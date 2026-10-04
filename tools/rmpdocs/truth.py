@@ -180,6 +180,14 @@ def check_names(ctx: Context) -> list[Problem]:
         return []
     names = known_names(str(fw))
     rmp_names = names["rmp"] | {q.rsplit("::", 1)[0] for q in names["rmp"]}
+    # `Platformer::grounded()` with the namespace left out: when the class is
+    # one of ours, the member has to be one of its own. A class that is not
+    # ours (std::vector, the reader's own) is not this gate's business.
+    ours_by_class: dict[str, set] = {}
+    for q in names["rmp"]:
+        parts = q.split("::")
+        if len(parts) >= 3 and parts[-2][:1].isupper():
+            ours_by_class.setdefault(parts[-2], set()).add(parts[-1])
     out = []
     for path, root in _fragments(ctx):
         for node, text, kind in _code_texts(root):
@@ -190,6 +198,11 @@ def check_names(ctx: Context) -> list[Problem]:
                 q = re.sub(r"::$", "", m.group(0))
                 if q not in rmp_names and q not in ("rmp",):
                     out.append(Problem("names", path, node.line, f"`{q}` names nothing in include/rmp/"))
+            for m in re.finditer(r"(?<![\w:])([A-Z]\w*)::([a-z_]\w*)", t):
+                cls, member = m.group(1), m.group(2)
+                if cls in ours_by_class and member not in ours_by_class[cls]:
+                    out.append(Problem("names", path, node.line,
+                                       f"`{cls}::{member}` is not a member of rmp's {cls}"))
             for m in re.finditer(r"\bRMP_[A-Z0-9_]+\b", t):
                 if m.group(0) not in names["macros"] and m.group(0) not in ctx.refconf.get("build_defines", {}):
                     out.append(Problem("names", path, node.line,
