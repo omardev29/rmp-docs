@@ -1,0 +1,3 @@
+over the 1 KB page budget
+gzipped, over the 20 KB a reader downloads to search
+over the 40 KB a browser parses to search

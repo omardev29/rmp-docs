@@ -1,2 +1,4 @@
 [budgets]
 page_kb = 1
+search_gz_kb = 20
+search_kb = 40

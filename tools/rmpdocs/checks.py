@@ -14,6 +14,7 @@ instead of a whole site.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import html
 import re
@@ -61,6 +62,8 @@ class Context:
         if out.is_dir():
             for p in sorted(out.rglob("*.html")):
                 outputs[p.relative_to(out).as_posix()] = p.read_text(encoding="utf-8")
+            if (out / "assets" / "search.json").is_file():
+                config["_search_json"] = (out / "assets" / "search.json").read_text(encoding="utf-8")
         sources = {}
         content = folder / "content"
         if content.is_dir():
@@ -297,11 +300,21 @@ def check_budgets(ctx: Context) -> list[Problem]:
             size = len(text.encode("utf-8")) / 1024
             if size > page_kb:
                 out.append(Problem("budgets", url, 0, f"{size:.0f} KB, over the {page_kb} KB page budget"))
-    search_kb = b.get("search_kb")
+    # search.json: what a reader downloads the first time they search is the
+    # gzipped size (Pages compresses JSON), and that is the budget; the raw
+    # size is what their browser then parses, and it gets a ceiling of its own.
     search = ctx.config.get("_search_json")
-    if search_kb and search is not None and len(search.encode("utf-8")) / 1024 > search_kb:
-        out.append(Problem("budgets", "assets/search.json", 0,
-                           f"{len(search.encode('utf-8')) / 1024:.0f} KB, over the {search_kb} KB search budget"))
+    if search is not None:
+        raw = search.encode("utf-8")
+        gz_kb = b.get("search_gz_kb")
+        if gz_kb and len(gzip.compress(raw, 9)) / 1024 > gz_kb:
+            out.append(Problem("budgets", "assets/search.json", 0,
+                               f"{len(gzip.compress(raw, 9)) / 1024:.0f} KB gzipped, over the "
+                               f"{gz_kb} KB a reader downloads to search"))
+        raw_kb = b.get("search_kb")
+        if raw_kb and len(raw) / 1024 > raw_kb:
+            out.append(Problem("budgets", "assets/search.json", 0,
+                               f"{len(raw) / 1024:.0f} KB, over the {raw_kb} KB a browser parses to search"))
     for kind, folder, key in (("css", "css", "css_kb"), ("js", "js", "js_kb")):
         limit = b.get(key)
         d = ctx.docs / "assets" / folder
