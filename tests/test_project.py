@@ -57,5 +57,19 @@ class BuildTest(unittest.TestCase):
         self.assertIn("does not build and boot after this page", results[1][1])
 
 
+class RelativeFrameworkTest(unittest.TestCase):
+    """CI names the framework relative to the docs (RMP_FRAMEWORK=framework),
+    and `rmp new` runs in a temporary folder: a path left relative pointed at
+    a framework inside that folder, and every tutorial failed before its first
+    page."""
+
+    def test_rmp_new_works_from_a_relative_framework_path(self):
+        if not (FRAMEWORK / "tools" / "rmp.py").is_file():
+            self.skipTest("no framework next to rmp-docs")
+        relative = Path(os.path.relpath(FRAMEWORK.resolve(), Path.cwd()))
+        self.assertFalse(relative.is_absolute())
+        self.assertEqual(project.run(relative, "relative_check", []), [])
+
+
 if __name__ == "__main__":
     unittest.main()

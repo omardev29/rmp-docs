@@ -99,6 +99,7 @@ def apply(project: Path, step: Step, framework: Path | None = None) -> None:
 def run(framework: Path, name: str, steps: list[Step], keep: Path | None = None):
     """(step, problem or None) for every step: built and booted in order."""
     results = []
+    framework = framework.resolve()   # rmp new runs from the temporary folder
     with tempfile.TemporaryDirectory() as tmp:
         parent = keep or Path(tmp)
         project = parent / name
