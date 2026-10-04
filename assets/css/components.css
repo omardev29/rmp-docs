@@ -145,7 +145,10 @@ figure > figcaption {
   color: var(--text-muted);
   vertical-align: middle;
 }
-.fields td:first-child { white-space: nowrap; }
+.fields td:first-child, .fields td.type, .fields td:nth-child(3) { white-space: nowrap; }
+.fields td code { overflow-wrap: normal; }
+.fields td p { margin: 0 0 0.4em; }
+.fields td p:last-child { margin-bottom: 0; }
 .fields td:first-child code { font-weight: 750; }
 .fields td.type code { color: var(--code-t); }
 

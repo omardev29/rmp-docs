@@ -1,0 +1,6 @@
+src/rmp/gone.cpp
+phase N
+<memory>
+rmp::nowhere
+[window] widht
+'this template'

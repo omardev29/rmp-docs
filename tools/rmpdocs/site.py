@@ -173,11 +173,10 @@ class Site:
             root, errors = dom.parse(rp.body)
             for e in errors:
                 self.problems.append(Problem("html", f"generated:{rp.url}", e.line, e.message))
-            entity = rp.entity
             self.pages.append(Page(url=rp.url, title=rp.title, description=rp.description,
-                                   source=entity.header, section="reference", kind="reference",
-                                   order=200, nav_title=entity.name, root=root,
-                                   meta={"line": entity.line}))
+                                   source=rp.source or "include/rmp", section="reference",
+                                   kind="reference", order=rp.order,
+                                   nav_title=rp.nav_title, root=root, meta={"line": rp.line}))
 
     # -- transforms ------------------------------------------------------------
 

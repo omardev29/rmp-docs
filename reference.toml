@@ -1,6 +1,17 @@
 # What the reference shows, and where. Everything else about it -- every
 # signature, sentence and line number -- comes from include/rmp/*.h.
+#
+# Every entry below says why. An entry that no longer matches anything in the
+# headers fails the build: a decision about a name that is gone is not kept.
 
-[pages]
-# The types that get a page of their own.
-classes = ["rmp::Scene", "rmp::Camera"]
+# Internal declarations that ARE the API a game sees, under another name.
+[expose."rmp::detail::Resource"]
+title = "Resource handles"
+reason = "rmp::Texture, rmp::Sound and the other handles are aliases of it; its members are what a game calls on them"
+
+# Public declarations the reference does not show.
+[hide]
+
+# Public declarations allowed to have no comment, for now. Each one is debt;
+# phase 13 is not finished until this table is empty.
+[allow_undocumented]

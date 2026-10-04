@@ -10,10 +10,16 @@ the footer names. A signature here is the header's signature, a sentence is the 
 and every entry links to the line that declares it.</p>
 
 <ul>
-<li><a href="ref:rmp::Scene"><code>rmp::Scene</code></a> — a scene, and the stack of scenes.</li>
-<li><a href="ref:rmp::Camera"><code>rmp::Camera</code></a> — what part of the world a scene shows.</li>
+<li><a href="/reference/namespaces/index.html">Namespaces</a> — <code>rmp</code> and its modules:
+<code>rmp::ui</code>, <code>rmp::input</code>, <code>rmp::assets</code> and the rest, each with its
+functions, its types and its options.</li>
+<li><a href="/reference/classes/index.html">Classes</a> — the types with pages of their own:
+<a href="ref:rmp::Scene"><code>rmp::Scene</code></a>, <a href="ref:rmp::Object"><code>rmp::Object</code></a>,
+<a href="ref:rmp::Camera"><code>rmp::Camera</code></a> and the others.</li>
+<li><a href="/reference/behaviors/index.html">Behaviors</a> — the catalogue in <code>rmp::behavior</code>.</li>
+<li><a href="/reference/macros.html">Macros</a> — <code>RMP_GAME</code> and the rest.</li>
 </ul>
 
 <p>Two conventions hold everywhere. A name starting with <code>_</code> is a hook: you override
 it, the framework calls it. A name in <code>detail</code> — <code>rmp::detail</code>, or a member
-called <code>detail_</code>something — belongs to the framework's own tests and is not shown.</p>
+called <code>detail_</code>something — belongs to the framework and its tests, and is not shown.</p>

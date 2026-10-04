@@ -1,0 +1,5 @@
+rmp::g has no comment
+rmp::Options::count has no comment
+rmp::Options has no comment
+[hide] names rmp::gone
+[allow_undocumented] rmp::f has no reason

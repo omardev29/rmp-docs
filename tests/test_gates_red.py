@@ -40,6 +40,14 @@ class GatesGoRedTest(unittest.TestCase):
                     if kind == "bad":
                         self.assertTrue(problems, f"{name} passed its bad fixture")
                         self.assertTrue(all(p.gate == name for p in problems))
+                        # A gate with several rules lists, in expect.txt, a
+                        # piece of the message each rule has to produce.
+                        expect = folder / "expect.txt"
+                        if expect.is_file():
+                            said = "\n".join(str(p) for p in problems)
+                            for piece in expect.read_text().splitlines():
+                                if piece.strip():
+                                    self.assertIn(piece, said, f"{name}: no problem says {piece!r}")
                     else:
                         self.assertEqual([str(p) for p in problems], [])
 

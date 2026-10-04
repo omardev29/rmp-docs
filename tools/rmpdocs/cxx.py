@@ -292,6 +292,7 @@ class HeaderReader:
         prev_end_line = -10
         prev_entity = None
         run_doc = ""
+        run_cover = False
         conditions: list[str] = []
         pos = start
         m = self.masked
@@ -352,10 +353,15 @@ class HeaderReader:
                     if under_banner and group_doc and not block:
                         ent.group_doc = group_doc
                 ent.run_doc = run_doc if in_run else ""
-                ent.covered = bool(ent.doc or ent.trailing or ent.run_doc or
-                                   (under_banner and group_doc) or ent.kind == "namespace")
-                if in_run and prev_entity is not None and not ent.covered:
-                    ent.covered = prev_entity.covered
+                leads_with_banner = bool(under_banner and group_doc and not block)
+                ent.covered = bool(ent.doc or ent.trailing or ent.run_doc or leads_with_banner
+                                   or ent.kind == "namespace")
+                # A run is covered by what is ABOVE it -- its doc block or its
+                # banner -- never by the trailing comment of the line before.
+                if not in_run:
+                    run_cover = bool(block) or leads_with_banner
+                elif run_cover:
+                    ent.covered = True
                 prev_entity = ent
             prev_end_line = last_line
             pos = stmt_end
@@ -432,6 +438,14 @@ class HeaderReader:
             close = _angle_close(cmasked, tm.end() - 1)
             template = collapse(clean[:close + 1])
             clean, cmasked = clean[close + 1:].strip(), cmasked[close + 1:].strip()
+        rm = re.match(r"requires\s*\(", cmasked)
+        rs = re.match(r"requires\s+[\w:]+(<[^;{()]*?>)?(::\w+)?\s+", cmasked)
+        if rm or rs:
+            # A constraint: part of the template it follows, not the name.
+            # `requires(expr)` or `requires std::is_same_v<B, bool>`.
+            end = _matching(cmasked, rm.end() - 1, "(", ")") + 1 if rm else rs.end()
+            template = (template + " " + collapse(clean[:end])).strip()
+            clean, cmasked = clean[end:].strip(), cmasked[end:].strip()
         if clean.startswith("friend "):
             clean, cmasked = clean[7:], cmasked[7:]
 
@@ -504,6 +518,11 @@ class HeaderReader:
                 if not nm:
                     raise ParseError(self.path, line, f"a function with no name: {collapse(clean)[:90]}")
                 name = nm.group(0)
+            if re.search(r"\w\s*::\s*~?" + re.escape(name.split()[0]) + r"$", head.rstrip()) \
+                    and scope_kind in ("file", "namespace"):
+                # `B &Object::add(B value) { ... }`: the body of a member
+                # declared -- and documented -- inside its class.
+                return None
             close = _matching(cmasked, par, "(", ")")
             tail = cmasked[close + 1:]
             stop = len(tail)
@@ -511,6 +530,9 @@ class HeaderReader:
                 k = tail.find(marker)
                 if k >= 0:
                     stop = min(stop, k)
+            init = re.search(r"(?<!:):(?!:)", tail[:stop])
+            if init and not re.match(r"\s*->", tail):
+                stop = init.start()      # a constructor's initialiser list
             sig = collapse(clean[:close + 1 + stop])
             sig = re.sub(r"\s*=\s*0$", " = 0", sig)
             ent = owner.add(Entity("function", name, _join(owner.qualname, name), self.path, line,
@@ -520,6 +542,14 @@ class HeaderReader:
             # Deleted, and the special members left to the compiler, are not
             # something a game calls: they are hidden like deleted ones.
             ent.deleted = bool(re.search(r"=\s*(delete|default)\b", sig))
+            owner_name = owner.name
+            if scope_kind in ("class", "struct") and (
+                    name.startswith("~") or
+                    (name == owner_name and re.search(rf"\(\s*(const\s+)?{owner_name}\s*&&?\s*\w*\s*\)", sig)) or
+                    (name == "operator=" and re.search(rf"\(\s*(const\s+)?{owner_name}\s*&&?\s*\w*\s*\)", sig))):
+                # The destructor, and copying or moving: what the compiler
+                # would write, written out. Not something a game calls by name.
+                ent.deleted = True
             ent.internal = owner.internal or name.startswith("detail_")
             ent.trailing = trailing
             return ent

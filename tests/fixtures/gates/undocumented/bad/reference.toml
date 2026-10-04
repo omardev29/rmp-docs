@@ -1,0 +1,4 @@
+[hide."rmp::gone"]
+reason = "it went"
+
+[allow_undocumented."rmp::f"]

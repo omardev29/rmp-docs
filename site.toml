@@ -61,6 +61,13 @@ allow = [
   "https://en.cppreference.com/",
 ]
 
+[counted]
+# Nouns whose count is the framework's, not the page's: a typed number next to
+# one of these is the `counts` gate's business. "14 targets" stayed in this
+# project's own design document for a phase after it became 17.
+nouns = ["targets", "target", "platforms", "behaviors", "behaviours", "examples", "games",
+         "headers", "modules", "families"]
+
 [forbidden]
 # Phrases a page may never contain. The framework stopped being a template,
 # and the Justfile is gone.

@@ -46,6 +46,8 @@ class Context:
     config: dict = field(default_factory=dict)
     sources: dict = field(default_factory=dict)      # source path -> text (fragments)
     build_problems: list = field(default_factory=list)
+    framework: Path | None = None                    # the framework checkout read
+    refconf: dict = field(default_factory=dict)      # reference.toml
 
     @classmethod
     def from_folder(cls, folder: Path) -> "Context":
@@ -64,7 +66,12 @@ class Context:
         if content.is_dir():
             for p in sorted(content.rglob("*.html")):
                 sources["content/" + p.relative_to(content).as_posix()] = p.read_text(encoding="utf-8")
-        return cls(docs=folder, outputs=outputs, config=config, sources=sources)
+        framework = folder / "framework" if (folder / "framework").is_dir() else None
+        refconf = {}
+        if (folder / "reference.toml").is_file():
+            refconf = tomllib.loads((folder / "reference.toml").read_text(encoding="utf-8"))
+        return cls(docs=folder, outputs=outputs, config=config, sources=sources,
+                   framework=framework, refconf=refconf)
 
 
 def gate(name: str, says: str):
@@ -439,4 +446,164 @@ def check_contrast(ctx: Context) -> list[Problem]:
             if got < need:
                 out.append(Problem("contrast", "assets/css/tokens.css", _line(text, f"{fg}:"),
                                    f"{theme}: {fg} {a} on {bg} {b} is {got:.2f}:1, needs {need}:1"))
+    return out
+
+
+# --- the headers --------------------------------------------------------------
+
+def _reference(ctx: Context):
+    from .reference import Reference
+    if ctx.framework is None or not (ctx.framework / "include" / "rmp").is_dir():
+        return None
+    return Reference(ctx.framework, ctx.refconf).read()
+
+
+@gate("undocumented", "every public declaration in include/rmp/ says what it is -- a doc "
+                      "comment, a trailing comment, the run or banner it sits under -- and "
+                      "every decision in reference.toml names something that exists, with a reason")
+def check_undocumented(ctx: Context) -> list[Problem]:
+    ref = _reference(ctx)
+    if ref is None:
+        return []
+    out = [Problem("undocumented", e.header, e.line,
+                   f"{e.kind} {e.qualname} has no comment; say what it is, or add it to "
+                   "reference.toml [allow_undocumented] with a reason")
+           for e in ref.undocumented()]
+    names = {e.qualname for e in ref.entities()}
+    for table in ("expose", "hide", "allow_undocumented"):
+        for q, spec in ctx.refconf.get(table, {}).items():
+            if q not in names:
+                out.append(Problem("undocumented", "reference.toml", 0,
+                                   f"[{table}] names {q}, which no header declares"))
+            if not isinstance(spec, dict) or not str(spec.get("reason", "")).strip():
+                out.append(Problem("undocumented", "reference.toml", 0,
+                                   f"[{table}] {q} has no reason"))
+    return out
+
+
+COMMENT_LINE = re.compile(r"^\s*//(.*)$")
+
+
+def header_comments(framework: Path):
+    """(header, line, text) for every comment line of the public headers."""
+    for h in sorted((framework / "include" / "rmp").glob("*.h")):
+        for n, line in enumerate(h.read_text(encoding="utf-8").split("\n"), 1):
+            m = COMMENT_LINE.match(line)
+            if m:
+                yield f"include/rmp/{h.name}", n, m.group(1)
+            elif "//" in line:
+                k = line.find("//")
+                if line[:k].count('"') % 2 == 0:
+                    yield f"include/rmp/{h.name}", n, line[k + 2:]
+
+
+FRAMEWORK_PATH = re.compile(r"\b((?:src|include|tools|tests|examples|cmake|thirdparty|raymob|ios|"
+                            r"next_architecture|docs)/[\w./*-]*[\w*])")
+
+
+@gate("header-comments", "what a header comment says about the framework is still true: the "
+                         "files it names exist, the rmp:: names resolve, the [section] keys are in "
+                         "the .toml, a header that says it has no <x> does not include it, and "
+                         "there is no history (phase N) or retired wording in it")
+def check_header_comments(ctx: Context) -> list[Problem]:
+    fw = ctx.framework
+    if fw is None or not (fw / "include" / "rmp").is_dir():
+        return []
+    out = []
+    ref = _reference(ctx)
+    names = {e.qualname for e in ref.entities()} if ref else set()
+    names |= {e.qualname.rsplit("::", 1)[0] for e in ref.entities()} if ref else set()
+    toml = _toml_keys(fw)
+    phrases = [p.lower() for p in ctx.config.get("forbidden", {}).get("phrases", [])]
+    includes = {}
+    for h in sorted((fw / "include" / "rmp").glob("*.h")):
+        includes[f"include/rmp/{h.name}"] = set(re.findall(r"#include\s*<([^>]+)>", h.read_text()))
+    for header, line, text in header_comments(fw):
+        for m in FRAMEWORK_PATH.finditer(text):
+            path = m.group(1).rstrip(".,;:")
+            if "*" in path:
+                if not list(fw.glob(path)):
+                    out.append(Problem("header-comments", header, line, f"names {path}, which matches nothing"))
+            elif not (fw / path).exists():
+                out.append(Problem("header-comments", header, line, f"names {path}, which does not exist"))
+        if re.search(r"\bphases?\s+\d", text, re.I):
+            out.append(Problem("header-comments", header, line,
+                               "history in a header (\"phase N\"): say what is true now, and why"))
+        for m in re.finditer(r"\brmp::[\w:]*\w", text):
+            q = m.group(0)
+            if names and q not in names:
+                out.append(Problem("header-comments", header, line, f"{q} names nothing in the headers"))
+        # "[window] width": a key of a section the .toml has. `_keys[i] names`
+        # is C++, not toml, and the section is what tells the two apart.
+        for m in re.finditer(r"\[([a-z_.]+)\]\s+([a-z_]+)", text):
+            section, key = m.group(1), m.group(2)
+            if toml and section in toml and key not in toml[section] and key not in TOML_PROSE:
+                out.append(Problem("header-comments", header, line, f"[{section}] {key} is not a key of the .toml"))
+        for m in re.finditer(r"\bno <([\w/.]+)>", text, re.I):
+            if m.group(1) in includes.get(header, set()):
+                out.append(Problem("header-comments", header, line,
+                                   f"says there is no <{m.group(1)}>, and the header includes it"))
+        if re.search(r"NO STANDARD LIBRARY HEADER", text) and any(
+                "/" not in i and "." not in i for i in includes.get(header, set())):
+            out.append(Problem("header-comments", header, line,
+                               "says NO STANDARD LIBRARY HEADER, and the header includes one"))
+        low = text.lower()
+        for phrase in phrases:
+            if phrase in low:
+                out.append(Problem("header-comments", header, line, f"says {phrase!r}"))
+    return out
+
+
+# Words that follow a [section] in prose without being a key: "[window] width x height".
+TOML_PROSE = {"x", "and", "or", "is", "in", "to", "the", "a", "rather", "than", "says", "sets"}
+
+
+def _toml_keys(fw: Path) -> dict:
+    try:
+        from .facts import Facts
+        defaults = Facts(fw).configure.DEFAULTS
+    except Exception:  # noqa: BLE001 - a fixture without a configure.py
+        return {}
+    out = {}
+    for section, keys in defaults.items():
+        out[section] = set(keys) if isinstance(keys, dict) else set()
+        if isinstance(keys, dict):
+            for k, v in keys.items():
+                if isinstance(v, dict):
+                    out[f"{section}.{k}"] = set(v)
+    return out
+
+
+# --- numbers typed by hand ------------------------------------------------------
+
+# "one" is not here: in prose it is a pronoun far more often than a count
+# ("one header per module", "one context of the game").
+NUMBER_WORDS = ("two three four five six seven eight nine ten eleven twelve thirteen "
+                "fourteen fifteen sixteen seventeen eighteen nineteen twenty").split()
+
+
+@gate("counts", "no page types a count the framework can change: a digit or a number word "
+                "next to a counted noun (site.toml [counted] nouns) has to be {{count:...}}")
+def check_counts(ctx: Context) -> list[Problem]:
+    nouns = ctx.config.get("counted", {}).get("nouns", [])
+    if not nouns:
+        return []
+    # The singular too: "the 17-target CI", "a 7-game catalogue".
+    forms = set(nouns) | {n[:-1] for n in nouns if n.endswith("s")}
+    noun = "|".join(re.escape(n) for n in sorted(forms, key=len, reverse=True))
+    number = r"\d+|" + "|".join(NUMBER_WORDS)
+    # "17 targets", "the 17-target CI", "all 17 of the targets", "seventeen of them... targets"
+    # The noun ends the phrase: "two game-over screens" counts screens.
+    pattern = re.compile(rf"\b({number})\b[\s-]+(?:\w+[\s-]+){{0,3}}?(?:{noun})\b(?!-\w)", re.I)
+    out = []
+    for path, text in ctx.sources.items():
+        body = re.sub(r"\A\s*<!--.*?-->", lambda m: " " * len(m.group(0)), text, flags=re.S)
+        # Code is code: `int lives = 3` is not a claim about the framework.
+        body = re.sub(r"(?s)<(pre|code)\b.*?</\1>", lambda m: " " * len(m.group(0)), body)
+        body = re.sub(r"<[^>]+>", lambda m: " " * len(m.group(0)), body)
+        flat = re.sub(r"\s+", " ", body)
+        for m in pattern.finditer(body.replace("\n", " ")):
+            line = text.count("\n", 0, m.start()) + 1
+            out.append(Problem("counts", path, line, f"{m.group(0)!r}: write {{{{count:...}}}}, not a typed number"))
+        del flat
     return out
