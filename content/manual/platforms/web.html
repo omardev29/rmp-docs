@@ -1,0 +1,156 @@
+<!--
+title: Web
+description: The web target: Emscripten, a browser that owns the frame loop and why that rules out ASYNCIFY, memory, saves in IndexedDB, sound that waits for the player, and how to serve a build.
+order: 20
+-->
+<h1>Web</h1>
+
+<p class="lede">The <code>web</code> target is the same game compiled to WebAssembly with
+Emscripten, and it plays in a browser tab. Almost everything about it is the same as anywhere else.
+The one thing that is not shapes the rest: in a browser, the browser owns the frame loop.</p>
+
+<h2>Building and running it</h2>
+
+<pre data-lang="shell">
+rmp web
+python3 -m http.server 8000 --directory build/web
+</pre>
+
+<p>and open <code>http://localhost:8000/my_game.html</code>. <code>rmp web</code> needs the
+Emscripten SDK activated in the shell first — <code>emsdk_env.sh</code>, or
+<code>emsdk_env.ps1</code> on Windows — and says so when it is not:
+<samp>the web build needs the emsdk: activate it first (source emsdk_env.sh, or emsdk_env.ps1 on
+Windows), so that EMSDK is set</samp>. Underneath it is <code>cmake --preset web</code>, a release
+build optimised for size; CI builds with the Emscripten pinned in its build image.</p>
+
+<p>The build is four files that belong together: <code>my_game.html</code>, the page;
+<code>my_game.js</code>, the loader; <code>my_game.wasm</code>, the game; and
+<code>my_game.data</code>, the contents of <code>resources/</code>. The page fetches the other three,
+so it has to be served — <code>rmp web</code> ends by saying <samp>serve it, do not open the file
+directly</samp> — and any static web server will do.</p>
+
+<h2>The browser owns the loop</h2>
+
+<p>A desktop game is a <code>while</code> loop: draw a frame, ask whether the window was closed, go
+round again. A browser tab cannot run that. JavaScript is single-threaded and cooperative, and a
+function that never returns never gives the page back — nothing is drawn, nothing is heard, and the
+tab freezes. So on the web the framework's entry point hands the loop to the browser with
+<code>emscripten_set_main_loop()</code>, and the browser calls the game once per frame, in step with
+the display. <code>main()</code> never returns, which is the same contract the desktop loop has.</p>
+
+<p>The only way to keep a <code>while</code> loop in a browser is to build with
+<code>-s ASYNCIFY</code>, which rewrites the whole program so its stack can be put aside and picked
+up again. Its cost is not charged to the loop: it is charged to every function that could be on the
+stack, in size and in speed, whether or not anything ever waits. The framework measured it at 26 %
+more <code>.wasm</code> and 18 % more download, and builds without it.</p>
+
+<p>Four rules come out of that, and the framework already follows each of them for you:</p>
+
+<ul>
+<li><strong>No <code>while</code> loop that draws.</strong> A loading screen that loops until the
+work is done freezes the tab. Do the work a slice per frame in <code>_update()</code>.</li>
+<li><strong>No <code>WindowShouldClose()</code>.</strong> On the web raylib's version waits with
+<code>emscripten_sleep()</code>, which needs ASYNCIFY; the framework never calls it there.</li>
+<li><strong>No <code>SetTargetFPS()</code>.</strong> The browser paces the frame, and a cap would be a
+wait inside its callback. <code>[window] fps</code> and <code>[window] vsync</code> change nothing on
+the web.</li>
+<li><strong>No backend that needs ASYNCIFY.</strong> See below.</li>
+</ul>
+
+<p><a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> works: the frame that asked
+finishes, the browser stops calling the game, and the same shutdown as on a desktop runs. The page
+itself stays open: a browser tab is the player's to close.</p>
+
+<h2>The backend</h2>
+
+<p>Emscripten compiles the game whatever <code>[web] backend</code> says; the choice is what raylib
+talks to in the browser.</p>
+
+<table>
+<thead><tr><th><code>[web] backend</code></th><th>raylib talks to</th></tr></thead>
+<tbody>
+<tr><td><code>"glfw"</code></td><td>GLFW, which Emscripten emulates in JavaScript. The default, and the path raylib has shipped on the web for years. Defines <code>PLATFORM_WEB</code>.</td></tr>
+<tr><td><code>"emscripten"</code></td><td>The browser, through Emscripten's own API, with no GLFW layer to download. Defines <code>PLATFORM_WEB_EMSCRIPTEN</code>. raylib's code for it still marks its key-code mapping and file dropping as unfinished, which is why it is not the default.</td></tr>
+</tbody>
+</table>
+
+<p>A third, RGFW, is refused, because its web backend waits with <code>emscripten_sleep()</code>: it
+would build, and then die in the tab.</p>
+
+<pre data-lang="toml" data-expect="reject">
+[web]
+backend = "rgfw"
+</pre>
+
+<p>Since the two backends define different <code>PLATFORM_*</code> macros, code that has to know it
+is on the web tests <code>__EMSCRIPTEN__</code>, which both define.</p>
+
+<h2>Graphics</h2>
+
+<p>raylib draws with OpenGL ES 2.0 on the web, which the browser provides as WebGL, with either
+backend. That is a smaller OpenGL than a desktop's 3.3: shaders are written in GLSL 100, and
+<a href="/manual/raylib/rlgl.html">rlgl and OpenGL</a> has what else differs.</p>
+
+<h2>Memory</h2>
+
+<p>A WebAssembly module gets its memory up front. <code>[web] memory</code> is how much, in
+megabytes, between 16 and 4096; the default, 64, is enough for menus and a handful of textures. A
+game that loads a tile atlas and a few tracks wants more, and when it runs out the tab dies with
+Emscripten's "Cannot enlarge memory arrays" rather than an error of raylib's.</p>
+
+<pre data-lang="toml">
+[web]
+memory = 256
+</pre>
+
+<p><code>[web] grow = true</code> lets the memory grow past that instead of stopping the game, and
+costs a little speed on every access to it, since each one goes through a bounds check that cannot
+be lifted out of a loop. A game that knows its ceiling is better served by raising
+<code>memory</code>.</p>
+
+<h2>Assets</h2>
+
+<p>The web build CI makes has no asset pack. The whole of <code>resources/</code> is preloaded into
+Emscripten's in-memory file system — that is the <code>.data</code> file — and the game reads it
+there with the same paths and the same <code>rmp::assets</code> calls as anywhere else. It also means
+the assets of a web build are ordinary files to anyone who opens the <code>.data</code>: the pack's
+encryption applies only to the targets that ship the pack.</p>
+
+<h2>Saves</h2>
+
+<p>Emscripten's files live in memory, so a save written there would be gone at the next reload. The
+framework mounts a folder backed by the browser's IndexedDB, <code>/rmp_save/&lt;name&gt;/</code>,
+and <a href="ref:rmp::save"><code>rmp::save</code></a> uses it: every write is pushed to IndexedDB,
+and before the game starts the folder is filled from it — the game's <code>main()</code> is held back
+until that has finished, so the first scene's <code>_ready()</code> finds the save the player left.
+The folder is named after <code>[project] name</code>, so games served from the same site do not share
+their saves.</p>
+
+<p>A browser that refuses storage — a private window, site data switched off — does not stop the
+game. The failure is logged on the browser's console and the saves last as long as the page
+does.</p>
+
+<h2>Sound</h2>
+
+<p>Browsers keep a page's sound suspended until the player does something. raylib's audio backend
+resumes it on a click or a touch, and the framework adds a key press to those, so a game played from
+the keyboard is heard from its first key. A gamepad cannot do it: browsers do not count its buttons
+as the kind of gesture that may start sound, and a game that only ever sees a gamepad stays silent
+until the first click, touch or key.</p>
+
+<h2>Serving a build</h2>
+
+<p>Any static web server that serves the four files from one folder will run the game; the page is
+<code>&lt;name&gt;.html</code>. CI's web archive is those four files and the licence notices.
+itch.io wants the page called <code>index.html</code>, and the framework's itch.io job uploads the
+build that way, so it plays in the page rather than as a download. More on hosting, size and the
+archive in <a href="/publishing/web.html">The web build</a>.</p>
+
+<h2>What CI checks</h2>
+
+<p>The web target is in the fast lane, on every push. CI builds it, checks the four files are there
+and not empty, and then plays it: the page is served from a local web server and opened in
+headless Chromium; the game must report that it booted, after writing a save to IndexedDB, reading
+it back and removing it; and after the game has had time to draw, the canvas is photographed and
+measured for drawn pixels. When the render check fails, the picture of the canvas is kept with the
+run.</p>

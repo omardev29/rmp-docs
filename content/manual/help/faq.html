@@ -1,0 +1,174 @@
+<!--
+title: Questions
+description: What people ask about the framework before they ask anything else: raylib, scenes, main(), targets, saves, players' machines, libraries and licences.
+order: 20
+-->
+<h1>Questions</h1>
+
+<p class="lede">Short answers, each with a link to where the long one is.</p>
+
+<h2>The framework</h2>
+
+<h3>Is it ready to ship a game with?</h3>
+
+<p>The framework's own README says that it is experimental and not meant for production. The
+pipeline is real — every target is built, and every target with a machine to run on is booted and
+checked for pixels — but the features themselves are young. Test your game on the platforms you
+ship it to.</p>
+
+<h3>Can I still call raylib?</h3>
+
+<p>All of it, from any scene, with nothing to unlock: the framework adds <code>rmp::</code> beside
+raylib and changes none of raylib's functions. A handful of calls are the framework's to make —
+opening and closing the window, beginning and ending the frame — and
+<a href="/manual/raylib/raylib.html">raylib in your game</a> lists them and why.</p>
+
+<h3>Do I have to use scenes?</h3>
+
+<p>No. <a href="ref:RMP_GAME"><code>RMP_GAME</code></a> is built on a lower-level entry point,
+<a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a>, which takes three functions of yours
+and nothing else. The window and the frame are then yours to open and close, as in a plain raylib
+program, while the framework still writes the right loop for each target, opens the asset pack,
+clamps the frame time and reports to CI. Many of the framework's examples are written this way:</p>
+
+<pre data-lang="cpp" data-harness="file">
+#include &lt;rmp/app.h&gt;
+
+static void on_ready() { InitWindow(RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT, RMP_WINDOW_TITLE); }
+
+static void on_frame(float delta) {
+    static float seconds = 0;
+    seconds += delta;
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+    DrawText(TextFormat("%.1f s", seconds), 20, 20, 20, DARKGRAY);
+    EndDrawing();
+}
+
+static void on_exit() { CloseWindow(); }
+
+RMP_ENTRY_POINT(on_ready, on_frame, on_exit);
+</pre>
+
+<h3>Can I write my own <code>main()</code>?</h3>
+
+<p>In plain C, yes: a game whose <code>src/</code> holds no C++ is linked against raylib alone, and
+its <code>main()</code> is its own — on the targets where a program owns its loop, which the web and
+iOS are not. See <a href="/manual/raylib/plain-c.html">Plain C</a>. In C++ with the framework, the
+entry-point macro writes <code>main()</code> for you, and a second one is a link error.</p>
+
+<h3>Does it use exceptions?</h3>
+
+<p>No. Nothing in the framework throws. A load that finds nothing gives an empty handle that draws
+nothing; <a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> raises a flag the loop reads;
+a mistake it can see is said once in the log.</p>
+
+<h3>Which C++?</h3>
+
+<p>C++20, with designated initialisers throughout: the options of a call are written by name —
+<code>rmp::ui::begin({ .placement = rmp::ui::Align::TOP_LEFT })</code> — in the order the struct
+declares them. A plain C game is C99.</p>
+
+<h2>Targets</h2>
+
+<h3>Which platforms does it build for?</h3>
+
+<p>{{count:targets}} targets: {{list:targets}}. A game turns any of them off in
+<code>[targets]</code>. See <a href="/manual/platforms/index.html">Platforms</a>.</p>
+
+<h3>Can I build for a platform I do not have?</h3>
+
+<p>CI builds every target a game enables, on GitHub's runners, so a release has all of them whatever
+machine you work on. On your own machine you build for that machine, for the web with the
+Emscripten SDK, and for Android with the Android SDK and NDK. iOS needs a Mac with Xcode, and a real
+iPhone needs an Apple Developer account as well.</p>
+
+<h3>Which targets does a push build?</h3>
+
+<p>Linux x86-64, the web, Windows x86-64 and Android, in about ten minutes. A release tag builds
+every enabled target. See <a href="/manual/platforms/index.html#what-ci-does-with-each-target">what
+CI does with each target</a>.</p>
+
+<h3>Do I need GitHub?</h3>
+
+<p>Not to build or play the game: <code>rmp run</code> and <code>rmp build release</code> work on
+your machine alone. The CI and the release pipeline that come with every game are GitHub Actions
+workflows, so building every target, and publishing, happens on GitHub.</p>
+
+<h3>Does it run on a Raspberry Pi?</h3>
+
+<p>Two ways. <code>linux-arm64-glibc</code> runs on a Pi with a desktop, through X11 like any
+Linux. <code>linux-arm64-glibc-drm</code> runs on one without a desktop, drawing straight to the
+screen; CI builds and checks it, and cannot run it, because what it is for is the Pi's own display
+hardware. See <a href="/manual/platforms/desktop.html">Desktop</a>.</p>
+
+<h2>Players</h2>
+
+<h3>Do players need to install anything?</h3>
+
+<p>No. raylib is linked into the game, and on Windows the C runtime is too, so there are no DLLs to
+ship. A Linux build opens X11 and OpenGL at run time from the system, and needs no glibc newer than
+<code>[linux] glibc</code>. The DRM builds are the exception: they link libdrm, GBM and EGL
+directly, and those have to be on the machine that runs them.</p>
+
+<h3>Where do saves go?</h3>
+
+<table>
+<thead><tr><th>Target</th><th>Folder</th></tr></thead>
+<tbody>
+<tr><td>Windows</td><td><code>%APPDATA%\&lt;name&gt;\</code>, or <code>saves\</code> next to the <code>.exe</code> with <code>[save] portable = true</code></td></tr>
+<tr><td>macOS</td><td><code>~/Library/Application Support/&lt;name&gt;/</code></td></tr>
+<tr><td>Linux and the BSDs</td><td><code>$XDG_DATA_HOME/&lt;name&gt;/</code> or <code>~/.local/share/&lt;name&gt;/</code>, or <code>saves/</code> next to the executable with <code>[save] portable = true</code></td></tr>
+<tr><td>Web</td><td>IndexedDB, as the folder <code>/rmp_save/&lt;name&gt;/</code></td></tr>
+<tr><td>Android</td><td>The app's private storage, in <code>saves/</code></td></tr>
+<tr><td>iOS</td><td>The app's <code>Library/Application Support/</code></td></tr>
+</tbody>
+</table>
+
+<p><code>&lt;name&gt;</code> is <code>[project] name</code>. <a href="ref:rmp::save::directory"><code>rmp::save::directory()</code></a>
+says which folder a running game is using.</p>
+
+<h3>Why does my release show nothing when I double-click it?</h3>
+
+<p>A desktop release reads <code>./resources/</code> relative to the folder it was started from.
+Started from its own folder, as the archive is laid out, it finds them; started from anywhere else,
+it does not. See <a href="/manual/help/troubleshooting.html#a-release-build-finds-nothing">Troubleshooting</a>.</p>
+
+<h2>The project</h2>
+
+<h3>Why is there no version in the .toml?</h3>
+
+<p>Because it comes from the git tag: <code>v1.2.3</code> is the version on every platform and the
+Android version code, so there is no number in the project to forget to change. See
+<a href="/publishing/releases.html">Releases</a>.</p>
+
+<h3>How do I make the game smaller?</h3>
+
+<p>A release build already drops what it does not call, at link time. Beyond that,
+<code>[raylib] disabled_modules</code> can leave out raylib's 3D models and its audio when the game
+uses neither — the shapes, textures and text cannot go, because the framework is built on them —
+and <code>[upx]</code> compresses the x86-64 and ARM64 glibc Linux binaries by default, and the
+others you add to it.</p>
+
+<pre data-lang="toml">
+[raylib]
+disabled_modules = ["rmodels"]
+</pre>
+
+<p>The modules do not reach iOS, which links a prebuilt raylib.</p>
+
+<h3>Can I add another library?</h3>
+
+<p>Yes, and it is a licence decision before it is a build one. Put it under
+<code>thirdparty/</code> and give it a row in <code>THIRD_PARTY_LICENSES.md</code>:
+<code>rmp test config</code> fails on a folder there it does not know, and on a copyleft licence.
+That row is also how its notice gets into the <code>LICENSES.txt</code> every build ships. Then add
+it to the build — to <code>CMakeLists.txt</code>, and, for Android and iOS, to the projects those
+two build through.</p>
+
+<h3>What licence is my game under?</h3>
+
+<p>None that the framework chooses: a game made with <code>rmp new</code> has no licence of its own,
+and picking one is yours. The framework's own code is MIT, and it is built on a copy of raylib,
+which is zlib-licensed and modified, each change listed beside it. Every build ships
+<code>LICENSES.txt</code> with the notices of everything in it, the framework's included.</p>

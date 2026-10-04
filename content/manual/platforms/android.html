@@ -1,0 +1,224 @@
+<!--
+title: Android
+description: The Android target: raymob around raylib, a Gradle build generated from the .toml, the application id, permissions and orientation, what gl_version really sets, and signing for the Play Store.
+order: 30
+-->
+<h1>Android</h1>
+
+<p class="lede">On Android the game is a native library inside an app. The app around it is
+raymob, a small implementation of raylib for Android — a Java activity and a C library of Android
+extras, vendored with the framework and patched where marked — and the Gradle build that makes it is
+driven by
+<code>raylib_multiplatform.toml</code> like every other build. The game's code does not change:
+raylib's Android glue starts it through the same <code>main()</code> a desktop uses.</p>
+
+<h2>Building it</h2>
+
+<pre data-lang="shell">
+rmp android
+adb install -r &lt;the APK rmp android printed&gt;
+</pre>
+
+<p><code>rmp android</code> regenerates the configuration and runs Gradle's debug build, and prints
+the APK it wrote. It needs the Android SDK and NDK; the versions CI builds with are pinned in
+<code>thirdparty/FROZEN_VERSIONS.md</code> — compile and target SDK 36, NDK r28, the CMake package of
+the SDK — and Gradle needs JDK 17 to run.</p>
+
+<p>Gradle never runs CMake early enough to generate anything, so the build reads two files
+<code>configure.py</code> writes from the <code>.toml</code>: <code>raymob/generated.properties</code>,
+with the game's name, ids, version and switches, and
+<code>raymob/app/generated/AndroidManifest.xml</code>, the manifest with exactly the permissions and
+features the <code>.toml</code> asks for. Neither is committed, so neither can drift from the
+<code>.toml</code>. Building from Android Studio or with <code>./gradlew</code> yourself, run
+<code>python3 tools/configure.py</code> first; Gradle says so when the first file is missing.</p>
+
+<p>The game is compiled into one shared library named after <code>[project] name</code>, with its
+own copy of raylib built for Android — <code>[raylib] disabled_modules</code> applies to it as it does
+on a desktop. A release build is optimised and has RMP_PRODUCTION_BUILD at 1; a debug build has it at
+0.</p>
+
+<h2>The application id</h2>
+
+<pre data-lang="toml">
+[android]
+application_id = "com.yourname.yourgame"
+</pre>
+
+<p>This is the app's identity on the device and on Google Play, and on Google Play it is permanent:
+once an app is published under an id, the id can never change, and a new one is a new listing
+without its installs and reviews. <code>rmp new</code> fills it with a <code>com.example.</code>
+placeholder; a release is refused while it still says so, by <code>rmp deploy</code> before it tags
+and by CI when a tag arrives.</p>
+
+<p>The id needs at least one dot, and every part starts with a letter. It also must not contain the
+string the build rewrites in raymob's sources on the way through, which is refused with the reason:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[android]
+application_id = "com.raylib.raymob.mygame"
+</pre>
+
+<p>The version name and the version code come from the git tag, not from the <code>.toml</code>:
+<code>v1.2.3</code> is version name <code>1.2.3</code> and version code <code>1002003</code>. See
+<a href="/publishing/releases.html">Releases</a>.</p>
+
+<h2>What the .toml decides</h2>
+
+<table>
+<thead><tr><th>Key</th><th>Becomes</th></tr></thead>
+<tbody>
+<tr><td><code>[window] title</code></td><td>The app's name under its icon.</td></tr>
+<tr><td><code>[window] orientation</code></td><td>The activity's screen orientation: <code>"landscape"</code>, <code>"portrait"</code> or <code>"unspecified"</code>. The same key sets iOS.</td></tr>
+<tr><td><code>[android] min_sdk</code></td><td>The oldest Android the app installs on, as an API level from 21 to 36; 24, the default, is Android 7.0. The target SDK is fixed at 36, which Google Play requires.</td></tr>
+<tr><td><code>[android] category</code></td><td><code>android:appCategory</code>, how the Play Store files the app: <code>"game"</code> by default. It is not what puts the icon in the launcher; that part is fixed.</td></tr>
+<tr><td><code>[android] gl_version</code></td><td>The OpenGL ES version a device must have to be offered the app. See below.</td></tr>
+<tr><td><code>[android.display] keep_on</code></td><td>The screen never sleeps while the game runs.</td></tr>
+<tr><td><code>[android.display] immersive</code></td><td>The system bars are hidden.</td></tr>
+<tr><td><code>[android.display] into_cutout</code></td><td>The game draws behind the notch. <code>rmp::ui</code> keeps its own controls out of it, padding the interface by the safe area.</td></tr>
+<tr><td><code>[android.permissions] internet</code>, <code>vibration</code></td><td>The permissions the app asks for. Each one is shown on the Play listing, so ask for nothing you do not use. <code>vibration</code> is what raymob's <code>Vibrate</code> needs.</td></tr>
+<tr><td><code>[android.features] gyroscope</code>, <code>accelerometer</code></td><td><code>true</code> hides the app from devices without the sensor; <code>false</code> declares it optional.</td></tr>
+<tr><td><code>[icon] source</code>, <code>adaptive_background</code></td><td>Every launcher icon density, the round icon and the adaptive icon's foreground, made from one picture. That needs Pillow on the machine that configures.</td></tr>
+</tbody>
+</table>
+
+<p>All of the switches are <code>true</code> or <code>false</code> and nothing else; the string
+<code>"false"</code> is refused rather than read as yes. A permission is an element of the manifest,
+present or absent, which is why the manifest is generated rather than filled in.</p>
+
+<pre data-lang="toml">
+[android]
+min_sdk = 26
+
+[android.display]
+into_cutout = false
+
+[android.permissions]
+vibration = true
+</pre>
+
+<h3><code>gl_version</code> is a requirement, not a choice</h3>
+
+<p><code>[android] gl_version</code> — <code>"ES20"</code>, <code>"ES30"</code>,
+<code>"ES31"</code> or <code>"ES32"</code>, <code>"ES30"</code> by default — writes the manifest's
+<code>&lt;uses-feature android:glEsVersion&gt;</code>: devices without that version are not offered
+the app. It does not change how the game draws. raylib's Android build is compiled for OpenGL ES 2.0
+whatever this says, so a higher value only narrows who can install the game. A game that needs no
+more than raylib draws with can ask for <code>"ES20"</code>.</p>
+
+<h2>Assets and saves</h2>
+
+<p>Gradle copies <code>resources/</code> into the APK's assets before it builds, and raylib's file
+functions read them there. The asset pack is left out: the pack is opened as a plain file, and inside
+an APK there is no such file, so Android always reads the loose copies — the files are in the APK
+unencrypted, and <code>[resources] rres_password</code> protects nothing on this target.</p>
+
+<p>Saves go to the app's private internal storage, in a <code>saves/</code> folder: no permission is
+needed, no other app can see them, and they are removed with the app.</p>
+
+<h2>Android-only extras: raymob</h2>
+
+<p><code>&lt;raymob.h&gt;</code> adds what raylib does not have on a phone: vibration, the on-screen
+keyboard, the accelerometer and the gyroscope, the screen's orientation, keeping the screen on, the
+app's storage folder. It declares those functions on Android only, so calls to it are guarded:</p>
+
+<pre data-lang="cpp" data-harness="file">
+#include &lt;raylib.h&gt;
+#ifdef __ANDROID__
+#include &lt;raymob.h&gt;
+#endif
+
+void on_hit() {
+#ifdef __ANDROID__
+    VibrateMS(40); // needs [android.permissions] vibration = true
+#endif
+}
+</pre>
+
+<p><code>examples/platform/02_mobile_raymob</code> uses each of them; see
+<a href="/examples/platform/02_mobile_raymob.html">its page</a>.</p>
+
+<h2>Ads</h2>
+
+<p><code>[android.admob] enabled</code> decides whether AdMob is in the build at all, and it is
+<code>true</code> in the <code>.toml</code> a new game starts with, set to Google's test ad units.
+<code>false</code> removes it completely: no Google Mobile Ads library, no advertising-ID permission,
+nothing to declare about advertising in Play's Data safety form, and the
+<a href="ref:rmp::ads"><code>rmp::ads</code></a> calls still compile and do nothing. It also switches
+itself off when Android is not a target, and it forces the internet permission on when it is
+on.</p>
+
+<pre data-lang="toml">
+[android.admob]
+enabled = false
+</pre>
+
+<p>The framework does not ship a consent form. Serving ads to players in the EEA or the UK requires
+one certified by Google, and adding it is yours before publishing with ads on.</p>
+
+<h2>Leaving the app</h2>
+
+<p><a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> ends the frame loop and, on
+Android, also tells the system the activity is finished, with <code>ANativeActivity_finish</code>. A
+process that simply stopped would leave its task in the recent-apps list, pointing at nothing.</p>
+
+<h2>Signing for Google Play</h2>
+
+<p>Google Play takes an Android App Bundle (an AAB) signed with your upload key. The key, and every
+password for it, are secrets, and none of them ever goes in <code>raylib_multiplatform.toml</code> —
+the <code>.toml</code> is committed, and there is no key in it for them. Create the upload keystore
+once and keep it somewhere you will not lose it:</p>
+
+<pre data-lang="shell">
+keytool -genkey -v -keystore upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+</pre>
+
+<p>CI reads it from four repository secrets on GitHub:</p>
+
+<table>
+<thead><tr><th>Secret</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><code>ANDROID_KEYSTORE_BASE64</code></td><td>The keystore file, base64-encoded: <code>base64 -w0 upload.jks</code>.</td></tr>
+<tr><td><code>ANDROID_KEYSTORE_PASSWORD</code></td><td>The keystore's password.</td></tr>
+<tr><td><code>ANDROID_KEY_ALIAS</code></td><td>The key's alias: <code>upload</code> above.</td></tr>
+<tr><td><code>ANDROID_KEY_PASSWORD</code></td><td>The key's password.</td></tr>
+</tbody>
+</table>
+
+<p>With them, the release bundle is signed with your key, its signature is verified, and it is
+attached to the release. Set the repository <em>variable</em> <code>ANDROID_SIGNER_CN</code> to the
+name your key was made with, and CI also checks the bundle is signed by that key and not merely by
+some key. Without the secrets, CI still builds and signs the bundle on every run — with a throwaway
+key made for that run — and names it <code>…-NOT-FOR-PLAY.aab</code>; that file is never attached to
+a release.</p>
+
+<p>On your own machine the release bundle is Gradle's <code>bundleRelease</code>, run in
+<code>raymob/</code> after <code>python3 tools/configure.py</code>:</p>
+
+<pre data-lang="shell">
+python3 tools/configure.py
+cd raymob
+./gradlew bundleRelease
+</pre>
+
+<p>Gradle signs it when four environment variables say where the key is:
+<code>ANDROID_KEYSTORE_FILE</code>, the path to the keystore, and the same three passwords and alias
+as above. Without them the bundle comes out unsigned, which is fine for looking at and not accepted
+by Google Play.</p>
+
+<h2>When a Gradle build is killed</h2>
+
+<p>raymob's sources carry its own package name, and the build rewrites them to your application id
+on the way in and puts them back when it finishes. A build that is killed half way — a cancelled
+job, a closed terminal, a machine out of memory — leaves them rewritten, and the next build then
+"restores" the wrong thing. CI fails loudly when that happens; on your machine, look for changes in
+<code>thirdparty/raymob/</code> and <code>raymob/app/</code> after an interrupted build, and put the
+files back with git before building again.</p>
+
+<h2>What CI checks</h2>
+
+<p>Android is in the fast lane. On every push CI builds the debug APK and checks it holds a manifest
+and the native library; builds the release AAB, signs it and verifies the signature; checks from the
+compiler's own records that the release was compiled as a release; and checks that Gradle put back
+every source it rewrote. It does not run the game: an Android emulator on a CI runner is slow and
+fails for reasons that have nothing to do with the game. A release can also send the debug APK to
+Firebase Test Lab, to be started on a real phone — see <a href="/publishing/index.html">Publishing</a>.</p>

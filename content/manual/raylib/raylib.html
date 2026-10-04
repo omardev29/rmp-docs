@@ -1,0 +1,349 @@
+<!--
+title: raylib in your game
+description: What the framework calls on raylib in your place — the window, the frame, the clock — and everything else, which is yours to call from your scenes.
+order: 10
+-->
+<h1>raylib in your game</h1>
+
+<p class="lede">A game made with the framework is a raylib game. The framework makes a small
+number of raylib calls for you — the ones every raylib program writes the same way: opening
+the window, beginning and ending the frame, closing it all at the end. Everything else in raylib
+is yours, from any scene, with nothing to unlock and nothing to convert.</p>
+
+<p>The split is easy to remember: the framework owns <em>when</em> things happen, and you own
+<em>what</em> happens. The frame loop, the window and the shutdown order are the framework's;
+drawing, input, loading, sound and the rest of raylib are yours, inside the hooks it calls.</p>
+
+<h2>What the framework owns</h2>
+
+<p><a href="ref:RMP_GAME"><code>RMP_GAME</code></a> in <code>src/main.cpp</code> writes the entry
+point for the platform you are building, and these are the raylib calls it makes so that you do
+not:</p>
+
+<table>
+<thead><tr><th>raylib call</th><th>When the framework makes it</th></tr></thead>
+<tbody>
+<tr><td><code>SetConfigFlags()</code></td><td>Once, before the window opens: <code>FLAG_WINDOW_RESIZABLE</code>, plus <code>FLAG_VSYNC_HINT</code> when <code>[window] vsync = true</code>.</td></tr>
+<tr><td><code>SetTargetFPS()</code></td><td>Once, before the window opens, when <code>[window] fps</code> is above 0 — and never on the web or iOS, where the browser and the display link pace the frame.</td></tr>
+<tr><td><code>InitWindow()</code></td><td>Once, at <code>[window] width</code> × <code>height</code>, titled <code>[window] title</code>. Your first scene's <code>_ready()</code> runs after it, so a texture loads there.</td></tr>
+<tr><td><code>WindowShouldClose()</code></td><td>Every frame, to see whether the player closed the window — except on the web and iOS, which have no such window and where it is never called.</td></tr>
+<tr><td><code>GetFrameTime()</code></td><td>Every frame, clamped to <code>[app] max_delta</code>, and handed to <code>_update(float delta)</code> as <code>delta</code>.</td></tr>
+<tr><td><code>BeginDrawing()</code> and <code>ClearBackground()</code></td><td>Every frame, cleared with the <a href="ref:rmp::Scene::background"><code>background</code></a> of the lowest scene being drawn, or the theme's when that is <code>BLANK</code>.</td></tr>
+<tr><td><code>BeginMode2D()</code> and <code>EndMode2D()</code></td><td>Every frame, around each scene's map and objects, with that scene's <a href="ref:rmp::Scene::camera"><code>camera</code></a>.</td></tr>
+<tr><td><code>EndDrawing()</code></td><td>Every frame, after the last scene's <code>_draw()</code>.</td></tr>
+<tr><td><code>CloseWindow()</code></td><td>Once, at the very end, after every scene, every <a href="ref:rmp::global"><code>rmp::global</code></a> and every resource that lives on the GPU has been released.</td></tr>
+</tbody>
+</table>
+
+<p>The sound device is not on that list on purpose: <a href="ref:rmp::audio"><code>rmp::audio</code></a>
+calls <code>InitAudioDevice()</code> the first time a sound is loaded or played, so a game that
+never makes a sound never opens one.</p>
+
+<p>Before your first scene's <code>_ready()</code> the framework has also opened the asset pack,
+if there is one, and routed raylib's own file loading through it; seeded
+<a href="ref:rmp::random"><code>rmp::random</code></a>; and on iOS moved into the app bundle, where
+the resources are.</p>
+
+<h3>One frame, in order</h3>
+
+<p>Every frame of a game made with <code>RMP_GAME</code> is the same sequence, and every hook you
+write has a fixed place in it:</p>
+
+<ol>
+<li>The input devices are sampled, once, for the whole frame.</li>
+<li>The scenes are updated from the bottom of the stack upwards, skipping the ones a scene above
+freezes. For each one: its <code>_update(delta)</code>, then its objects, then the collision pass,
+then its camera, which follows where everything ended up.</li>
+<li><code>BeginDrawing()</code>, and the clear.</li>
+<li>Every scene that is visible, from the bottom up: <code>BeginMode2D()</code> with its camera,
+its map, its objects, <code>EndMode2D()</code>, and then its own <code>_draw()</code> — outside the
+camera, in screen space.</li>
+<li><code>EndDrawing()</code>.</li>
+<li>The scene changes asked for during the frame — <code>change</code>, <code>push</code>,
+<code>replace</code>, <code>pop</code> — are applied.</li>
+</ol>
+
+<p data-fw-grep="src/rmp/scene.cpp::if \(window\) BeginMode2D\(scene\.camera\.raylib\(\)\);">That
+fourth step is why a HUD drawn in a scene's <code>_draw()</code> stays put while the camera moves:
+the camera is closed before <code>_draw()</code> is called, and it is the reason the
+<a href="/manual/core/scenes.html">scene</a> hooks say which space they draw in.</p>
+
+<h3>And when the game ends</h3>
+
+<p>The shutdown runs in an order that was chosen so nothing touches a dead GL context. First,
+everything that owns something on the GPU, while the window still exists: the scenes are ended from
+the top of the stack down — each gets its <a href="ref:rmp::Scene::_end"><code>_end()</code></a> —
+then the globals are destroyed, then the UI's font, then every texture, font and sound still
+loaded through <code>rmp::assets</code>. Then <code>CloseWindow()</code>. Then what owns nothing on
+the GPU: the asset pack, raylib's loader hook, and the sound device.</p>
+
+<p>It is the same sequence whether the player closed the window, the game called
+<a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a>, or a CI run reached its frame
+budget.</p>
+
+<h2>What stays yours</h2>
+
+<p>All of raylib: shapes, textures, text, models, shaders, sound, input, files, the window's state.
+Most headers under <code>include/rmp/</code> already include <code>&lt;raylib.h&gt;</code>, so a
+scene can call raylib with nothing more than the header it already has.</p>
+
+<h3>In <code>_update()</code>, use the delta you are given</h3>
+
+<p><code>delta</code> is the seconds since the last frame, the same number
+<code>GetFrameTime()</code> returns — with one difference that matters. A frame that really took
+longer than <code>[app] max_delta</code> arrives clamped, so dragging the window or stopping at a
+breakpoint gives the game a moment of slow motion instead of moving a bullet through a wall. Call
+<code>GetFrameTime()</code> yourself and you get the real number, unclamped.</p>
+
+<pre data-lang="cpp" data-harness="members">
+Vector2 ship{ 400, 225 };
+
+void _update(float delta) override {
+    if (IsKeyDown(KEY_RIGHT)) ship.x += 300 * delta;
+    if (IsKeyDown(KEY_LEFT)) ship.x -= 300 * delta;
+}
+
+void _draw() override {
+    DrawTriangle({ ship.x, ship.y - 20 }, { ship.x - 15, ship.y + 15 },
+                 { ship.x + 15, ship.y + 15 }, SKYBLUE);
+}
+</pre>
+
+<h3>Input: raylib's, or routed</h3>
+
+<p>raylib's input functions work everywhere, and read the same frame of input the framework does.
+What they do not know about is <em>who should hear it</em>. A query by name through
+<a href="ref:rmp::input"><code>rmp::input</code></a> is routed: an action bound to the mouse goes
+quiet while the interface wants the pointer, and every action goes quiet in a scene whose input is
+taken by a scene above it. <code>IsMouseButtonPressed()</code> called directly fires on the click
+that pressed a button in your menu as well.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static void shoot() {}">
+// raw: also fires when the click lands on a UI button
+if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) shoot();
+
+// routed: silent while rmp::ui wants the pointer
+rmp::input::action("fire", MOUSE_BUTTON_LEFT, KEY_SPACE);
+if (rmp::input::just_pressed("fire")) shoot();
+</pre>
+
+<p>The raw form has a spelling of its own in <code>rmp::input</code> too:
+<a href="ref:rmp::input::pressed"><code>rmp::input::pressed(KEY_W)</code></a> is exactly
+<code>IsKeyDown(KEY_W)</code>, never routed. The type of the argument says which of the two you
+asked for. The <a href="ref:rmp::ui"><code>rmp::ui</code></a> controls read the keyboard and the
+gamepad through a seam of their own, so a menu navigates with the arrow keys whether or not the
+game defines a single action.</p>
+
+<h3>In <code>_draw()</code>, screen space — and the world when you open the camera</h3>
+
+<p>A scene's <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a> runs after its map and its
+objects have been drawn, with the camera already closed. A coordinate there is a pixel of the
+window. To draw in the same world units as the objects, open the camera yourself, for exactly the
+lines that need it, with <a href="ref:rmp::Camera::raylib"><code>camera.raylib()</code></a>:</p>
+
+<pre data-lang="cpp" data-harness="members">
+Vector2 target{ 640, 300 };
+
+void _draw() override {
+    // the world, through the same camera the objects were drawn with
+    BeginMode2D(camera.raylib());
+    DrawCircleLinesV(target, 24, RED);
+    EndMode2D();
+
+    // the screen: stays put while the camera moves
+    DrawText("Find the target", 10, 10, 20, RAYWHITE);
+}
+</pre>
+
+<p>On a window of exactly the design size, with a camera nobody touched, the two spaces are the
+same and the difference is invisible. On any other window they are not, which is why Pong in
+<code>examples/games/01_pong</code> opens the camera to draw its net: drawn in screen pixels, the
+net and the court would come apart as soon as the window is resized.</p>
+
+<p>An object's own <a href="ref:rmp::Object::_draw"><code>_draw()</code></a> is different: it
+runs inside the camera already, because objects live in the world. Override it to draw an object
+with raylib calls of your own, in world units, without opening anything.</p>
+
+<p><code>rmp::ui</code> draws when <code>rmp::ui::end()</code> is called, so the order inside
+<code>_draw()</code> is the order on screen: what you draw before <code>rmp::ui::begin()</code> is
+under the interface, and what you draw after <code>rmp::ui::end()</code> is over it.</p>
+
+<h3>3D</h3>
+
+<p>Nothing in the framework is 2D-only on raylib's side. A scene that wants a 3D view keeps a
+<code>Camera3D</code> of its own and opens it in <code>_draw()</code>:</p>
+
+<pre data-lang="cpp" data-harness="members">
+Camera3D view{ .position = { 6, 6, 6 },
+               .target = { 0, 0, 0 },
+               .up = { 0, 1, 0 },
+               .fovy = 45,
+               .projection = CAMERA_PERSPECTIVE };
+
+void _draw() override {
+    BeginMode3D(view);
+    DrawCube({ 0, 0, 0 }, 2, 2, 2, MAROON);
+    DrawGrid(10, 1);
+    EndMode3D();
+
+    DrawText("3D, from a scene", 10, 10, 20, RAYWHITE);
+}
+</pre>
+
+<p>The scene's own <a href="ref:rmp::Scene::map"><code>map</code></a> and objects are 2D and are
+drawn before <code>_draw()</code>, so a 3D scene simply has neither. <code>DrawCube()</code> and
+<code>DrawGrid()</code> live in raylib's <code>rmodels</code> module; a game that lists
+<code>"rmodels"</code> in <code>[raylib] disabled_modules</code> does not have them.</p>
+
+<h3>What you load yourself</h3>
+
+<p>raylib's loaders work, and they read through the asset pack when there is one: opening the pack
+also routes raylib's own file loading through it, so <code>LoadTexture()</code>,
+<code>LoadModel()</code> and <code>LoadShader()</code> find a packed file by the same path they
+would find a loose one. Build every path from RMP_RESOURCES_PATH, the macro every build system
+defines with the folder its <code>resources/</code> are read from:</p>
+
+<pre data-lang="cpp" data-harness="members">
+Texture2D picture{};
+
+void _ready() override { picture = LoadTexture(RMP_RESOURCES_PATH "rabbit.png"); }
+
+void _end() override { UnloadTexture(picture); }
+
+void _draw() override { DrawTexture(picture, 0, 0, WHITE); }
+</pre>
+
+<p>What you load yourself you unload yourself, and <code>_end()</code> is a safe place for it: at
+shutdown every scene is ended while the window — and the GL context with it — still exists. The
+same goes for a <code>RenderTexture2D</code> from <code>LoadRenderTexture()</code>. The
+alternative is <a href="ref:rmp::assets::load_texture"><code>rmp::assets::load_texture()</code></a>,
+whose <a href="ref:rmp::Texture"><code>rmp::Texture</code></a> releases itself and converts to a
+<code>Texture2D</code> wherever raylib wants one.</p>
+
+<p>Two of raylib's loaders stay outside the pack, by raylib's design. <code>LoadMusicStream()</code>
+opens its file itself, so music loaded with it has to ship as a loose file;
+<a href="ref:rmp::audio::music"><code>rmp::audio::music()</code></a> streams from the pack instead.
+And the pack holds the files directly in <code>resources/</code>, not its subfolders.</p>
+
+<p>If your code calls <code>InitAudioDevice()</code> itself, the framework notices and leaves
+closing it to you; when <code>rmp::audio</code> opened it, the framework closes it after the
+window.</p>
+
+<h2>What never to call</h2>
+
+<p>A short list, and each one is on it because the framework already does the same job at a
+moment it has chosen for a reason.</p>
+
+<dl>
+<dt><code>InitWindow()</code> and <code>CloseWindow()</code></dt>
+<dd>The window is the framework's, from before your first <code>_ready()</code> to after your last
+<code>_end()</code>. A <code>CloseWindow()</code> of your own takes the GL context away while the
+framework still has textures, a font and your scenes' resources to release through it. To end the
+game, call <code>rmp::app::quit()</code>: the frame you are in finishes, and the shutdown above
+runs.</dd>
+
+<dt><code>BeginDrawing()</code> and <code>EndDrawing()</code> inside a hook</dt>
+<dd>The frame is already open when <code>_draw()</code> runs. <code>EndDrawing()</code> is what ends
+it — it submits the batch, swaps the buffers and polls the input — so a pair of your own inside a
+hook puts a half-drawn frame on the screen and then ends the frame a second time.</dd>
+
+<dt><code>SetTargetFPS()</code> on the web and on iOS</dt>
+<dd>The browser and the display link pace the frame there, and the framework hands them the loop
+for that reason. A frame cap is a wait inside their callback, which only stalls it. The cap you
+want is <code>[window] fps</code>, which the framework applies before the window opens on every
+target where it means something. If you change it at run time — a battery-saving option — keep the
+call off those two:
+<pre data-lang="cpp" data-harness="function">
+#if !defined(__EMSCRIPTEN__) &amp;&amp; !defined(PLATFORM_IOS)
+SetTargetFPS(30);
+#endif
+</pre>
+<code>__EMSCRIPTEN__</code> rather than <code>PLATFORM_WEB</code>, because the second is only
+defined by one of the two <code>[web] backend</code> choices.</dd>
+
+<dt><code>WindowShouldClose()</code></dt>
+<dd>The framework asks it every frame on the targets that have a window to close. On the web it is
+never called: there
+it returns <code>false</code> and calls <code>emscripten_sleep()</code>, which a build without
+ASYNCIFY — and this one has none — cannot do. To know whether the game is on its way out, ask
+<a href="ref:rmp::app::quit_requested"><code>rmp::app::quit_requested()</code></a>.</dd>
+
+<dt><code>exit()</code>, <code>std::exit()</code>, <code>abort()</code></dt>
+<dd>They end the process where it stands: your scenes never get <code>_end()</code>, the window is
+never closed, and on Android the Activity is left behind with its process gone. On iOS an app that
+ends itself "will appear to the user to have crashed", in Apple's own words (QA1561), and App
+Review rejects it. <code>rmp::app::quit()</code> is the way out everywhere it exists — and on iOS it
+deliberately does nothing but say, once,
+<samp>APP: quit() does nothing on iOS — Apple rejects apps that terminate themselves (QA1561). Ignoring.</samp></dd>
+
+<dt>A <code>while</code> loop that draws</dt>
+<dd>A loading screen that loops on <code>BeginDrawing()</code> until the work is done works on a
+desktop and freezes the tab on the web, where the browser owns the loop. Do the work a slice per
+frame in <code>_update()</code> instead, or in a scene of its own.</dd>
+</dl>
+
+<h2>Include what you use</h2>
+
+<p>There is no umbrella header. Each header under <code>include/rmp/</code> is one part of the
+framework you can name — <code>rmp/app.h</code>, <code>rmp/scene.h</code>, <code>rmp/ui.h</code>,
+<code>rmp/assets.h</code> and the rest — and a file includes the ones whose names it uses. A file
+that draws the HUD with <code>rmp::ui</code> includes <code>rmp/ui.h</code> and recompiles when the
+interface changes, not when the asset pipeline does;
+<code>examples/platform/03_minimal_includes</code> is one translation unit that includes
+<code>rmp/ui.h</code> and nothing else of ours, compiled on every run to prove that it is
+enough.</p>
+
+<p>For raylib the same rule reads naturally: include <code>&lt;raylib.h&gt;</code> in a file that
+calls raylib, rather than relying on which <code>rmp/</code> header happens to bring it. The other
+headers you may want are on the include path of every target and are never included for
+you:</p>
+
+<table>
+<thead><tr><th>Header</th><th>For</th></tr></thead>
+<tbody>
+<tr><td><code>&lt;raymath.h&gt;</code>, or <code>rmp/math.h</code></td><td>Vector and matrix maths, with C++ operators on raylib's own <code>Vector2</code>. <code>rmp/math.h</code> adds raylib-cpp's maths classes on top.</td></tr>
+<tr><td><code>&lt;rlgl.h&gt;</code></td><td>raylib's GL layer. See <a href="/manual/raylib/rlgl.html">rlgl and OpenGL</a>.</td></tr>
+<tr><td><code>&lt;clay.h&gt;</code></td><td>The layout engine under <code>rmp::ui</code>. See <a href="/manual/raylib/clay.html">Dropping to Clay</a>.</td></tr>
+<tr><td><code>&lt;raymob.h&gt;</code></td><td>Android's extras — vibration, the soft keyboard, the sensors — declared on Android only. See <a href="/manual/platforms/android.html">Android</a>.</td></tr>
+</tbody>
+</table>
+
+<p>The values from <code>raylib_multiplatform.toml</code> — <code>RMP_WINDOW_WIDTH</code>,
+<code>RMP_WINDOW_TITLE</code> and the rest, listed on the
+<a href="/reference/macros.html#from-the-toml">macros</a> page — come with every
+<code>rmp/</code> header, so you never include <code>rmp/config.h</code> yourself unless the file
+includes none of them.</p>
+
+<h2>Telling the platforms apart</h2>
+
+<p>Most games need no platform branch at all. When one does, the build defines a
+<code>PLATFORM_*</code> macro that names which of raylib's backends it was compiled for:</p>
+
+<table>
+<thead><tr><th>Macro</th><th>Defined when</th></tr></thead>
+<tbody>
+<tr><td><code>PLATFORM_DESKTOP</code></td><td>Windows, Linux, macOS and the BSDs on the default GLFW backend.</td></tr>
+<tr><td><code>PLATFORM_DESKTOP_WIN32</code></td><td><code>[windows] backend = "win32"</code>.</td></tr>
+<tr><td><code>PLATFORM_DESKTOP_RGFW</code></td><td><code>[windows] backend</code> or <code>[linux] backend</code> set to <code>"rgfw"</code>.</td></tr>
+<tr><td><code>PLATFORM_DRM</code></td><td>The Linux DRM/KMS targets, which draw with no X11 and no Wayland.</td></tr>
+<tr><td><code>PLATFORM_WEB</code></td><td>The web, with <code>[web] backend = "glfw"</code>.</td></tr>
+<tr><td><code>PLATFORM_WEB_EMSCRIPTEN</code></td><td>The web, with <code>[web] backend = "emscripten"</code>.</td></tr>
+<tr><td><code>PLATFORM_ANDROID</code></td><td>Android.</td></tr>
+<tr><td><code>PLATFORM_IOS</code></td><td>iOS.</td></tr>
+<tr><td><code>PLATFORM_MEMORY</code></td><td>raylib's software renderer, with no window and no GPU: what <code>rmp test render</code> and CI's render checks build.</td></tr>
+</tbody>
+</table>
+
+<p>For the operating system itself, use what the compiler defines: <code>_WIN32</code>,
+<code>__APPLE__</code> (macOS and iOS both), <code>__linux__</code> (Android too — test
+<code>__ANDROID__</code> first), <code>__ANDROID__</code>, <code>__EMSCRIPTEN__</code> (both web
+backends), and <code>__FreeBSD__</code>, <code>__OpenBSD__</code> and <code>__NetBSD__</code>, since
+the BSDs share <code>PLATFORM_DESKTOP</code> with the other desktops. And RMP_PRODUCTION_BUILD,
+which every build system defines, is <code>0</code> or <code>1</code> on every target, for code that
+belongs in a debug build only:</p>
+
+<pre data-lang="cpp" data-harness="function">
+#if !RMP_PRODUCTION_BUILD
+DrawFPS(10, 10);
+#endif
+</pre>

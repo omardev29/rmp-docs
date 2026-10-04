@@ -1,0 +1,28 @@
+<!--
+title: Working with raylib and Clay
+description: The framework is built on raylib and hides none of it: what it does in your place, and how to reach raylib, Clay, rlgl and plain C yourself.
+order: 40
+-->
+<h1>Working with raylib and Clay</h1>
+
+<p class="lede">Everything the framework adds lives under <code>rmp::</code>, and everything else in
+a game is raylib's, unchanged in its API and fully available. These pages are about that border:
+what the framework does in your place, what stays yours, and how to go below it — to raylib
+directly, to the layout engine underneath <code>rmp::ui</code>, to rlgl and OpenGL, or out of the
+framework altogether.</p>
+
+<ul>
+<li><a href="/manual/raylib/raylib.html">raylib in your game</a> — what the framework owns (the
+window, the frame, the clock), what you are free to call in <code>_update()</code> and
+<code>_draw()</code>, and the handful of raylib calls that would fight it.</li>
+<li><a href="/manual/raylib/clay.html">Dropping to Clay</a> — writing Clay's own elements in the
+same frame as <code>rmp::ui</code>, and the rules that make it work: ids, strings, images.</li>
+<li><a href="/manual/raylib/rlgl.html">rlgl and OpenGL</a> — raylib's GL layer from a game, which
+OpenGL each target really runs, and what raw OpenGL costs you.</li>
+<li><a href="/manual/raylib/plain-c.html">Plain C</a> — the opt-out: your own
+<code>main()</code> in C, the build and the pipeline kept, the runtime layer given up.</li>
+</ul>
+
+<p>The rule underneath all four is the same one: the framework never stops you from calling
+raylib, and it never asks you to. <code>rmp::assets</code> does not stop you calling
+<code>LoadTexture()</code>, and <code>rmp::ui</code> does not stop you calling Clay.</p>

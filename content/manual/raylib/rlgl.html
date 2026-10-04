@@ -1,0 +1,185 @@
+<!--
+title: rlgl and OpenGL
+description: raylib's GL layer from a game: where in the frame it is safe, which OpenGL each target really runs, and what raw OpenGL costs.
+order: 30
+-->
+<h1>rlgl and OpenGL</h1>
+
+<p class="lede">Under every raylib drawing call is rlgl, raylib's thin layer over OpenGL: a matrix
+stack, a render batch, blend and depth state, shaders. It is on the include path of every target,
+it is what raylib's own drawing is made of, and it is the portable way to reach below
+<code>DrawTexture()</code> — the one that works on every target the framework builds, including the
+software renderer its tests run on.</p>
+
+<p>Raw OpenGL is possible too, and costs more than it looks: the version is not the same on every
+target, and the framework hands your code no GL header and no loader.</p>
+
+<h2>Where in the frame</h2>
+
+<p><code>&lt;rlgl.h&gt;</code> is never included for you; a file that uses it says so. What it is
+safe to do, and where, follows from the frame the framework runs:</p>
+
+<table>
+<thead><tr><th>Where</th><th>What is safe there</th></tr></thead>
+<tbody>
+<tr><td>A scene's <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a></td><td>Drawing, in screen space. It is the hook that runs between <code>BeginDrawing()</code> and <code>EndDrawing()</code>.</td></tr>
+<tr><td>An object's <a href="ref:rmp::Object::_draw"><code>_draw()</code></a></td><td>Drawing, in world space: it runs inside the scene's camera.</td></tr>
+<tr><td>A scene's <a href="ref:rmp::Scene::_ready"><code>_ready()</code></a></td><td>Creating GPU resources — textures, render textures, shaders. The window, and the GL context with it, exists by then.</td></tr>
+<tr><td>A scene's <a href="ref:rmp::Scene::_end"><code>_end()</code></a></td><td>Releasing them. At shutdown every scene is ended before the window closes.</td></tr>
+<tr><td>A scene's constructor, or a member initialiser</td><td>Nothing that touches the GPU. The first scene is constructed before the window opens.</td></tr>
+<tr><td><code>_update()</code></td><td>Nothing that draws. The frame has not begun.</td></tr>
+</tbody>
+</table>
+
+<p>The constructor is the one that surprises. <code>RMP_GAME</code> builds your first scene as the
+argument to the call that opens the window, so anything its constructor or its member initialisers
+load is loaded with no GL context — and comes back empty, with raylib asking in the log whether you
+are trying to load before <code>InitWindow()</code>. Every scene after the first is
+constructed while the game runs, which is why the mistake hides until the scene it is in becomes
+the first one.</p>
+
+<h2>The batch</h2>
+
+<p>raylib does not send each drawing call to the GPU as it comes. It queues vertices into a render
+batch and submits the batch when it is full, when a change of state forces it, and at the end of
+the frame in <code>EndDrawing()</code>. Everything drawn through raylib and rlgl goes through that
+one queue, in order, so mixing <code>DrawRectangle()</code> with <code>rlBegin()</code> and
+<code>rlVertex2f()</code> needs no ceremony.</p>
+
+<p>Two things do need it, and both are about code that reads or writes the GPU around the queue
+rather than through it: raw OpenGL calls, and reading the framebuffer back. Flush the queue first
+with <code>rlDrawRenderBatchActive()</code>, or raylib's drawing lands after yours, and the read
+sees only what was submitted before. The framework's own CI capture, in
+<code>tests/smoke_test.h</code>, flushes for exactly that reason before it reads a frame back.</p>
+
+<p>The batch is not the same size everywhere: rlgl sizes it at 8192 quads on OpenGL 3.3 and at 2048
+on OpenGL ES 2.0, so the same scene submits more often on the web and on Android than on a
+desktop.</p>
+
+<h2>Leave the state as you found it</h2>
+
+<p>Your <code>_draw()</code> is not the last thing in the frame. The interface draws in
+<code>rmp::ui::end()</code>, the scenes above yours draw after it, and next frame the world draws
+again with whatever state the GPU was left in. raylib's paired calls put back what they change; a
+bare rlgl switch stays switched until something switches it back:</p>
+
+<pre data-lang="cpp" data-harness="members" data-given="#include &lt;rlgl.h&gt;">
+float angle = 0;
+
+void _update(float delta) override { angle += 90 * delta; }
+
+void _draw() override {
+    // a pair: blending goes back to alpha at EndBlendMode()
+    BeginBlendMode(BLEND_ADDITIVE);
+    DrawCircleV({ 200, 200 }, 60, Fade(ORANGE, 0.6f));
+    DrawCircleV({ 240, 200 }, 60, Fade(SKYBLUE, 0.6f));
+    EndBlendMode();
+
+    // the matrix stack: whatever is pushed is popped
+    rlPushMatrix();
+    rlTranslatef(500, 225, 0);
+    rlRotatef(angle, 0, 0, 1);
+    DrawRectangle(-40, -40, 80, 80, LIME);
+    rlPopMatrix();
+}
+</pre>
+
+<p>The same goes for <code>BeginScissorMode()</code>, <code>BeginShaderMode()</code> and
+<code>BeginTextureMode()</code>, each with its <code>End</code>. Switches such as
+<code>rlEnableDepthTest()</code> or <code>rlDisableBackfaceCulling()</code> have no pair: turn
+back on what you turned off before <code>_draw()</code> returns.</p>
+
+<h2>Which OpenGL each target runs</h2>
+
+<p>raylib is compiled once per target for one version of OpenGL, and it is not the same version
+everywhere. This is what the framework's build asks for at its current source:</p>
+
+<table>
+<thead><tr><th>Targets</th><th>OpenGL</th><th><code>rlGetVersion()</code></th></tr></thead>
+<tbody>
+<tr><td>Windows, Linux (glibc and musl, every architecture), the BSDs</td><td>OpenGL 3.3, whichever windowing backend is chosen</td><td><code>RL_OPENGL_33</code></td></tr>
+<tr><td>macOS</td><td>OpenGL 3.3 — raylib's build fixes it there, and notes that Apple has marked OpenGL deprecated</td><td><code>RL_OPENGL_33</code></td></tr>
+<tr><td>Linux DRM/KMS</td><td>OpenGL ES 2.0, through EGL and GBM</td><td><code>RL_OPENGL_ES_20</code></td></tr>
+<tr><td>Web</td><td>OpenGL ES 2.0, which the browser provides as WebGL — with either <code>[web] backend</code></td><td><code>RL_OPENGL_ES_20</code></td></tr>
+<tr><td>Android</td><td>OpenGL ES 2.0, whatever <code>[android] gl_version</code> says (see below)</td><td><code>RL_OPENGL_ES_20</code></td></tr>
+<tr><td>iOS</td><td>OpenGL ES 3.0, through ANGLE, which runs it on Metal. The game is compiled for ES 3.0; raylib itself comes prebuilt from the raylib-iOS fork.</td><td><code>RL_OPENGL_ES_30</code></td></tr>
+<tr><td>The software renderer of <code>rmp test render</code> and CI's render checks</td><td>None: raylib rasterises on the CPU, into memory</td><td><code>RL_OPENGL_SOFTWARE</code></td></tr>
+</tbody>
+</table>
+
+<p><code>[android] gl_version</code> deserves its sentence. It writes the
+<code>&lt;uses-feature android:glEsVersion&gt;</code> line of the Android manifest — the version a
+device must have for the Play Store to offer it your game — and nothing else: the Android build
+compiles raylib for OpenGL ES 2.0 whatever it says. Setting it to <code>"ES30"</code>, the default,
+narrows who can install the game, and does not give the game OpenGL ES 3.0.</p>
+
+<p>Ask at run time rather than with a macro: <code>rlGetVersion()</code> is compiled into raylib
+itself, so it answers for the library the game really linked against.</p>
+
+<h3>Shaders</h3>
+
+<p>The version decides which shading language a shader is written in: GLSL 330 for OpenGL 3.3,
+GLSL 100 for OpenGL ES 2.0, and GLSL 300 es for OpenGL ES 3.0. A game with shaders ships one file
+for each language its targets report, and picks by version:</p>
+
+<pre data-lang="cpp" data-harness="members" data-given="#include &lt;rlgl.h&gt;">
+Shader glow{};
+
+void _ready() override {
+    const char *glsl = "100";                               // ES 2.0: DRM, web, Android
+    if (rlGetVersion() == RL_OPENGL_33) glsl = "330";       // the desktops
+    if (rlGetVersion() == RL_OPENGL_ES_30) glsl = "300es";  // iOS
+    glow = LoadShader(nullptr, TextFormat(RMP_RESOURCES_PATH "glow%s.fs", glsl));
+}
+
+void _end() override { UnloadShader(glow); }
+
+void _draw() override {
+    BeginShaderMode(glow);
+    DrawRectangle(100, 100, 200, 200, WHITE);
+    EndShaderMode();
+}
+</pre>
+
+<p><code>LoadShader()</code> reads its files through the asset pack like every raylib loader the
+framework hooks, so the shaders ship inside <code>resources.rres</code> with everything else. Keep
+them directly in <code>resources/</code>: the pack does not reach into subfolders.</p>
+
+<h2>Raw OpenGL</h2>
+
+<p>The framework gives your code no OpenGL header and no function loader. raylib loads the GL
+functions it needs inside rlgl's implementation, for itself. What that means in practice:</p>
+
+<ul>
+<li><strong>The versions differ</strong> by target, as the table above says, so a GL call that is
+fine on a desktop's OpenGL 3.3 may not exist on the web's ES 2.0.</li>
+<li><strong>The software renderer has no GL at all.</strong> <code>rmp test render</code> and the
+render checks in CI build the game against raylib's software renderer, which links no GL library —
+a direct <code>glClear()</code> in a game's code links on a Linux desktop and fails to link there,
+with the linker reporting an undefined <code>glClear</code>. Code that calls OpenGL directly has to
+be left out of that build, for instance with
+<code>#if !defined(GRAPHICS_API_OPENGL_SOFTWARE)</code> around it.</li>
+<li><strong>The queue comes first.</strong> Call <code>rlDrawRenderBatchActive()</code> before your
+own GL calls, so raylib's queued drawing reaches the GPU before them.</li>
+<li><strong>The state goes back.</strong> raylib keeps its own idea of what is bound and enabled; a
+raw call that changes it behind rlgl's back changes it for every draw that follows.</li>
+</ul>
+
+<p>raylib does lend out its loader. <code>rlGetProcAddress()</code> returns the address of a GL
+function through the same loader raylib used for itself — on the targets whose OpenGL is 3.3 or
+ES 2.0. On iOS and under the software renderer it returns null, so the call has to be checked:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="#include &lt;rlgl.h&gt;">
+using GetIntegerv = void (*)(unsigned int, int *);
+auto get_integerv = reinterpret_cast&lt;GetIntegerv&gt;(rlGetProcAddress("glGetIntegerv"));
+if (get_integerv != nullptr) {
+    rlDrawRenderBatchActive();
+    int largest = 0;
+    get_integerv(0x0D33, &amp;largest); // GL_MAX_TEXTURE_SIZE
+    TraceLog(LOG_INFO, "largest texture: %d", largest);
+}
+</pre>
+
+<p>Everything past that — a GL loader of your own, linking the platform's GL library yourself, the
+GLES headers of each mobile SDK — is outside what the framework builds and tests on its targets. If
+rlgl can say it, say it with rlgl.</p>

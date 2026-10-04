@@ -1,0 +1,275 @@
+<!--
+title: Troubleshooting
+description: Real problems and the messages they print — a missing Python, a refused .toml, a build directory left over from the other build type, assets that fail to load, a window with nothing in it — and what to do about each.
+order: 10
+-->
+<h1>Troubleshooting</h1>
+
+<p class="lede">Each entry here is a problem that really happens, with what the framework prints
+when it does. A message set like <samp>rmp: not inside a project</samp> is the framework's own
+words, checked against its source; a line of the log
+that starts with <code>INFO:</code> or <code>WARNING:</code> is raylib's log, which the framework
+writes into too.</p>
+
+<p>Most of the framework's warnings about a game are said once, however many frames they happen in.
+With <code>[dev] strict = true</code> the first one stops a debug build instead, in the debugger, at
+the line that caused it, saying <samp>[dev] strict = true: the diagnostic above is fatal in a debug
+build. Fix it, or set strict = false in raylib_multiplatform.toml.</samp> A release build never
+stops for one.</p>
+
+<h2>Before anything builds</h2>
+
+<h3>Python is missing, or too old</h3>
+
+<p><code>rmp</code> and the configuration need Python 3.11 or newer, because they read the
+<code>.toml</code> with the library that version added. The launchers ask every Python they find for
+its version, rather than taking the first one, because the obvious one is often wrong: the
+<code>python3</code> macOS ships is older than 3.11, and on Windows <code>python3</code> can be the
+Microsoft Store's placeholder. When none will do, the launcher says it needs Python 3.11 or newer on
+the PATH, and a Python that is found and too old says
+<samp>rmp needs Python 3.11 or newer; this is …</samp> with its version and its path.</p>
+
+<p data-fw-grep="cmake/configure_hook.cmake::no usable Python 3\.11\+ found and nothing has been generated yet">CMake
+needs it too: <code>cmake --preset debug</code> runs <code>tools/configure.py</code> before anything
+else, and stops when it can find no Python 3.11 and nothing has been generated yet. When the files
+were generated before, it warns and builds with them — but then edits to the <code>.toml</code> are
+not picked up until a Python is there again.</p>
+
+<h3>A tool is not on the PATH</h3>
+
+<p><code>rmp</code> says which one: <samp>FALLA: cmake is not installed, or not on PATH</samp>. A
+game needs CMake, Ninja and a C++ compiler; on Linux, the X11 development libraries as well.</p>
+
+<h3><code>rmp</code> does nothing outside a game</h3>
+
+<p><samp>rmp: not inside a project</samp> means there is no <code>raylib_multiplatform.toml</code>
+in the folder or above it. <code>rmp</code> works from anywhere inside a game; <code>rmp new
+my_game</code> makes one.</p>
+
+<h3>The .toml is refused</h3>
+
+<p><code>tools/configure.py</code> reads the <code>.toml</code> before anything is compiled, and
+refuses a value it cannot build — or a pair of values it cannot honour together — with the file, the
+line, and what to write instead. This one asks for a frame rate the clamp on the frame time would
+turn into slow motion:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[window]
+fps = 15
+</pre>
+
+<p>The message is the fix. <code>rmp test config</code>, or <code>python3 tools/configure.py
+--check</code>, checks the file without building anything. A key the framework does not know is
+refused as well, so a misspelt key cannot be silently ignored.</p>
+
+<h3>A release is refused</h3>
+
+<p>A tag builds a release, and a release under a placeholder identity is refused:
+<samp>refusing to build a release with placeholder identifiers</samp>, naming the Android
+application id or the iOS bundle id that still says <code>com.example.</code>. A Google Play id can
+never change once published, so it is checked before the first release rather than after it. Set
+real ids in the <code>.toml</code>. A tag that is not a version — <code>v1.2.3</code>, optionally
+with a pre-release part — is refused as well; see <a href="/publishing/releases.html">Releases</a>.</p>
+
+<h2>Building</h2>
+
+<h3>Switching between a debug and a release build</h3>
+
+<p>The debug and release builds share <code>build/</code>, and a CMake cache keeps the compiler it
+was first configured with — the one <code>[dev] compiler</code> chose, for a debug build — so a
+release configured on top of a debug cache would be built with your development compiler instead of
+the one CI ships with. <code>rmp</code> handles it: when <code>build/</code> was configured as the
+other build type, it deletes it and starts again, saying <samp>removing build/ -- the compiler is
+cached and would carry over.</samp></p>
+
+<p data-fw-grep="CMakeLists.txt::A release build must not inherit it">With CMake's presets used
+directly, the release configure stops instead, explaining that the directory was configured by the
+debug preset and that a release build must not inherit its compiler. <code>rmp clean</code> — or
+deleting <code>build/</code> — and configuring again is the fix.</p>
+
+<h3>A link error about the entry point</h3>
+
+<p>A program has exactly one entry point: <code>RMP_GAME</code> or <code>RMP_ENTRY_POINT</code>,
+once, in one file. Two of them define the same symbols twice, and the linker names
+<code>rmp_entry_point_is_declared_exactly_once</code> as a duplicate — the symbol exists so that
+this error points at the cause. A game with neither has no <code>main()</code>, and the link fails
+saying so.</p>
+
+<h3>A handle that will not convert</h3>
+
+<p>This does not compile, on purpose:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="deleted">
+Texture2D picture = rmp::assets::load_texture("rabbit.png");
+</pre>
+
+<p>The <code>rmp::Texture</code> the loader returns is a temporary that would release the texture
+at the end of the line, leaving <code>picture</code> pointing at a texture that had already been
+unloaded. Keep the handle — <code>rmp::Texture picture = …</code> — and hand it to raylib where
+raylib wants a <code>Texture2D</code>; it converts there.</p>
+
+<h3>Compiling the framework outside its build</h3>
+
+<p><samp>RMP_PRODUCTION_BUILD is not defined: the build system has to pass it (0 or 1)</samp> comes
+from <code>src/rmp/app.cpp</code> when it is compiled by a build that does not define that macro.
+CMake, Gradle and the generated Xcode project all do; a build of your own has to as well.</p>
+
+<h3>Raw OpenGL links on the desktop and not in the tests</h3>
+
+<p><code>rmp test render</code> and CI's render checks build the game against raylib's software
+renderer, which links no OpenGL library, so a direct <code>glClear()</code> in a game links on a
+Linux desktop and fails there as an undefined symbol. See
+<a href="/manual/raylib/rlgl.html">rlgl and OpenGL</a>.</p>
+
+<h2>Assets</h2>
+
+<h3>A release build finds nothing</h3>
+
+<p>A debug build reads <code>resources/</code> by its absolute path. A desktop release reads
+<code>./resources/</code>, relative to the working directory — so a release started from another
+folder logs <samp>ASSETS: No resource pack found, using loose files from ./resources/</samp> and
+every texture comes back empty. Start the game from its own folder, where the archive put
+<code>resources/</code>.</p>
+
+<h3>An asset failed to load</h3>
+
+<p>When the game is started with a frame budget — <code>rmp test smoke</code>, and every boot test
+in CI — it logs a line beginning <code>RAY_TEST_BOOT_OK</code> with <code>assets_failed=</code> and
+<code>assets_requested=</code>, and a run with a failed asset does not pass:
+<samp>FALLA: the game did not boot, or an asset failed to load</samp>. An asset failed when an
+<code>rmp::assets</code> load found its name neither in the pack nor in <code>resources/</code>.
+Look for:</p>
+
+<ul>
+<li><strong>A misspelt name.</strong> Names are file names: <code>"player.png"</code>, not a
+path.</li>
+<li><strong>A file in a subfolder.</strong> The pack holds the files directly in
+<code>resources/</code> and does not reach into folders, and a release configure warns when it
+finds one. Move the file up.</li>
+<li><strong>A name in the pack the pack cannot open.</strong> The log says
+<samp>ASSETS: '…' not found in pack, falling back to loose file</samp> before trying the loose file;
+when a packed file will not decrypt, it says <samp>ASSETS: Failed to unpack</samp> — a pack made
+with a different <code>[resources] rres_password</code>. <code>rmp pack</code> makes it again, or
+<code>rmp unpack</code> goes back to loose files.</li>
+</ul>
+
+<p>Only loads through <code>rmp::assets</code> are counted. A <code>LoadTexture()</code> of your own
+that fails is not in the number — and leaves an empty texture all the same.</p>
+
+<h3>A sound does not play</h3>
+
+<p><code>rmp::audio</code> finds a sound by its name, trying the name as given and then each
+extension it can play, and says once when there is nothing:
+<samp>AUDIO: no sound called "…" in resources/ (tried the name as given, then .wav, .ogg, .mp3,
+.qoa)</samp>. On a machine with no sound device it says
+<samp>AUDIO: no sound device on this machine; sound is off and every rmp::audio call is a silent
+no-op from here on</samp>, and the game runs on, silent. In a browser, sound waits for the player's
+first click, touch or key — see <a href="/manual/platforms/web.html">Web</a>.</p>
+
+<h2>A window with nothing in it</h2>
+
+<h3>The game booted and drew nothing</h3>
+
+<p><code>rmp test smoke</code> says <samp>FALLA: the game booted and drew nothing</samp> when the
+frame it reads back is blank. Things that come to that:</p>
+
+<ul>
+<li><strong>Every texture is empty</strong> because the assets were not found — see above. An
+empty texture draws nothing rather than crashing: a hole in the picture, not a dead process.</li>
+<li><strong>The last scene was popped.</strong> The framework refuses, and says
+<samp>SCENE: pop() with … scene(s) on the stack would leave nothing to draw; ignoring. Did you mean
+rmp::app::quit()?</samp></li>
+<li><strong>The interface hit its ceiling.</strong> <samp>UI: more than max_elements (…) elements
+in one frame. The interface will not lay out again until the game is restarted.</samp> Raise
+<code>[ui] max_elements</code>, or draw less at once.</li>
+<li><strong>Drawing in the wrong space.</strong> A scene's <code>_draw()</code> is in screen
+pixels, and objects are drawn through the camera. On a window that is not the design size, world
+coordinates drawn in <code>_draw()</code> without opening the camera land somewhere else — see
+<a href="/manual/raylib/raylib.html">raylib in your game</a>.</li>
+<li><strong>The web build ran out of memory.</strong> The tab stops with Emscripten's "Cannot
+enlarge memory arrays". Raise <code>[web] memory</code>.</li>
+</ul>
+
+<h3>A key does nothing</h3>
+
+<p>An action read by a name nobody defined reads as false, and says so once:
+<samp>INPUT: no action called</samp> followed by the name and how to define it. An action that is
+defined can still be silent on purpose: a mouse action while the interface wants the pointer, a key
+action while the interface wants the keyboard, and every action in a scene whose input a scene above
+it has taken.</p>
+
+<h2>On one platform only</h2>
+
+<h3>Linux: "version GLIBC_… not found"</h3>
+
+<p>The binary was built against a newer glibc than the machine has. CI's builds honour
+<code>[linux] glibc</code>, the oldest glibc the binary may need; <code>rmp build release</code> on
+your own machine uses your machine's. See <a href="/manual/platforms/desktop.html">Desktop</a> for
+the floor, and for the targets it does not apply to.</p>
+
+<h3>Linux on Wayland: the window has no position</h3>
+
+<p>With <code>[linux] wayland = true</code>, <code>GetWindowPosition()</code> and
+<code>SetWindowPosition()</code> do nothing, and GLFW warns the first time. That is Wayland's
+design: a window does not know where it is.</p>
+
+<h3>Windows: the executable is quarantined</h3>
+
+<p>An unsigned <code>.exe</code> compressed with UPX looks like malware to Windows Defender on some
+machines. Windows is left out of <code>[upx]</code> by default for that reason; if you added it and
+do not sign your builds, take it out again.</p>
+
+<h3>Web: a blank page, or no build at all</h3>
+
+<p>Opened as a file, the page cannot fetch the rest of the game — <code>rmp web</code> says
+<samp>serve it, do not open the file directly</samp>. Serve the folder over HTTP. Without the
+Emscripten SDK activated, <code>rmp web</code> stops at once with
+<samp>the web build needs the emsdk: activate it first (source emsdk_env.sh, or emsdk_env.ps1 on
+Windows), so that EMSDK is set</samp>.</p>
+
+<h3>Android: the sources changed after a build</h3>
+
+<p>The Android build rewrites raymob's package name in a few of its sources and puts it back at the
+end. A build that was killed half way leaves them rewritten, and the next build restores the wrong
+thing. After an interrupted Gradle build, check <code>thirdparty/raymob/</code> and
+<code>raymob/app/</code> for changes and put them back with git. Gradle also stops at once when
+<code>raymob/generated.properties</code> is missing; <code>python3 tools/configure.py</code> writes
+it.</p>
+
+<h3>iOS: Quit does nothing</h3>
+
+<p>On purpose: <samp>APP: quit() does nothing on iOS — Apple rejects apps that terminate themselves
+(QA1561). Ignoring.</samp> See <a href="/manual/platforms/ios.html">iOS</a> for why, and for hiding
+the button there.</p>
+
+<h3>OpenBSD and NetBSD: portable saves are not portable</h3>
+
+<p><samp>SAVE: [save] portable: this system does not say where the executable is; saving in the
+user's folder instead</samp> — raylib cannot tell where the executable is on those two, so there is
+no "next to the executable" to save in.</p>
+
+<h2>In CI</h2>
+
+<h3>A run was cancelled</h3>
+
+<p>A push cancels the run already going on the same branch. <code>rmp push</code> refuses while one
+is in flight and names it; <code>rmp push force</code> is for when cancelling it is what you
+meant.</p>
+
+<h3>A BSD job failed, and nothing you changed explains it</h3>
+
+<p>The BSD jobs install their build tools from each system's package mirrors, which publish no dated
+snapshots — the one part of CI that is not pinned. Suspect the mirror first, and run the job
+again.</p>
+
+<h3>The Android bundle is called NOT-FOR-PLAY</h3>
+
+<p>CI signed it with a throwaway key because the signing secrets are not set. See
+<a href="/manual/platforms/android.html">Android</a> for the four secrets that make it a bundle
+Google Play accepts.</p>
+
+<h3>The iOS app is built but never started</h3>
+
+<p>Starting it in the simulator runs only when the repository variable
+<code>IOS_SIMULATOR_TEST</code> is <code>true</code>, because the simulator on the hosted runners does
+not boot reliably.</p>

@@ -1,0 +1,142 @@
+<!--
+title: Platforms
+description: Every target the framework builds, how a game chooses its own in [targets], and what CI does with each one — on every push, and on a release.
+order: 50
+-->
+<h1>Platforms</h1>
+
+<p class="lede">One codebase builds for {{count:targets}} targets: {{list:targets}}. A game chooses
+which of them it ships in one place, <code>[targets]</code> in
+<code>raylib_multiplatform.toml</code>, and everything downstream — the build files, CI, the
+release — follows that choice.</p>
+
+<p>The code of a game does not change from one target to another. What changes is how the game is
+built, packaged and run, and the pages in this section are about those differences:</p>
+
+<ul>
+<li><a href="/manual/platforms/desktop.html">Desktop</a> — Windows, macOS, Linux (glibc, musl,
+DRM/KMS, RISC-V) and the BSDs.</li>
+<li><a href="/manual/platforms/web.html">Web</a> — Emscripten, a browser that owns the frame loop,
+memory, saves and sound.</li>
+<li><a href="/manual/platforms/android.html">Android</a> — raymob, Gradle generated from the
+<code>.toml</code>, permissions, signing.</li>
+<li><a href="/manual/platforms/ios.html">iOS</a> — Xcode through XcodeGen, the raylib-iOS fork, and
+an app that is not allowed to quit.</li>
+</ul>
+
+<h2>Every target</h2>
+
+<div data-generated="targets-table"></div>
+
+<p>A target's name is <code>&lt;os&gt;-&lt;arch&gt;-&lt;libc&gt;-&lt;env&gt;</code>, and each part
+is only there when it can differ. <code>linux-x64-glibc</code> and <code>linux-x64-musl</code> name
+their C library because a glibc binary does not start on Alpine and a musl binary does not start on
+Debian; <code>windows-x64</code> stops after the architecture because Windows has one C library;
+<code>macos</code> stops at the operating system because its binary carries both architectures. The
+last part, the environment, is the windowing system, and it is only written when the binary is
+limited to one: <code>linux-x64-glibc-drm</code> draws through DRM/KMS, with no X11 and no
+Wayland.</p>
+
+<h3>Families</h3>
+
+<p>Each target belongs to one of {{count:families}} families, and the family is which part of CI
+builds it: <code>linux</code>, <code>windows</code>, <code>apple</code>, <code>web</code>,
+<code>android</code> and <code>bsd</code>. CI skips a whole family when none of its targets are
+enabled, so a game that ships only to desktops never starts an Android build.</p>
+
+<h2>Choosing a game's targets</h2>
+
+<p><code>[targets]</code> has two lists. <code>enabled</code> names targets and groups;
+<code>disabled</code> is subtracted from whatever <code>enabled</code> came to. Groups expand and
+duplicates fold together, so there is no order to think about and nothing to conflict:</p>
+
+<pre data-lang="toml">
+[targets]
+enabled = ["all"]
+disabled = ["ios"]
+</pre>
+
+<p>That is everything but iOS. The same lists take exact target names, and mix them with groups:</p>
+
+<pre data-lang="toml">
+[targets]
+enabled = ["desktop", "web", "linux-x64-musl"]
+disabled = ["windows-arm64"]
+</pre>
+
+<p>The groups:</p>
+
+<table>
+<thead><tr><th>Group</th><th>Holds</th></tr></thead>
+<tbody>
+<tr><td><code>all</code></td><td>Every target.</td></tr>
+<tr><td><code>desktop</code></td><td>Linux glibc on x86-64, ARM64 and RISC-V; Windows on x86-64 and ARM64; macOS. Not musl, not the DRM targets and not the BSDs.</td></tr>
+<tr><td><code>linux</code></td><td>Every Linux target: the glibc ones, musl and the DRM ones.</td></tr>
+<tr><td><code>windows</code></td><td>Windows on x86-64 and ARM64.</td></tr>
+<tr><td><code>apple</code></td><td>macOS and iOS.</td></tr>
+<tr><td><code>mobile</code></td><td>Android and iOS.</td></tr>
+<tr><td><code>bsd</code></td><td>FreeBSD, OpenBSD and NetBSD, on every architecture built for them.</td></tr>
+<tr><td><code>drm</code></td><td>The Linux DRM/KMS targets.</td></tr>
+<tr><td><code>web</code>, <code>android</code></td><td>The one target each.</td></tr>
+</tbody>
+</table>
+
+<p>The table above says which groups each target is in. A name that is neither a target nor a group
+is refused, and so is a pair of lists that leaves nothing to build. So is the most natural typo of
+all — a group name without the brackets of a list:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[targets]
+enabled = "all"
+</pre>
+
+<p>Turning a target off removes it from the build, from CI and from the release. Other settings
+follow it: <code>[android.admob]</code> switches itself off when Android is not a target, and a
+non-empty <code>[raylib] disabled_modules</code> warns when iOS is one, because iOS links a prebuilt
+raylib that it cannot reach.</p>
+
+<h2>What CI does with each target</h2>
+
+<p>CI runs in two lanes. A push or a pull request gets the <strong>fast lane</strong>: the targets
+that catch most mistakes, in about ten minutes. A tag — a release — gets the <strong>full
+lane</strong>: every target the game has enabled, and then the release itself. The full lane can
+also be started by hand, for every target or for one group:</p>
+
+<pre data-lang="shell">
+gh workflow run ci.yml -f full=true        # every enabled target
+gh workflow run ci.yml -f targets=drm      # one group or target; implies the full lane
+</pre>
+
+<p>Building is not the bar. Wherever there is a machine to run on, the game is started with a frame
+budget, it must report that it booted with no asset missing, a frame is read back and must have
+something drawn on it, and the process must exit cleanly when the budget is spent.</p>
+
+<table>
+<thead><tr><th>Target</th><th>Lane</th><th>What CI checks</th></tr></thead>
+<tbody>
+<tr><td><code>linux-x64-glibc</code></td><td>every push</td><td>Built; checked against the <code>[linux] glibc</code> floor; resources packed; booted under a virtual X server, with a frame read back.</td></tr>
+<tr><td><code>web</code></td><td>every push</td><td>Built; booted in headless Chromium, the canvas measured for pixels, and a save written to IndexedDB and read back.</td></tr>
+<tr><td><code>windows-x64</code></td><td>every push</td><td>Built with MSVC; booted on the Windows runner with a software OpenGL placed next to the executable, a frame read back, and a save made in a user folder whose name is not ASCII.</td></tr>
+<tr><td><code>android</code></td><td>every push</td><td>A debug APK built and checked; a release AAB built, signed and its signature verified. Not run, except by the optional Firebase Test Lab job on a release.</td></tr>
+<tr><td><code>linux-arm64-glibc</code></td><td>full</td><td>Built on an ARM64 runner, checked against the glibc floor, booted under a virtual X server.</td></tr>
+<tr><td><code>linux-x64-musl</code></td><td>full</td><td>Built; checked to be a musl binary with no glibc symbol; a software-rendered build of it booted inside Alpine with nothing installed.</td></tr>
+<tr><td><code>linux-riscv64-glibc</code></td><td>full</td><td>Cross-compiled and checked to be a RISC-V executable. Never run: there is no RISC-V runner.</td></tr>
+<tr><td><code>linux-x64-glibc-drm</code></td><td>full</td><td>Built; checked to link libdrm and no X11 or Wayland; booted on a virtual display the kernel provides.</td></tr>
+<tr><td><code>linux-arm64-glibc-drm</code></td><td>full</td><td>Built and checked the same way. Not run: what it is for is a Raspberry Pi's own display pipeline, which a virtual display does not resemble.</td></tr>
+<tr><td><code>windows-arm64</code></td><td>full</td><td>Cross-compiled with MSVC and checked to be an ARM64 executable. Never run.</td></tr>
+<tr><td><code>macos</code></td><td>full</td><td>Built as one binary with both architectures, and checked for both; a software-rendered build booted.</td></tr>
+<tr><td><code>ios</code></td><td>full</td><td>raylib built for iOS, the Xcode project generated, a simulator app built and its bundle checked. Booted in the simulator only when the repository variable <code>IOS_SIMULATOR_TEST</code> is <code>true</code>.</td></tr>
+<tr><td>the BSDs</td><td>full</td><td>Built in a virtual machine of each system; checked to be an executable; resources packed; a software-rendered build booted inside the machine.</td></tr>
+</tbody>
+</table>
+
+<p>Every push also runs the checks that need no target: the <code>.toml</code>, the pinned
+versions, the licences, and one frame of the game drawn by raylib's software renderer — most of
+what <code>rmp test</code> runs on your machine.</p>
+
+<p>A push to a branch cancels a CI run already going on that branch, so a second push can kill a
+long full-lane run halfway. <code>rmp push</code> refuses while a run is in flight and names it;
+<code>rmp push force</code> pushes anyway.</p>
+
+<p>What becomes of the builds — the release, its archives, the stores — is the subject of
+<a href="/publishing/index.html">Publishing</a>.</p>

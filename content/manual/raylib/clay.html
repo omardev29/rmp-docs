@@ -1,0 +1,282 @@
+<!--
+title: Dropping to Clay
+description: Writing Clay's own elements in the same frame as rmp::ui, for what the small API does not have — and the rules about ids, strings and images that make it work.
+order: 20
+-->
+<h1>Dropping to Clay</h1>
+
+<p class="lede"><code>rmp::ui</code> is a small surface over <a href="https://github.com/nicbarker/clay">Clay</a>,
+the layout engine underneath it. When a screen needs something that surface does not have — an
+element floating at an exact spot, an aspect ratio, a clip container shaped your way — you do not
+have to give up <code>rmp::ui</code> to get it. Include <code>&lt;clay.h&gt;</code> and write Clay
+between <code>rmp::ui::begin()</code> and <code>rmp::ui::end()</code>: your elements join the same
+tree, are laid out in the same pass and are drawn by the same renderer.</p>
+
+<p>It is the same bargain as the rest of the framework. <code>rmp::assets</code> does not stop you
+calling <code>LoadTexture()</code>, and <code>rmp::ui</code> does not stop you calling Clay.</p>
+
+<h2>Clay, next to rmp::ui</h2>
+
+<p>Clay is on the include path of every target and is never included for you: no Clay type, macro
+or enum appears in <code>rmp/ui.h</code>, so a game that does not ask for it never sees it. A file
+that wants it says so:</p>
+
+<pre data-lang="cpp" data-harness="file">
+#include &lt;rmp/scene.h&gt;
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;clay.h&gt; // the layout engine itself: not included for you
+
+class InventoryScene : public rmp::Scene {
+    void _draw() override {
+        rmp::ui::begin();
+        rmp::ui::text("Inventory");
+
+        // a row of four slots, which rmp::ui has no primitive for
+        CLAY(CLAY_ID("hotbar"), { .layout = { .padding = CLAY_PADDING_ALL(8),
+                                              .childGap = 8,
+                                              .layoutDirection = CLAY_LEFT_TO_RIGHT },
+                                  .backgroundColor = { 30, 30, 38, 255 } }) {
+            for (int i = 0; i &lt; 4; i++) {
+                CLAY(CLAY_IDI("hotbar-slot", i),
+                     { .layout = { .sizing = { .width = CLAY_SIZING_FIXED(48),
+                                               .height = CLAY_SIZING_FIXED(48) } },
+                       .backgroundColor = { 44, 44, 56, 255 } }) {}
+            }
+        }
+
+        if (rmp::ui::button("Close")) rmp::Scene::pop();
+        rmp::ui::end();
+    }
+};
+</pre>
+
+<p>The text, the row and the button are one layout, in the order they were declared.
+<a href="ref:rmp::ui::begin"><code>rmp::ui::begin()</code></a> and
+<a href="ref:rmp::ui::end"><code>rmp::ui::end()</code></a> are Clay's own begin and end, with the
+framework's input, scale and drawing around them, so never call <code>Clay_BeginLayout()</code> or
+<code>Clay_EndLayout()</code> yourself. Clay itself is started by the first
+<code>rmp::ui::begin()</code> of the game, sized by <code>[ui] max_elements</code>, and your elements
+count towards that ceiling with the framework's.</p>
+
+<h2>The example</h2>
+
+<p><code>examples/ui/03_clay_direct</code> is the whole technique in one file: Clay's macros in the
+same frame as <code>rmp::ui</code>, an image, ids in a loop and a hover query. It is written with
+<a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a> rather than scenes, so it opens its
+own window and its own frame; in a game with scenes, the part between <code>begin()</code> and
+<code>end()</code> goes in a scene's <code>_draw()</code> exactly as it is. The framework's CI
+builds and boots it on every run, and compiles it with MSVC as well, because Clay's macros are
+designated initialisers inside a <code>for</code> block — the shape MSVC is fussiest about.</p>
+
+<pre data-lang="cpp" data-include="examples/ui/03_clay_direct/src/main.cpp"></pre>
+
+<aside class="callout warning"><span class="callout-title">Careful</span><p>Two comments in that
+file describe more than the renderer does. The tint of an image is not its
+<code>backgroundColor</code>: <code>src/rmp/ui/render.cpp</code> reads it from
+<code>userData</code>, and a background colour on an image element paints over the picture — see
+<a href="#images">Images</a> below. And per-corner radii are not drawn as such: every corner is
+rounded by the top-left radius.</p></aside>
+
+<h2>Where your elements go</h2>
+
+<p><code>rmp::ui::begin()</code> has already opened two elements by the time your first
+<code>CLAY()</code> runs: a root that fills the window, and inside it a column that fits its
+contents and centres them. Your elements are children of that column, beside the framework's
+widgets. The placement you give <code>begin()</code> — <code>rmp::ui::begin({ .placement =
+rmp::ui::Align::TOP_LEFT })</code> — moves that column, and your elements with it.</p>
+
+<p>To get out of the column, float. An element with <code>.floating.attachTo =
+CLAY_ATTACH_TO_ROOT</code> is placed by its <code>.offset</code> from the corner of the window,
+whatever the column is doing:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="#include &lt;clay.h&gt;">
+rmp::ui::begin();
+rmp::ui::text("Paused");
+
+CLAY(CLAY_ID("build-badge"), { .layout = { .padding = CLAY_PADDING_ALL(6) },
+                               .backgroundColor = { 200, 60, 60, 255 },
+                               .floating = { .offset = { 16, 16 },
+                                             .attachTo = CLAY_ATTACH_TO_ROOT } }) {
+    CLAY_TEXT(CLAY_STRING("BETA"),
+              CLAY_TEXT_CONFIG({ .textColor = { 255, 255, 255, 255 }, .fontSize = 16 }));
+}
+
+rmp::ui::end();
+</pre>
+
+<p>Clay's own designated initialisers follow the rule every C++20 one does: the fields in the order
+the struct declares them. <code>.layout</code> before <code>.backgroundColor</code> before
+<code>.floating</code>, and inside <code>.layout</code>, <code>.sizing</code>, <code>.padding</code>,
+<code>.childGap</code>, <code>.childAlignment</code>, <code>.layoutDirection</code>. Out of order is
+a compile error, not a warning.</p>
+
+<h2>Ids</h2>
+
+<p>Every element gets the id you give it, and the id is how you ask Clay about it later:</p>
+
+<table>
+<thead><tr><th>Spelling</th><th>For</th></tr></thead>
+<tbody>
+<tr><td><code>CLAY(CLAY_ID("wallet"), ...)</code></td><td>One element with a name of its own.</td></tr>
+<tr><td><code>CLAY(CLAY_IDI("slot", i), ...)</code></td><td>One of many, in a loop, without building a string per element.</td></tr>
+<tr><td><code>CLAY_AUTO_ID(...)</code></td><td>An element you will never ask about.</td></tr>
+</tbody>
+</table>
+
+<p>Three rules follow from how they are made.</p>
+
+<ul>
+<li><strong>Ask with the macro you made it with.</strong> <code>CLAY_ID("x")</code> and
+<code>CLAY_IDI("x", 0)</code> are two different ids: Clay hashes them differently even at index 0,
+so an element made with one is never found with the other. The example asks
+<code>Clay_PointerOver(CLAY_IDI("slot", 0))</code> about the element it made with
+<code>CLAY_IDI("slot", i)</code>.</li>
+<li><strong>Use labels no rmp::ui control in the scene uses.</strong> <code>rmp::ui</code> names
+its elements by their label through <code>Clay_GetElementIdWithIndex()</code> — the function behind
+<code>CLAY_IDI</code> — counting each label's occurrences and giving each scene that draws UI a
+block of indices of its own. In the first such scene of a frame that block starts at 0, so
+<code>CLAY_IDI("Close", 0)</code> there is the id <code>rmp::ui::button("Close")</code> already
+has.</li>
+<li><strong>One id, one element, per frame.</strong> Two elements with the same id are Clay's error,
+and the framework prints each kind of Clay error once rather than every frame, in Clay's own words
+after <samp>UI: clay: …</samp>. With <code>[dev] strict = true</code> the first one stops a debug
+build where it happened.</li>
+</ul>
+
+<h2>Strings</h2>
+
+<p>Clay does not copy strings. It keeps the pointer it is given and reads it while the layout is
+computed and drawn, which is inside <code>rmp::ui::end()</code>. <code>rmp::ui::text()</code> takes
+that problem away by copying what it is given into a frame arena first — which is why
+<code>rmp::ui::text(std::to_string(score))</code> is safe — but a string you hand to Clay yourself
+is your responsibility:</p>
+
+<ul>
+<li><code>CLAY_STRING("BETA")</code> on a literal is fine forever: a literal lives as long as the
+program.</li>
+<li>A string built at run time has to stay alive until <code>rmp::ui::end()</code> returns. A
+<code>std::string</code> declared in <code>_draw()</code> before <code>rmp::ui::begin()</code> does;
+a temporary made inside the <code>CLAY_TEXT()</code> call does not.</li>
+</ul>
+
+<pre data-lang="cpp" data-harness="members" data-given="#include &lt;clay.h&gt;
+#include &lt;string&gt;">
+int coins = 120;
+
+void _draw() override {
+    // alive until _draw() returns, which is after end()
+    const std::string label = "Coins: " + std::to_string(coins);
+    const Clay_String text{ .isStaticallyAllocated = false,
+                            .length = static_cast&lt;int32_t&gt;(label.size()),
+                            .chars = label.c_str() };
+
+    rmp::ui::begin();
+    CLAY(CLAY_ID("wallet"), { .layout = { .padding = CLAY_PADDING_ALL(8) },
+                              .backgroundColor = { 30, 30, 38, 255 } }) {
+        CLAY_TEXT(text, CLAY_TEXT_CONFIG({ .textColor = { 255, 220, 120, 255 },
+                                           .fontSize = 24 }));
+    }
+    rmp::ui::end();
+}
+</pre>
+
+<p>Text is measured and drawn with the interface's font — the one <code>[ui] font</code> names, or
+raylib's built-in font when it is empty — whatever <code>.fontId</code> says. The
+<code>.fontSize</code> is in pixels, and the spacing between letters is a tenth of it, the same as
+<code>rmp::ui</code>'s own text.</p>
+
+<h2 id="images">Images</h2>
+
+<p>An image element points <code>.image.imageData</code> at a <code>Texture2D</code> — raylib's
+struct, not an <a href="ref:rmp::Texture"><code>rmp::Texture</code></a> — that stays alive until
+<code>rmp::ui::end()</code> returns. The renderer draws it stretched to the element's box. The
+example does it the safe way: it keeps the <code>rmp::Texture</code> that owns the picture, and
+copies the raylib struct out of it into a local for the frame.</p>
+
+<p>The tint is the part that is easy to write wrong. It travels in <code>.userData</code>, as a
+pointer to a <code>Color</code>; a null <code>userData</code> draws the picture untinted. It is not
+<code>.backgroundColor</code>: Clay emits a rectangle for any element with a background colour,
+<em>after</em> the element's image, so a colour put there is painted straight over the
+picture.</p>
+
+<pre data-lang="cpp" data-harness="members" data-given="#include &lt;clay.h&gt;">
+rmp::Texture face;                // owns the picture
+Color hurt{ 255, 120, 120, 255 }; // a member: alive for as long as the scene
+
+void _ready() override { face = rmp::assets::load_texture("rabbit.png"); }
+
+void _draw() override {
+    Texture2D frame_face = face; // the raylib struct, for this frame
+
+    rmp::ui::begin();
+    CLAY(CLAY_ID("portrait"),
+         { .layout = { .sizing = { .width = CLAY_SIZING_FIXED(96 * rmp::ui::scale()),
+                                   .height = CLAY_SIZING_FIXED(96 * rmp::ui::scale()) } },
+           .image = { .imageData = &amp;frame_face },
+           .userData = &amp;hurt }) {}
+    rmp::ui::end();
+}
+</pre>
+
+<p><a href="ref:rmp::ui::image"><code>rmp::ui::image()</code></a> does all of this for you, copying
+the struct into the frame arena and carrying its
+<a href="ref:rmp::ui::ImageOptions::tint"><code>tint</code></a> the same way; drop to Clay for an
+image only when it has to sit somewhere <code>rmp::ui</code> cannot put it.</p>
+
+<h2>Sizes are pixels</h2>
+
+<p>Every number you give Clay is a pixel of the window. Every number you give <code>rmp::ui</code>
+is a design unit — a pixel at the <code>[window]</code> resolution — which it multiplies by
+<a href="ref:rmp::ui::scale"><code>rmp::ui::scale()</code></a> on the way to Clay, so a menu is the
+same size on a laptop and on a 4K screen. Clay elements of your own do not get that for free.
+Multiply by <code>rmp::ui::scale()</code>, as the portrait above does, and they grow and shrink with
+the rest of the interface; leave it out, and they stay the same number of pixels on every
+screen.</p>
+
+<h2>Hover and the pointer</h2>
+
+<p><code>Clay_PointerOver()</code> answers from the previous frame's layout, exactly as
+<code>rmp::ui::button()</code> does: this frame's layout does not exist until <code>end()</code>.
+The framework hands Clay the pointer at the end of each scene's layout, and for a scene whose input
+a scene above it has taken, it hands Clay a position no element can contain — so
+<code>Clay_PointerOver()</code> is false under a pause menu, the same as every <code>rmp::ui</code>
+widget there.</p>
+
+<p>Clay keeps one pointer state, and the last <code>rmp::ui::end()</code> of a frame is what sets
+it. With two scenes describing UI in the same frame, ask Clay about the pointer only in the upper
+one.</p>
+
+<h2>What the renderer draws</h2>
+
+<p>Clay does not draw: it produces a list of commands, and <code>src/rmp/ui/render.cpp</code> turns
+them into raylib calls, in Clay's z order. It understands these, and the elements you write get
+exactly what the framework's own get:</p>
+
+<table>
+<thead><tr><th>Command</th><th>Drawn as</th></tr></thead>
+<tbody>
+<tr><td><code>RECTANGLE</code></td><td>The background colour, rounded by the corner radius.</td></tr>
+<tr><td><code>BORDER</code></td><td>The border colour, at one width — the left one — on every side, rounded the same way.</td></tr>
+<tr><td><code>TEXT</code></td><td>The interface's font, at the element's size and colour.</td></tr>
+<tr><td><code>IMAGE</code></td><td><code>imageData</code> as a <code>Texture2D</code>, stretched to the box, tinted by a <code>Color</code> in <code>userData</code>.</td></tr>
+<tr><td><code>SCISSOR_START</code>, <code>SCISSOR_END</code></td><td>Clipping, so Clay's clip and scroll containers work.</td></tr>
+</tbody>
+</table>
+
+<p>A corner radius is one radius: every corner is rounded by the top-left value. Anything else Clay
+can emit — <code>CUSTOM</code> elements, overlay colours — is not drawn. The renderer is one short
+file, and adding a case to it is the intended way to extend it.</p>
+
+<h2>What it costs</h2>
+
+<p>The Clay in <code>thirdparty/clay/clay.h</code> is pinned at 0.14 in
+<code>thirdparty/FROZEN_VERSIONS.md</code>, carries one marked patch so that it builds with
+NetBSD's compiler, and does not move unless someone decides it should. Clay is not at 1.0, and its
+API has changed between minor versions. Code written against <code>rmp::ui</code> does not depend on
+any of that — it never names a Clay type — while code that drops to Clay is tied to the version it
+was written for.</p>
+
+<p>That is a fair trade for a feature a screen needs today, and a poor one for a button. Reach for
+Clay for the element <code>rmp::ui</code> cannot make, and keep everything around it in
+<code>rmp::ui</code>.</p>
