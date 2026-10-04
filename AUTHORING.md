@@ -75,6 +75,15 @@ A block that shows a mistake on purpose: `data-expect="error" data-error="no mat
 Quote a long piece of a real example with `data-include` rather than retyping it: the
 framework's CI builds and boots that file.
 
+**A tutorial is a real game.** A block with `data-project="my_game" data-file="src/scenes/play.cpp"`
+is that whole file of the tutorial's game at that page; the next page that gives the same file
+replaces it. A `toml` block with `data-file="raylib_multiplatform.toml"` holds only the keys it
+sets, under their `[section]`. A file the reader copies from the framework (art, a sound) is a
+shell block with `data-project`, `data-file="resources/hit.wav"` and
+`data-copy-from="examples/games/01_pong/resources/hit.wav"`. `--tier project` makes the game with
+`rmp new`, and after each page — in sidebar order — applies its files, builds the game for the
+software renderer and boots it: it has to load every asset, draw, and exit cleanly.
+
 **Every `toml` block is run through `configure.py --check --config`**: it has to be accepted. A
 block that shows a refusal is `data-expect="reject"`; the build prints configure.py's real
 message under it — never type the error yourself. A toml block that is not

@@ -304,7 +304,8 @@ class Site:
                     else:
                         caption = caption or pre.get("data-file")
                         self.project_files.setdefault(project, []).append(
-                            ProjectFile(page.source, pre.line, pre.get("data-file"), code, lang))
+                            ProjectFile(page.source, pre.line, pre.get("data-file"), code, lang,
+                                        copy_from=pre.get("data-copy-from", "")))
                     if lang == "toml":
                         toml_out = self._toml(page, pre, code)
                 elif lang in ("cpp", "c") and page.kind == "content":

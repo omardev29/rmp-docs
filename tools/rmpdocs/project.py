@@ -33,6 +33,7 @@ class ProjectFile:
     path: str          # in the project
     code: str
     lang: str
+    copy_from: str = ""   # a framework file the step copies in (art, a sound)
 
 
 @dataclass
@@ -76,9 +77,17 @@ def set_toml_keys(text: str, edits: str) -> str:
     return "\n".join(lines)
 
 
-def apply(project: Path, step: Step) -> None:
+def apply(project: Path, step: Step, framework: Path | None = None) -> None:
     for f in step.files:
         target = project / f.path
+        if f.copy_from:
+            import shutil
+            source = (framework or Path()) / f.copy_from
+            if not source.is_file():
+                raise ValueError(f"data-copy-from={f.copy_from!r} is not a file of the framework")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(source, target)
+            continue
         if f.lang == "toml" and f.path == "raylib_multiplatform.toml":
             target.write_text(set_toml_keys(target.read_text(encoding="utf-8"), f.code),
                               encoding="utf-8")
@@ -99,7 +108,7 @@ def run(framework: Path, name: str, steps: list[Step], keep: Path | None = None)
             return [(steps[0] if steps else None, f"rmp new {name} failed:\n{got.stdout}{got.stderr}")]
         for step in steps:
             try:
-                apply(project, step)
+                apply(project, step, framework)
             except ValueError as e:
                 results.append((step, str(e)))
                 break
