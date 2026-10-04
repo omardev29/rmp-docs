@@ -1,0 +1,166 @@
+<!--
+title: The App Store
+description: What CI builds for iOS — the engine and a simulator build of the app — and why archiving, signing and TestFlight are left to Xcode on a Mac.
+order: 60
+-->
+<h1>The App Store</h1>
+
+<p class="lede">CI builds the iOS engine and a simulator build of your game, and checks the app
+it made. It does not archive, sign or upload anything to Apple, and that is deliberate: an app a
+phone will install has to be signed, and signing needs an Apple developer account and credentials
+that do not belong in CI. The step from a working build to TestFlight and the App Store is made in
+Xcode, on a Mac, from a project the framework generates.</p>
+
+<h2 id="what-ci-builds">What CI builds</h2>
+
+<p>iOS is in the full matrix: it builds on a tag, and on a run started with <code>full</code>, on
+a macOS runner with its Xcode version pinned. The job:</p>
+
+<ol>
+<li>builds <code>raylib.xcframework</code>, for devices and for the simulator, from the raylib-iOS
+fork pinned as the submodule <code>thirdparty/raylib-ios</code> — upstream raylib has no iOS
+backend, and the fork draws through ANGLE, OpenGL ES on top of Metal;</li>
+<li>generates the Xcode project from <code>raylib_multiplatform.toml</code>;</li>
+<li>builds the app for the simulator, without signing;</li>
+<li>checks what it built: the executable is a Mach-O, the bundle's <code>Info.plist</code> has a
+readable bundle identifier, and your <code>resources/</code> folder is inside the bundle.</li>
+</ol>
+
+<p>Two files go to the release from it: <code>ios-raylib-xcframework.zip</code>, the engine, and
+<code>ios-app-simulator.zip</code>, the app. The app is a debug build for the simulator, unsigned;
+it runs in the iOS Simulator and cannot be installed on a phone.</p>
+
+<p data-fw-grep=".github/workflows/_apple.yml::if: vars\.IOS_SIMULATOR_TEST == 'true'">Starting the app in the simulator is part of the job and switched off: the simulator on the
+pinned runner does not come up reliably, and a step that is known not to work is off rather than
+allowed to fail quietly. Set the repository variable <code>IOS_SIMULATOR_TEST</code> to
+<code>true</code> to try it; it then installs the app, runs it, and requires the same boot and
+render markers as every other platform.</p>
+
+<h3>Trying the simulator build</h3>
+
+<p>On a Mac with Xcode, from the release's <code>ios-app-simulator.zip</code>:</p>
+
+<pre data-lang="shell">
+unzip ios-app-simulator.zip
+xcrun simctl boot "iPhone 16"
+open -a Simulator
+xcrun simctl install booted my_game.app
+xcrun simctl launch --console booted com.yourname.yourgame
+</pre>
+
+<h2>What CI does not do, and why</h2>
+
+<p>Archiving, signing, TestFlight and submitting to the App Store are not automated. Apple only
+installs a signed app on a device, and signing takes a paid Apple Developer account, a provisioning
+profile and a certificate. Those cannot live in a public repository, and the framework does not ask
+for them as secrets either: the release path that touches Apple's credentials runs in Xcode, on
+your Mac, under your account.</p>
+
+<p>For the same reason the iOS app is never run on Firebase Test Lab: Test Lab needs a signed
+<code>.ipa</code> for iOS.</p>
+
+<h2>Onto a phone, and to the App Store</h2>
+
+<p>On a Mac with Xcode and <a href="https://developer.apple.com/">an Apple developer account</a>,
+from your game's folder:</p>
+
+<ol>
+<li><p><strong>Fetch the fork.</strong> A game made with <code>rmp new</code> has the submodule
+registered and not checked out, since only iOS needs it:</p>
+
+<pre data-lang="shell">
+git submodule update --init
+</pre>
+</li>
+<li><p><strong>Build the engine</strong>, the same way CI does:</p>
+
+<pre data-lang="shell">
+cd thirdparty/raylib-ios/projects/scripts
+chmod +x build-ios-xcframework.sh
+./build-ios-xcframework.sh
+cd ../../../..
+</pre>
+</li>
+<li><p><strong>Set your team in the .toml</strong>, rather than in Xcode, so it survives the next
+time the project is generated. <code>[ios.settings]</code> is copied into the Xcode project as
+build settings, word for word:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[ios.settings]
+DEVELOPMENT_TEAM = "ABCDE12345"
+CODE_SIGN_STYLE  = "Automatic"
+</pre>
+</li>
+<li><p><strong>Generate the project</strong> and open it. <code>tools/configure.py</code> writes
+<code>ios/project.yml</code>, and XcodeGen turns that into the Xcode project — CI uses the
+XcodeGen version pinned in <code>thirdparty/FROZEN_VERSIONS.md</code>:</p>
+
+<pre data-lang="shell">
+python3 tools/configure.py
+cd ios &amp;&amp; xcodegen generate
+open my_game.xcodeproj
+</pre>
+</li>
+<li><p><strong>Run it on your phone</strong>: select the device and press Run.</p></li>
+<li><p><strong>Archive it for TestFlight and the App Store</strong> from Xcode, with
+<em>Product → Archive</em>, and upload the archive from there.</p></li>
+</ol>
+
+<p>The Xcode project is generated, so a change made to it by hand in Xcode is gone the next time
+it is generated; whatever the project needs belongs in <code>[ios]</code>,
+<code>[ios.settings]</code> or the rest of the .toml.</p>
+
+<h2>What the generated project sets</h2>
+
+<table>
+<thead><tr><th>In the app</th><th>From</th></tr></thead>
+<tbody>
+<tr><td>Bundle identifier</td><td><code>[ios] bundle_id</code>. Like Android's id, a placeholder <code>com.example.</code> id is refused for a release.</td></tr>
+<tr><td>Oldest iOS</td><td><code>[ios] deployment_target</code>, <code>"15.6"</code> by default and no lower than 13.0: <code>rmp::save</code> uses <code>std::filesystem</code>, which Apple's C++ library has from iOS 13.</td></tr>
+<tr><td>Version</td><td>The tag: <code>v1.2.0</code> becomes the marketing version <code>1.2.0</code>. The generator sets no build number; Xcode's <code>CURRENT_PROJECT_VERSION</code> can be given in <code>[ios.settings]</code> like any other build setting.</td></tr>
+<tr><td>Name under the icon</td><td><code>[window] title</code>.</td></tr>
+<tr><td>Orientations</td><td><code>[window] orientation</code>, the same setting Android reads.</td></tr>
+<tr><td>Icon</td><td><code>[icon] source</code>, as the app's icon set.</td></tr>
+<tr><td>Launch screen</td><td>A plain one generated by Xcode. An app without a launch screen runs letterboxed at an old resolution, and App Review rejects it.</td></tr>
+<tr><td>Full screen, no status bar, arm64 only</td><td>Fixed.</td></tr>
+<tr><td>Assets</td><td>Your <code>resources/</code> folder, copied into the bundle as a folder. The app changes into its bundle before it loads anything, so the same relative paths work as on a desktop.</td></tr>
+<tr><td>Licence notices</td><td><code>LICENSES.txt</code> at the root of the bundle, crediting the raylib-iOS fork and ANGLE too. Writing it needs the submodule checked out; without it, the configuration warns and writes no iOS notice.</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[ios]
+deployment_target = "12.0"
+</pre>
+
+<h2>What is different on iOS</h2>
+
+<ul>
+<li><p><strong>The game cannot quit itself.</strong> Apple's guidance is that an iOS app that
+terminates itself appears to the player to have crashed, and App Review rejects that.
+<a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> logs a warning and does nothing on
+iOS, so the same source ships everywhere and a Quit button is simply inert on a phone. Hide it
+there if a dead button bothers you:</p>
+
+<pre data-lang="cpp" data-harness="function">
+#if !defined(PLATFORM_IOS)
+if (rmp::ui::button("Quit")) rmp::app::quit();
+#endif
+</pre>
+</li>
+<li><p><strong>raylib is prebuilt.</strong> The app links the fork's
+<code>raylib.xcframework</code>, so <code>[raylib] disabled_modules</code> changes nothing on
+iOS.</p></li>
+<li><p><strong>No ads.</strong> <a href="ref:rmp::ads"><code>rmp::ads</code></a> does nothing on
+iOS; ads are implemented for Android only.</p></li>
+<li><p><strong>The frame is paced by the display.</strong> <code>[window] fps</code> is ignored on
+iOS.</p></li>
+</ul>
+
+<h2>Keeping up with Xcode</h2>
+
+<p>Apple requires submissions to be built with a recent Xcode and SDK, and raises that bar about
+once a year. Building with a newer Xcode means updating the raylib-iOS fork and the ANGLE it
+bundles to one that supports it, and moving the Xcode pin in
+<code>thirdparty/FROZEN_VERSIONS.md</code>, which is where CI reads the runner and the Xcode
+version from.</p>

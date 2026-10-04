@@ -1,0 +1,228 @@
+<!--
+title: Continuous integration
+description: What CI builds, boots and checks for each target on a push and on a tag, what it pins so the build cannot change under you, and how to read a run that went red.
+order: 70
+-->
+<h1>Continuous integration</h1>
+
+<p class="lede">Every game made with <code>rmp new</code> carries the framework's CI, and it runs
+as soon as the game's repository is on GitHub. A push builds the targets that catch most mistakes,
+starts the game and looks at the pixels it draws, in about ten minutes; a tag builds every target
+the game enables — all {{count:targets}} of them unless it switches some off — and publishes the
+release. Building is the easy half: the point of the
+pipeline is that a game which compiles and draws nothing is a red run.</p>
+
+<h2>When it runs</h2>
+
+<table>
+<thead><tr><th>Event</th><th>What runs</th></tr></thead>
+<tbody>
+<tr><td>A push to <code>main</code>, a pull request</td><td>The fast lane: <code>linux-x64-glibc</code>, <code>web</code>, <code>windows-x64</code> and <code>android</code>, and the <code>lint</code> job.</td></tr>
+<tr><td>A tag starting with <code>v</code></td><td>The full matrix — every target <code>[targets]</code> enables — then the GitHub release, then itch.io.</td></tr>
+<tr><td>Started by hand</td><td>The fast lane, or the full matrix with <code>full</code>, or one group or target with <code>targets</code>.</td></tr>
+</tbody>
+</table>
+
+<p>A push or pull request that changes only Markdown files or <code>LICENSE</code> runs nothing.
+A target switched off in <code>[targets]</code> is never built, on any event.</p>
+
+<pre data-lang="shell">
+gh workflow run ci.yml -f full=true      # every enabled target, without a tag
+gh workflow run ci.yml -f targets=drm    # one group or target, built in full
+</pre>
+
+<p><code>targets</code> narrows what the .toml enables and can never add to it: naming a target
+the .toml switched off, or one that does not exist, stops the run in its first job. A third input,
+<code>image_digest</code>, builds with another build image than the pinned one, to try a new image
+before committing to it.</p>
+
+<p>A new push to a branch cancels that branch's run still in progress — a run of a commit nobody
+wants any more is minutes wasted. A tag's run is never cancelled. To push without killing a run
+you are waiting for, use <code>rmp push</code>: it refuses while a CI run is in flight and names
+it, and <code>rmp push force</code> pushes anyway.</p>
+
+<h2>What each target gets</h2>
+
+<p>A target is <strong>booted</strong> when CI starts the game, lets it draw a bounded number of
+frames, and checks what it printed. It is <strong>checked statically</strong> when CI inspects the
+file it built without running it — its format, its architecture, what it links.</p>
+
+<table>
+<thead><tr><th>Target</th><th>Lane</th><th>What CI does with it</th></tr></thead>
+<tbody>
+<tr><td><code>linux-x64-glibc</code></td><td>every push</td><td>Booted under a virtual X server. Checked: x86-64 ELF, no debug sections, glibc no newer than <code>[linux] glibc</code>.</td></tr>
+<tr data-fw-grep=".github/workflows/_linux.yml::^  arm64:\n    if: inputs\.full"><td><code>linux-arm64-glibc</code></td><td>full</td><td>Booted under a virtual X server on an ARM64 runner. Checked: aarch64 ELF, the glibc floor.</td></tr>
+<tr><td><code>linux-riscv64-glibc</code></td><td>full</td><td>Cross-compiled; checked statically (RISC-V ELF) and never run — there is no RISC-V runner.</td></tr>
+<tr><td><code>linux-x64-musl</code></td><td>full</td><td>Checked: linked against musl, with no glibc symbol in it. A software-rendered build of the game is booted inside Alpine Linux with nothing installed.</td></tr>
+<tr><td><code>linux-x64-glibc-drm</code></td><td>full</td><td>Booted through DRM/KMS on a virtual display the kernel provides. Checked: it links <code>libdrm</code> and no X11 or Wayland; its real glibc floor is printed.</td></tr>
+<tr><td><code>linux-arm64-glibc-drm</code></td><td>full</td><td>Checked statically: aarch64, <code>libdrm</code>, no X11 or Wayland. Not run: a virtual display would not answer the question a Raspberry Pi's own display pipeline does.</td></tr>
+<tr><td><code>windows-x64</code></td><td>every push</td><td>Booted on a real Windows runner with Mesa's software OpenGL next to the <code>.exe</code>, with the player's data folder set to a path that is not ASCII and a save written there and read back. The zip is checked to carry no Mesa file.</td></tr>
+<tr><td><code>windows-arm64</code></td><td>full</td><td>Cross-compiled; checked statically (ARM64 PE) and never run.</td></tr>
+<tr><td><code>macos</code></td><td>full</td><td>Checked: a universal Mach-O with both slices. A software-rendered build of the game is booted on the runner.</td></tr>
+<tr><td><code>ios</code></td><td>full</td><td>Engine and simulator app built; the bundle checked for its identifier and its <code>resources/</code>. The simulator boot is off unless <code>IOS_SIMULATOR_TEST</code> is <code>true</code>.</td></tr>
+<tr><td><code>web</code></td><td>every push</td><td>Booted in headless Chromium: a screenshot of the canvas is measured, and a save is written to IndexedDB and read back.</td></tr>
+<tr><td><code>android</code></td><td>every push</td><td>Debug APK and signed App Bundle built. Checked: the manifest and native library in the APK, the bundle's signature and signer, and that the bundle was compiled as a release. Not run, unless Firebase Test Lab is configured — then on a real phone, on full runs.</td></tr>
+<tr><td><code>freebsd-x64</code>, <code>freebsd-arm64</code>, <code>openbsd-x64</code>, <code>openbsd-arm64</code>, <code>netbsd-x64</code></td><td>full</td><td>Built inside a virtual machine of each system. Checked: an ELF. A software-rendered build of the game is booted in the same machine.</td></tr>
+</tbody>
+</table>
+
+<p>Next to the platforms, the <code>lint</code> job runs on every push. In a game it checks the
+workflows (actionlint, with shellcheck over every script in them), validates the configuration,
+compares every pinned version across the files that state it, checks every licence, and draws a
+frame with raylib's software renderer. In the framework's own repository it also runs the
+framework's tests and gates, and jobs of its own build and boot every example, make a game with
+<code>rmp new</code> to test it, and check this documentation against the commit.</p>
+
+<h3>What booted means</h3>
+
+<p>A booted target runs with <code>RAY_TEST_MAX_FRAMES</code> set, which makes the game draw that
+many frames and exit; in a normal run the variable is unset and none of this exists. The game then
+prints markers, and the runs on Linux, Windows, macOS and the BSDs require all three; the web test reads the boot marker
+from the browser's console and measures the canvas itself:</p>
+
+<dl>
+<dt><code>RAY_TEST_BOOT_OK assets_failed=0</code></dt>
+<dd>A window opened, and every asset the game asked for was found. A missing texture does not
+stop a game from starting, which is why the count is part of the marker.</dd>
+<dt><code>RAY_TEST_RENDER_OK</code></dt>
+<dd>A frame was read back, and the share of its pixels that differ from its most common colour is
+in a sane range. A broken shader or a lost texture still boots and still exits cleanly; a blank
+frame does not pass this.</dd>
+<dt><code>RAY_TEST_DONE_FRAMES</code></dt>
+<dd>The game drew its frames and reached its exit: a crash on the way out fails here.</dd>
+</dl>
+
+<p>The markers come from <code>tests/smoke_test.h</code>, which every game carries. The share of
+pixels is the gate everywhere because GPUs and software renderers disagree on the details of a
+frame; where the frame is drawn by raylib's own software renderer it is identical on every system,
+and the framework's own CI compares it with a recorded hash as well. A game has no recorded frame,
+so its software render checks the boot, the pixels and a clean exit.</p>
+
+<h3>What no job checks</h3>
+
+<ul>
+<li><code>linux-riscv64-glibc</code>, <code>windows-arm64</code> and
+<code>linux-arm64-glibc-drm</code> are never run.</li>
+<li>On macOS and the BSDs, what is booted is a software-rendered build of the game, not the
+executable that ships; the shipped one is checked statically. The same holds for
+<code>linux-x64-musl</code>.</li>
+<li>A binary compressed with UPX is booted before it is compressed, and only verified with
+<code>upx -t</code> after.</li>
+<li>iOS is not started unless you turn the simulator test on, and Android is not started unless
+Firebase Test Lab is configured.</li>
+<li>Nothing here plays your game. A game that boots and draws and is broken from its second screen
+on passes every gate. Test your game on the platforms you ship.</li>
+</ul>
+
+<h2>What is pinned</h2>
+
+<p>A green run should mean the same thing in six months as today, so what a build depends on is
+pinned wherever it can be:</p>
+
+<ul>
+<li><strong>The build image, by digest.</strong> The Linux builds, the web and Android builds, the
+lint job and the itch.io upload run inside <code>ghcr.io/omardev29/raylib-build</code>, named by its
+<code>sha256</code> digest and never by a tag, which could be moved. The image carries the compilers
+and tools those jobs use — CMake, Ninja, Emscripten, the Android SDK and NDK, zig, UPX, butler,
+actionlint and shellcheck — so none of them is fetched while a job runs. Its own packages come from
+a dated Ubuntu snapshot, and the build jobs print the image's manifest as their first step, so a
+log says which toolchain produced it. What those jobs do fetch is Gradle and the Android build's
+libraries, at the versions the build files name, with Gradle checked against its checksum; they are
+cached between runs.</li>
+<li><strong>The runners and Xcode.</strong> Runner images by explicit label, never
+<code>-latest</code>, and on macOS an explicit Xcode version, with a step that fails and lists
+what is installed when the pinned one is gone. A label fixes the operating system, not every tool
+GitHub installs on it: the Windows jobs build with the compilers the runner image carries.</li>
+<li><strong>Every download</strong> the other jobs make — Ninja and XcodeGen on macOS, Mesa and
+UPX on Windows — at a fixed version, checked against its <code>sha256</code>. Chromium for the
+web test comes through Playwright, pinned by <code>package-lock.json</code>. The Alpine image the
+musl build is tested in is named by its digest.</li>
+<li><strong>Every GitHub Action</strong>, by the full commit it resolves to, with the tag in a
+comment beside it.</li>
+</ul>
+
+<p>The versions live in <code>thirdparty/FROZEN_VERSIONS.md</code>, the first job reads them from
+there and hands them to the others, and <code>tools/versions_check.sh</code> — part of
+<code>rmp test config</code> and of the lint job — fails if any two places disagree. A game keeps
+the pins it was made with; they change when the game changes them.</p>
+
+<p>The exception is the BSDs. Their virtual-machine images and package mirrors move from day to
+day, and neither offers a snapshot to pin to, so those jobs install whatever the mirror serves that
+day. When a BSD job fails after the rest of the run passed, and nothing you changed explains it,
+suspect the mirror first. The other exception is narrow: the job that boots DRM installs the
+kernel's extra modules on its runner when the virtual display driver is missing from it, after the
+binary it tests has already been built.</p>
+
+<h2>The canary</h2>
+
+<p>Pinning stops the world from breaking a build, and it also stops anyone from noticing that the
+world moved. The framework's own repository runs a <em>canary</em> every Monday: the same
+workflows against the newest build image, the newest runner images, the newest Xcode and the newest
+Mesa, to find what the next bump of the pins will break before anyone needs it. It runs only in
+<code>omardev29/raylib_multiplatform</code>, and <code>rmp new</code> does not copy it into a game:
+a game's CI never runs it.</p>
+
+<h2>Secrets and variables</h2>
+
+<p>The workflows read these from the repository's settings and from nowhere else. Every one is
+optional: without it, what needs it is skipped — the itch.io upload, the Test Lab run — or done
+another way — the App Bundle signed with a throwaway key — and the run stays green.</p>
+
+<table>
+<thead><tr><th>Name</th><th>Kind</th><th>Read by</th></tr></thead>
+<tbody>
+<tr><td><code>ANDROID_KEYSTORE_BASE64</code>, <code>ANDROID_KEYSTORE_PASSWORD</code>, <code>ANDROID_KEY_ALIAS</code>, <code>ANDROID_KEY_PASSWORD</code></td><td>secrets</td><td>the Android job, to sign the App Bundle with your upload key</td></tr>
+<tr><td><code>ANDROID_SIGNER_CN</code></td><td>variable</td><td>the Android job, to check the bundle's signer by name</td></tr>
+<tr><td><code>BUTLER_API_KEY</code></td><td>secret</td><td>the itch.io job</td></tr>
+<tr><td><code>ITCH_USER</code>, <code>ITCH_GAME</code></td><td>variables</td><td>the itch.io job, ahead of <code>[deploy.itch]</code></td></tr>
+<tr><td><code>GCP_SA_KEY</code></td><td>secret</td><td>the Firebase Test Lab job</td></tr>
+<tr><td><code>FIREBASE_PROJECT</code>, <code>FIREBASE_DEVICE</code></td><td>variables</td><td>the Firebase Test Lab job, ahead of <code>[deploy.firebase]</code></td></tr>
+<tr><td><code>FIREBASE_RESULTS_BUCKET</code></td><td>variable</td><td>the Firebase Test Lab job, for where its results go</td></tr>
+<tr><td><code>IOS_SIMULATOR_TEST</code></td><td>variable</td><td>the iOS job: <code>true</code> turns the simulator boot on</td></tr>
+</tbody>
+</table>
+
+<p>The release itself needs none: it publishes with the run's own token.</p>
+
+<h2>Reading a red run</h2>
+
+<p>Open the run on GitHub, or follow it from a terminal with <code>gh run watch</code>, and start
+from the first job that failed: everything after it may only be its consequence. The job's name
+says which platform — <code>linux / x64</code>, <code>windows / x64</code>,
+<code>apple / macos</code>, <code>bsd / build (freebsd, …)</code>, <code>web / boot-test</code>,
+<code>android / build</code> — and the failing step says which stage. Most checks that fail
+print a line starting with <code>FAIL</code> or <code>FALLA</code> that says what they found.</p>
+
+<table>
+<thead><tr><th>Red</th><th>What it usually means</th><th>On your machine</th></tr></thead>
+<tbody>
+<tr><td><code>config</code></td><td>The .toml is invalid, or a tag build found a placeholder <code>com.example.</code> id.</td><td><code>rmp test config</code></td></tr>
+<tr><td><code>lint</code></td><td>A workflow does not lint, two pinned versions disagree, a licence is unknown, or the software-rendered frame failed.</td><td><code>rmp test config</code>, <code>rmp test render</code></td></tr>
+<tr><td>A step that configures or generates, on a tag</td><td>The tag is not <code>vMAJOR.MINOR.PATCH</code>.</td><td><code>rmp deploy</code> checks it before tagging.</td></tr>
+<tr><td>A build step</td><td>The code does not compile on that platform's compiler.</td><td><code>rmp build release</code></td></tr>
+<tr><td>A runtime test</td><td>The game did not boot, lost an asset, drew nothing, or crashed on the way out. The captured output is printed above the verdict.</td><td><code>rmp test smoke</code>, <code>rmp test render</code></td></tr>
+<tr><td><em>It runs on older distributions than this one</em></td><td>The Linux binary needs a newer glibc than <code>[linux] glibc</code>; the step lists the symbols that ask for it.</td><td><code>tools/glibc_check.sh</code> on the binary</td></tr>
+<tr><td>A BSD job, after everything else passed</td><td>Most often the package mirror. If the step <em>The VM script reached its end</em> failed, the build script stopped early without saying so.</td><td><code>sh tools/render_check.sh Ninja "" my_game</code> runs its check anywhere</td></tr>
+<tr><td>The AAB check in <code>android / build</code></td><td>The bundle is signed by a key other than the one the secrets name, or its certificate has errors.</td><td><a href="/publishing/google-play.html#signing">Google Play</a></td></tr>
+<tr><td><code>release</code> skipped on a tag</td><td>A platform job or the lint job failed or was cancelled, so nothing was published.</td><td>Fix it and re-run the failed jobs.</td></tr>
+</tbody>
+</table>
+
+<p>The runtime tests say which marker is missing. Locally, <code>rmp test smoke</code> builds the
+game, boots it for a few frames and makes the same two checks:</p>
+
+<pre data-lang="shell">
+rmp test smoke
+rmp test render
+</pre>
+
+<p>and stops with <samp>FALLA: the game did not boot, or an asset failed to load</samp> or
+<samp>FALLA: the game booted and drew nothing</samp> when one of them is not there.
+<code>rmp test render</code> builds the game for raylib's software renderer, with no window and no
+GPU, and runs exactly the check the macOS and BSD jobs run.</p>
+
+<p>Some jobs leave something to look at: the web test uploads its screenshot of the canvas as
+<code>web-canvas-capture</code> when the frame was wrong, and the Windows test tries Mesa's
+<code>llvmpipe</code>, <code>softpipe</code> and <code>d3d12</code> drivers in turn and says which
+ones failed before it gives up. A yellow warning on the itch.io or Firebase job is not a failure:
+it is the job saying what is not configured, and skipping.</p>

@@ -1,0 +1,231 @@
+<!--
+title: Google Play
+description: Google Play takes a signed App Bundle: CI builds and verifies one on every run, signs it with your upload key from four repository secrets, and can run the game on real phones in Firebase Test Lab.
+order: 50
+-->
+<h1>Google Play</h1>
+
+<p class="lede">Google Play takes a signed Android App Bundle — an <code>.aab</code>, not an APK,
+and not the debug build. CI builds, signs and verifies one on every run. With your upload key in
+four repository secrets, it signs with that key and a release tag attaches the bundle to the GitHub
+release, ready to upload in the Play Console. Nothing is uploaded to Play for you.</p>
+
+<h2>The application id is permanent</h2>
+
+<p>Once an app is published on Google Play, its application id can never change: not renamed,
+not moved. A different id is a different listing, without the installs and reviews of the old
+one. It is <code>[android] application_id</code>:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[android]
+application_id = "com.yourname.yourgame"
+</pre>
+
+<p>Letters, digits and <code>_</code>, at least two parts separated by dots, each starting with
+a letter; no <code>-</code>, which Apple's bundle ids allow and Android's do not. <code>rmp new</code>
+writes <code>com.example.</code> followed by the game's name, and every <code>com.example.</code> id
+is treated as a placeholder: <code>rmp deploy</code> refuses to tag a release under one, and so does
+CI when a tag is pushed by hand —
+<samp>refusing to build a release with placeholder identifiers</samp>. Only you know whether the
+id you replace it with is one you want to live with.</p>
+
+<h2 id="signing">Signing</h2>
+
+<p>Play needs the bundle signed with your <em>upload key</em>. You make it once, keep it, and hand
+it to CI as secrets.</p>
+
+<ol>
+<li><p><strong>Make an upload keystore</strong>, and keep it somewhere you will not lose it:</p>
+
+<pre data-lang="shell">
+keytool -genkey -v -keystore upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+</pre>
+
+<p>Turn on <strong>Play App Signing</strong> in the Play Console, so Google can reset your upload
+key if you do lose it.</p></li>
+<li><p><strong>Add four repository secrets</strong>, with exactly these names, under
+<em>Settings → Secrets and variables → Actions</em>:</p>
+
+<table>
+<thead><tr><th>Secret</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><code>ANDROID_KEYSTORE_BASE64</code></td><td>the keystore file, base64-encoded on one line: <code>base64 -w0 upload.jks</code></td></tr>
+<tr><td><code>ANDROID_KEYSTORE_PASSWORD</code></td><td>the keystore's password</td></tr>
+<tr><td><code>ANDROID_KEY_ALIAS</code></td><td>the key's alias — <code>upload</code> above</td></tr>
+<tr><td><code>ANDROID_KEY_PASSWORD</code></td><td>the key's password</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="shell">
+base64 -w0 upload.jks | gh secret set ANDROID_KEYSTORE_BASE64
+gh secret set ANDROID_KEYSTORE_PASSWORD
+gh secret set ANDROID_KEY_ALIAS
+gh secret set ANDROID_KEY_PASSWORD
+</pre>
+</li>
+<li><p><strong>Optionally, name the key.</strong> Set the repository <em>variable</em>
+<code>ANDROID_SIGNER_CN</code> to the CN of your upload key's certificate. Without it, CI can only
+check that the bundle is not signed with its throwaway key — which every wrong key passes too. With
+it, CI checks the bundle is signed by that one.</p></li>
+</ol>
+
+<aside class="callout danger"><span class="callout-title">Never</span><p>Never commit the
+keystore, and never write its passwords in <code>raylib_multiplatform.toml</code> or anywhere else
+in the repository. Whoever has the upload key and its passwords can publish as you.</p></aside>
+
+<h3>What CI does with them</h3>
+
+<p>The bundle is built and signed on every run, secrets or not — it is the one artifact you
+cannot afford to test for the first time on release day. What the secrets change is which key
+signs it:</p>
+
+<table>
+<thead><tr><th></th><th>Signed with</th><th>Artifact of the run</th><th>On the release</th></tr></thead>
+<tbody>
+<tr><td>No signing secrets (the default)</td><td>a throwaway key made for that run</td><td><code>android-unsigned-aab</code>, a file ending in <code>-NOT-FOR-PLAY.aab</code></td><td>never</td></tr>
+<tr><td><code>ANDROID_KEYSTORE_BASE64</code> set</td><td>your upload key</td><td><code>android-release-aab</code></td><td>yes, on a tag</td></tr>
+</tbody>
+</table>
+
+<p>Either way the bundle is then checked, not trusted: <code>jarsigner -verify -strict</code> has
+to verify it, and the certificate that signed it is read back and compared — a run with your key
+fails if the bundle carries the throwaway signature, if <code>jarsigner</code> reports errors in
+the signer's certificate, or, with <code>ANDROID_SIGNER_CN</code> set, if the signer is anyone
+else. A further step reads the compiler commands Gradle used for the bundle and fails unless the
+game was compiled as a release.</p>
+
+<p>The release build is minified, its unused resources removed, and it is not debuggable.</p>
+
+<h3>Signing on your own machine</h3>
+
+<p>The same bundle can be built locally with Gradle. The signing configuration reads the key from
+the environment, never from a file in the repository:</p>
+
+<pre data-lang="shell">
+export ANDROID_KEYSTORE_FILE=/path/to/upload.jks
+export ANDROID_KEYSTORE_PASSWORD=...
+export ANDROID_KEY_ALIAS=upload
+export ANDROID_KEY_PASSWORD=...
+cd raymob &amp;&amp; ./gradlew bundleRelease
+</pre>
+
+<p>The bundle is written to <code>build/outputs/bundle/release/</code> inside
+<code>raymob/app/</code>. Without
+<code>ANDROID_KEYSTORE_FILE</code> it comes out unsigned, which is fine for a look and refused by
+Play. <code>rmp android</code> builds the debug APK, which is what you install on your own phone
+with <code>adb install -r</code>.</p>
+
+<h2>The version code</h2>
+
+<p>Play orders the builds of an app by its version code, and refuses an upload whose code is not
+higher than the last one it took — for good: a code once uploaded is spent. The code comes from
+the tag, <code>MAJOR * 1000000 + MINOR * 1000 + PATCH</code>, so it rises with every version you
+tag in order (<a href="/publishing/releases.html#the-android-version-code">Releases and
+versions</a> has the limits). A pre-release shares its version's code: <code>v1.2.0-rc1</code> and
+<code>v1.2.0</code> are both <code>1002000</code>, so upload one of them, not both. Builds that are
+not tags have code <code>1</code> and are not for Play.</p>
+
+<h2>Uploading</h2>
+
+<p>The framework uploads nothing to Play: the bundle is on the GitHub release, and the Play Console
+is where it goes from there.</p>
+
+<pre data-lang="shell">
+gh release download v1.2.0 --pattern '*.aab'
+</pre>
+
+<p>Upload it to a track in the Play Console — an internal testing track first is the quick way to
+put a release on your own phones before anyone else gets it — and promote it from there.</p>
+
+<h2>What Play asks of the build</h2>
+
+<ul>
+<li><strong>A recent target SDK.</strong> The app targets and compiles against API 36, which Play
+requires of new apps and of updates from 2026-08-31. Play raises that requirement about once a
+year, and meeting it means moving the Android SDK, the NDK, the Android Gradle plugin and Gradle
+together, as one set.</li>
+<li><strong>16 KB pages.</strong> The native code is built with NDK r28, whose default is the
+16 KB ELF page alignment Play requires alongside that target.</li>
+<li><strong>The oldest Android</strong> is <code>[android] min_sdk</code>, 24 by default
+(Android 7.0), between 21 and 36.</li>
+<li><strong>Who is offered the app.</strong> <code>[android] gl_version</code> is the OpenGL ES
+version the app requires, <code>ES30</code> by default: devices without it are not offered it.
+<code>[android.features]</code> does the same for a gyroscope or an accelerometer the game cannot
+do without; <code>false</code> still declares the sensor, as optional.</li>
+<li><strong>What it asks for.</strong> Every permission is visible on the listing.
+<code>[android.permissions]</code> has <code>internet</code> and <code>vibration</code>, both off by
+default; <code>internet</code> is turned on regardless when AdMob is in the build.</li>
+<li><strong>How Play files it.</strong> <code>[android] category</code>, <code>"game"</code> by
+default.</li>
+</ul>
+
+<h2>Ads, and the Data safety form</h2>
+
+<p data-fw-grep="raylib_multiplatform.toml::^enabled = true"><code>[android.admob] enabled</code> is <code>true</code> in the .toml a new game starts with,
+with Google's official test ad ids. With it on, the Android build carries the Google Mobile Ads
+SDK, the <code>AD_ID</code> permission, and the duty to declare advertising-id collection in Play's
+Data safety form — and the <code>INTERNET</code> permission with it. A game without ads should turn
+it off; its <a href="ref:rmp::ads"><code>rmp::ads</code></a> calls, if it has any, still compile and
+do nothing:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[android.admob]
+enabled = false
+</pre>
+
+<p>A game with ads replaces the three test ids with its own before it publishes. Showing ads to
+players in the EEA or the UK requires a Google-certified consent platform, and the framework does
+not ship one: with ads on, that traffic is served badly or not at all until the game adds it.</p>
+
+<h2 id="real-devices-on-firebase-test-lab">Real devices on Firebase Test Lab</h2>
+
+<p data-fw-grep=".github/workflows/_firebase.yml::--timeout 5m">CI never starts the Android build itself: an emulator inside a runner with no acceleration is
+slow, and fails for reasons that have nothing to do with the game. Firebase Test Lab installs the
+APK on a real phone in Google's lab, lets its robot explore the game for up to five minutes, and
+reports whether it started and kept running.</p>
+
+<p>It is optional, and off until it is configured:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[deploy.firebase]
+project_id = "your-gcp-project"
+device     = "model=MediumPhone.arm,version=33,locale=en,orientation=portrait"
+</pre>
+
+<p><code>project_id</code> is a Google Cloud project id — lowercase letters, digits and hyphens —
+and empty means off. <code>device</code> is the device to run on, in <code>gcloud</code>'s
+notation; the line above is the default. Google retires device models every few years, so check
+that the one you name still exists with
+<code>gcloud firebase test android models list</code>.</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[deploy.firebase]
+project_id = "My Game"
+</pre>
+
+<p>Setting it up, once:</p>
+
+<ol>
+<li>Create or pick a Google Cloud project, and give it Blaze billing: Test Lab has no free
+quota.</li>
+<li>Enable its APIs: <code>gcloud services enable testing.googleapis.com toolresults.googleapis.com</code>.</li>
+<li>Create a service account with the roles <code>roles/cloudtesting.testAdmin</code> and
+<code>roles/cloudtoolresults.testAdmin</code>.</li>
+<li>Create a JSON key for it, and store the whole file as the secret <code>GCP_SA_KEY</code>.</li>
+<li>Optionally, set the repository variable <code>FIREBASE_RESULTS_BUCKET</code> to a Cloud
+Storage bucket, and give the service account <code>roles/storage.objectAdmin</code> on it: the
+results are written there and fetched back into the run.</li>
+</ol>
+
+<p>The repository variables <code>FIREBASE_PROJECT</code> and <code>FIREBASE_DEVICE</code> are read
+too, and when set they win over the .toml.</p>
+
+<p>Test Lab runs on full runs only — a tag, or a run started by hand with <code>full</code> —
+after the Android build. It sends the <strong>debug</strong> APK and refuses anything else: the robot taps
+whatever it finds, ad banners included, and the debug build shows Google's test ads, where a
+release build would send invalid clicks to your real ad units. The results are kept with the run
+for seven days as <code>firebase-testlab-results</code>. A failure there fails its own job and does
+not hold back the release.</p>
+
+<p>There is no iOS equivalent here: Test Lab needs a signed <code>.ipa</code> for iOS, and that
+needs an Apple developer account.</p>

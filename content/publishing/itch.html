@@ -1,0 +1,140 @@
+<!--
+title: itch.io
+description: On every release tag CI pushes each build itch.io can use to your game's page with butler; it needs a user, a game and one secret.
+order: 40
+-->
+<h1>itch.io</h1>
+
+<p class="lede">Once it is set up, every release tag puts your game on itch.io by itself: CI
+pushes each build itch.io can use to its own channel of your game's page with butler, itch.io's
+upload tool, and the web build plays in the page. It needs two names in the .toml and one secret
+on GitHub.</p>
+
+<h2>Setting it up</h2>
+
+<ol>
+<li><p><strong>Make the game's page on itch.io</strong>, if it does not exist yet. Its address,
+<code>https://yourname.itch.io/your-game</code>, holds the two names CI needs: your user name and
+the game's slug.</p></li>
+<li><p><strong>Write them in the .toml.</strong> They are names, not secrets, so they live with
+the rest of the game:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[deploy.itch]
+user = "yourname"
+game = "your-game"
+</pre>
+</li>
+<li><p><strong>Add the API key as a secret.</strong> Make a key on
+<a href="https://itch.io/user/settings/api-keys">itch.io's API keys page</a> and store it in the
+repository as <code>BUTLER_API_KEY</code> — under <em>Settings → Secrets and variables →
+Actions</em>, or from a terminal:</p>
+
+<pre data-lang="shell">
+gh secret set BUTLER_API_KEY
+</pre>
+</li>
+<li><p><strong>Release.</strong> The next tag publishes:</p>
+
+<pre data-lang="shell">
+rmp deploy 1.0.0
+</pre>
+</li>
+</ol>
+
+<p>The two names go together. With one of them set and the other empty, CI would have no
+<code>user/game</code> to push to and would skip the upload without anyone asking for that, so the
+configuration refuses it:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[deploy.itch]
+user = "yourname"
+</pre>
+
+<p>Both may hold letters, digits, <code>_</code> and <code>-</code>, and nothing else. Leave both
+empty, as a new game has them, and itch.io is simply off: the job logs a warning and does
+nothing, so a game that does not use itch.io never gets a red run over it.</p>
+
+<p>The repository variables <code>ITCH_USER</code> and <code>ITCH_GAME</code> are read too, and
+when set they win over the .toml. If a value in the .toml seems ignored, look there first.</p>
+
+<h2>Channels</h2>
+
+<p>A butler upload goes to a channel of the game, and itch.io works out the platform of a
+download from the channel's name, out of a fixed set it recognises. CI pushes these:</p>
+
+<table>
+<thead><tr><th>Channel</th><th>What is pushed</th><th>itch.io sees</th></tr></thead>
+<tbody>
+<tr><td><code>linux-x64-glibc</code></td><td>the Linux x86-64 archive, unpacked</td><td>Linux</td></tr>
+<tr><td><code>linux-arm64-glibc</code></td><td>the Linux ARM64 archive, unpacked</td><td>Linux</td></tr>
+<tr><td><code>linux-riscv64-glibc</code></td><td>the Linux RISC-V archive, unpacked</td><td>a download with no platform: itch.io has no RISC-V</td></tr>
+<tr><td><code>windows-x64</code></td><td>the Windows x86-64 archive, unpacked</td><td>Windows</td></tr>
+<tr><td><code>windows-arm64</code></td><td>the Windows ARM64 archive, unpacked</td><td>Windows</td></tr>
+<tr><td><code>osx</code></td><td>the macOS archive, unpacked</td><td>macOS</td></tr>
+<tr><td><code>html5</code></td><td>the web build, as a folder with <code>index.html</code> at its root</td><td>a game that plays in the browser</td></tr>
+<tr><td><code>android</code></td><td>the debug APK</td><td>Android</td></tr>
+</tbody>
+</table>
+
+<p>The archives are unpacked before they are pushed, so the player gets a folder rather than a zip
+inside a zip, and butler can upload only what changed since the last version.</p>
+
+<p>The web build is the one that is easy to get wrong by hand: itch.io plays an HTML5 game from an
+<code>index.html</code> at the root of an uploaded folder, and a zip pushed as it is becomes a
+file to download that nobody can play. So CI unpacks <code>web-build.zip</code> and copies
+<code>my_game.html</code> to <code>index.html</code> before it pushes.</p>
+
+<p data-fw-grep=".github/workflows/_itch.yml::artifact: android-debug-apk, +channel: android">The Android channel gets the debug APK, the build CI makes on every run — Google Play is where
+the signed release bundle goes (<a href="/publishing/google-play.html">Google Play</a>).</p>
+
+<p>Some targets have no channel, on purpose, and stay on the GitHub release only:</p>
+
+<ul>
+<li><code>linux-x64-musl</code>: the same game as <code>linux-x64-glibc</code> for Alpine. A second
+Linux x86-64 channel would show players two identical downloads, with no way on itch.io to say
+which one is for them.</li>
+<li><code>linux-x64-glibc-drm</code> and <code>linux-arm64-glibc-drm</code>: they boot straight
+onto the screen with no desktop. Right for a kiosk or a Pi, wrong for a player who double-clicks
+it inside a desktop session.</li>
+<li>The BSD builds: itch.io has no BSD platform.</li>
+<li><code>ios</code>: there is no way to install an iOS app from a downloaded file.</li>
+</ul>
+
+<h2>Versions</h2>
+
+<p>Each push carries the tag as its version — <code>v1.2.0</code>, <code>v</code> and all — and
+itch.io shows it on the page. The version also makes a push repeatable: running the same tag again
+does not create a second build on itch.io.</p>
+
+<p>This is the command each channel runs, with <code>payload</code> the unpacked build:</p>
+
+<pre data-lang="shell">
+butler push payload yourname/your-game:html5 --userversion v1.2.0
+</pre>
+
+<h2>When it runs</h2>
+
+<p>Only on a tag, and only after the GitHub release has been published: a tag whose build failed
+anywhere pushes nothing to itch.io either. Each channel is a job of its own, so one channel failing
+— an expired key, a network error — fails that job, visibly, and leaves the others to finish. A
+channel whose target you switched off finds no build to push and does nothing.</p>
+
+<p>butler comes from CI's pinned image, at the version recorded in
+<code>thirdparty/FROZEN_VERSIONS.md</code> and checked against its checksum when the image was
+built. Nothing fetches it from the network while a release is being published.</p>
+
+<h2>Saves in a downloaded build</h2>
+
+<p>A player who downloads from itch.io gets a folder, runs the game from it, and deletes the
+folder when done. <code>[save] portable = true</code> keeps the saves inside that folder, so
+deleting the game deletes them too:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[save]
+portable = true
+</pre>
+
+<p>It applies to the Windows, Linux and BSD builds; macOS, the web and Android keep their saves
+where those platforms keep them. <a href="/publishing/desktop.html#where-the-saves-go">Where the
+saves go</a> has the folders.</p>

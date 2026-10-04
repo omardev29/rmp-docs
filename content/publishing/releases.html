@@ -1,0 +1,289 @@
+<!--
+title: Releases and versions
+description: A release is a vMAJOR.MINOR.PATCH tag that rmp deploy checks and pushes; the version name and the Android version code come from it, and CI turns it into a GitHub release.
+order: 10
+-->
+<h1>Releases and versions</h1>
+
+<p class="lede">A release is an annotated git tag named <code>vMAJOR.MINOR.PATCH</code>.
+<code>rmp deploy</code> makes it after checking everything CI would check, pushes it, and CI
+builds every enabled target from that commit and publishes them as one GitHub release. The tag is
+also the only place the version lives: the version Android and iOS show, the Android version
+code and the name of the release are all read from it.</p>
+
+<h2>A release is a tag</h2>
+
+<pre data-lang="shell">
+rmp deploy 1.2.0
+</pre>
+
+<p>That tags the commit you are on as <code>v1.2.0</code> — the <code>v</code> is added when you
+leave it out — and pushes the tag to <code>origin</code>. Nothing else is pushed: the commit has
+to be on GitHub already, which is one of the things <code>rmp deploy</code> checks before it
+tags anything. On success it prints:</p>
+
+<pre data-lang="text">
+== checking v1.2.0 the way CI will ==
+  ok    v1.2.0 is release-ready
+ * [new tag]         v1.2.0 -> v1.2.0
+
+pushed v1.2.0. CI builds every target and attaches them to the release.
+  gh run watch
+
+to undo, if you were quick enough:
+  git push --delete origin v1.2.0 &amp;&amp; git tag -d v1.2.0
+</pre>
+
+<p>The tag is annotated, with the message <code>Release v1.2.0</code>: a real git object with an
+author and a date, which is what <code>git describe</code> and most release tooling expect. A
+lightweight tag pushed by hand builds just the same; <code>rmp deploy</code> makes the annotated
+kind.</p>
+
+<h2>The version comes from the tag</h2>
+
+<p>There is deliberately no <code>version</code> key in <code>raylib_multiplatform.toml</code>.
+The build reads the tag CI is building, and everything that carries a version gets it from
+there:</p>
+
+<table>
+<thead><tr><th>Tag</th><th>Version name</th><th>Android version code</th><th>GitHub release</th></tr></thead>
+<tbody>
+<tr><td><code>v1.2.3</code></td><td><code>1.2.3</code></td><td><code>1002003</code></td><td>a release</td></tr>
+<tr><td><code>v1.2.3-rc1</code></td><td><code>1.2.3-rc1</code></td><td><code>1002003</code></td><td>marked as a pre-release</td></tr>
+<tr><td><code>v1.2.3+7</code></td><td><code>1.2.3+7</code></td><td><code>1002003</code></td><td>a release</td></tr>
+<tr><td><code>v0.9.0</code></td><td><code>0.9.0</code></td><td><code>9000</code></td><td>a release</td></tr>
+<tr><td><code>v1.2</code></td><td colspan="3">refused: not <code>vMAJOR.MINOR.PATCH</code></td></tr>
+<tr><td>no tag</td><td><code>0.0.0-dev</code></td><td><code>1</code></td><td>none</td></tr>
+</tbody>
+</table>
+
+<p>The version name is the Android <code>versionName</code>, the iOS <code>MARKETING_VERSION</code>,
+and the version itch.io shows for the upload (there it keeps its <code>v</code>:
+<code>v1.2.3</code>). Every build that is not a tag build, on your machine or on a push, is
+<code>0.0.0-dev</code> with version code <code>1</code>.</p>
+
+<p>The tag has to be <code>v</code>, three numbers separated by dots, and optionally a
+<code>-</code> or <code>+</code> suffix of letters, digits, dots and hyphens. Anything else that
+starts with <code>v</code> is refused — there is no fallback, because a release named
+<code>0.0.0-dev</code> would be worse than no release:</p>
+
+<pre data-lang="text">
+  configure: error: tag 'v1.2' is not vMAJOR.MINOR.PATCH (optionally -rc1 / +build).
+                    Releases take their version from the tag and there is no fallback that would not be a lie.
+                    Delete the tag and re-tag: git tag -d v1.2 &amp;&amp; git push origin :refs/tags/v1.2
+</pre>
+
+<h3>Pre-releases</h3>
+
+<p data-fw-grep=".github/workflows/_release.yml::prerelease: \$\{\{ contains\(github\.ref_name, '-'\) \}\}">A hyphen in the tag marks the GitHub release as a pre-release: <code>v1.2.0-rc1</code>,
+<code>v1.2.0-beta.2</code>. It is built and published like any other tag, and it is labelled so
+nobody watching the repository mistakes a candidate for the real thing.</p>
+
+<pre data-lang="shell">
+rmp deploy 1.2.0-rc1
+</pre>
+
+<p>A <code>+</code> suffix is build metadata, not a pre-release: <code>v1.2.0+7</code> is published
+as a normal release.</p>
+
+<h2>The Android version code</h2>
+
+<p data-fw-grep="tools/configure.py::major \* 1_000_000 \+ minor \* 1_000 \+ patch">Google Play orders the builds of an app by an integer, the version code, and refuses an upload
+whose code is not higher than the last one it accepted. The framework packs the three numbers of
+the tag into that integer so that it rises whenever the version does:</p>
+
+<pre data-lang="text">
+versionCode = MAJOR * 1000000 + MINOR * 1000 + PATCH
+</pre>
+
+<p>That only works while <code>MINOR</code> and <code>PATCH</code> fit in three digits, so a tag
+with either of them at 1000 or above is refused:
+<samp>minor and patch must each stay below 1000 so the Android versionCode stays monotonic</samp>.
+And Play refuses any code above 2100000000, so <code>MAJOR</code> stops at 2099:
+<samp>major must stay at or below …</samp>. The highest version that fits is
+<code>v2099.999.999</code>, code <code>2099999999</code>.</p>
+
+<p>Two things the arithmetic does not do for you:</p>
+
+<ul>
+<li><strong>Nothing compares a tag with the previous one.</strong> The code rises only if your tags
+do. Tag <code>v1.0.0</code> after <code>v2.0.0</code> and the build gets a lower code than the one
+Play already has, and Play refuses it.</li>
+<li><strong>A pre-release shares its version's code.</strong> <code>v1.2.3-rc1</code> and
+<code>v1.2.3</code> are both <code>1002003</code>. Nothing uploads to Play automatically, so this
+costs nothing until you hand Play both: upload one of them, never the two.</li>
+</ul>
+
+<h2>What rmp deploy checks</h2>
+
+<p>Each check catches a mistake that would otherwise surface on CI, and finding it twenty minutes
+into a run, on a tag that is already public, is the expensive way. They run in this order, and
+the first that fails stops <code>rmp deploy</code> before it tags anything:</p>
+
+<ol>
+<li><p><strong>Nothing uncommitted.</strong> CI builds the commit, so a change that is only in
+your working tree would not be in the release. Staged or not, a change to a tracked file stops it
+(files git does not track are not part of any commit, and do not count):
+<samp>FALLA: uncommitted changes. Commit or stash them first.</samp></p></li>
+<li><p><strong>The tag is new here.</strong>
+<samp>FALLA: the tag v1.2.0 already exists here.</samp></p></li>
+<li><p><strong>The tag is new on <code>origin</code>.</strong> A version that has been pushed once
+is not cut again: <samp>FALLA: v1.2.0 is already on the remote. Releases are not re-cut; bump the
+version.</samp> When <code>origin</code> cannot be asked at all — no remote, no network — that
+stops it too, with what git said.</p></li>
+<li><p><strong>Your branch is on <code>origin</code>.</strong> CI checks the tag out from GitHub,
+so a tag on a commit that exists only on your machine builds nothing:
+<samp>FALLA: origin/main does not exist. Push the branch first:</samp></p></li>
+<li><p><strong>The commit is the one <code>origin</code> has.</strong> <code>HEAD</code> must be
+exactly what <code>origin/&lt;branch&gt;</code> points at, as of your last fetch:
+<samp>FALLA: HEAD is not what origin/main points at (as of your last fetch).</samp> It suggests
+<code>rmp push</code>, which pushes unless a CI run is in flight.</p></li>
+<li><p><strong>The configuration, the way CI will read it.</strong> <code>tools/configure.py</code>
+runs with the tag set the way CI sets it, so the whole <code>.toml</code> is validated, the tag is
+parsed into a version name and code, and — in a game, not in the framework's own repository —
+the ids are checked for placeholders. That last check is what stops a first release from going
+out under <code>com.example.</code>:</p>
+
+<pre data-lang="text">
+== checking v1.2.0 the way CI will ==
+
+  configure: error: refusing to build a release with placeholder identifiers:
+                      [android] application_id is still the example value 'com.example.my_game'
+                      [ios] bundle_id is still the example value 'com.example.my-game'
+
+                    A Google Play application id is PERMANENT: once published you can never change it.
+                    Set real values in raylib_multiplatform.toml before tagging.
+</pre>
+
+<p>An id is checked only when its platform is a target: with <code>ios</code> switched off in
+<code>[targets]</code>, the iOS bundle id is not looked at.</p></li>
+<li><p><strong>Tag and push.</strong> <code>git tag -a v1.2.0 -m "Release v1.2.0"</code>, then
+<code>git push origin v1.2.0</code>.</p></li>
+</ol>
+
+<p>Every refusal exits with status 1, and leaves no tag behind.</p>
+
+<h3>A tag pushed by hand</h3>
+
+<p>Tagging with git directly skips the checks on your machine, not the ones on CI. In a game, the
+first job of a tag run validates the configuration with the same placeholder check, and stops the
+run if it fails. A tag that is not <code>vMAJOR.MINOR.PATCH</code> fails every job that builds,
+at the step that generates its build files. Either way nothing is published, and the tag is left on GitHub to be
+deleted — see <a href="#undoing-a-tag">Undoing a tag</a>.</p>
+
+<p>Only tags that start with <code>v</code> start a release run at all.</p>
+
+<h2>What CI does with a tag</h2>
+
+<p>A tag runs the full matrix: every target <code>[targets]</code> enables, each built, checked and,
+where CI can, booted (<a href="/publishing/ci.html">Continuous integration</a> says what each one
+gets). A push to the branch while a tag run is going does not cancel it: superseded branch runs
+are cancelled, tag runs never are.</p>
+
+<p>Then a <code>release</code> job collects what every target uploaded and publishes it. It runs
+only when:</p>
+
+<ul>
+<li>the <code>lint</code> job passed — in a game, that is the workflows, the configuration, the
+pinned versions, the licences and a frame drawn in software;</li>
+<li>and no platform job failed or was cancelled. A platform you switched off in
+<code>[targets]</code> is skipped, and a skipped one does not hold the release back — otherwise
+turning a platform off would turn releases off with it.</li>
+</ul>
+
+<p>In the framework's own repository the release also waits for the jobs only it has: its
+examples, the game it makes with <code>rmp new</code>, and this documentation, checked against the
+commit being released.</p>
+
+<p>When the release is published, the <a href="/publishing/itch.html">itch.io</a> job pushes the
+builds to itch.io, if it is configured. Firebase Test Lab, if configured, runs alongside and does
+not hold the release back.</p>
+
+<h2>What the release holds</h2>
+
+<p>The release is named after the tag, its notes are generated by GitHub from what changed since
+the previous one, and these are its files. A target your game does not build has no file:</p>
+
+<table>
+<thead><tr><th>File</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><code>linux-x64-glibc-build.zip</code><br><code>linux-arm64-glibc-build.zip</code><br><code>linux-riscv64-glibc-build.zip</code><br><code>linux-x64-musl-build.zip</code><br><code>linux-x64-glibc-drm-build.zip</code><br><code>linux-arm64-glibc-drm-build.zip</code></td><td>Linux: the executable, its assets and <code>LICENSES.txt</code>. <a href="/publishing/desktop.html#linux">Desktop and BSD archives</a></td></tr>
+<tr><td><code>windows-x64-build.zip</code><br><code>windows-arm64-build.zip</code></td><td>Windows: the <code>.exe</code>, its assets and <code>LICENSES.txt</code>.</td></tr>
+<tr><td><code>macos-build.zip</code></td><td>macOS: one universal executable for Apple silicon and Intel, its assets and <code>LICENSES.txt</code>.</td></tr>
+<tr><td><code>bsd-freebsd-x86-64-build.zip</code><br><code>bsd-freebsd-arm64-build.zip</code><br><code>bsd-openbsd-x86-64-build.zip</code><br><code>bsd-openbsd-arm64-build.zip</code><br><code>bsd-netbsd-x86-64-build.zip</code></td><td>FreeBSD, OpenBSD and NetBSD, built in their own virtual machines.</td></tr>
+<tr><td><code>web-build.zip</code></td><td>The browser build. <a href="/publishing/web.html">The web build</a></td></tr>
+<tr><td>the debug <code>.apk</code></td><td>The Android debug build: installable on a phone, not what Play takes.</td></tr>
+<tr><td>the release <code>.aab</code></td><td>The App Bundle signed with your upload key. Only there when the Android signing secrets are set. <a href="/publishing/google-play.html">Google Play</a></td></tr>
+<tr><td><code>ios-raylib-xcframework.zip</code></td><td>The iOS engine, <code>raylib.xcframework</code>, for device and simulator.</td></tr>
+<tr><td><code>ios-app-simulator.zip</code></td><td>The game built for the iOS simulator: unsigned, and not installable on a device. <a href="/publishing/app-store.html">The App Store</a></td></tr>
+<tr><td><code>THIRD_PARTY_LICENSES.md</code></td><td>Every vendored component, its licence, and whether the copy is modified.</td></tr>
+<tr><td><code>SHA256SUMS</code></td><td>The SHA-256 of every zip, APK and AAB above.</td></tr>
+</tbody>
+</table>
+
+<p>One file never reaches a release: the App Bundle CI signs with a throwaway key when your
+signing secrets are not set. It is uploaded to the run under its own artifact name, with
+<code>-NOT-FOR-PLAY</code> in its file name, and the release step never looks at that artifact —
+so a bundle Play would accept is the only kind a release can carry.</p>
+
+<h3>Checking a download</h3>
+
+<p><code>SHA256SUMS</code> lists every archive by its file name, as the release has it. With the
+files downloaded next to it:</p>
+
+<pre data-lang="shell">
+sha256sum -c SHA256SUMS                    # every file it lists
+sha256sum -c --ignore-missing SHA256SUMS   # only the ones you downloaded
+</pre>
+
+<h3>The licence notices</h3>
+
+<p>Every archive carries <code>LICENSES.txt</code> beside the executable, the APK and the App
+Bundle carry it among their assets, and the iOS app carries it in its bundle. It is generated
+from the components block of <code>THIRD_PARTY_LICENSES.md</code>: the full notice of everything
+the game is built on, with a line saying which copies are modified. It is the only third-party
+notice the game ships, so turning it off needs a reason on record — where the credits are
+instead:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[deploy]
+licenses = false
+</pre>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[deploy]
+licenses = false
+credits_note = "the Credits scene, from the main menu"
+</pre>
+
+<h2>Undoing a tag</h2>
+
+<p><strong>Before CI has published anything</strong> — the run is still going, or it failed — the
+tag can simply go, from GitHub and from your machine. It is what <code>rmp deploy</code> prints
+when it pushes:</p>
+
+<pre data-lang="shell">
+git push --delete origin v1.2.0 &amp;&amp; git tag -d v1.2.0
+</pre>
+
+<p>Deleting the tag does not stop a run that has already started, so cancel the run as well,
+from its page or with <code>gh run cancel</code>.</p>
+
+<p><strong>After the release is published</strong>, deleting the tag leaves the release where it
+is. Delete both at once:</p>
+
+<pre data-lang="shell">
+gh release delete v1.2.0 --cleanup-tag
+</pre>
+
+<p>Then cut the next version rather than the same one again. <code>rmp deploy</code> refuses a
+version that is still on <code>origin</code>, and anything you already uploaded to Google Play has
+spent its version code for good.</p>
+
+<p><strong>A tag run that went red for a reason that was not yours</strong> — a BSD package mirror
+having a bad day is the usual one — does not need a new tag. Re-run the failed jobs of that run;
+the release job, which was skipped, is evaluated again with them:</p>
+
+<pre data-lang="shell">
+gh run rerun &lt;run-id&gt; --failed
+</pre>

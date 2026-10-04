@@ -1,0 +1,168 @@
+<!--
+title: The web build
+description: The browser build is four static files compiled with Emscripten; this is what each one is, how to host them, and what decides their memory and their size.
+order: 30
+-->
+<h1>The web build</h1>
+
+<p class="lede">The web build is the same game compiled to WebAssembly with Emscripten: four
+static files that any web server can serve, and a browser plays. CI builds it on every push, opens
+it in a headless browser and checks that the canvas shows the game; on a tag it goes into the
+release as <code>web-build.zip</code>, and to itch.io as a game that plays in the page.</p>
+
+<h2>Building it</h2>
+
+<p>Locally, the web build needs the Emscripten SDK, activated in the shell you build from so that
+<code>EMSDK</code> is set:</p>
+
+<pre data-lang="shell">
+rmp web
+python3 -m http.server 8000 --directory build/web
+</pre>
+
+<p>Then open <code>http://localhost:8000/my_game.html</code>. Serve it: opening the file
+straight from disk does not work, because the page fetches the other files. Without the SDK, <code>rmp web</code> stops at the start with
+<samp>FALLA: the web build needs the emsdk: activate it first (source emsdk_env.sh, or
+emsdk_env.ps1 on Windows), so that EMSDK is set</samp>.</p>
+
+<p><code>rmp web</code> is <code>cmake --preset web</code> and a build, with the output in
+<code>build/web/</code>. The <code>web</code> preset is a release build, the same one CI makes.</p>
+
+<h2>The files</h2>
+
+<table>
+<thead><tr><th>File</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><code>my_game.html</code></td><td>The page: the canvas the game draws on, and the code that loads the rest.</td></tr>
+<tr><td><code>my_game.js</code></td><td>Emscripten's runtime and the glue between the browser and the game.</td></tr>
+<tr><td><code>my_game.wasm</code></td><td>The game itself — your code, the framework and raylib — compiled to WebAssembly.</td></tr>
+<tr><td><code>my_game.data</code></td><td>Your <code>resources/</code> folder, packed for the browser and mounted at <code>/resources/</code> before the game starts.</td></tr>
+</tbody>
+</table>
+
+<p><code>web-build.zip</code> holds these four and <code>LICENSES.txt</code>. The names come from
+<code>[project] name</code>; keep the files together in one folder, since the page finds the others
+by name next to itself.</p>
+
+<p>The <code>.data</code> file is whatever <code>resources/</code> holds when you build, as it is:
+the loose files, and also <code>resources.rres</code> if you have run <code>rmp pack</code> — in
+which case everything is in it twice. <code>rmp unpack</code> before a web build keeps it to one
+copy. CI builds the web from the loose files.</p>
+
+<h2>Hosting it</h2>
+
+<p>The files are static, so anything that serves files over HTTP hosts the game: a static site,
+a bucket, a folder on a server you already have. CI itself serves them with Python's
+<code>http.server</code> for its browser test. On itch.io the game plays in the page —
+<a href="/publishing/itch.html">itch.io</a> covers the upload.</p>
+
+<p>What the browser changes, and what the framework does about it:</p>
+
+<dl>
+<dt>The frame</dt>
+<dd>The browser owns the loop: the game draws a frame each time the browser asks the page for
+one. <code>[window] fps</code> and <code>vsync</code> do nothing on the
+web, and the framework never calls <code>SetTargetFPS()</code> there.</dd>
+<dt>Saves</dt>
+<dd><a href="ref:rmp::save"><code>rmp::save</code></a> writes to a folder kept in the browser's
+IndexedDB, so a save survives a reload. The game starts only once that folder has been read
+back, so its first scene finds the saves already there. The database is named after
+<code>[project] name</code>, so games served from the same site keep their saves apart. Where the
+browser has no IndexedDB or refuses it — a private window, storage switched off — the game still
+runs, and its saves last as long as the tab.</dd>
+<dt>Sound</dt>
+<dd>Browsers keep a page silent until the player does something. A click or a touch unlocks the
+sound, and so does a key press: a game played from the keyboard from its title screen on is not
+silent until the first click. A gamepad button does not count as a gesture to the browser.</dd>
+</dl>
+
+<h2>Memory</h2>
+
+<p>A WebAssembly module gets its memory when it starts. <code>[web] memory</code> is how much, in
+megabytes:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[web]
+memory = 256
+grow   = false
+</pre>
+
+<p data-fw-grep="tools/configure.py::.web.: \{.memory.: 64,">The default, 64, is enough for menus and a handful of textures; a game that loads a tile atlas
+and a few music tracks wants more. When it runs out, the tab dies with "Cannot enlarge memory
+arrays" rather than a raylib error. <code>grow = true</code> lets the memory grow instead of
+aborting, and costs a little speed on every access to the heap; a game that knows its ceiling is
+better off raising <code>memory</code> and leaving <code>grow</code> off.</p>
+
+<p>Below 16 nothing loads, and above 4096 is more than 32-bit WebAssembly can address at all,
+so both are refused:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[web]
+memory = 8
+</pre>
+
+<h2>Size</h2>
+
+<p>What the player downloads is mostly the <code>.wasm</code> and the <code>.data</code>. What
+decides each:</p>
+
+<ul>
+<li><strong>The code</strong> is compiled for size (<code>-Oz</code>), and unused functions are
+dropped when it is linked.</li>
+<li><strong>No ASYNCIFY.</strong> The framework hands the frame loop to the browser instead of
+running a loop of its own, which is what lets it build without Emscripten's ASYNCIFY: that
+rewrites every function that could be on the stack while the game waits, and the framework's own
+measurement of it was a quarter more <code>.wasm</code>.</li>
+<li><strong>raylib modules you do not use.</strong> <code>[raylib] disabled_modules</code> takes
+<code>rshapes</code>, <code>rmodels</code> or <code>raudio</code> out of the build. On a desktop
+the linker has removed most of what you do not call already; the web and Android are where it
+shows.</li>
+<li><strong>Your assets</strong> make up the <code>.data</code>, as they are in
+<code>resources/</code>.</li>
+</ul>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[raylib]
+disabled_modules = ["rmodels"]
+</pre>
+
+<p>UPX is refused for the web, and the reason is the framework's: it is <code>.wasm</code>, and the
+browser fetches it gzipped anyway.</p>
+
+<h2>The browser backend</h2>
+
+<p>Emscripten compiles the game either way. <code>[web] backend</code> chooses what raylib talks
+to inside the browser:</p>
+
+<ul>
+<li><code>"glfw"</code>, the default: raylib calls GLFW, which Emscripten provides in JavaScript.
+The path raylib has shipped on the web for years.</li>
+<li><code>"emscripten"</code>: raylib calls the browser through Emscripten's own API, with no
+GLFW layer. One layer less; the keyboard mapping in raylib's code for it is still marked
+unfinished, which is why it is not the default.</li>
+</ul>
+
+<p>Both are opened in a headless browser by the framework's own CI. RGFW, raylib's third web
+backend, needs ASYNCIFY, and is refused:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[web]
+backend = "rgfw"
+</pre>
+
+<h2>What CI checks</h2>
+
+<p>On every push — the web is in the fast lane — CI builds the game in its pinned image, checks
+that the four files exist and are not empty, and then plays it: it serves the folder, opens the
+page in headless Chromium, waits for the game to boot and draw, and takes a screenshot of the
+canvas. The run fails when the game does not report a clean boot, when a save written to
+IndexedDB does not read back, or when the share of the canvas that differs from its most common
+colour is outside the range a real frame has — a blank canvas fails, and so does one that is all
+noise. An error in the browser's console fails it too, unless it is one of the few messages a
+headless browser prints on every clean run, and so does a file the page could not fetch. When the
+frame is the wrong one, the screenshot is uploaded with the run as
+<code>web-canvas-capture</code>, because a picture of the wrong frame says more than a ratio in a
+log.</p>
+
+<p>Chromium is the one Playwright pins, and Playwright is pinned by the framework's
+<code>package-lock.json</code>.</p>

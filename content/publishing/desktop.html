@@ -1,0 +1,267 @@
+<!--
+title: Desktop and BSD archives
+description: What is in the zip CI makes for each Windows, macOS, Linux and BSD target, what the Linux glibc floor is, and what compressing with UPX costs.
+order: 20
+-->
+<h1>Desktop and BSD archives</h1>
+
+<p class="lede">Every desktop and BSD target ships as a zip: the executable, its assets and the
+licence notice, nothing to install. CI makes one per target on a tag and attaches it to the
+release; every run that builds a target uploads the same zip as an artifact of the run.</p>
+
+<h2>What an archive holds</h2>
+
+<p>Unpacked, an archive is a folder like this, with your <code>[project] name</code> as the
+executable's name:</p>
+
+<pre data-lang="text">
+my_game              my_game.exe on Windows
+LICENSES.txt         the notices of everything the game is built on
+resources/
+    resources.rres   every asset, in one encrypted pack
+</pre>
+
+<table>
+<thead><tr><th>Archive</th><th>Executable</th><th>Assets</th></tr></thead>
+<tbody>
+<tr><td><code>linux-x64-glibc-build.zip</code></td><td>x86-64 ELF</td><td>the pack</td></tr>
+<tr><td><code>linux-arm64-glibc-build.zip</code></td><td>aarch64 ELF</td><td>the pack</td></tr>
+<tr><td><code>linux-riscv64-glibc-build.zip</code></td><td>RISC-V ELF</td><td>loose files</td></tr>
+<tr><td><code>linux-x64-musl-build.zip</code></td><td>x86-64 ELF, linked against musl</td><td>loose files</td></tr>
+<tr><td><code>linux-x64-glibc-drm-build.zip</code></td><td>x86-64 ELF, DRM/KMS</td><td>the pack</td></tr>
+<tr><td><code>linux-arm64-glibc-drm-build.zip</code></td><td>aarch64 ELF, DRM/KMS</td><td>the pack</td></tr>
+<tr><td><code>windows-x64-build.zip</code></td><td>x86-64 <code>.exe</code></td><td>the pack</td></tr>
+<tr><td><code>windows-arm64-build.zip</code></td><td>ARM64 <code>.exe</code></td><td>loose files</td></tr>
+<tr><td><code>macos-build.zip</code></td><td>universal Mach-O: arm64 and x86_64 in one file</td><td>the pack</td></tr>
+<tr><td><code>bsd-&lt;os&gt;-&lt;arch&gt;-build.zip</code></td><td>FreeBSD, OpenBSD or NetBSD ELF</td><td>the pack</td></tr>
+</tbody>
+</table>
+
+<h3>The pack, and when there is none</h3>
+
+<p><code>resources.rres</code> is your <code>resources/</code> folder packed into one file and
+encrypted with <code>[resources] rres_password</code>. The password ends up inside the executable,
+so this keeps casual hands off your art and nothing more; <code>rmp new</code> gives every game a
+password of its own. The game reads the pack when there is one and the loose files when there is
+not, so both shapes run the same game. <code>rmp pack</code> makes the same pack locally, and
+<code>rmp unpack</code> deletes it.</p>
+
+<p>Three archives carry the loose files instead, with a <code>PACK_SKIPPED.txt</code> in
+<code>resources/</code> that says why: <code>linux-riscv64-glibc</code>,
+<code>linux-x64-musl</code> and <code>windows-arm64</code> are built by a compiler for another
+machine, so the packer comes out as a program for that machine too, and cannot run where the pack
+would have to be made.</p>
+
+<h3>Start it from its own folder</h3>
+
+<p>A release build looks for <code>./resources/</code> — relative to the folder the game is
+started from, not to where the executable is. The iOS app changes into its bundle before it loads
+anything; a desktop build does not. Started from its own folder, it finds its assets:</p>
+
+<pre data-lang="shell">
+cd my_game
+./my_game
+</pre>
+
+<p>Started from anywhere else, it finds neither the pack nor the loose files, and the log says
+<samp>ASSETS: No resource pack found, using loose files from …</samp> before every load fails.
+Whatever launches the game — a shortcut, a launcher, a store — has to start it in its own
+folder.</p>
+
+<h2 id="where-the-saves-go">Where the saves go</h2>
+
+<p><a href="ref:rmp::save"><code>rmp::save</code></a> writes into one of two places, chosen by
+<code>[save] portable</code>:</p>
+
+<table>
+<thead><tr><th><code>portable</code></th><th>Saves go to</th><th>Wanted by</th></tr></thead>
+<tbody>
+<tr><td><code>false</code> (the default)</td><td><code>%APPDATA%\my_game</code> on Windows,
+<code>~/Library/Application Support/my_game</code> on macOS, <code>~/.local/share/my_game</code>
+on Linux and the BSDs</td><td>installers, and Steam's cloud saves</td></tr>
+<tr><td><code>true</code></td><td>a <code>saves/</code> folder next to the executable</td><td>a zip
+the player unpacks and runs — itch.io's downloads: deleting the folder deletes the game, saves
+included</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[save]
+portable = true
+</pre>
+
+<p>Only Windows, Linux and the BSDs have a folder next to the executable to use; macOS ignores
+<code>portable</code>. When that folder cannot be written — a portable build copied somewhere
+read-only — the saves go to the player's folder instead and the log says so once, and a read
+looks in both and takes the newer save, so nothing is lost in silence.</p>
+
+<h2 id="linux">Linux</h2>
+
+<p>The Linux archives answer three questions a player's machine answers differently: which
+processor, which C library, and whether there is a desktop at all.</p>
+
+<ul>
+<li><code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code>: the ordinary desktop build,
+for every distribution built on glibc.</li>
+<li><code>linux-riscv64-glibc</code>: the same for RISC-V.</li>
+<li><code>linux-x64-musl</code>: for Alpine and the other musl distributions. musl and glibc are
+two C libraries, not two versions of one: a glibc binary does not start on Alpine, and this one
+does not start on Debian. It is linked dynamically, so that GLFW can open the system's X11 and GL
+libraries when it starts.</li>
+<li><code>linux-x64-glibc-drm</code> and <code>linux-arm64-glibc-drm</code>: DRM/KMS. The game
+draws straight to the screen through the kernel, with no X11 and no Wayland — a Raspberry Pi, a
+cabinet, a kiosk, a bare console. It links <code>libdrm</code>, <code>libgbm</code>,
+<code>libEGL</code> and <code>libGLESv2</code> from the system. Leave both out with
+<code>disabled = ["drm"]</code>.</li>
+</ul>
+
+<p>The desktop builds need nothing installed on the player's side but a desktop: GLFW opens
+libX11 and libGL with <code>dlopen</code> when the game starts, so neither is a link-time
+dependency. Release binaries are stripped of their debug symbols as they are linked, and the
+x64 job fails if one still carries them.</p>
+
+<h3>The glibc floor</h3>
+
+<p>A Linux binary records, for every symbol it imports, the glibc version that symbol came from,
+and the loader refuses to start it on a system with an older glibc. CI builds on Ubuntu 24.04,
+whose glibc is newer than Debian 12's, Ubuntu 22.04's or the Steam runtime's, and a binary
+linked the ordinary way there would stop at <code>version GLIBC_2.39 not found</code> on all of
+them.</p>
+
+<p><code>[linux] glibc</code> is the oldest glibc the shipped binary may ask for:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[linux]
+glibc = "2.31"
+</pre>
+
+<p data-fw-grep="tools/configure.py::.glibc.: .2\.28.">The default is <code>"2.28"</code>: RHEL 8, Debian 10, and with room to spare Steam's
+<em>sniper</em> runtime. With a floor set, <code>tools/linux_build.sh</code> compiles with
+<code>zig cc</code> against that glibc's symbols, and <code>tools/glibc_check.sh</code> reads every
+versioned symbol out of the finished binary and fails the build if one is newer than the floor —
+naming the symbols. The game's own code is the same either way; this is a compatibility setting,
+not a behaviour change. <code>""</code> builds against whatever the build machine has, which is
+right for a local build and wrong for a release. A version outside 2.17–2.99 is refused:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[linux]
+glibc = "2.16"
+</pre>
+
+<p>The floor applies to <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code>, which are
+built that way and checked. The rest are built differently:</p>
+
+<ul>
+<li><strong>DRM</strong> links the system's <code>libdrm</code>, <code>libgbm</code> and
+<code>libEGL</code> directly, and those were built against the build machine's glibc, so its floor
+is the build machine's. Its job prints the floor the binary really has, on every run.</li>
+<li><strong><code>linux-riscv64-glibc</code></strong> is built with the cross compiler in CI's
+image, and its floor is neither lowered nor checked.</li>
+<li><strong><code>linux-x64-musl</code></strong> has no glibc to ask for.</li>
+</ul>
+
+<h2>Windows</h2>
+
+<p><code>windows-x64</code> and <code>windows-arm64</code>, the second compiled with MSVC for ARM64
+on an x64 machine. A release build opens no console window behind the game.</p>
+
+<ul>
+<li><strong>The icon.</strong> Windows keeps a program's icon inside the <code>.exe</code>.
+When Pillow is installed on the machine that runs <code>tools/configure.py</code>, it turns
+<code>[icon] source</code> into a multi-resolution <code>.ico</code> that the build embeds; without
+Pillow the <code>.exe</code> is built without one, and nothing fails over it.</li>
+<li><strong>The windowing backend.</strong> <code>[windows] backend</code> is
+<code>"glfw"</code> by default; <code>"win32"</code> and <code>"rgfw"</code> drop GLFW for a
+smaller <code>.exe</code> and cover less — gamepads, several monitors, the clipboard.</li>
+<li><strong>Tested on a real Windows.</strong> CI starts the x64 <code>.exe</code> with Mesa's
+software OpenGL placed beside it, since the runners have no GPU, and checks it draws. Those
+DLLs are deleted before packaging, and the packaging step fails if one of them is in the zip: a
+copy shipped by mistake would force software rendering on every player.</li>
+</ul>
+
+<h2>macOS</h2>
+
+<p><code>macos-build.zip</code> holds one executable with both an arm64 and an x86_64 slice, for
+Apple silicon and Intel Macs, next to its <code>resources/</code> folder. It is a plain executable,
+not an <code>.app</code> bundle. CI checks both slices are in the file.</p>
+
+<h2>Signing</h2>
+
+<p>Nothing in the pipeline signs the Windows <code>.exe</code> or signs or notarises the macOS
+executable, and the framework has no setting for either. What the framework does take into
+account is what signing changes — it is the reason UPX is off for Windows by default, and
+refused for macOS (<a href="#compressing-with-upx">below</a>).</p>
+
+<h2>FreeBSD, OpenBSD and NetBSD</h2>
+
+<p><code>freebsd-x64</code>, <code>freebsd-arm64</code>, <code>openbsd-x64</code>,
+<code>openbsd-arm64</code> and <code>netbsd-x64</code> are each built inside a virtual machine of
+that system, with its own compiler and its own packages. Their archives are named after the system
+and the machine — <code>bsd-freebsd-x86-64-build.zip</code>,
+<code>bsd-openbsd-arm64-build.zip</code> — and carry the pack like the others.</p>
+
+<p>Some combinations are not built, each for a reason outside the framework: FreeBSD publishes no
+RISC-V packages, the virtual machines CI builds in exist for neither OpenBSD nor NetBSD on RISC-V,
+and NetBSD's ARM64 packages cannot be installed on its base system. RISC-V is covered by <code>linux-riscv64-glibc</code>.</p>
+
+<p>The packages a BSD machine installs come from the systems' own mirrors, which change from day
+to day, and neither project offers a snapshot to pin to. These archives are on the GitHub release
+and not on itch.io, which has no BSD platform.</p>
+
+<h2 id="compressing-with-upx">Compressing with UPX</h2>
+
+<p>UPX compresses an executable into one that unpacks itself in memory when it starts. On this
+framework's own game it makes the binary about three quarters smaller, at the cost of a few
+milliseconds at every launch. <code>[upx]</code> says which targets get it:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[upx]
+enabled  = ["linux"]
+disabled = ["linux-riscv64-glibc"]
+</pre>
+
+<p data-fw-grep="tools/configure.py::.upx.: \{.enabled.: \[.linux-x64-glibc., .linux-arm64-glibc.\]">Groups expand and <code>disabled</code> is taken away afterwards, like <code>[targets]</code>.
+The groups here are <code>all</code>, <code>linux</code>, <code>windows</code> and
+<code>bsd</code>, and <code>all</code> means every target that can be compressed — not every
+target. The default is <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code>. To turn
+compression off, empty <code>enabled</code>.</p>
+
+<p>Each target that cannot be compressed has its own reason, and naming one is an error that
+says it, not a setting that quietly does nothing:</p>
+
+<table>
+<thead><tr><th>Target</th><th>Why not</th></tr></thead>
+<tbody>
+<tr><td><code>macos</code>, <code>ios</code></td><td>the binary is code-signed; compressing it breaks the signature</td></tr>
+<tr><td><code>android</code></td><td>what ships is a <code>.so</code> inside an APK, which is already a zip — compressing it makes the APK bigger</td></tr>
+<tr><td><code>web</code></td><td>it is <code>.wasm</code>, and the browser fetches it gzipped anyway</td></tr>
+</tbody>
+</table>
+
+<p>The error comes when a build is packaged, from the step that asks
+<code>tools/configure.py</code> which binaries to compress.</p>
+
+<p>The trade-offs of the targets that can be compressed:</p>
+
+<ul>
+<li><strong>Windows</strong> is available and off by default. An unsigned <code>.exe</code> that
+has been UPX-packed is a shape Windows Defender associates with malware, and it gets quarantined
+on some machines and not on others. If you sign your builds, turn it on.</li>
+<li><strong>The BSDs</strong> are available and off by default, because nothing has tested a
+packed BSD binary.</li>
+<li><strong>A binary that is too big is left alone.</strong> UPX itself refuses files past about
+768 MB, and fails rather than declining. <code>[upx] max_size_mb</code>, 600 by default, is the
+size above which a binary is shipped uncompressed with a line in the log, so a large game still
+releases. Above 768 it is refused, and so is a value below 1, since that would skip everything —
+emptying <code>enabled</code> says that better:</li>
+</ul>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[upx]
+max_size_mb = 0
+</pre>
+
+<p>UPX runs at its slowest and smallest setting, and every packed binary is verified with
+<code>upx -t</code> before it goes into the zip. The version is pinned with a checksum in
+<code>thirdparty/FROZEN_VERSIONS.md</code>. CI boots each binary before the packaging step
+compresses it; the compressed file itself is checked by <code>upx -t</code>, not started.</p>
