@@ -30,6 +30,7 @@ from . import dom, prose
 from .checks import Problem
 from .highlight import LANGS, highlight
 from .facts import Facts
+from . import generated
 from .reference import Reference
 from .snippets import Snippet, harness_file
 from . import search as search_index
@@ -173,7 +174,21 @@ class Site:
 
     def reference(self):
         self.reference_model = Reference(self.framework, self.refconf).read()
-        for rp in self.reference_model.build(self.blob_url):
+        refpages = self.reference_model.build(self.blob_url)
+        for rp in refpages:
+            if rp.url == "reference/macros.html":
+                rp.body += "\n" + generated.defines_table(self.framework)
+        for url, title, body in (generated.configuration_page(self.framework),
+                                 generated.commands_page(self.framework)):
+            root, errors = dom.parse(body)
+            for e in errors:
+                self.problems.append(Problem("html", f"generated:{url}", e.line, e.message))
+            self.pages.append(Page(url=url, title=title, source="tools/rmpdocs/generated.py",
+                                   description=f"Every {'key of the .toml' if 'config' in url else 'rmp command'}, "
+                                               "read from the framework's own tool.",
+                                   section="reference", kind="reference", order=80, nav_title=title,
+                                   root=root))
+        for rp in refpages:
             root, errors = dom.parse(rp.body)
             for e in errors:
                 self.problems.append(Problem("html", f"generated:{rp.url}", e.line, e.message))
@@ -187,6 +202,7 @@ class Site:
     def transform(self, page: Page):
         root = page.root
         self._facts(page, root)
+        self._generated_blocks(page, root)
         self._code_blocks(page, root)
         self._code_spans(page, root)
         self._headings(page, root)
@@ -257,6 +273,17 @@ class Site:
             markup = (f'<div class="code-block{(" " + extra) if extra else ""}"{attr_text}>{head}'
                       f'<pre data-lang="{lang}"><code>{highlighted}</code></pre>{said}</div>')
             replace(pre, dom.Raw(markup, pre.line))
+
+    def _generated_blocks(self, page: Page, root: dom.Node):
+        """<div data-generated="targets-table"></div>: a table the build makes
+        from the framework's tools."""
+        for n in [n for n in root.walk() if n.get("data-generated")]:
+            make = generated.GENERATED_BLOCKS.get(n.get("data-generated"))
+            if make is None:
+                self.problems.append(Problem("facts", page.source, n.line,
+                                             f"data-generated={n.get('data-generated')!r} is not a table the build knows"))
+                continue
+            replace(n, dom.Raw(make(self.framework), n.line))
 
     def _facts(self, page: Page, root: dom.Node):
         """{{count:targets}} and friends: the framework's number, not a typed one."""
