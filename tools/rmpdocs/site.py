@@ -29,6 +29,7 @@ from .checks import Problem
 from .highlight import LANGS, highlight
 from .facts import Facts
 from .reference import Reference
+from .snippets import Snippet, harness_file
 from . import search as search_index
 
 DOCS = Path(__file__).resolve().parents[2]
@@ -115,6 +116,7 @@ class Site:
         self.outputs: dict[str, str] = {}
         self.warnings: list[str] = []
         self.facts = Facts(self.framework)
+        self.snippets: list[Snippet] = []
 
     # -- the framework ---------------------------------------------------------
 
@@ -225,6 +227,8 @@ class Site:
                 if code.startswith("\n"):
                     code = code[1:]
                 code = dedent(code.rstrip())
+                if lang in ("cpp", "c") and page.kind == "content":
+                    self._snippet(page, pre, lang, code)
             if not lang:
                 self.problems.append(Problem("code", page.source, pre.line,
                                              "a <pre> without data-lang; say what it is"))
@@ -259,6 +263,31 @@ class Site:
                             self.problems.append(Problem("facts", page.source, line, str(e).strip("'\"")))
                             return m.group(0)
                     child.data = re.sub(r"\{\{(count|list):([\w-]+)\}\}", value, child.data)
+
+    def _snippet(self, page: Page, pre: dom.Node, lang: str, code: str):
+        """Record a C or C++ block for the compile tier, or say why it cannot be."""
+        harness = pre.get("data-harness")
+        if not harness:
+            self.problems.append(Problem(
+                "snippets", page.source, pre.line,
+                f"a {lang} block that nothing compiles: give it data-harness (one of "
+                "file, toplevel, function, scene, object, members, c99) or quote it with "
+                "data-include from a source the framework builds"))
+            return
+        if harness_file(harness) is None:
+            self.problems.append(Problem("snippets", page.source, pre.line,
+                                         f"data-harness={harness!r} is not a file in snippets/harness/"))
+            return
+        expect = pre.get("data-expect", "")
+        if expect not in ("", "error"):
+            self.problems.append(Problem("snippets", page.source, pre.line,
+                                         f"data-expect={expect!r}: the only expectation is \"error\""))
+        if expect == "error" and not pre.get("data-error"):
+            self.problems.append(Problem("snippets", page.source, pre.line,
+                                         "a block shown as a mistake says which error: data-error=\"...\""))
+        self.snippets.append(Snippet(page.source, pre.line, lang, code, harness,
+                                     given=pre.get("data-given", ""), expect_error=expect == "error",
+                                     error_text=pre.get("data-error", "")))
 
     def _code_spans(self, page: Page, root: dom.Node):
         for node in list(root.walk()):

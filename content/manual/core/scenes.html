@@ -15,7 +15,7 @@ stack of them, and moving between screens is putting one on that stack or taking
 needs. Every hook has an empty default, so a scene that only draws overrides only
 <code>_draw()</code>:</p>
 
-<pre data-lang="cpp">
+<pre data-lang="cpp" data-harness="toplevel" data-given="struct GameScene : rmp::Scene {};">
 #include &lt;rmp/scene.h&gt;
 #include &lt;rmp/ui.h&gt;
 #include &lt;rmp/app.h&gt;
@@ -32,7 +32,7 @@ class MainMenuScene : public rmp::Scene {
 
 <p>The game starts with one scene, named once in <code>src/main.cpp</code>:</p>
 
-<pre data-lang="cpp">
+<pre data-lang="cpp" data-harness="toplevel" data-given="struct MainMenuScene : rmp::Scene {};">
 RMP_GAME(MainMenuScene);
 </pre>
 
@@ -99,7 +99,7 @@ draw — a black window on a desktop, and on iOS no way back at all. To leave, c
 <p>The arguments of <code>change</code>, <code>push</code> and <code>replace</code> go to the new
 scene's constructor, so data crosses a transition the way it crosses into any object:</p>
 
-<pre data-lang="cpp">
+<pre data-lang="cpp" data-harness="toplevel" data-given="enum class Difficulty { EASY, HARD };">
 class GameScene : public rmp::Scene {
 public:
     GameScene(int level, Difficulty difficulty) : _level(level), _difficulty(difficulty) {}
@@ -108,7 +108,12 @@ private:
     int _level;
     Difficulty _difficulty;
 };
+</pre>
 
+<p>and, wherever the game starts a level:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="enum class Difficulty { EASY, HARD };
+struct GameScene : rmp::Scene { GameScene(int, Difficulty) {} };">
 rmp::Scene::change&lt;GameScene&gt;(3, Difficulty::HARD);
 </pre>
 
@@ -135,7 +140,7 @@ underneath:</p>
 freezes, stays visible, and stops hearing the keyboard — which is why a pause scene in this
 framework sets no policy at all:</p>
 
-<pre data-lang="cpp">
+<pre data-lang="cpp" data-harness="toplevel" data-given="struct MainMenuScene : rmp::Scene {};">
 class PauseScene : public rmp::Scene {
     void _draw() override {
         rmp::ui::begin();
@@ -170,7 +175,7 @@ makes one, puts it in the scene and calls its <code>_ready()</code>; the object 
 drawn with the scene, and ends with it. The reference it returns is good for the rest of the
 frame:</p>
 
-<pre data-lang="cpp">
+<pre data-lang="cpp" data-harness="scene" data-given="static Vector2 muzzle{}, aim{};">
 auto &amp;bullet = spawn({ .position = muzzle });
 bullet.velocity = aim * 900;
 </pre>

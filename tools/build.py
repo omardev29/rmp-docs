@@ -3,6 +3,8 @@
 
     python3 tools/build.py build            write _site/, then run every gate
     python3 tools/build.py check            the gates, without writing
+    ... --tier compile                      and compile every C and C++ block against
+                                            the framework (needs its build/lint configured)
     python3 tools/build.py serve [PORT]     build, then serve _site/ on localhost
     python3 tools/build.py gates            list the gates and what each one says
 
@@ -46,6 +48,8 @@ def main(argv):
     ap.add_argument("port", nargs="?", type=int, default=8040)
     ap.add_argument("--framework", type=Path)
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--tier", choices=("static", "compile"), default="static",
+                    help="static: the gates; compile: and every C/C++ block compiled")
     args = ap.parse_args(argv)
 
     if args.command == "gates":
@@ -57,6 +61,13 @@ def main(argv):
     for w in site.warnings:
         print(f"warning: {w}")
     problems = [p for p in site.problems if p.gate != "html"] + checks.run(context(site))
+    if args.tier == "compile":
+        from rmpdocs import snippets
+        results = snippets.check(site.snippets, site.framework)
+        for s, why in results:
+            if why:
+                problems.append(checks.Problem("snippets", s.page, s.line, why))
+        print(f"compiled {len(results)} C/C++ blocks against the framework")
     for p in problems:
         print(p)
     pages = len(site.pages)

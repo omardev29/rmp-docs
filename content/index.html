@@ -11,7 +11,7 @@ screen.</p>
 
 <p>You write the game. A main menu is three calls:</p>
 
-<pre data-lang="cpp">
+<pre data-lang="cpp" data-harness="function" data-given="void play(); void quit();">
 rmp::ui::begin();
 if (rmp::ui::button("Play")) play();
 if (rmp::ui::button("Quit")) quit();

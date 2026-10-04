@@ -20,8 +20,8 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-KEY_PAGES = ["index.html", "manual/core/scenes.html", "reference/rmp-Camera.html",
-             "getting-started/index.html"]
+KEY_PAGES = ["index.html", "manual/core/scenes.html", "reference/classes/rmp-Camera.html",
+             "reference/namespaces/rmp-ui.html", "getting-started/index.html"]
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -102,7 +102,7 @@ def main(site: Path, shots: Path) -> int:
             failures.append(f"searching 'spawn' put {first!r} first, not rmp::Scene::spawn")
         page.keyboard.press("Enter")
         try:
-            page.wait_for_url("**/reference/rmp-Scene.html#spawn", timeout=5000)
+            page.wait_for_url("**/reference/classes/rmp-Scene.html#spawn", timeout=5000)
         except Exception:
             failures.append(f"Enter on the first result went to {page.url}")
         ctx.close()

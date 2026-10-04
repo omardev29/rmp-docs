@@ -81,6 +81,16 @@ jobs:
             echo "FALLA: checked out $GOT, FRAMEWORK_REF says ${{ needs.resolve.outputs.ref }}"; exit 1; }
           echo "  ok    framework at $GOT"
 
+      # The compile commands the framework's own build gives an example: the
+      # flags every C and C++ block on the site is compiled with.
+      - name: Configure the framework
+        working-directory: framework
+        run: |
+          set -euo pipefail
+          python3 tools/configure.py > /dev/null
+          cmake --preset lint > /dev/null
+          test -s build/lint/compile_commands.json
+
       - name: actionlint
         run: |
           set -euo pipefail
@@ -88,10 +98,13 @@ jobs:
           actionlint -color
 
       - name: Unit tests
+        env:
+          RMP_FRAMEWORK: framework
+          RMP_DOCS_REQUIRE_COMPILE: "1"
         run: python3 -m unittest discover -s tests -v
 
-      - name: Build, and every gate
-        run: python3 tools/build.py build --framework framework
+      - name: Build, every gate, every C and C++ block compiled
+        run: python3 tools/build.py build --framework framework --tier compile
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
