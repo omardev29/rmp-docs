@@ -568,6 +568,21 @@ class HeaderReader:
 
         decl = clean.rstrip().rstrip(";").rstrip()
         dmask = mask(decl)
+        am = re.match(r"(struct|union)\s*\{", dmask)
+        if am:
+            # `struct { ... } ours;`: an unnamed type and the one field of it.
+            # The field is what the reader sees and names; the body is its type.
+            close = _matching(dmask, am.end() - 1, "{", "}")
+            fm = re.match(r"\s*(\w+)\s*$", decl[close + 1:])
+            if not fm:
+                raise ParseError(self.path, line, f"an unnamed {am.group(1)} with no field: "
+                                                  f"{collapse(clean)[:90]}")
+            name = fm.group(1)
+            ent = owner.add(Entity("field", name, _join(owner.qualname, name), self.path, line,
+                                   access=access, signature=f"{am.group(1)} {{ … }} {name}"))
+            ent.internal = owner.internal
+            ent.trailing = trailing
+            return ent
         cuts = [x for x in (_first_top(dmask, "="), _first_top(dmask, "{")) if x >= 0]
         cut = min(cuts) if cuts else len(decl)
         head = decl[:cut].strip()

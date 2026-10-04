@@ -74,6 +74,10 @@ enum class Flat { A, B, C };
 struct Options {
     int count = 3; // how many
     const char *name = "a; b { c }"; // braces and semicolons in a string
+    // What it keeps. One unnamed struct and its one field.
+    struct {
+        int frame = 0; // the frame it is on
+    } ours;
 };
 
 class Outer {

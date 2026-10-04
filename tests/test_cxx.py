@@ -102,6 +102,12 @@ class GrammarTest(unittest.TestCase):
         self.assertEqual((limit.kind, limit.value, limit.trailing), ("constant", "8", "the most there can be"))
         self.assertEqual(len(self.by["rmp::Widget::as"]), 1, "the body outside the class is not a second entity")
 
+    def test_an_unnamed_struct_is_its_field(self):
+        ours = self.one("rmp::Options::ours")
+        self.assertEqual((ours.kind, ours.signature), ("field", "struct { … } ours"))
+        self.assertEqual(ours.doc, "What it keeps. One unnamed struct and its one field.")
+        self.assertNotIn("rmp::Options::struct", self.by)
+
     def test_a_macro_in_two_branches(self):
         m = self.one("RMP_ENTRY")
         self.assertEqual(m.signature, "#define RMP_ENTRY(X)")
