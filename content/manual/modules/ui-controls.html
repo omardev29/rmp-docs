@@ -50,6 +50,12 @@ keyboard and gamepad reach it like a button (see
 <a href="/manual/modules/ui.html#focus-keyboard-and-gamepad">focus, keyboard and gamepad</a>). The label
 is drawn at the theme's <code>font_size</code>.</p>
 
+<p data-fw-grep="src/rmp/ui/controls.cpp::return over &amp;&amp; detail::pointer_released\(\) &amp;&amp; detail::press_id\(\) == id\.id;">A
+checkbox, a dropdown and a text field count a click the way a button does: the press has to start on
+the control and the release end on it. A release alone is not a click, so a drag that starts in the
+game and ends on a settings panel ticks no box, opens no list and starts no typing. The items of an
+open dropdown are clicked the same way.</p>
+
 <p>All four options structs have the two fields buttons have:</p>
 
 <ul>
@@ -141,8 +147,14 @@ value is <code>true</code> when a different item was picked. While the list is o
 of everything else in the scene: <code>wants_pointer()</code> is true wherever the pointer is, and a
 click on the list does not reach what is behind it.</p>
 
-<p>Pressed from the keyboard or a gamepad, while it has the focus, a dropdown opens and closes its
-list; picking an item in the list is done with the pointer.</p>
+<p data-fw-grep="src/rmp/ui/controls.cpp::detail::claim_vertical\(id\.id\);">A controller has to be
+able to pick from a list it can open, so the keyboard and the gamepad work the whole of it. While the
+dropdown has the focus, Enter, Space or the bottom face button opens the list. Open and focused, the
+list takes the keys that would move the focus — Up and Down, the d-pad, the stick — for itself: they
+walk a highlight that starts on the current value and stops at the first and the last item, and once
+the player has used a key it lights up the way an item under the pointer does. Enter, Space or the
+bottom face button picks the highlighted item and closes the list, returning <code>true</code> if it
+is a different one; Escape or the right face button closes it and changes nothing.</p>
 
 <p>The index is clamped into the array on every call, so a value read from an old save cannot point
 past the end of a shorter list. Nothing is drawn when the array is null or <code>count</code> is not
@@ -164,9 +176,9 @@ static char name[24] = "";
 rmp::ui::text_input("Name", name, sizeof(name), { .placeholder = "your name" });
 </pre>
 
-<p>A click on the field gives it the focus, and so does reaching it with Tab or the d-pad. While it
-has the focus, typed characters are added at the end — printable ASCII, the characters from space to
-<code>~</code> — and Backspace removes the last one, repeating while it is held. A blinking
+<p>While the field is typing — which is not the same as having the focus; see
+<a href="#typing-is-having-the-keyboard">below</a> — characters are added at the end, printable ASCII
+from space to <code>~</code>, and Backspace removes the last one, repeating while it is held. A blinking
 <code>_</code> marks the end of the text. There is no caret to move, no selection and no clipboard.
 Typing arrives through raylib's <code>GetCharPressed()</code>; the field does not open an on-screen
 keyboard on Android or iOS.</p>
@@ -179,7 +191,7 @@ keyboard on Android or iOS.</p>
 <tbody>
 <tr><td><a href="ref:rmp::ui::TextInputOptions::width"><code>width</code></a></td><td>0</td><td>Of the field, in design units; 0 fills the space available.</td></tr>
 <tr><td><a href="ref:rmp::ui::TextInputOptions::enabled"><code>enabled</code></a></td><td><code>true</code></td><td>As above.</td></tr>
-<tr><td><a href="ref:rmp::ui::TextInputOptions::placeholder"><code>placeholder</code></a></td><td>none</td><td>Shown in the theme's <code>text_muted</code> while the field is empty and does not have the focus. It is copied, so a temporary is fine.</td></tr>
+<tr><td><a href="ref:rmp::ui::TextInputOptions::placeholder"><code>placeholder</code></a></td><td>none</td><td>Shown in the theme's <code>text_muted</code> while the field is empty and not typing. It is copied, so a temporary is fine.</td></tr>
 <tr><td><a href="ref:rmp::ui::TextInputOptions::id"><code>id</code></a></td><td>none</td><td>As above.</td></tr>
 </tbody>
 </table>
@@ -187,25 +199,37 @@ keyboard on Android or iOS.</p>
 <p>An empty label draws the field alone. A <code>capacity</code> below 2 — no room for a character and
 its terminator — draws nothing.</p>
 
-<h3>The keyboard is the field's</h3>
+<h3>Typing is having the keyboard</h3>
 
-<p>While a text field has the focus, <a href="ref:rmp::ui::wants_keyboard"><code>rmp::ui::wants_keyboard()</code></a>
+<p data-fw-grep="src/rmp/ui/controls.cpp::bool typing = o\.enabled &amp;&amp; detail::has_keyboard\(id\.id\);">A
+field types only while it has the <em>keyboard</em>, and the keyboard is not the focus. The focus says
+which control Enter would press; the keyboard says which field the keys are typed into. The focus can
+rest on a field that is not typing, and a player who reaches a field with a controller can always
+leave it again.</p>
+
+<ul>
+<li data-fw-grep="src/rmp/ui/focus.cpp::capture\.keyboard_id = target\.id;"><strong>It takes the
+keyboard</strong> when it is clicked, when the focus is moved onto it — by Tab, Up or Down, the d-pad,
+or <code>rmp::ui::focus()</code> — and when Enter, Space or the bottom face button is pressed while it
+has the focus. The focus a screen gives its first control by itself is not one of those: a screen
+whose first control is a name field opens with the field focused and not typing.</li>
+<li><strong>It gives the keyboard back</strong> on Enter or the bottom face button, on Escape or the
+right face button, on a press of the pointer anywhere else, and when the focus moves on. Space is
+typed, not taken as Enter. The focus stays on the field, so Enter again starts typing again.</li>
+<li><strong>Tab, Up and Down leave a field</strong> like any other control, and the keyboard goes with
+the focus: off this field, and into the next one if that is a field too.</li>
+</ul>
+
+<p>While a field is typing, <a href="ref:rmp::ui::wants_keyboard"><code>rmp::ui::wants_keyboard()</code></a>
 is true, and every <a href="/manual/modules/input.html">rmp::input</a> action reads its keys, gamepad
 buttons and sticks as not pressed; only its mouse buttons still count. Typing "Wolf" into a name
-field does not walk the player across the level.</p>
+field does not walk the player across the level. A field that has the focus and not the keyboard
+leaves them alone, so once the player presses Enter the game hears its keys again.</p>
 
-<aside class="callout warning" data-fw-grep="src/rmp/ui/focus.cpp::if \(!capture\.keyboard\) \{"><span class="callout-title">The field keeps the focus</span>
-<p>A text field holds the focus until the game moves it. While it has it, Tab, the arrows and the
-d-pad do not move the focus on, and a click on another control does not take it away — so a player
-who reaches the field with a controller stays in it. Give the focus back from code with
-<a href="ref:rmp::ui::focus"><code>rmp::ui::focus()</code></a>: an empty name clears it, and the screen's
-first control takes it. Enter, read from raylib, is a natural moment:</p>
-<pre data-lang="cpp" data-harness="function">
-static char name[24] = "";
-rmp::ui::text_input("Name", name, sizeof(name));
-if (rmp::ui::focused() == "Name" &amp;&amp; IsKeyPressed(KEY_ENTER)) rmp::ui::focus("");
-</pre>
-</aside>
+<aside class="callout warning"><span class="callout-title">Escape on the desktop</span>
+<p>Escape is also the key raylib closes the window with, unless the game turns that off. A game that
+has not turned it off ends when the player presses Escape to leave a field; see
+<a href="/manual/core/app.html#the-escape-key">the Escape key</a>.</p></aside>
 
 <h2>A settings screen</h2>
 

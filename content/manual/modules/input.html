@@ -127,9 +127,9 @@ are ordinary actions: defining one of these names again replaces it like any oth
 
 <p><code>ui_accept</code> and <code>ui_cancel</code> are there for the game to read. The interface
 does not read them: <a href="ref:rmp::ui"><code>rmp::ui</code></a> watches its own keys for moving
-the focus and pressing a button (see <a href="/manual/modules/ui.html#focus-keyboard-and-gamepad">focus,
-keyboard and gamepad</a>), so redefining <code>ui_accept</code> does not change what presses a
-focused button.</p>
+the focus, pressing a button, and backing out of a text field or an open list (see
+<a href="/manual/modules/ui.html#focus-keyboard-and-gamepad">focus, keyboard and gamepad</a>), so
+redefining <code>ui_accept</code> does not change what presses a focused button.</p>
 
 <h2>Moving: vector and axis</h2>
 
@@ -277,12 +277,15 @@ key while the mouse is over a button.</p>
 <ol>
 <li data-fw-grep="src/rmp/input.cpp::if \(binding\.device == detail::Device::MOUSE\) return rmp::ui::wants_pointer\(\);"><strong>Mouse bindings go quiet while the interface wants the pointer</strong>:
 while <a href="ref:rmp::ui::wants_pointer"><code>rmp::ui::wants_pointer()</code></a> is true. That is
-while the pointer is over a control — a button, a checkbox, a slider's rail, a dropdown, a text field —
-while a slider is being dragged, and while a dropdown's list is open. The background of a panel,
-text and images do not take the pointer.</li>
+while the pointer is over anything the interface paints — a control, a panel or any box with a
+background or a border, an image, a scroll area, empty part included — while a slider is being
+dragged, and while a dropdown's list is open. Plain text with nothing behind it does not take the
+pointer, so a score drawn over the game can be clicked through.</li>
 <li><strong>Key and gamepad bindings go quiet while the interface wants the keyboard</strong>: while
 <a href="ref:rmp::ui::wants_keyboard"><code>rmp::ui::wants_keyboard()</code></a> is true, which is
-while a text field has the focus. Gamepad buttons and sticks go with the keyboard.</li>
+while a text field is typing — not merely while it has the focus (see
+<a href="/manual/modules/ui-controls.html#typing-is-having-the-keyboard">typing is having the
+keyboard</a>). Gamepad buttons and sticks go with the keyboard.</li>
 <li><strong>Every action goes quiet in a scene that another one covers</strong>, unless every scene
 above it set <a href="ref:rmp::Scene::input_below"><code>input_below</code></a>, which is
 <code>false</code> by default. A covered scene is usually not updated at all; when the one on top
@@ -305,8 +308,9 @@ anything above the caller is holding that device: a scene on top, or the interfa
 <h3>What routing does not cover</h3>
 
 <p>The interface's own navigation is not an action. The arrow keys, Tab, the d-pad and the left
-stick move the focus between controls, and Enter, Space and the bottom face button press the focused
-one — and <code>wants_keyboard()</code> is only about text fields. In a scene that draws a menu
+stick move the focus between controls, Enter, Space and the bottom face button press the focused
+one, and Escape and the right face button back out of a text field or an open list — and
+<code>wants_keyboard()</code> is only about text fields. In a scene that draws a menu
 <em>and</em> reads <code>move_up</code>, the up arrow moves both. The usual shape keeps them apart:
 the menu is its own scene, pushed on top, and the game underneath is frozen or, by the third rule,
 deaf. A HUD in

@@ -62,7 +62,8 @@ count towards that ceiling with the framework's.</p>
 <h2>The example</h2>
 
 <p><code>examples/ui/03_clay_direct</code> is the whole technique in one file: Clay's macros in the
-same frame as <code>rmp::ui</code>, an image, ids in a loop and a hover query. It is written with
+same frame as <code>rmp::ui</code>, a strip shaped like a tab — its top corners rounded, its bottom
+ones square, a border along one side — an image, ids in a loop and a hover query. It is written with
 <a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a> rather than scenes, so it opens its
 own window and its own frame; in a game with scenes, the part between <code>begin()</code> and
 <code>end()</code> goes in a scene's <code>_draw()</code> exactly as it is. The framework's CI
@@ -71,20 +72,16 @@ designated initialisers inside a <code>for</code> block — the shape MSVC is fu
 
 <pre data-lang="cpp" data-include="examples/ui/03_clay_direct/src/main.cpp"></pre>
 
-<aside class="callout warning"><span class="callout-title">Careful</span><p>Two comments in that
-file describe more than the renderer does. The tint of an image is not its
-<code>backgroundColor</code>: <code>src/rmp/ui/render.cpp</code> reads it from
-<code>userData</code>, and a background colour on an image element paints over the picture — see
-<a href="#images">Images</a> below. And per-corner radii are not drawn as such: every corner is
-rounded by the top-left radius.</p></aside>
-
 <h2>Where your elements go</h2>
 
 <p><code>rmp::ui::begin()</code> has already opened two elements by the time your first
 <code>CLAY()</code> runs: a root that fills the window, and inside it a column that fits its
 contents and centres them. Your elements are children of that column, beside the framework's
 widgets. The placement you give <code>begin()</code> — <code>rmp::ui::begin({ .placement =
-rmp::ui::Align::TOP_LEFT })</code> — moves that column, and your elements with it.</p>
+rmp::ui::Align::TOP_LEFT })</code> — moves that column, and your elements with it. With
+<code>rmp::ui::begin({ .grow = true })</code> the column fills the window instead, less the padding,
+so an element of yours sized with <code>CLAY_SIZING_GROW</code> reaches its edges; see
+<a href="/manual/modules/ui-layout.html#filling-the-window">filling the window</a>.</p>
 
 <p>To get out of the column, float. An element with <code>.floating.attachTo =
 CLAY_ATTACH_TO_ROOT</code> is placed by its <code>.offset</code> from the corner of the window,
@@ -184,7 +181,8 @@ void _draw() override {
 <p>Text is measured and drawn with the interface's font — the one <code>[ui] font</code> names, or
 raylib's built-in font when it is empty — whatever <code>.fontId</code> says. The
 <code>.fontSize</code> is in pixels, and the spacing between letters is a tenth of it, the same as
-<code>rmp::ui</code>'s own text.</p>
+<code>rmp::ui</code>'s own text, and a font of your own is rasterised at exactly that size for your
+text as it is for theirs.</p>
 
 <h2 id="images">Images</h2>
 
@@ -247,6 +245,13 @@ widget there.</p>
 it. With two scenes describing UI in the same frame, ask Clay about the pointer only in the upper
 one.</p>
 
+<p data-fw-grep="src/rmp/ui/context.cpp::void claim_pointer_over_painted\(Clay_RenderCommandArray commands\)">Your
+elements count for <a href="ref:rmp::ui::wants_pointer"><code>rmp::ui::wants_pointer()</code></a>
+the same as the framework's own. It is answered from what each <code>end()</code> drew: the pointer
+over an element of yours with a background colour, a border or an image, or over a clip container, is
+over the interface, and the game's mouse actions go quiet there. Text alone is not, and neither is
+whatever a clip container has clipped away.</p>
+
 <h2>What the renderer draws</h2>
 
 <p>Clay does not draw: it produces a list of commands, and <code>src/rmp/ui/render.cpp</code> turns
@@ -256,17 +261,35 @@ exactly what the framework's own get:</p>
 <table>
 <thead><tr><th>Command</th><th>Drawn as</th></tr></thead>
 <tbody>
-<tr><td><code>RECTANGLE</code></td><td>The background colour, rounded by the corner radius.</td></tr>
-<tr><td><code>BORDER</code></td><td>The border colour, at one width — the left one — on every side, rounded the same way.</td></tr>
+<tr><td><code>RECTANGLE</code></td><td>The background colour, each corner rounded by its own radius.</td></tr>
+<tr><td><code>BORDER</code></td><td>The border colour, each side at its own width, each corner rounded by its own radius.</td></tr>
 <tr><td><code>TEXT</code></td><td>The interface's font, at the element's size and colour.</td></tr>
 <tr><td><code>IMAGE</code></td><td><code>imageData</code> as a <code>Texture2D</code>, stretched to the box, tinted by a <code>Color</code> in <code>userData</code>.</td></tr>
 <tr><td><code>SCISSOR_START</code>, <code>SCISSOR_END</code></td><td>Clipping, so Clay's clip and scroll containers work.</td></tr>
 </tbody>
 </table>
 
-<p>A corner radius is one radius: every corner is rounded by the top-left value. Anything else Clay
-can emit — <code>CUSTOM</code> elements, overlay colours — is not drawn. The renderer is one short
-file, and adding a case to it is the intended way to extend it.</p>
+<p data-fw-grep="src/rmp/ui/render.cpp::Corners corners_of\(Clay_CornerRadius r, Clay_BoundingBox b\)">Each
+radius is taken on its own and held to half the box's shorter side, so a radius too big for the box
+cannot turn it inside out. A box with four
+equal corners and four equal sides — everything <code>rmp::ui</code> draws — goes through raylib's own
+rounded-rectangle calls; any other shape is drawn by the renderer itself, such as a tab rounded only
+along the top with a border along the bottom:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="#include &lt;clay.h&gt;">
+rmp::ui::begin();
+CLAY(CLAY_ID("tab"), { .layout = { .padding = CLAY_PADDING_ALL(10) },
+                       .backgroundColor = { 30, 30, 38, 255 },
+                       .cornerRadius = { .topLeft = 18, .topRight = 18 },
+                       .border = { .color = { 88, 120, 245, 255 }, .width = { .bottom = 3 } } }) {
+    CLAY_TEXT(CLAY_STRING("Items"),
+              CLAY_TEXT_CONFIG({ .textColor = { 255, 255, 255, 255 }, .fontSize = 20 }));
+}
+rmp::ui::end();
+</pre>
+
+<p>Anything else Clay can emit — <code>CUSTOM</code> elements, overlay colours — is not drawn. The
+renderer is one short file, and adding a case to it is the intended way to extend it.</p>
 
 <h2>What it costs</h2>
 

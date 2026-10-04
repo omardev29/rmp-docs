@@ -88,10 +88,13 @@ rmp::ui::end();
 EndDrawing();
 </pre>
 
-<p>There is nothing to start and nothing to stop. The interface starts itself on the first
+<p data-fw-grep="src/rmp/ui/context.cpp::Clay_SetCurrentContext\(nullptr\);">There is nothing to
+start and nothing to stop. The interface starts itself on the first
 <a href="ref:rmp::ui::begin"><code>begin()</code></a> — by which time there is a window — so a game
 that never draws an interface never allocates one, and the entry point shuts it down for you while
-the window is still open.</p>
+the window is still open. A <code>begin()</code> after
+<a href="ref:rmp::ui::shutdown"><code>rmp::ui::shutdown()</code></a> starts it again, the same way
+the first one did.</p>
 
 <h2>The three rules</h2>
 
@@ -152,7 +155,9 @@ the one that compiles; when a compiler complains about designator order, that is
 
 <p>A button fills the width it is offered. In <code>begin()</code>'s column that is the width of the
 widest thing in it, which is why the buttons of a menu come out the same width without anyone
-measuring anything; in a row, the buttons share the row. Its height is at least the theme's
+measuring anything; in a row, the buttons share the row; in a frame opened to
+<a href="/manual/modules/ui-layout.html#filling-the-window">fill the window</a>, it is the window's
+width less the padding. Its height is at least the theme's
 <a href="ref:rmp::ui::Theme::min_touch_size"><code>min_touch_size</code></a> — 44 design units, a
 target a thumb can hit — scaled with its type size.</p>
 
@@ -217,6 +222,7 @@ The widgets you already wrote can be played with a keyboard or a gamepad:</p>
 <tr><td>Next control</td><td>Tab, Down</td><td>d-pad down, left stick down</td></tr>
 <tr><td>Previous control</td><td>Shift+Tab, Up</td><td>d-pad up, left stick up</td></tr>
 <tr><td>Press, tick, open</td><td>Enter, keypad Enter, Space</td><td>bottom face button</td></tr>
+<tr><td>Back out of a text field or an open list</td><td>Escape</td><td>right face button</td></tr>
 <tr><td>Move a slider</td><td>Left, Right</td><td>d-pad left and right, left stick</td></tr>
 </tbody>
 </table>
@@ -225,6 +231,13 @@ The widgets you already wrote can be played with a keyboard or a gamepad:</p>
 short pause. These keys are read by the interface itself, from raylib; they are not
 <a href="/manual/modules/input.html">rmp::input</a> actions, and redefining an action does not change
 them. The focus moves between controls of the previous frame, for the same reason hit testing does.</p>
+
+<p>Two controls use the keys a little differently, and their sections say how. A
+<a href="/manual/modules/ui-controls.html#text-field">text field</a> types only once it has the
+keyboard, which is not the same as having the focus, and Tab, Up and Down leave it like any other
+control. An open <a href="/manual/modules/ui-controls.html#dropdown">dropdown</a> takes Up and Down
+for its own items. On the desktop, Escape is also the key raylib closes the window with, unless the
+game turns that off; see <a href="/manual/core/app.html#the-escape-key">the Escape key</a>.</p>
 
 <h3>Nothing to start</h3>
 
@@ -241,48 +254,57 @@ where they are as soon as they reach for it.</p>
 
 <h3>Moving it yourself</h3>
 
-<p><a href="ref:rmp::ui::focus"><code>rmp::ui::focus()</code></a> gives the focus to a control by
-its label — the first one with that label — or by the <code>id</code> it was given, and shows the
-ring straight away, because you asked for it. An empty string clears it, and by the rule above the
-screen's first control then takes it.
+<p>A screen does not need to put the focus anywhere: its first control already has it.
+<a href="ref:rmp::ui::focus"><code>rmp::ui::focus()</code></a> is for starting somewhere else. It
+gives the focus to a control by its label or by the <code>id</code> it was given, and shows the ring
+straight away, because you asked for it; a text field given the focus this way also takes the
+keyboard. An empty string clears it, and by the rule above the screen's first control then takes it.
 <a href="ref:rmp::ui::focused"><code>rmp::ui::focused()</code></a> names what has it, or gives
 <code>""</code>.</p>
 
-<p data-fw-grep="src/rmp/ui/focus.cpp::detail::focus_by_id\(detail::peek_element_id\(id\)\.id, id\);">It
-looks the label up among the controls of the <code>begin()</code>/<code>end()</code> being described,
-so the place to call it is inside the pair, before the control it names — once, the first time the
-screen is drawn. Called outside a pair, in a scene's <code>_ready()</code> for instance, it can miss
-when more than one scene draws an interface, and the focus lands on the first control instead:</p>
+<p data-fw-grep="src/rmp/ui/focus.cpp::asked\.waiting = true;">The place to call it is the scene's
+<code>_ready()</code>, once. Between frames there is no interface being described to look the name up
+in, so the name waits: the next frame that draws controls gives the focus to the first one carrying
+it, in whichever scene draws it. <code>focused()</code> answers with the name at once. If that frame
+draws controls and none of them has the name, the request is dropped and the screen keeps its own
+first control, rather than lying in wait for a control with that label to turn up later.</p>
 
 <pre data-lang="cpp" data-harness="members">
-bool _focused = false;
+void _ready() override {
+    rmp::ui::focus("Continue"); // not the first button: the one the player most likely wants
+}
 
 void _draw() override {
     rmp::ui::begin();
-    if (!_focused) {
-        rmp::ui::focus("Continue"); // not the first button: the one the player most likely wants
-        _focused = true;
-    }
     rmp::ui::button("New game");
     rmp::ui::button("Continue");
     rmp::ui::end();
 }
 </pre>
 
+<p data-fw-grep="src/rmp/ui/focus.cpp::detail::focus_by_id\(detail::peek_element_id\(id\)\.id, id\);">Called
+inside a <code>begin()</code>/<code>end()</code> pair, it looks the label up among the controls of
+that pair, so it goes before the control it names.</p>
+
 <p><a href="ref:rmp::ui::set_navigation_enabled"><code>rmp::ui::set_navigation_enabled(false)</code></a>
 turns keyboard and gamepad handling off, for a game that drives the focus itself;
 <a href="ref:rmp::ui::navigation_enabled"><code>navigation_enabled()</code></a> says whether it is on.
-It starts on. With it off, clicks and taps still work, but no control has the focus, and a text field
-types only while it has the focus, so text fields do not take typing either.</p>
+It starts on. With it off, clicks and taps still work but no control has the focus, so Enter, Space
+and the gamepad press nothing. A text field still types when it is clicked, and stops on Enter,
+Escape or a click elsewhere, because those are read whether navigation is on or not.</p>
 
 <h3>Scenes on top of scenes</h3>
 
 <p>When two scenes draw, the one on top holds the focus. A scene underneath that input cannot reach
 — the scene above left <a href="ref:rmp::Scene::input_below"><code>input_below</code></a> at
 <code>false</code> — is drawn exactly as usual, and nothing in it can be hovered, focused or clicked:
-a HUD under an open pause menu is visible and inert, and neither scene says so. When the scene on
-top sets <code>input_below</code>, the one underneath can hold the focus and the arrows walk between
-the two.</p>
+a HUD under an open pause menu is visible and inert, and neither scene says so.</p>
+
+<p data-fw-grep="src/rmp/ui/focus.cpp::if \(index_of\(target\.id\) &gt;= 0\) return;">When the scene on
+top sets <code>input_below</code>, both scenes' controls are one list: the one underneath can hold the
+focus, and the arrows walk up out of it into the scene above and back down. A scene whose interface
+is drawn first does not claim a focus that was on screen last frame, because a scene drawn after it
+may be about to declare that control; only when no scene does is the focus handed on.</p>
 
 <h3>A button in the HUD</h3>
 
@@ -321,10 +343,18 @@ functions say when the game should leave them alone:</p>
 
 <ul>
 <li><a href="ref:rmp::ui::wants_pointer"><code>rmp::ui::wants_pointer()</code></a> — the pointer is
-over a control, a slider is being dragged, or a dropdown's list is open.</li>
+over something the interface paints, a slider is being dragged, or a dropdown's list is open.</li>
 <li><a href="ref:rmp::ui::wants_keyboard"><code>rmp::ui::wants_keyboard()</code></a> — a text field
-has the focus, and the keyboard is its.</li>
+has the keyboard and is typing. Having the focus is not enough: a field the player pressed Enter on
+keeps the focus and gives the keyboard back.</li>
 </ul>
+
+<p data-fw-grep="src/rmp/ui/context.cpp::case CLAY_RENDER_COMMAND_TYPE_TEXT: // over the game, text is not a wall">"Something
+the interface paints" is every control, every box with a background colour or a border — a panel,
+a progress bar, an open dropdown list — every image, and every scroll area, its empty part included
+but not where it has clipped its rows away. A click on a panel's background is the interface's, and
+does not fall through to the game behind it. Plain text with nothing behind it is the exception, on
+purpose: a score drawn over the game does not stop the game being clicked through it.</p>
 
 <p>Both answer for the last frame in which the interface drew, until it draws again, so they read
 the same in <code>_update()</code> and on the line after <code>end()</code>. In a game of scenes
@@ -371,9 +401,10 @@ worse than what is left over: the tighter side wins and the interface stays on s
 the two absurd ends, a window too small to read and a monitor that turns a button into a
 billboard.</p>
 
-<p>raylib's built-in font is a bitmap, and a bitmap drawn at 1.73 times is a smear, so with it the
-<em>text</em> scale is rounded to a whole number — 1, 2, 3 — and the text steps instead of sliding.
-A font of your own keeps the exact scale; see <a href="/manual/modules/ui-style.html#fonts">fonts</a>.</p>
+<p>Text follows the same scale: it is drawn at the pixel size the layout asks for, its size in design
+units times the scale. raylib's built-in font is a small bitmap stretched to that size; a font of
+your own is rasterised at that exact size, so it stays sharp. See
+<a href="/manual/modules/ui-style.html#fonts">fonts</a>.</p>
 
 <p><a href="ref:rmp::ui::scale"><code>rmp::ui::scale()</code></a> reads the factor in use.
 <a href="ref:rmp::ui::set_scale"><code>rmp::ui::set_scale()</code></a> pins it — an "interface

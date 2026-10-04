@@ -55,6 +55,7 @@ column is as big as its contents, and the root places it — in the middle, unle
 <tr><td><a href="ref:rmp::ui::FrameOptions::placement"><code>placement</code></a></td><td><code>Align::CENTER</code></td><td>Where the column sits on the screen.</td></tr>
 <tr><td><a href="ref:rmp::ui::FrameOptions::gap"><code>gap</code></a></td><td>the theme's <code>gap</code></td><td>Between the things in the column.</td></tr>
 <tr><td><a href="ref:rmp::ui::FrameOptions::padding"><code>padding</code></a></td><td>the theme's <code>panel_padding</code></td><td>Kept clear around the edge of the screen.</td></tr>
+<tr><td><a href="ref:rmp::ui::FrameOptions::grow"><code>grow</code></a></td><td><code>false</code></td><td><code>true</code>: the column fills the window, less the padding, instead of fitting what is in it. See <a href="#filling-the-window">filling the window</a>.</td></tr>
 </tbody>
 </table>
 
@@ -107,14 +108,41 @@ rmp::ui::panel({ .box = { .width = 240, .grow_y = true } }, [&amp;] {
 });
 </pre>
 
-<h3>Grow fills the parent, not the screen</h3>
+<h3>Filling the window</h3>
 
-<p data-fw-grep="src/rmp/ui/widgets.cpp::content\.layout\.sizing\.width = size_fit\(\);">The column
-that <code>begin()</code> opens fits its contents. So <code>grow_x</code> on something directly
-inside it fills the width of that column — the width of the widest thing next to it — and not the
-width of the screen. A bar that has to be a given size gets that size: a fixed <code>width</code>
-or <code>height</code>, in design units, which the scale turns into pixels with everything else.
-Everything that grows inside it then has something to grow into:</p>
+<p data-fw-grep="src/rmp/ui/widgets.cpp::content\.layout\.sizing\.width = o\.grow \? size_grow\(\) : size_fit\(\);">Grow
+fills the parent, and the column that <code>begin()</code> opens fits its contents. So
+<code>grow_x</code> on something directly inside it fills the width of that column — the width of
+the widest thing next to it — and not the width of the screen. A menu wants exactly that, which is
+why it is the default.</p>
+
+<p>A screen laid out edge to edge — a sidebar beside a content area, a list as tall as the window —
+asks for the other kind of frame. <a href="ref:rmp::ui::FrameOptions::grow"><code>begin({ .grow = true })</code></a>
+makes the column fill the
+window, less the padding, on both axes, so whatever grows inside it reaches the edges:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::begin({ .grow = true });
+rmp::ui::row({ .grow_x = true, .grow_y = true }, [&amp;] {
+    rmp::ui::panel({ .box = { .width = 200, .grow_y = true } }, [&amp;] {
+        rmp::ui::text("Sections");
+    });
+    rmp::ui::panel({ .box = { .grow_x = true, .grow_y = true } }, [&amp;] {
+        rmp::ui::text("World");
+    });
+});
+rmp::ui::end();
+</pre>
+
+<p>What does not grow is still placed by <code>placement</code>: in a frame opened with
+<code>{ .placement = rmp::ui::Align::TOP_CENTER, .grow = true }</code>, a line of text sits at the top
+in the middle, and a row that grows beneath it takes the rest. Without <code>grow</code>, the frame
+is the one the three-function menu is drawn in. The <a href="/examples/ui/05_inventory.html">inventory</a>
+and <a href="/examples/ui/07_responsive.html">responsive</a> examples are both laid out this way.</p>
+
+<p>Inside a frame that fits, a bar that has to be a given size gets that size: a fixed
+<code>width</code> or <code>height</code>, in design units, which the scale turns into pixels with
+everything else. Everything that grows inside it then has something to grow into:</p>
 
 <pre data-lang="cpp" data-harness="function">
 rmp::ui::begin({ .placement = rmp::ui::Align::TOP_CENTER });
@@ -247,10 +275,10 @@ rmp::ui::grid(4, [&amp;] {
 the frame.</p>
 
 <p>With <a href="ref:rmp::ui::GridOptions::columns"><code>columns</code></a> at 0 the grid works out
-how many cells of <a href="ref:rmp::ui::GridOptions::min_cell"><code>min_cell</code></a> design units
-fit in the width it had last frame, and works it out again as the window changes. An inventory then
-reflows on a phone held upright instead of staying at the number someone typed on a desktop. This is
-also the row that wraps: there is no wrap flag on <code>row()</code>, because
+how many cells of <a href="ref:rmp::ui::GridOptions::min_cell"><code>min_cell</code></a> design units,
+each with its gap, fit in the width it had last frame, and works it out again as the window changes.
+An inventory then reflows on a phone held upright instead of staying at the number someone typed on a
+desktop. This is also the row that wraps: there is no wrap flag on <code>row()</code>, because
 <code>grid({ .columns = 0 })</code> is one.</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="static const char *names[] = { &quot;Sword&quot;, &quot;Shield&quot;, &quot;Potion&quot;, &quot;Rope&quot; };">
@@ -262,16 +290,19 @@ rmp::ui::panel({ .box = { .width = 480 } }, [&amp;] {
 });
 </pre>
 
-<p data-fw-grep="src/rmp/ui/containers.cpp::if \(columns &lt;= 0\) columns = 4;">Until the grid has been
-laid out once — its first frame — and whenever not even one cell fits, it uses four columns.</p>
+<p data-fw-grep="src/rmp/ui/containers.cpp::if \(columns &lt;= 0\) columns = 1;">It is never fewer
+than one column and never more than fit. A grid too narrow for even one cell of
+<code>min_cell</code> is one column, so the narrower it gets, the fewer columns it has, down to one.
+Its first frame, with no width measured yet, is one column too, and it has its real count from the
+second.</p>
 
 <p><a href="ref:rmp::ui::GridOptions"><code>GridOptions</code></a>:</p>
 
 <table>
 <thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
 <tbody>
-<tr><td><code>columns</code></td><td>0</td><td>How many; 0 is as many as fit.</td></tr>
-<tr><td><code>min_cell</code></td><td>96</td><td>The narrowest a cell may be, when <code>columns</code> is 0.</td></tr>
+<tr><td><code>columns</code></td><td>0</td><td>How many; 0 is as many as fit, and at least one.</td></tr>
+<tr><td><code>min_cell</code></td><td>96</td><td>The width a column needs, when <code>columns</code> is 0.</td></tr>
 <tr><td><a href="ref:rmp::ui::GridOptions::gap"><code>gap</code></a></td><td>the theme's <code>gap</code></td><td>Between cells and between rows.</td></tr>
 <tr><td><a href="ref:rmp::ui::GridOptions::padding"><code>padding</code></a></td><td>none</td><td>Inside the grid.</td></tr>
 <tr><td><a href="ref:rmp::ui::GridOptions::grow_x"><code>grow_x</code></a></td><td><code>true</code></td><td>Take the width it is offered.</td></tr>
@@ -280,9 +311,10 @@ laid out once — its first frame — and whenever not even one cell fits, it us
 </tbody>
 </table>
 
-<p>To work out its columns, a grid finds its own width from last frame. A grid with an
-<code>id</code> finds itself by that name; one without is found by its order among the unnamed grids
-on screen, which a grid that comes and goes before it changes. Name the ones that share a screen with
+<p>To work out its columns, a grid finds its own width from last frame, with or without a name. A
+grid with an <code>id</code> finds itself by that name; one without is found by its order among the
+unnamed grids of the same <code>begin()</code>/<code>end()</code>, and a grid that comes and goes
+before it can make it borrow another's width. Name the ones that share a screen with
 others that come and go.</p>
 
 <h2>Scrolling</h2>
@@ -293,11 +325,14 @@ mouse on a desktop. It stops at the end of the contents. Neither gesture needs a
 
 <pre data-include="examples/ui/05_inventory/src/panels/list.cpp"></pre>
 
-<p>How big the area is follows the sizing rules. By default it grows on both axes, so in a panel of
-a fixed height it fills the panel, as the list above does. Where everything around it only fits its
-contents, it is as tall as what is in it, up to the room the screen leaves — and that is where it
-starts to clip. <a href="ref:rmp::ui::ScrollOptions::height"><code>height</code></a> makes it a
-window of a fixed size onto a longer list:</p>
+<p>How big the area is follows the sizing rules. By default it grows on both axes: it takes the room
+its parent gives it and clips there. The list above is in a panel that grows to the height of the
+example's frame, which <a href="#filling-the-window">fills the window</a>, and the area takes what
+the panel has left once its two lines of text are in. Its rows never push a parent past
+the window: where everything around it only fits its contents, the area is squeezed to the room the
+window has left, and clips there.
+<a href="ref:rmp::ui::ScrollOptions::height"><code>height</code></a> makes it a window of a fixed
+size onto a longer list:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="static int level_count = 30; void play_level(int);">
 rmp::ui::scroll({ .height = 200, .id = "levels" }, [&amp;] {
@@ -328,8 +363,9 @@ remembered by the area, and an area without an <code>id</code> is told apart by 
 unnamed ones, as a grid is — so one that shares a screen with areas that come and go gets a name.</p>
 
 <p>What is scrolled out of view cannot be clicked: only the part of a control inside the area takes
-the pointer. Moving the focus with the keyboard or a gamepad does not scroll the area, so a control
-reached that way can be out of view.</p>
+the pointer, and the area itself — its empty part included — is the interface's, so a drag inside it
+scrolls the list instead of reaching the game. Moving the focus with the keyboard or a gamepad does
+not scroll the area, so a control reached that way can be out of view.</p>
 
 <h2>Images and progress bars</h2>
 
@@ -347,13 +383,20 @@ interface instead of shrinking into nothing on a big screen.
 </tbody>
 </table>
 
-<p>The texture is copied on the way in, so passing a temporary is safe — but what is copied is a
-handle to something on the GPU, so the texture itself still has to be loaded when the frame is drawn.
-Keep it in an <a href="ref:rmp::Texture"><code>rmp::Texture</code></a> that outlives the screen, and
-pass that:</p>
+<p>The <code>Texture2D</code> is copied on the way in, so the struct may be a temporary — but what is
+copied is a handle to something on the GPU, so the texture itself has to stay loaded until
+<code>end()</code> has drawn the frame. Keep it in an <a href="ref:rmp::Texture"><code>rmp::Texture</code></a>
+that outlives the screen, and pass that:</p>
 
 <pre data-lang="cpp" data-harness="scene" data-given="static rmp::Texture icon;">
 rmp::ui::image(icon, { .width = 40, .height = 40 });
+</pre>
+
+<p>A temporary <code>rmp::Texture</code> does not compile there, on purpose: it would unload the
+texture at the end of the line, long before <code>end()</code> draws it.</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="deleted">
+rmp::ui::image(rmp::assets::load_texture("icon.png"));
 </pre>
 
 <p><a href="ref:rmp::ui::progress"><code>rmp::ui::progress</code></a> is a bar, filled to a fraction

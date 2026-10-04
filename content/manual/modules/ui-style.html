@@ -249,10 +249,11 @@ content from a row into a column as the window is resized.</p>
 <p>The interface draws all its text in one font, named by <code>[ui] font</code>, at sizes measured
 from <code>[ui] font_size</code>.</p>
 
-<p>Left empty, the default, it is raylib's built-in font: no file, no licence, and it works on every
-platform. It is a bitmap font, so the scale its text is drawn at is rounded to a whole number — 1, 2,
-3 — and it stays sharp instead of going blurry; text steps in size as the window grows rather than
-sliding.</p>
+<p>Text is drawn at the pixel size the layout asks for: its size in design units — a step or a
+number — times the <a href="/manual/modules/ui.html#scale-and-design-units">scale</a>.</p>
+
+<p>Left empty, the default, the font is raylib's built-in one: no file, no licence, and it works on
+every platform. It is a bitmap 10 pixels tall, stretched to whatever size the text asks for.</p>
 
 <p>A font of your own is a file in <code>resources/</code>, named relative to it:</p>
 
@@ -262,12 +263,19 @@ font = "ui.ttf"
 font_size = 24
 </pre>
 
-<p>It is loaded through <a href="ref:rmp::assets::load_font"><code>rmp::assets::load_font</code></a>,
-so it works the same loose in <code>resources/</code> and packed in a release. It follows the scale
-exactly. It is rasterised at the theme's <code>font_size</code> times the scale, and again whenever
-that changes, so medium text is drawn at exactly the size it was rasterised at and stays sharp as the
-window changes; the other sizes are drawn from that same rasterisation, scaled. A font file that is missing or cannot be read
-does not switch the interface off: it falls back to the built-in font and says so once,
+<p data-fw-grep="src/rmp/ui/context.cpp::constexpr int FONT_FACES = 8;">It is loaded through
+<a href="ref:rmp::assets::load_font"><code>rmp::assets::load_font</code></a>, so it works the same
+loose in <code>resources/</code> and packed in a release. A font file is only sharp at the size it was
+rasterised at, so the interface rasterises it once for every pixel size it draws — <code>SMALL</code>,
+<code>MEDIUM</code>, <code>LARGE</code> and every number, each times the scale — and keeps each of
+those faces until the interface shuts down. Text is then drawn from a face made at exactly its size,
+so it stays sharp at any scale. Eight faces are kept at once; a ninth size makes room by
+letting go of the face used longest ago, never of one drawn in the same frame, whose glyphs may still
+be waiting to be drawn. A frame that draws more than eight sizes draws the extra ones from the
+nearest face, stretched.</p>
+
+<p>A font file that is missing or cannot be read does not switch the interface off: it falls back to
+the built-in font and says so once,
 <samp>UI: [ui] font '…' could not be loaded; using the built-in font</samp>.</p>
 
 <p><code>font_size</code> is the medium step in design units, a whole number from 6 to 200; the small
