@@ -1,0 +1,4 @@
+reference/classes/rmp-Sprite.html: no hand-written page links this reference page
+examples/games/01_pong.html: no hand-written page links this example
+rmp new: no hand-written page shows this command
+[audio]: no hand-written page mentions this .toml section
