@@ -473,7 +473,12 @@ def check_diagnostics(ctx: Context) -> list[Problem]:
                 if literal_in(longest, parts) < 0:
                     return False
                 said_of_its_own = [literal_in(x, parts) for x in pieces]
-                return min(said_of_its_own) >= 0 and sum(said_of_its_own) >= MIN_WORDS
+                # And EACH piece says something of its own: a stretch that is a
+                # hole with one literal character on its end matched a message
+                # whose words had changed ("(tried the name as given, ...)"
+                # against "(looked for %s)").
+                return (all(lit >= min(len(x), MIN_WORDS) for lit, x in zip(said_of_its_own, pieces))
+                        and sum(said_of_its_own) >= MIN_WORDS)
 
             if not any(holds(parts) for parts in messages):
                 out.append(Problem("diagnostics", path, n.line,
