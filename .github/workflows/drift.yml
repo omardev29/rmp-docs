@@ -1,0 +1,125 @@
+# Every day, the site at main against the framework at ITS main -- not at
+# FRAMEWORK_REF. The site is deployed from FRAMEWORK_REF and stays true to
+# it; this says how far the framework has moved from what the site says,
+# before somebody bumps the ref and finds out all at once.
+#
+# It never deploys. When the docs stop passing it opens one issue, and adds
+# a comment to that same issue every day they still do not; when they pass
+# again it closes it. One issue, never one a day.
+
+name: Drift
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drift
+  cancel-in-progress: false
+
+env:
+  TITLE: "The docs do not pass against the framework's main"
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      ref: ${{ steps.r.outputs.ref }}
+      image: ${{ steps.r.outputs.image }}
+    steps:
+      - name: The framework's main, and the image it pins
+        id: r
+        run: |
+          set -euo pipefail
+          REF=$(git ls-remote https://github.com/omardev29/raylib_multiplatform refs/heads/main | cut -f1)
+          printf '%s' "$REF" | grep -Eq '^[0-9a-f]{40}$' || { echo "FALLA: no main in the framework: '$REF'"; exit 1; }
+          curl -fsSL "https://raw.githubusercontent.com/omardev29/raylib_multiplatform/$REF/.github/workflows/ci.yml" -o ci.yml
+          IMAGE=$(sed -nE "s/^ *PINNED_IMAGE: '([^']+)'.*/\1/p" ci.yml)
+          case "$IMAGE" in
+            ghcr.io/omardev29/raylib-build@sha256:*) ;;
+            *) echo "FALLA: no digest-pinned image in the framework's ci.yml at $REF"; exit 1 ;;
+          esac
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "framework main is $REF"
+
+  check:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: ${{ needs.resolve.outputs.image }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: omardev29/raylib_multiplatform
+          ref: ${{ needs.resolve.outputs.ref }}
+          path: framework
+          persist-credentials: false
+
+      - name: Configure the framework
+        working-directory: framework
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/framework"
+          python3 tools/configure.py > /dev/null
+          cmake --preset lint > /dev/null
+
+      # Every gate, every block compiled, every tutorial step built and booted.
+      - name: The docs against the framework's main
+        run: python3 tools/build.py check --framework framework --tier project 2>&1 | tee drift.txt; exit "${PIPESTATUS[0]}"
+
+      - name: What it said
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: drift
+          path: drift.txt
+          if-no-files-found: ignore
+
+  report:
+    needs: [resolve, check]
+    if: always() && needs.resolve.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REF: ${{ needs.resolve.outputs.ref }}
+      RESULT: ${{ needs.check.result }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open, update or close the one issue
+        run: |
+          set -euo pipefail
+          OPEN=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title \
+                   --jq "map(select(.title == env.TITLE)) | .[0].number // empty")
+          if [ "$RESULT" = "success" ]; then
+            if [ -n "$OPEN" ]; then
+              gh issue close "$OPEN" --comment "They pass again against framework main \`$REF\`: $RUN_URL"
+            fi
+            echo "the docs pass against framework main $REF"
+            exit 0
+          fi
+          BODY="The site at main does not pass against framework main \`$REF\`. The run says which page and why: $RUN_URL
+
+          Fix the pages, then bump \`FRAMEWORK_REF\` -- \`python3 tools/build.py check --tier project\` with the framework checked out next to this repository says the same."
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --body "Still failing against \`$REF\`: $RUN_URL"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
+          echo "FALLA: the docs do not pass against framework main $REF ($RESULT)"
+          exit 1
