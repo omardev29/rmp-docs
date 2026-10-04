@@ -426,9 +426,11 @@ class Site:
             cfg.write_text(code + "\n", encoding="utf-8")
             got = subprocess.run([sys.executable, "tools/configure.py", "--check", "--config", str(cfg)],
                                  capture_output=True, text=True, cwd=self.framework)
-        said = (got.stdout + got.stderr).replace(str(cfg), "raylib_multiplatform.toml").strip()
+        # Blank lines go, indentation stays: configure.py puts a caret under
+        # the column it means, and a stripped first line moves it.
+        said = (got.stdout + got.stderr).replace(str(cfg), "raylib_multiplatform.toml")
         said = re.sub(r"^configure: (warning: thirdparty/raylib-ios is empty.*|\d+ warning\(s\) above)\n?",
-                      "", said, flags=re.M).strip()
+                      "", said, flags=re.M).strip("\n").rstrip()
         if expect == "reject":
             if got.returncode == 0:
                 self.problems.append(Problem("toml", page.source, pre.line,

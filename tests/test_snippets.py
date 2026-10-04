@@ -152,6 +152,16 @@ class TomlTest(unittest.TestCase):
         self.assertIn('class="compiler-output"', body)
         self.assertIn("[window] vsync", body)
 
+    def test_the_caret_stays_under_what_it_points_at(self):
+        import html as h
+        import re
+        _problems, body = self.build_with(
+            '<pre data-lang="toml" data-expect="reject">[window]\nvsync = "yes"\n</pre>')
+        out = h.unescape(re.search(r'<pre class="compiler-output"[^>]*>(.*?)</pre>', body, re.S).group(1))
+        lines = out.split("\n")
+        line = next(i for i, x in enumerate(lines) if 'vsync = "yes"' in x)
+        self.assertEqual(lines[line + 1].index("^"), lines[line].index("vsync"), out)
+
     def test_a_refusal_that_is_taken_is_red(self):
         problems, _ = self.build_with(
             '<pre data-lang="toml" data-expect="reject">[window]\nvsync = true\n</pre>')

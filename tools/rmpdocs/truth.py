@@ -229,7 +229,13 @@ def check_paths(ctx: Context) -> list[Problem]:
     fw = ctx.framework
     if fw is None:
         return []
-    game = game_paths(str(fw))
+    game = set(game_paths(str(fw)))
+    # A tutorial's game grows past what rmp new makes: the files its pages
+    # write (data-project + data-file) are paths of a game too.
+    for _path, root in _fragments(ctx):
+        for n in root.walk():
+            if n.tag == "pre" and n.get("data-project") and n.get("data-file"):
+                game.add(n.get("data-file").strip("/"))
     out = []
     for path, root in _fragments(ctx):
         for node, text, kind in _code_texts(root):
