@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from rmpdocs import checks  # noqa: E402
+from rmpdocs import checks, truth  # noqa: E402,F401 - truth registers its gates
 from rmpdocs.site import Site  # noqa: E402
 
 

@@ -96,3 +96,52 @@ class StaticRuleTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TomlTest(unittest.TestCase):
+    """Every .toml block goes through the framework's configure.py."""
+
+    def setUp(self):
+        if not (FRAMEWORK / "tools" / "configure.py").is_file():
+            self.skipTest("no framework next to rmp-docs")
+
+    def build_with(self, block):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ("site.toml", "reference.toml", "FRAMEWORK_REF"):
+                shutil.copy(DOCS / name, root / name)
+            shutil.copytree(DOCS / "templates", root / "templates")
+            (root / "content").mkdir()
+            (root / "content" / "index.html").write_text(
+                f"<!--\ntitle: T\ndescription: A page.\n-->\n<h1>T</h1>\n{block}\n")
+            site = Site(framework=FRAMEWORK, docs=root).build(write=False)
+            page = next(p for p in site.pages if p.url == "index.html")
+            return [str(p) for p in site.problems if p.gate == "toml"], page.body
+
+    def test_a_valid_block_passes(self):
+        problems, _ = self.build_with('<pre data-lang="toml">[window]\nvsync = false\n</pre>')
+        self.assertEqual(problems, [])
+
+    def test_an_invalid_block_is_red(self):
+        problems, _ = self.build_with('<pre data-lang="toml">[window]\nvsync = "yes"\n</pre>')
+        self.assertEqual(len(problems), 1)
+        self.assertIn("configure.py refuses this", problems[0])
+
+    def test_a_refusal_shows_the_real_words(self):
+        problems, body = self.build_with(
+            '<pre data-lang="toml" data-expect="reject">[window]\nvsync = "yes"\n</pre>')
+        self.assertEqual(problems, [])
+        self.assertIn('class="compiler-output"', body)
+        self.assertIn("[window] vsync", body)
+
+    def test_a_refusal_that_is_taken_is_red(self):
+        problems, _ = self.build_with(
+            '<pre data-lang="toml" data-expect="reject">[window]\nvsync = true\n</pre>')
+        self.assertIn("configure.py takes it", problems[0])
+
+    def test_a_block_that_is_not_the_config_says_why(self):
+        problems, _ = self.build_with('<pre data-lang="toml" data-config="no">[x]\ny = 1\n</pre>')
+        self.assertIn("needs a data-reason", problems[0])
+        problems, _ = self.build_with(
+            '<pre data-lang="toml" data-config="no" data-reason="site.toml">[x]\ny = 1\n</pre>')
+        self.assertEqual(problems, [])

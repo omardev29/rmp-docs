@@ -20,6 +20,8 @@ import posixpath
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -199,6 +201,7 @@ class Site:
                 continue     # generated already
             lang = pre.get("data-lang")
             include = pre.get("data-include")
+            toml_out = ""   # what configure.py said about a .toml shown as refused
             caption = pre.get("data-file", "")
             link = ""
             if include:
@@ -229,6 +232,8 @@ class Site:
                 code = dedent(code.rstrip())
                 if lang in ("cpp", "c") and page.kind == "content":
                     self._snippet(page, pre, lang, code)
+                if lang == "toml" and page.kind == "content":
+                    toml_out = self._toml(page, pre, code)
             if not lang:
                 self.problems.append(Problem("code", page.source, pre.line,
                                              "a <pre> without data-lang; say what it is"))
@@ -247,8 +252,10 @@ class Site:
             attrs = {k: v for k, v in pre.attrs.items()
                      if k.startswith("data-") and k not in ("data-include", "data-region", "data-file")}
             attr_text = "".join(f' {k}="{html.escape(v)}"' for k, v in attrs.items())
+            said = (f'<pre class="compiler-output" data-lang="text">{html.escape(toml_out, quote=False)}</pre>'
+                    if toml_out else "")
             markup = (f'<div class="code-block{(" " + extra) if extra else ""}"{attr_text}>{head}'
-                      f'<pre data-lang="{lang}"><code>{highlighted}</code></pre></div>')
+                      f'<pre data-lang="{lang}"><code>{highlighted}</code></pre>{said}</div>')
             replace(pre, dom.Raw(markup, pre.line))
 
     def _facts(self, page: Page, root: dom.Node):
@@ -288,6 +295,38 @@ class Site:
         self.snippets.append(Snippet(page.source, pre.line, lang, code, harness,
                                      given=pre.get("data-given", ""), expect_error=expect == "error",
                                      error_text=pre.get("data-error", "")))
+
+    def _toml(self, page: Page, pre: dom.Node, code: str) -> str:
+        """Every .toml block goes through the framework's own configure.py
+        --check --config. One shown as refused (data-expect="reject") has to
+        be refused, and what configure.py said is shown under it -- the real
+        words, never typed. Returns that output, or ""."""
+        if pre.get("data-config") == "no":
+            if not pre.get("data-reason"):
+                self.problems.append(Problem("toml", page.source, pre.line,
+                                             "data-config=\"no\" needs a data-reason"))
+            return ""
+        expect = pre.get("data-expect", "")
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / "raylib_multiplatform.toml"
+            cfg.write_text(code + "\n", encoding="utf-8")
+            got = subprocess.run([sys.executable, "tools/configure.py", "--check", "--config", str(cfg)],
+                                 capture_output=True, text=True, cwd=self.framework)
+        said = (got.stdout + got.stderr).replace(str(cfg), "raylib_multiplatform.toml").strip()
+        said = re.sub(r"^configure: (warning: thirdparty/raylib-ios is empty.*|\d+ warning\(s\) above)\n?",
+                      "", said, flags=re.M).strip()
+        if expect == "reject":
+            if got.returncode == 0:
+                self.problems.append(Problem("toml", page.source, pre.line,
+                                             "shown as refused (data-expect=\"reject\"), and configure.py takes it"))
+            return said
+        if expect:
+            self.problems.append(Problem("toml", page.source, pre.line,
+                                         f"data-expect={expect!r}: the only expectation is \"reject\""))
+        if got.returncode != 0:
+            self.problems.append(Problem("toml", page.source, pre.line,
+                                         f"configure.py refuses this .toml:\n{said[:500]}"))
+        return ""
 
     def _code_spans(self, page: Page, root: dom.Node):
         for node in list(root.walk()):

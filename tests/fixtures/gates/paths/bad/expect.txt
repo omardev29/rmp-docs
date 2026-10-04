@@ -1,0 +1,3 @@
+`src/gone.cpp`
+has 3 lines
+no such file

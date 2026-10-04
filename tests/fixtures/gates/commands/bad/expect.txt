@@ -1,0 +1,4 @@
+there is no `rmp tset`
+does not take '02_pong'
+cmake --preset relase
+does not take 'relase'

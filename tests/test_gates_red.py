@@ -13,7 +13,7 @@ from pathlib import Path
 DOCS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(DOCS / "tools"))
 
-from rmpdocs import checks  # noqa: E402
+from rmpdocs import checks, truth  # noqa: E402,F401
 
 FIXTURES = DOCS / "tests" / "fixtures" / "gates"
 
