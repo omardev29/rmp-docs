@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -126,6 +127,28 @@ def defines_table(framework: Path) -> str:
             "The values here are the framework's own; a game's are whatever its .toml says.</p>"
             '<table class="fields"><thead><tr><th>Macro</th><th>From</th><th>The framework\'s value</th>'
             f"</tr></thead><tbody>{body}</tbody></table>")
+
+
+def build_defines_table(framework: Path, refconf: dict) -> tuple[str, list[str]]:
+    """reference.toml [build_defines]: macros the build passes, each checked
+    against the files it says set it. Returns the table and what is wrong."""
+    rows, wrong = [], []
+    for name, spec in refconf.get("build_defines", {}).items():
+        for rel in spec.get("set_in", []):
+            f = framework / rel
+            if not f.is_file() or not re.search(rf"\b{re.escape(name)}=", f.read_text(encoding="utf-8")):
+                wrong.append(f"[build_defines] {name}: {rel} does not set it ({name}=...)")
+        if not spec.get("set_in"):
+            wrong.append(f"[build_defines] {name}: says no file that sets it (set_in)")
+        rows.append(f'<tr id="{html.escape(name)}"><td><code>{html.escape(name)}</code></td>'
+                    f"<td>{prose.inline(spec.get('doc', ''))}</td></tr>")
+    if not rows:
+        return "", wrong
+    return ('<h2 id="from-the-build">Set by the build</h2>'
+            "<p>Macros no header defines: the build passes them to the compiler, for the framework "
+            "and for your game.</p>"
+            '<table class="fields"><thead><tr><th>Macro</th><th>What it is</th></tr></thead>'
+            f"<tbody>{''.join(rows)}</tbody></table>"), wrong
 
 
 def targets_table(framework: Path) -> str:

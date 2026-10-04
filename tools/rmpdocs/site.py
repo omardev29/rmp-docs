@@ -185,7 +185,10 @@ class Site:
         refpages = self.reference_model.build(self.blob_url)
         for rp in refpages:
             if rp.url == "reference/macros.html":
-                rp.body += "\n" + generated.defines_table(self.framework)
+                table, wrong = generated.build_defines_table(self.framework, self.refconf)
+                for w in wrong:
+                    self.problems.append(Problem("reference", "reference.toml", 0, w))
+                rp.body += "\n" + generated.defines_table(self.framework) + "\n" + table
         for url, title, body in (generated.configuration_page(self.framework),
                                  generated.commands_page(self.framework)):
             root, errors = dom.parse(body)

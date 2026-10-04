@@ -191,7 +191,7 @@ def check_names(ctx: Context) -> list[Problem]:
                 if q not in rmp_names and q not in ("rmp",):
                     out.append(Problem("names", path, node.line, f"`{q}` names nothing in include/rmp/"))
             for m in re.finditer(r"\bRMP_[A-Z0-9_]+\b", t):
-                if m.group(0) not in names["macros"]:
+                if m.group(0) not in names["macros"] and m.group(0) not in ctx.refconf.get("build_defines", {}):
                     out.append(Problem("names", path, node.line,
                                        f"`{m.group(0)}` is not a macro of the framework or a value the .toml sets"))
             # A raylib/rlgl/Clay-shaped call: CamelCase( or Clay_x( -- must exist.

@@ -15,3 +15,14 @@ reason = "rmp::Texture, rmp::Sound and the other handles are aliases of it; its 
 # Public declarations allowed to have no comment, for now. Each one is debt;
 # phase 13 is not finished until this table is empty.
 [allow_undocumented]
+
+# Macros a game can read that no header defines: the build system passes them
+# on the compiler's command line. Each names the files that set it, and the
+# build fails when one of them stops: a define the page promises and no build
+# passes would be read as 0 by every `#if`.
+[build_defines.RMP_PRODUCTION_BUILD]
+set_in = ["CMakeLists.txt", "raymob/app/src/main/cpp/CMakeLists.txt", "ios/project.yml"]
+doc = "1 in a release build and 0 in a debug one, on every platform: `rmp build release`, `rmp web` and every build CI ships are 1; `rmp build` and `rmp run` are 0. A build system that forgets it is a compile error in `src/rmp/app.cpp`, not a quiet debug build, so `#if RMP_PRODUCTION_BUILD` is safe to write."
+[build_defines.RMP_RESOURCES_PATH]
+set_in = ["CMakeLists.txt"]
+doc = "The folder loose resources are read from, ending in a slash. A game does not need it: `rmp::assets` resolves a name against the pack first and this folder second, and so does plain raylib's `LoadTexture()` on a path inside it."
