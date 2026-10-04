@@ -97,7 +97,10 @@ it to match a string the framework really prints (`…` for the parts you leave 
 
 **A sentence about how the framework works inside** can be pinned to its source:
 `<p data-fw-grep="src/rmp/app.cpp::rmp::scenes::detail::draw\(\)">`. If the code changes, the
-gate tells whoever bumps `FRAMEWORK_REF`.
+gate tells whoever bumps `FRAMEWORK_REF`. Pin the claim WITH its context: a regex that
+names only a call still matches after the call moves to another function, and the page goes on
+saying where it is. Span from the enclosing function's head to the line you mean
+(`void frame\(float delta\) \{[^}]*begin_frame`), so moving it is a change the gate sees.
 
 No raster images. Diagrams are inline SVG whose colours are CSS variables (`var(--text)`,
 `var(--accent)`, `var(--border)`, `var(--bg-sunken)`), so they follow the theme.
