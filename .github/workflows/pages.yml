@@ -112,7 +112,7 @@ jobs:
   check:
     needs: [resolve, examples]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 40
     container:
       image: ${{ needs.resolve.outputs.image }}
     defaults:
@@ -156,6 +156,7 @@ jobs:
         env:
           RMP_FRAMEWORK: framework
           RMP_DOCS_REQUIRE_COMPILE: "1"
+          RMP_DOCS_SLOW: "1"
         run: python3 -m unittest discover -s tests -v
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
@@ -163,9 +164,11 @@ jobs:
           name: built-examples
           path: built-examples
 
-      - name: Build, every gate, every C and C++ block compiled
+      # --tier project: every C and C++ block compiled, and every tutorial's
+      # game made with rmp new, built and booted after each of its pages.
+      - name: Build, every gate, every block compiled, every tutorial step built
         run: |
-          python3 tools/build.py build --framework framework --tier compile \
+          python3 tools/build.py build --framework framework --tier project \
             --examples-web built-examples/web --posters built-examples/posters
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

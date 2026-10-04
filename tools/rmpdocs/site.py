@@ -34,6 +34,7 @@ from . import generated
 from . import examples as examples_mod
 from .reference import Reference
 from .snippets import Snippet, harness_file
+from .project import ProjectFile
 from . import search as search_index
 
 DOCS = Path(__file__).resolve().parents[2]
@@ -126,6 +127,7 @@ class Site:
         self.examples_built: dict = {}
         self.posters: set = set()
         self.snippets: list[Snippet] = []
+        self.project_files: dict[str, list[ProjectFile]] = {}   # project -> files, page order later
 
     # -- the framework ---------------------------------------------------------
 
@@ -264,7 +266,7 @@ class Site:
             lang = pre.get("data-lang")
             include = pre.get("data-include")
             toml_out = ""   # what configure.py said about a .toml shown as refused
-            caption = pre.get("data-file", "")
+            caption = pre.get("data-file", "") if not pre.get("data-project") else ""
             link = ""
             if include:
                 src = self.framework / include
@@ -292,9 +294,22 @@ class Site:
                 if code.startswith("\n"):
                     code = code[1:]
                 code = dedent(code.rstrip())
-                if lang in ("cpp", "c") and page.kind == "content":
+                project = pre.get("data-project")
+                if project and page.kind == "content":
+                    # A file of a tutorial's game: built with the whole project
+                    # by --tier project, not by a harness.
+                    if not pre.get("data-file"):
+                        self.problems.append(Problem("snippets", page.source, pre.line,
+                                                     "data-project needs data-file: which file this is"))
+                    else:
+                        caption = caption or pre.get("data-file")
+                        self.project_files.setdefault(project, []).append(
+                            ProjectFile(page.source, pre.line, pre.get("data-file"), code, lang))
+                    if lang == "toml":
+                        toml_out = self._toml(page, pre, code)
+                elif lang in ("cpp", "c") and page.kind == "content":
                     self._snippet(page, pre, lang, code)
-                if lang == "toml" and page.kind == "content":
+                elif lang == "toml" and page.kind == "content":
                     toml_out = self._toml(page, pre, code)
             if not lang:
                 self.problems.append(Problem("code", page.source, pre.line,
@@ -547,6 +562,22 @@ class Site:
         """The section's pages in the order the sidebar shows them."""
         tree = self.nav_tree_order(section)
         return tree
+
+    def project_steps(self) -> dict:
+        """project -> [Step], one per page that has files of it, in the order
+        the sidebar shows the pages."""
+        from .project import Step
+        order = []
+        for s in self.sections():
+            order += self.nav_tree_order(s["id"])
+        rank = {p.source: i for i, p in enumerate(order)}
+        out = {}
+        for name, files in self.project_files.items():
+            steps: dict[str, Step] = {}
+            for f in files:
+                steps.setdefault(f.page, Step(f.page)).files.append(f)
+            out[name] = sorted(steps.values(), key=lambda s: rank.get(s.page, 10**6))
+        return out
 
     def nav_tree_order(self, section: str) -> list[Page]:
         pages = [p for p in self.pages if p.section == section]

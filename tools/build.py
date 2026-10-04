@@ -52,8 +52,9 @@ def main(argv):
                     help="the framework's web build of the examples (build/web): played in their pages")
     ap.add_argument("--posters", type=Path, metavar="DIR",
                     help="the examples job's screenshots, one <target>.png each")
-    ap.add_argument("--tier", choices=("static", "compile"), default="static",
-                    help="static: the gates; compile: and every C/C++ block compiled")
+    ap.add_argument("--tier", choices=("static", "compile", "project"), default="static",
+                    help="static: the gates; compile: and every C/C++ block compiled; "
+                         "project: and every tutorial built and booted, step by step")
     args = ap.parse_args(argv)
 
     if args.command == "gates":
@@ -66,13 +67,21 @@ def main(argv):
     for w in site.warnings:
         print(f"warning: {w}")
     problems = [p for p in site.problems if p.gate != "html"] + checks.run(context(site))
-    if args.tier == "compile":
+    if args.tier in ("compile", "project"):
         from rmpdocs import snippets
         results = snippets.check(site.snippets, site.framework)
         for s, why in results:
             if why:
                 problems.append(checks.Problem("snippets", s.page, s.line, why))
         print(f"compiled {len(results)} C/C++ blocks against the framework")
+    if args.tier == "project":
+        from rmpdocs import project
+        for name, steps in site.project_steps().items():
+            for step, why in project.run(site.framework, name, steps):
+                if why:
+                    problems.append(checks.Problem("project", step.page if step else name, 0, why))
+                else:
+                    print(f"  ok    {name}: built and booted after {step.page}")
     for p in problems:
         print(p)
     pages = len(site.pages)
