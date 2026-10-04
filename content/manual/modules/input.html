@@ -1,0 +1,353 @@
+<!--
+title: Input
+description: Named actions with as many bindings as you like, movement in eight directions in one call, the mouse and a finger as one pointer, and the rule that decides who hears a press.
+order: 20
+-->
+<h1>Input</h1>
+
+<p class="lede"><a href="ref:rmp::input"><code>rmp::input</code></a> gives what the player
+presses a name, and decides who gets to hear it. raylib answers "is the space bar down?"; a game
+wants to know "did the player jump?", and whether that press was meant for the game at all or for
+the button under the player's finger.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void jump();">
+rmp::input::action("jump", KEY_SPACE, KEY_W, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
+if (rmp::input::just_pressed("jump")) jump();
+</pre>
+
+<p>It is one header, <code>#include &lt;rmp/input.h&gt;</code>, and it works on the scene stack: the
+devices are read once at the top of every frame of a game started with <code>RMP_GAME</code>, before
+any scene updates, so two scenes in the same frame cannot disagree about what is held down.</p>
+
+<aside class="callout warning" data-fw-grep="src/rmp/app.cpp::rmp::input::detail::begin_frame\(\);"><span class="callout-title">Careful</span>
+<p>A game that runs its own loop with <code>RMP_ENTRY_POINT</code> has no scene stack, and nothing
+reads the devices for <code>rmp::input</code>: every action reads as not pressed. Such a game asks
+raylib directly — <code>IsKeyDown()</code> and the rest — and can still ask the interface whether
+it wants the pointer, with <a href="ref:rmp::ui::wants_pointer"><code>rmp::ui::wants_pointer()</code></a>.</p></aside>
+
+<h2>Actions</h2>
+
+<p>An action is a name and the bindings that press it, as many as you like.
+<a href="ref:rmp::input::action"><code>rmp::input::action</code></a> takes the name first and the
+bindings after it:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::input::action("jump", KEY_SPACE, KEY_W, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
+rmp::input::action("fire", MOUSE_BUTTON_LEFT, KEY_J, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
+</pre>
+
+<p>Each binding is a plain raylib constant, and its <em>type</em> says which device it belongs to.
+<code>KeyboardKey</code>, <code>MouseButton</code> and <code>GamepadButton</code> are three different
+enums in C++, so the framework knows at compile time that <code>KEY_SPACE</code> is a key and
+<code>MOUSE_BUTTON_LEFT</code> a mouse button. Anything else is a compile error at the call, which is
+also why there is no string of key names to spell wrong:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="no matching function">
+rmp::input::action("jump", 32); // an int is not a key
+</pre>
+
+<p>An action with no binding at all does not compile either: there is no version of
+<code>action()</code> that takes the name alone.</p>
+
+<h3>Defining one again replaces it</h3>
+
+<p>Calling <code>action()</code> with a name that already exists replaces its bindings; it does not
+add to them. That is what makes the natural place for these calls safe — a scene's
+<code>_ready()</code>, which runs every time the player enters the scene:</p>
+
+<pre data-lang="cpp" data-harness="members">
+void _ready() override {
+    rmp::input::action("jump", KEY_SPACE, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
+    rmp::input::action("fire", MOUSE_BUTTON_LEFT, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
+}
+</pre>
+
+<p>It is also how a game rebinds a key at runtime: call <code>action()</code> again with the new
+list. An action holds up to eight bindings; more than that keeps the first eight and says so in the
+log: <samp>INPUT: "…" was given … bindings and the limit is …; the extra ones are ignored.</samp></p>
+
+<h3>Reading an action</h3>
+
+<p>Three questions, each asked by name:</p>
+
+<table>
+<thead><tr><th>Call</th><th>True</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::input::pressed"><code>pressed("jump")</code></a></td><td>Every frame any of its bindings is held down.</td></tr>
+<tr><td><a href="ref:rmp::input::just_pressed"><code>just_pressed("jump")</code></a></td><td>The frame one of them goes down.</td></tr>
+<tr><td><a href="ref:rmp::input::just_released"><code>just_released("jump")</code></a></td><td>The frame one of them comes up.</td></tr>
+</tbody>
+</table>
+
+<p>The edges compare this frame with the one before, and the first frame of the game is compared
+with itself: a key already held when the game starts does not read as just pressed and fire
+whatever it is bound to.</p>
+
+<p>An action nobody has defined reads as false, and the log says so once per name — not sixty times
+a second: <samp>INPUT: no action called</samp> followed by the name. A misspelt name is the usual
+reason.</p>
+
+<h3>Half of a stick</h3>
+
+<p>An analogue stick reads from -1 to +1 and an action is on or off, so a stick binding names one
+half of an axis. <a href="ref:rmp::input::stick"><code>rmp::input::stick</code></a> is the one place
+you write something that is not a plain raylib constant:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::input::action("aim_left", KEY_Q, rmp::input::stick(GAMEPAD_AXIS_RIGHT_X, -1));
+rmp::input::action("aim_right", KEY_E, rmp::input::stick(GAMEPAD_AXIS_RIGHT_X, 1));
+</pre>
+
+<p>The sign says which half counts: -1 is left or up, +1 right or down. Any other number is taken as
+its sign, because a stick has two halves and there is no third thing to mean. The half counts as
+pressed once the stick is past the dead zone, described below.</p>
+
+<h3>Which gamepad</h3>
+
+<p>Every gamepad binding reads the first gamepad raylib knows, index 0. A game for several players on
+one machine reads the others from raylib itself, with <code>IsGamepadButtonDown()</code> and the
+gamepad's index.</p>
+
+<h2>The actions that come with it</h2>
+
+<p>Six actions exist before the game defines any, so that movement works with no setup at all. They
+are ordinary actions: defining one of these names again replaces it like any other.</p>
+
+<table>
+<thead><tr><th>Action</th><th>Keyboard</th><th>Gamepad</th></tr></thead>
+<tbody>
+<tr><td><code>move_left</code></td><td><code>KEY_A</code>, <code>KEY_LEFT</code></td><td>d-pad left, left stick to the left</td></tr>
+<tr><td><code>move_right</code></td><td><code>KEY_D</code>, <code>KEY_RIGHT</code></td><td>d-pad right, left stick to the right</td></tr>
+<tr><td><code>move_up</code></td><td><code>KEY_W</code>, <code>KEY_UP</code></td><td>d-pad up, left stick up</td></tr>
+<tr><td><code>move_down</code></td><td><code>KEY_S</code>, <code>KEY_DOWN</code></td><td>d-pad down, left stick down</td></tr>
+<tr><td><code>ui_accept</code></td><td><code>KEY_ENTER</code>, <code>KEY_SPACE</code></td><td>the bottom face button</td></tr>
+<tr><td><code>ui_cancel</code></td><td><code>KEY_ESCAPE</code></td><td>the right face button</td></tr>
+</tbody>
+</table>
+
+<p><code>ui_accept</code> and <code>ui_cancel</code> are there for the game to read. The interface
+does not read them: <a href="ref:rmp::ui"><code>rmp::ui</code></a> watches its own keys for moving
+the focus and pressing a button (see <a href="/manual/modules/ui.html#focus-keyboard-and-gamepad">focus,
+keyboard and gamepad</a>), so redefining <code>ui_accept</code> does not change what presses a
+focused button.</p>
+
+<h2>Moving: vector and axis</h2>
+
+<p><a href="ref:rmp::input::vector"><code>rmp::input::vector()</code></a> is a direction from four
+actions, and with no arguments it uses the four <code>move_</code> actions above — the keyboard, the
+d-pad and the left stick at once:</p>
+
+<pre data-lang="cpp" data-harness="object">
+velocity = rmp::input::vector() * 200;
+</pre>
+
+<p>Three things are decided for you in that line:</p>
+
+<ul>
+<li><strong>It is normalised.</strong> Holding right and down gives a vector of length 1, not 1.41,
+so going diagonally is not 41 % faster than going straight. Only a vector longer than 1 is shortened:
+a stick pushed halfway still gives half.</li>
+<li><strong>+Y is down</strong>, as in raylib's screen coordinates and an object's
+<code>position</code>, so "up" gives a negative Y and nothing has to be flipped.</li>
+<li><strong>Opposite directions cancel.</strong> Left and right held together give 0, which is what a
+player mashing both keys expects.</li>
+</ul>
+
+<p><a href="ref:rmp::input::axis"><code>rmp::input::axis()</code></a> is the same thing on one axis:
+-1, 0 or +1 from <code>move_left</code> and <code>move_right</code>, or the analogue value in between
+when a stick is what is moving it. A platformer walks with it:</p>
+
+<pre data-lang="cpp" data-harness="object">
+velocity.x = rmp::input::axis() * 180;
+</pre>
+
+<p>Both take your own actions too, in the order negative then positive:</p>
+
+<pre data-lang="cpp" data-harness="function">
+float aim = rmp::input::axis("aim_left", "aim_right");
+
+rmp::input::action("port", KEY_A);
+rmp::input::action("starboard", KEY_D);
+rmp::input::action("ahead", KEY_W);
+rmp::input::action("astern", KEY_S);
+Vector2 boat = rmp::input::vector("port", "starboard", "ahead", "astern");
+</pre>
+
+<p>Each action contributes how far it is pushed, from 0 to 1. A key or a button is all or nothing;
+a stick is analogue. When an action has several bindings the strongest one wins, so a key held down
+gives a full 1 even if the stick on the same action is only half pushed.</p>
+
+<p>For a stick's raw reading — a camera that turns with the right stick, say —
+<a href="ref:rmp::input::axis_value"><code>rmp::input::axis_value()</code></a> gives one axis from
+-1 to +1, dead zone applied, and is never routed:</p>
+
+<pre data-lang="cpp" data-harness="function">
+float turn = rmp::input::axis_value(GAMEPAD_AXIS_RIGHT_X);
+</pre>
+
+<h2>The dead zone</h2>
+
+<p>A stick at rest does not read exactly 0, and a worn one drifts further. The dead zone is the part
+of the travel that reads as zero, as a fraction of it, and it starts at <code>[input] deadzone</code>
+in <code>raylib_multiplatform.toml</code>:</p>
+
+<pre data-lang="toml">
+[input]
+deadzone = 0.25
+</pre>
+
+<p>Past the zone the reading is rescaled so that it starts again from 0: just outside a dead zone of
+0.2 the stick reads a little above zero, not a sudden 0.2, and a character does not lurch into
+motion at a fifth of its speed. Keys and the d-pad have no travel and are unaffected.</p>
+
+<p>The value has to be between 0 and 0.95. Anything else is refused when the configuration is read,
+before a build starts, with the reason:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[input]
+deadzone = 1.0
+</pre>
+
+<p>At runtime, <a href="ref:rmp::input::deadzone"><code>rmp::input::deadzone()</code></a> reads it and
+<a href="ref:rmp::input::set_deadzone"><code>rmp::input::set_deadzone()</code></a> changes it — what a
+settings slider calls. A value outside 0..0.95 is clamped rather than refused, so a slider cannot
+switch the sticks off:</p>
+
+<pre data-lang="cpp" data-harness="function">
+static float deadzone = rmp::input::deadzone();
+if (rmp::ui::slider("Stick dead zone", &amp;deadzone, 0.0f, 0.5f)) rmp::input::set_deadzone(deadzone);
+</pre>
+
+<h2>The pointer</h2>
+
+<p>The mouse and a finger are one pointer. raylib already reports the first touch as the mouse, so
+the same code works on a desktop and on a phone, with no <code>#if</code>:</p>
+
+<table>
+<thead><tr><th>Call</th><th>Gives</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::input::pointer_screen"><code>pointer_screen()</code></a></td><td>Where it is, in pixels, from the top-left of the window.</td></tr>
+<tr><td><a href="ref:rmp::input::pointer"><code>pointer()</code></a></td><td>Where it is in the world, through the camera of the scene on top of the stack: what you compare an object's position with. The same as <code>pointer_screen()</code> while that camera has not moved.</td></tr>
+<tr><td><a href="ref:rmp::input::pointer_delta"><code>pointer_delta()</code></a></td><td>How far it moved since the last frame, in pixels. Zero on the first frame.</td></tr>
+<tr><td><a href="ref:rmp::input::pointer_down"><code>pointer_down()</code></a></td><td>The left button, or a finger, is held.</td></tr>
+<tr><td><a href="ref:rmp::input::pointer_pressed"><code>pointer_pressed()</code></a></td><td>The frame it goes down.</td></tr>
+<tr><td><a href="ref:rmp::input::pointer_released"><code>pointer_released()</code></a></td><td>The frame it comes up.</td></tr>
+</tbody>
+</table>
+
+<p>The last three are the left mouse button, read raw: they are not routed, so a press on an
+interface button reads as <code>pointer_pressed()</code> too. To act only on presses the interface
+did not take, ask <a href="ref:rmp::input::consumed_pointer"><code>consumed_pointer()</code></a> first —
+or bind the button to an action, which asks for you:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+if (rmp::input::pointer_pressed() &amp;&amp; !rmp::input::consumed_pointer()) {
+    spawn({ .position = rmp::input::pointer() });
+}
+</pre>
+
+<p>An object that wants to be clicked does not need any of this: its
+<a href="ref:rmp::Object::on_click"><code>on_click</code></a> already gives the interface first
+refusal.</p>
+
+<h2>Who hears a press</h2>
+
+<p>A finger that presses a button on the HUD must not also fire the gun under it, and typing a name
+into a text field must not walk the player across the level. Both have to be true without anyone
+writing an <code>if</code>, so a query <strong>by name</strong> is routed, and a query <strong>by
+device</strong> is not:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void shoot(); void walk();">
+if (rmp::input::just_pressed("fire")) shoot(); // routed: quiet while something above has the input
+if (rmp::input::pressed(KEY_W)) walk();        // raw: exactly IsKeyDown(KEY_W), always
+</pre>
+
+<p>The argument's type says which of the two you asked for, and you can see it at the call. The raw
+versions — <code>pressed</code>, <code>just_pressed</code> and <code>just_released</code> given a
+key, a mouse button or a gamepad button constant instead of a name — are there for
+when you want to know regardless of who else is listening: a held Shift that makes the player run,
+a debug key.</p>
+
+<h3>The three rules</h3>
+
+<p>An action reads as false while something above the code asking for it has taken its device. It
+is decided binding by binding, so an action on both a key and a mouse button still answers to the
+key while the mouse is over a button.</p>
+
+<ol>
+<li data-fw-grep="src/rmp/input.cpp::if \(binding\.device == detail::Device::MOUSE\) return rmp::ui::wants_pointer\(\);"><strong>Mouse bindings go quiet while the interface wants the pointer</strong>:
+while <a href="ref:rmp::ui::wants_pointer"><code>rmp::ui::wants_pointer()</code></a> is true. That is
+while the pointer is over a control — a button, a checkbox, a slider's rail, a dropdown, a text field —
+while a slider is being dragged, and while a dropdown's list is open. The background of a panel,
+text and images do not take the pointer.</li>
+<li><strong>Key and gamepad bindings go quiet while the interface wants the keyboard</strong>: while
+<a href="ref:rmp::ui::wants_keyboard"><code>rmp::ui::wants_keyboard()</code></a> is true, which is
+while a text field has the focus. Gamepad buttons and sticks go with the keyboard.</li>
+<li><strong>Every action goes quiet in a scene that another one covers</strong>, unless every scene
+above it set <a href="ref:rmp::Scene::input_below"><code>input_below</code></a>, which is
+<code>false</code> by default. A covered scene is usually not updated at all; when the one on top
+sets <a href="ref:rmp::Scene::updates_below"><code>updates_below</code></a> — a world that keeps
+moving under a menu — its <code>_update()</code> runs and every action it reads is false, and neither
+scene says so. See <a href="/manual/core/scenes.html#what-a-scene-lets-through">what a scene lets
+through</a>.</li>
+</ol>
+
+<p>The interface's answers come from the last frame in which it drew. <code>_update()</code> runs
+before anything draws, so it reads the previous frame's — one frame of tolerance, which nobody
+notices — and the answer holds until the interface draws again.</p>
+
+<p>For code that wants the reason and not the answer — a different cursor over the HUD, a raw read
+that should still respect the interface —
+<a href="ref:rmp::input::consumed_pointer"><code>consumed_pointer()</code></a> and
+<a href="ref:rmp::input::consumed_keyboard"><code>consumed_keyboard()</code></a> answer whether
+anything above the caller is holding that device: a scene on top, or the interface.</p>
+
+<h3>What routing does not cover</h3>
+
+<p>The interface's own navigation is not an action. The arrow keys, Tab, the d-pad and the left
+stick move the focus between controls, and Enter, Space and the bottom face button press the focused
+one — and <code>wants_keyboard()</code> is only about text fields. In a scene that draws a menu
+<em>and</em> reads <code>move_up</code>, the up arrow moves both. The usual shape keeps them apart:
+the menu is its own scene, pushed on top, and the game underneath is frozen or, by the third rule,
+deaf. A HUD in
+the playing scene can have buttons too; <a href="/manual/modules/ui.html#a-button-in-the-hud">the
+interface page</a> says what to switch off while the game is being played.</p>
+
+<h2>A whole example</h2>
+
+<p><code>examples/input/01_actions</code> defines its own actions, moves with
+<code>vector()</code>, shoots with an action on the left mouse button and pushes a pause scene with a
+button in the middle of the screen. Pressing that button does not shoot, and nothing in the code
+says so:</p>
+
+<pre data-include="examples/input/01_actions/src/main.cpp"></pre>
+
+<pre data-lang="shell">
+rmp example 01_actions
+</pre>
+
+<aside class="callout warning" data-fw-grep="src/rmp/app.cpp::const bool closed = WindowShouldClose\(\);"><span class="callout-title">Escape closes the game</span>
+<p>On desktop, raylib treats Escape as the key that closes the window, and the game ends when the
+window says it should close — before the next frame, the one in which an action bound to
+<code>KEY_ESCAPE</code> would read as pressed. That includes the <code>pause</code> action above and
+<code>ui_cancel</code>. A game that wants Escape for itself hands it back to the game once the window
+exists, in its first scene's <code>_ready()</code> (see <a href="/manual/core/app.html#the-escape-key">the
+Escape key</a>):</p>
+<pre data-lang="cpp" data-harness="members">
+void _ready() override {
+    SetExitKey(KEY_NULL); // Escape belongs to the game now, not to raylib
+    rmp::input::action("pause", KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
+}
+</pre>
+</aside>
+
+<h2>Dropping to raylib</h2>
+
+<p>Nothing here hides raylib. <code>IsKeyPressed()</code>, <code>GetMousePosition()</code>,
+<code>GetTouchPointCount()</code>, <code>GetGestureDetected()</code> and the rest work as they always
+do, next to <code>rmp::input</code>, and they are what to reach for when the game needs something
+this module does not model: several touches at once, a second gamepad, text typed as characters with
+<code>GetCharPressed()</code>. They are raw — the routing above does not apply to them — so a raw
+read that should leave the interface alone asks
+<a href="ref:rmp::input::consumed_pointer"><code>consumed_pointer()</code></a> or
+<a href="ref:rmp::input::consumed_keyboard"><code>consumed_keyboard()</code></a> first.</p>

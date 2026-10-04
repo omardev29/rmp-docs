@@ -1,0 +1,354 @@
+<!--
+title: Saving
+description: rmp::Value is a tree you fill and read with defaults; rmp::save writes it to a file that survives crashes, tells edited from damaged, and lands in the right folder on every platform.
+order: 70
+-->
+<h1>Saving</h1>
+
+<p class="lede">A save is a <a href="ref:rmp::Value"><code>rmp::Value</code></a> — a tree of
+numbers, strings, lists and objects — written to a slot with
+<a href="ref:rmp::save::write"><code>rmp::save::write()</code></a> and read back with
+<a href="ref:rmp::save::read"><code>rmp::save::read()</code></a>. Every read has a default, a write
+never leaves half a file behind, and the file goes where each platform expects a game's data to
+be.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Value v;
+v["level"] = 7;
+v["name"] = "Ada";
+v["unlocked"].push("forest");
+rmp::save::write("slot1", v);
+</pre>
+
+<p>and, the next time the game starts:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Value v;
+rmp::save::read("slot1", &amp;v);
+const int level = v["level"].as_int(1); // 1 on the first run: there was nothing to read
+</pre>
+
+<p>There is no <code>if</code> around the read, and the first run needs no code of its own. When
+there is no save, <code>v</code> stays empty, and an empty Value answers every question with the
+default it is given.</p>
+
+<h2>rmp::Value</h2>
+
+<p>A Value is one of six things — exactly what JSON can hold, so a real structure fits and not
+only flat pairs:</p>
+
+<table>
+<thead><tr><th><a href="ref:rmp::Value::Type"><code>Type</code></a></th><th>Holds</th><th>Read with</th></tr></thead>
+<tbody>
+<tr><td><code>NONE</code></td><td>nothing: a missing key, an index out of range, a Value never assigned</td><td>every reader returns its fallback</td></tr>
+<tr><td><code>BOOL</code></td><td><code>true</code> or <code>false</code></td><td><a href="ref:rmp::Value::as_bool"><code>as_bool(fallback)</code></a></td></tr>
+<tr><td><code>NUMBER</code></td><td>a <code>double</code>: every integer up to 2<sup>53</sup> is exact</td><td><a href="ref:rmp::Value::as_int"><code>as_int(fallback)</code></a>, <a href="ref:rmp::Value::as_float"><code>as_float(fallback)</code></a></td></tr>
+<tr><td><code>STRING</code></td><td>text</td><td><a href="ref:rmp::Value::as_string"><code>as_string(fallback)</code></a></td></tr>
+<tr><td><code>LIST</code></td><td>Values in order</td><td><code>v[i]</code>, <a href="ref:rmp::Value::size"><code>size()</code></a></td></tr>
+<tr><td><code>OBJECT</code></td><td>keys naming Values, in the order they were added</td><td><code>v["key"]</code>, <a href="ref:rmp::Value::contains"><code>contains()</code></a>, <a href="ref:rmp::Value::key"><code>key(i)</code></a></td></tr>
+</tbody>
+</table>
+
+<p>Assigning makes the Value what was assigned, and assigning through a key or an index makes
+whatever path leads there:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Value v;
+v["player"]["x"] = 120.5f;           // creates "player", an object, on the way
+v["player"]["hp"] = 3;
+v["inventory"] = rmp::Value::list(); // an empty list, for "nothing yet"
+v["inventory"].push("sword");
+v["inventory"].push("rope");
+v["options"]["subtitles"] = true;
+</pre>
+
+<p><a href="ref:rmp::Value::list"><code>rmp::Value::list()</code></a> and
+<a href="ref:rmp::Value::object"><code>rmp::Value::object()</code></a> make an empty one of each;
+<a href="ref:rmp::Value::push"><code>push()</code></a> appends to a list, and turns a Value that
+holds nothing into one first. <a href="ref:rmp::Value::erase"><code>erase(key)</code></a> removes a
+key, and assigning <code>rmp::Value{}</code> to a key amounts to the same: a key that holds nothing
+and a key that is not there read the same everywhere, in <code>size()</code>, in
+<code>contains()</code>, in <code>==</code> and in the file.</p>
+
+<h3>Reading never creates anything</h3>
+
+<p>Reading through <code>[]</code> walks the tree and returns what is there, or nothing. It does
+not add the keys it asks about, even on a Value that is not <code>const</code>:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Value v;
+const int coins = v["stats"]["coins"].as_int(0); // 0, and v is still empty
+</pre>
+
+<p>That is the difference from <code>std::map</code>, where asking is adding. Reading a save never
+grows it, and reading a Value never warns about anything, so going through what a load returned
+can never be what trips <code>[dev] strict</code>.</p>
+
+<p>A read gives the fallback whenever the Value is not of the type asked for. Types are not
+converted: a number is not a bool, and <code>"7"</code> is not 7. <code>as_int()</code> cuts a
+number towards zero and clamps it to the range of an <code>int</code>, so an edited save holding a
+number too big for one cannot overflow anything. <code>as_string()</code> returns a view that is
+valid while the Value is alive and unchanged; copy it into a <code>std::string</code> to keep it.</p>
+
+<h3>A write that cannot land</h3>
+
+<p>Writing through a path creates what is missing, but it does not change what is there into
+something else. Writing a key into a number — a number read from an old save, say — goes nowhere,
+and says so once; so does an index past the end of a list. Turning that number into an object
+behind your back would lose it. To change what a key is, assign the whole thing first:
+<code>v["stats"] = rmp::Value::object();</code>. A list is written at <code>0</code> up to
+<code>size()</code>, and writing at <code>size()</code> appends.</p>
+
+<h3>Walking a Value you did not write</h3>
+
+<p>Reading a save never needs <a href="ref:rmp::Value::type"><code>type()</code></a>: a read of the
+wrong type gives its fallback. A tree of unknown shape — one a modding tool wrote, say — is walked
+with <code>type()</code>, <code>size()</code> and <code>key(i)</code>:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Value v;
+rmp::save::read("slot1", &amp;v);
+const rmp::Value &amp;items = v["inventory"];
+std::vector&lt;std::string&gt; names;
+for (int i = 0; i &lt; items.size(); i++) names.emplace_back(items[i].as_string("?"));
+
+const rmp::Value &amp;stats = v["stats"];
+for (int i = 0; i &lt; stats.size(); i++) {
+    const std::string_view key = stats.key(i);
+    const int value = stats[key].as_int(0);
+}
+</pre>
+
+<p>Two Values are <code>==</code> when they hold the same things, whatever order an object's keys
+were added in.</p>
+
+<h2>Writing and reading</h2>
+
+<p><a href="ref:rmp::save::write"><code>write(slot, value)</code></a> returns whether it worked. A
+write that fails leaves the previous save exactly as it was: the new file is written beside the
+old one, flushed to the disk, and only then put in its place, so at every instant there is one
+whole save on disk — the old or the new. The power going out in the middle of a save does not lose
+the game.</p>
+
+<p data-fw-grep="src/rmp/save.cpp::slot.size\(\) > 64">A <em>slot</em> is the name of the file, without its extension: letters, digits,
+<code>_</code>, <code>-</code> and <code>.</code>, not starting with a dot, at most 64 of them. Each
+slot is a file of its own, so a game with three save slots, settings and a best score uses five
+names. Anything else — a path above all — is refused and said once.</p>
+
+<p>A Value that could not be read back is refused too, rather than written and lost: one nested
+deeper than 64 levels, or with a NUL character in a string or a key. A number that is not finite
+— a NaN, an infinity — is written as nothing, and reads back as the default, which is what it meant
+anyway.</p>
+
+<p>A write flushes the file to the disk, so it is a thing to do at a checkpoint, on a menu, when a
+level ends — not every frame.</p>
+
+<h3>What a read tells you</h3>
+
+<p><a href="ref:rmp::save::read"><code>read(slot, &amp;value)</code></a> returns a
+<a href="ref:rmp::save::Result"><code>Result</code></a> that is true in an <code>if</code> only when
+the save was read and checked. When it is false,
+<a href="ref:rmp::save::Result::status"><code>status</code></a> says why, because each reason is a
+different thing to tell a player:</p>
+
+<table>
+<thead><tr><th><a href="ref:rmp::save::Status"><code>Status</code></a></th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>OK</code></td><td>Read, checked, and the Value filled.</td></tr>
+<tr><td><code>MISSING</code></td><td>Nothing has been saved in that slot: the first run.</td></tr>
+<tr><td><code>TRUNCATED</code></td><td>The file is cut short, as a write the power went out on would be.</td></tr>
+<tr><td><code>MODIFIED</code></td><td>The checksum or the seal does not match: the file was edited, or the disk damaged it.</td></tr>
+<tr><td><code>UNREADABLE</code></td><td>Not a save at all, a save from a newer version of the framework, a slot name that is refused, or a file too large to be one.</td></tr>
+</tbody>
+</table>
+
+<p>On anything but <code>OK</code>, the Value passed in is left exactly as it was. That gives the
+pattern for loading settings: fill a struct with its defaults, read, and let each field take the
+saved value when there is one.</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+struct Settings {
+    float music = 0.8f;
+    bool subtitles = false;
+};
+
+Settings load_settings(bool *damaged) {
+    Settings s;
+    rmp::Value v;
+    const rmp::save::Result read = rmp::save::read("settings", &amp;v);
+    *damaged = read.status == rmp::save::Status::MODIFIED ||
+        read.status == rmp::save::Status::TRUNCATED;
+    s.music = v["music"].as_float(s.music);
+    s.subtitles = v["subtitles"].as_bool(s.subtitles);
+    return s;
+}
+</pre>
+
+<p>A missing file is simply the first run and needs no message; a damaged one is worth telling the
+player about before the next write replaces it. That is what
+<a href="/examples/ui/04_settings.html">examples/ui/04_settings</a> does.</p>
+
+<h3>Slots, and where they are</h3>
+
+<dl>
+<dt><a href="ref:rmp::save::exists"><code>exists(slot)</code></a></dt>
+<dd>Whether there is a save in that slot — what decides if a title screen offers "Continue". It
+does not open the file, so a damaged save exists too.</dd>
+<dt><a href="ref:rmp::save::remove"><code>remove(slot)</code></a></dt>
+<dd>Deletes it. False when there was nothing to delete.</dd>
+<dt><a href="ref:rmp::save::directory"><code>directory()</code></a></dt>
+<dd>The folder saves are written to this session, with a trailing separator.</dd>
+</dl>
+
+<h2>Where saves go</h2>
+
+<p>Each platform has a place for an application's own data, and the saves go there, in a folder
+named after <code>[project] name</code>:</p>
+
+<table>
+<thead><tr><th>Platform</th><th>Folder</th></tr></thead>
+<tbody>
+<tr><td>Windows</td><td><code>%APPDATA%\&lt;name&gt;\</code></td></tr>
+<tr><td>macOS</td><td><code>~/Library/Application Support/&lt;name&gt;/</code></td></tr>
+<tr><td>Linux and the BSDs</td><td><code>$XDG_DATA_HOME/&lt;name&gt;/</code> when that is set to an absolute path, otherwise <code>~/.local/share/&lt;name&gt;/</code></td></tr>
+<tr><td>Android</td><td>the app's private internal storage, in a <code>saves</code> folder: no permission needed, invisible to other apps, removed with the app</td></tr>
+<tr><td>iOS</td><td><code>Library/Application Support/</code> in the app's own container — not <code>Documents</code>, which Apple keeps for files the user made</td></tr>
+<tr><td>Web</td><td>the browser's IndexedDB, one database per game</td></tr>
+</tbody>
+</table>
+
+<p>On the web, every write and every remove is copied into IndexedDB, and the game does not start
+until the saves already there have been read in, so the first scene finds them. Where the browser
+refuses IndexedDB — a private window, storage turned off — the game still runs, and its saves last
+as long as the tab.</p>
+
+<h3>Portable saves</h3>
+
+<p>A game handed out as a zip — on itch.io, say — is expected to keep everything in its own
+folder, so that deleting the folder deletes the game. <code>[save] portable = true</code> puts the
+saves in a <code>saves</code> folder next to the executable instead. Only Windows, Linux and the
+BSDs have such a place; on macOS, Android, iOS and the web the setting is ignored. Where the system
+does not say where the executable is — raylib cannot tell on NetBSD and OpenBSD — the saves go to
+the user's folder, and the log says that too.</p>
+
+<p>If that folder cannot be written — a portable build copied into Program Files — the saves go
+to the user's folder instead, and the log says so once:</p>
+
+<p><samp>SAVE: cannot write in … (a portable build in a read-only folder, like Program Files?); saving in … instead</samp></p>
+
+<p>Reads look in both folders and take the newer save, so a session that had to fall back and a
+later one that did not — the game was moved out of Program Files — do not disagree about where the
+player's progress is. <code>directory()</code> returns where the saves really went.</p>
+
+<h2>The .toml</h2>
+
+<pre data-lang="toml">
+[save]
+portable = false
+encrypt  = false
+version  = 1
+</pre>
+
+<dl>
+<dt><code>portable</code></dt>
+<dd>Saves next to the executable, as above. Off by default: the user's data folder is what
+installers and Steam Cloud expect.</dd>
+<dt><code>encrypt</code></dt>
+<dd>Whether <code>write()</code> seals the file by default. See below.</dd>
+<dt><code>version</code></dt>
+<dd>The version of <em>your</em> save format, a whole number from 1 up, stored in every file.</dd>
+</dl>
+
+<p>Nothing in <code>[save]</code> is a secret, and there is no password to put there; a key the
+section does not have is refused:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[save]
+password = "hunter2"
+</pre>
+
+<h3>Changing what a save means</h3>
+
+<p>Most updates need no migration at all. A save written by yesterday's version is not broken, it
+is only missing the keys added since, and a missing key reads as its default. Adding a key never
+needs a version bump.</p>
+
+<p>Bump <code>[save] version</code> when a key changes <em>meaning</em> — when <code>gold</code>
+becomes <code>coins</code>, or a time is stored in milliseconds instead of seconds. The version
+the file was written with comes back in <a href="ref:rmp::Value::version"><code>version()</code></a>,
+and the game moves the old meaning to the new one as it reads:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Value v;
+if (rmp::save::read("slot1", &amp;v) &amp;&amp; v.version() &lt; 2) {
+    v["coins"] = v["gold"].as_int(0);
+    v.erase("gold");
+}
+</pre>
+
+<p><code>write()</code> always stores the version this build has, so once the migrated Value is
+written back, the save is migrated for good.</p>
+
+<pre data-lang="toml">
+[save]
+version = 2
+</pre>
+
+<p>The version is a counter that only goes up, from 1:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[save]
+version = 0
+</pre>
+
+<h2>Sealed saves</h2>
+
+<p>A plain save is readable: it is one line of header followed by the JSON, and anyone who opens
+it in a text editor can see the coins and change them. A <em>sealed</em> save is encrypted and
+authenticated, so it cannot be read, and any change to it — a single byte, even with the checksum
+worked out again — reads as <code>MODIFIED</code>.</p>
+
+<p><code>[save] encrypt = true</code> seals every write; a single write can ask either way:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::Value v;">
+rmp::save::write("slot1", v, { .encrypted = true });
+rmp::save::write("debug", v, { .encrypted = false });
+</pre>
+
+<p>With sealing on, a <em>plain</em> file in a slot reads as <code>MODIFIED</code> too — otherwise
+anyone could replace a sealed save with a plain one of their own. A game that turns sealing on in
+an update still has players with plain saves; it reads them for as long as they may exist
+with:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::Value v;">
+rmp::save::read("slot1", &amp;v, { .sealed_only = false });
+</pre>
+
+<aside class="callout warning"><span class="callout-title">What sealing is for</span><p>It stops a
+player opening the file and giving themselves a thousand coins, and it catches an edit even when
+whoever made it knew to fix the checksum. It is not security: the key is derived from <code>[project] name</code> and lives in
+the game you hand out, and nothing stops someone determined. Because the key comes from the name,
+games with different names cannot read each other's sealed saves — and <strong>renaming the
+project makes the old sealed saves unreadable</strong>: they read as <code>MODIFIED</code>.</p></aside>
+
+<p>The seal is XChaCha20-Poly1305, from the copy of Monocypher the framework already carries for
+its resource pack, with a fresh random nonce for every write.</p>
+
+<h2>The file</h2>
+
+<p>Every save is one line of ASCII, then the payload:</p>
+
+<pre data-lang="text">
+rmp-save 1 &lt;version&gt; &lt;plain|sealed&gt; &lt;payload bytes&gt; &lt;crc32&gt;
+{"level":7,"name":"Ada","unlocked":["forest"]}
+</pre>
+
+<p data-fw-grep="src/rmp/save.cpp::MAX_FILE = std::uintmax_t\{ 64 \} \* 1024 \* 1024">The <code>1</code> is the layout of the file itself; a framework that meets a bigger one says
+<code>UNREADABLE</code> rather than guessing. The checksum, a CRC-32, spans the first line and
+the payload, so an edited version or length is caught like an edited byte, and the length is what tells a file cut
+short (<code>TRUNCATED</code>) from one with something added (<code>MODIFIED</code>). A file of
+more than 64 MB is not a save and is not read.</p>
+
+<p>Numbers are written with as many digits as it takes to read back exactly the same number, and
+read and written with a <code>.</code> as the decimal point whatever language the player's system
+is set to, so a save made under a German locale reads anywhere.</p>

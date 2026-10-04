@@ -1,0 +1,41 @@
+<!--
+title: Modules
+description: The parts of the framework a game takes when it needs them — input, the interface, assets, sprites, levels, sound, saving, random numbers and ads — each one header of its own.
+order: 30
+-->
+<h1>Modules</h1>
+
+<p class="lede">The core is what every game is made of. The modules are what a game takes when it
+needs them: each one is a header of its own under <code>include/rmp/</code>, there is no header that
+includes them all, and a game includes only the ones it uses. Which header holds what is in
+<a href="/manual/basics/headers.html">headers</a>.</p>
+
+<ul>
+<li><a href="/manual/modules/input.html">Input</a> — named actions with any number of bindings,
+movement in eight directions in one call, the mouse and a finger as one pointer, and who gets to
+hear a press.</li>
+<li><a href="/manual/modules/ui.html">Interface</a> — menus, HUDs and settings screens in immediate
+mode, playable with a mouse, a finger, a keyboard or a gamepad.
+<ul>
+<li><a href="/manual/modules/ui-layout.html">Interface layout</a> — rows, columns, panels, stacks,
+grids, scrolling, and how big each thing is.</li>
+<li><a href="/manual/modules/ui-controls.html">Interface controls</a> — checkboxes, sliders,
+dropdowns and text fields that write into your variables.</li>
+<li><a href="/manual/modules/ui-style.html">Interface style</a> — themes, variants, sizes,
+transitions, breakpoints and fonts.</li>
+</ul></li>
+<li><a href="/manual/modules/assets.html">Assets</a> — files in <code>resources/</code>, loaded by
+name, the same from loose files or from a pack.</li>
+<li><a href="/manual/modules/sprites.html">Sprites</a> — what an object looks like: a texture, or an
+Aseprite file whose tags are its animations.</li>
+<li><a href="/manual/modules/tilemaps.html">Tilemaps</a> — levels designed in LDtk or Tiled, drawn,
+collided with, and turned into objects.</li>
+<li><a href="/manual/modules/audio.html">Audio</a> — sound effects and music by name, on volume
+buses a settings screen can move.</li>
+<li><a href="/manual/modules/saving.html">Saving</a> — <a href="ref:rmp::Value"><code>rmp::Value</code></a>
+and <a href="ref:rmp::save"><code>rmp::save</code></a>: a tree of data written to the right folder on
+every platform.</li>
+<li><a href="/manual/modules/random.html">Random</a> — random numbers you can reproduce.</li>
+<li><a href="/manual/modules/ads.html">Ads</a> — interstitial and rewarded ads on Android, and the
+same calls doing nothing everywhere else.</li>
+</ul>

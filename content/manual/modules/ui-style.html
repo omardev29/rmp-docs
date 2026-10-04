@@ -1,0 +1,274 @@
+<!--
+title: Interface style
+description: Themes as plain data, variants that say what a button means, sizes as steps of a type scale, colour transitions, breakpoints for the shape of a layout, and the font the interface draws with.
+order: 25
+-->
+<h1>Interface style</h1>
+
+<p class="lede">No call in <code>rmp::ui</code> takes a colour. A control says what it
+<em>means</em> — primary, danger, a muted line of text — and how important it is — small, medium,
+large — and the theme decides what that looks like. Restyling a game is then one theme, and no call
+site is revisited.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::button("Start game", { .style = rmp::ui::Variant::PRIMARY, .size = rmp::ui::Size::LARGE });
+rmp::ui::text("v1.0.2", { .color = rmp::ui::ColorRole::MUTED, .size = rmp::ui::Size::SMALL });
+</pre>
+
+<h2>Themes</h2>
+
+<p>A <a href="ref:rmp::ui::Theme"><code>rmp::ui::Theme</code></a> is plain data: every colour the
+widgets are drawn with, as raylib's <code>Color</code>, and every metric, in design units. There is no
+inheritance, no cascade and no stylesheet. Customising one is assignment — copy it, change what you
+want, set it back:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::Theme theme = rmp::ui::current_theme();
+theme.primary = GOLD;
+theme.primary_hover = YELLOW;
+theme.primary_press = ORANGE;
+theme.corner_radius = 0; // square corners
+rmp::ui::set_theme(theme);
+</pre>
+
+<p><a href="ref:rmp::ui::current_theme"><code>current_theme()</code></a> returns the one theme in
+use, and <a href="ref:rmp::ui::set_theme"><code>set_theme()</code></a> copies a new one over it.
+Anything drawn after the call uses the new one, in the same frame. Both work at any time, before the
+window exists too.</p>
+
+<p>Two themes come with the framework, <a href="ref:rmp::ui::theme_dark"><code>theme_dark()</code></a>
+and <a href="ref:rmp::ui::theme_light"><code>theme_light()</code></a>. Each returns a copy, so the same
+copy-modify-set works on top of either. Which one the game starts with is <code>[ui] theme</code>:</p>
+
+<pre data-lang="toml">
+[ui]
+theme = "light"
+</pre>
+
+<p>Only those two names exist, and a typo is refused when the configuration is read instead of
+falling back to dark at runtime:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[ui]
+theme = "blue"
+</pre>
+
+<p>After that it is a runtime call, so an appearance setting in the game is one line:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static bool light = false;">
+if (rmp::ui::checkbox("Light theme", &amp;light))
+    rmp::ui::set_theme(light ? rmp::ui::theme_light() : rmp::ui::theme_dark());
+</pre>
+
+<p>The dark theme is a default-constructed <code>Theme</code>; its values are the member initialisers
+in <code>include/rmp/ui.h</code>. The light one is not the dark one with the numbers flipped. A dark
+interface separates its surfaces with their own shadows and a light one has none, so the light theme
+sets <a href="ref:rmp::ui::Theme::border_width"><code>border_width</code></a> to 1, and normal buttons
+and panels get an outline that keeps a pale button on a pale page a button. Its accents are darker,
+because the blue that reads as bright on near-black looks washed out on near-white, and white text on
+it stops being legible.</p>
+
+<h2>Colours</h2>
+
+<p>Each colour of the theme has a job, and these are all of them:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Paints</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Theme::background"><code>background</code></a></td><td>Behind the interface. No widget paints it: a game of scenes is cleared with it every frame unless the scene sets its own <code>background</code>; a loop of your own passes it to <code>ClearBackground()</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::panel"><code>panel</code></a></td><td>A panel, and a dropdown's open list.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::surface"><code>surface</code></a></td><td>A normal button at rest, the field of a dropdown and of a text field, a slider's rail, an unticked checkbox, the track of a progress bar.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::surface_hover"><code>surface_hover</code></a>, <a href="ref:rmp::ui::Theme::surface_press"><code>surface_press</code></a></td><td>A normal, outline or ghost button under the pointer, and while the pointer is held down on it; also a checkbox's row, a dropdown's field and the items of its open list.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::border"><code>border</code></a></td><td>An outline button, an unticked checkbox, a dropdown's open list; and normal buttons and panels when <code>border_width</code> is above 0.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::text"><code>text</code></a></td><td>Text, the labels of normal, outline and ghost buttons and of every control.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::text_muted"><code>text_muted</code></a></td><td>Muted text, a slider's percentage, a text field's placeholder.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::text_on_accent"><code>text_on_accent</code></a></td><td>The label of a primary or danger button, and the dot of a ticked checkbox.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::primary"><code>primary</code></a>, <a href="ref:rmp::ui::Theme::primary_hover"><code>primary_hover</code></a>, <a href="ref:rmp::ui::Theme::primary_press"><code>primary_press</code></a></td><td>A primary button in its three states; also primary text, a ticked checkbox, the filled part of a slider and of a progress bar.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::danger"><code>danger</code></a>, <a href="ref:rmp::ui::Theme::danger_hover"><code>danger_hover</code></a>, <a href="ref:rmp::ui::Theme::danger_press"><code>danger_press</code></a></td><td>A danger button in its three states; also danger text.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::disabled"><code>disabled</code></a>, <a href="ref:rmp::ui::Theme::disabled_text"><code>disabled_text</code></a></td><td>The fill and the label of a control whose <code>enabled</code> is false.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::focus"><code>focus</code></a></td><td>The ring around whatever the keyboard or gamepad is on. A controller build cannot be used without it, which is why it is the theme's and not each widget's.</td></tr>
+</tbody>
+</table>
+
+<p>Text picks one of four of these through a <a href="ref:rmp::ui::ColorRole"><code>ColorRole</code></a>,
+never a colour of its own: <code>TEXT</code> is <code>text</code>, <code>MUTED</code> is
+<code>text_muted</code>, <code>PRIMARY</code> is <code>primary</code> and <code>DANGER</code> is
+<code>danger</code>.</p>
+
+<h2>Variants</h2>
+
+<p>A button's <code>style</code> is a <a href="ref:rmp::ui::Variant"><code>Variant</code></a>: what
+the button is for, not what colour it is.</p>
+
+<table>
+<thead><tr><th>Variant</th><th>For</th><th>Looks</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Variant::NORMAL"><code>NORMAL</code></a></td><td>Most buttons; the default.</td><td>A filled <code>surface</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Variant::PRIMARY"><code>PRIMARY</code></a></td><td>The one thing you want pressed on this screen.</td><td><code>primary</code>, with <code>text_on_accent</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Variant::DANGER"><code>DANGER</code></a></td><td>Something destructive, which should look it.</td><td><code>danger</code>, with <code>text_on_accent</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Variant::OUTLINE"><code>OUTLINE</code></a></td><td>A secondary action.</td><td>An outline and a label; it fills in under the pointer.</td></tr>
+<tr><td><a href="ref:rmp::ui::Variant::GHOST"><code>GHOST</code></a></td><td>Toolbars, "back" links.</td><td>The label alone, in either theme, until the pointer is on it.</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::row({ .grow_x = true }, [&amp;] {
+    rmp::ui::button("Start game", { .style = rmp::ui::Variant::PRIMARY });
+    rmp::ui::button("Load");
+    rmp::ui::button("Settings", { .style = rmp::ui::Variant::OUTLINE });
+    rmp::ui::button("Back", { .style = rmp::ui::Variant::GHOST });
+    rmp::ui::button("Delete", { .style = rmp::ui::Variant::DANGER });
+});
+</pre>
+
+<p>Being disabled is not a sixth variant, because it can happen to any of them: it is the
+<code>enabled</code> flag, and a disabled button of any variant is drawn in <code>disabled</code> and
+<code>disabled_text</code>.</p>
+
+<h2>Sizes</h2>
+
+<p>Anywhere a size is asked for — a button's, a text's — the same field takes one of three steps of
+the theme's type scale, or a plain number of design units:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::button("Play", { .size = rmp::ui::Size::LARGE });
+rmp::ui::text("Chapter One", { .size = 34 });
+</pre>
+
+<table>
+<thead><tr><th>Step</th><th>Theme field</th><th>Default</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Size::SMALL"><code>Size::SMALL</code></a></td><td><a href="ref:rmp::ui::Theme::font_size_small"><code>font_size_small</code></a></td><td>0.8 × <code>[ui] font_size</code></td></tr>
+<tr><td><a href="ref:rmp::ui::Size::MEDIUM"><code>Size::MEDIUM</code></a></td><td><a href="ref:rmp::ui::Theme::font_size"><code>font_size</code></a></td><td><code>[ui] font_size</code>, 20 unless set</td></tr>
+<tr><td><a href="ref:rmp::ui::Size::LARGE"><code>Size::LARGE</code></a></td><td><a href="ref:rmp::ui::Theme::font_size_large"><code>font_size_large</code></a></td><td>1.4 × <code>[ui] font_size</code></td></tr>
+</tbody>
+</table>
+
+<p>The steps are what to reach for almost always: they come from the theme, so they stay in
+proportion when someone changes the type scale. A number is the escape hatch — for a title, not for a
+button. It is one field that takes two spellings rather than two fields that could disagree.</p>
+
+<p>On a button the step moves the type, the padding and the minimum height together, so a large
+button is large all over and not a normal one with bigger letters. The one exception is a touch
+screen: on Android and iOS no button is shorter than <code>min_touch_size</code>, small ones
+included. The labels of checkboxes, sliders, dropdowns and text fields are always at
+<code>font_size</code>.</p>
+
+<p>The three type sizes are three fields of the theme. Changing <code>font_size</code> moves the
+medium step only, so making all the text bigger is all three:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::Theme theme = rmp::ui::current_theme();
+theme.font_size *= 1.15f;
+theme.font_size_small *= 1.15f;
+theme.font_size_large *= 1.15f;
+rmp::ui::set_theme(theme);
+</pre>
+
+<h2>Metrics</h2>
+
+<p>The rest of the theme is measurements, every one in design units:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Theme::padding_x"><code>padding_x</code></a></td><td>20</td><td>Inside a button, left and right of the label.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::padding_y"><code>padding_y</code></a></td><td>12</td><td>Inside a button, above and below it.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::gap"><code>gap</code></a></td><td>12</td><td>Between siblings.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::panel_padding"><code>panel_padding</code></a></td><td>20</td><td>Inside a panel, and around what <code>begin()</code> lays out.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::corner_radius"><code>corner_radius</code></a></td><td>8</td><td>Of buttons, panels and the controls' fields; 0 is square.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::border_width"><code>border_width</code></a></td><td>0 dark, 1 light</td><td>The outline of normal buttons and of panels; 0 draws none.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::control_size"><code>control_size</code></a></td><td>22</td><td>A checkbox's box, and the height of a slider's drag area.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::track_thickness"><code>track_thickness</code></a></td><td>6</td><td>A slider's rail.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::focus_ring"><code>focus_ring</code></a></td><td>2</td><td>The outline on the focused control.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::min_touch_size"><code>min_touch_size</code></a></td><td>44</td><td>The shortest a button can be: Apple's touch-target guidance, close to Material's 48 dp. It follows a button's type size, except on Android and iOS.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::transition"><code>transition</code></a></td><td>0.12</td><td>Seconds, not design units: how long a colour takes to change. See below.</td></tr>
+</tbody>
+</table>
+
+<h2>Transitions</h2>
+
+<p>Controls fade between their colours — at rest, under the pointer, pressed — instead of snapping,
+and a checkbox's box fills in instead of switching. There is nothing to opt into and one knob,
+<code>transition</code>, the time a change takes. A control seen for the first time starts at the
+colour it should have, so nothing fades in from nowhere.</p>
+
+<p><strong>Only colour moves.</strong> Nothing about the layout is animated, so a control is always
+exactly where it was drawn and an animation can never make the player miss what they aimed at.
+<code>transition = 0</code> turns it off — every control takes its new colour on the frame it
+changes — which is what a "reduce motion" setting does:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static bool reduce_motion = true;">
+rmp::ui::Theme theme = rmp::ui::current_theme();
+theme.transition = reduce_motion ? 0.0f : 0.12f;
+rmp::ui::set_theme(theme);
+</pre>
+
+<h2>Breakpoints and scale</h2>
+
+<p>Two mechanisms make an interface fit a screen, and knowing which to reach for is most of the
+skill. The <a href="/manual/modules/ui.html#scale-and-design-units">scale</a> makes everything bigger
+or smaller together; it is automatic, and you rarely touch it. A <strong>breakpoint</strong> changes
+the <em>shape</em> of a layout, which no amount of growing, fitting or fixing can do: on a phone held
+upright, a sidebar beside the content has to go above it.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void sidebar(); void content();">
+if (rmp::ui::compact()) {
+    rmp::ui::column([&amp;] { sidebar(); content(); });
+} else {
+    rmp::ui::row([&amp;] { sidebar(); content(); });
+}
+</pre>
+
+<p><a href="ref:rmp::ui::current_breakpoint"><code>current_breakpoint()</code></a> classifies the
+screen by its <strong>aspect ratio</strong>, width over height, and
+<a href="ref:rmp::ui::compact"><code>compact()</code></a> is the case that comes up:</p>
+
+<table>
+<thead><tr><th>Breakpoint</th><th>Width ÷ height</th><th>In practice</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Breakpoint::COMPACT"><code>COMPACT</code></a></td><td>below 1</td><td>A phone held upright, a narrow window.</td></tr>
+<tr><td><a href="ref:rmp::ui::Breakpoint::MEDIUM"><code>MEDIUM</code></a></td><td>1 up to 1.6</td><td>A tablet, a small desktop window, 4:3.</td></tr>
+<tr><td><a href="ref:rmp::ui::Breakpoint::EXPANDED"><code>EXPANDED</code></a></td><td>1.6 and wider</td><td>An ordinary desktop, a TV, a phone on its side.</td></tr>
+</tbody>
+</table>
+
+<p>Aspect ratio and not pixels, deliberately: a pixel threshold would call a phone 1080 pixels wide
+a desktop, and the scale has already dealt with how big everything is. What is left — the only thing
+that decides whether a row still fits — is how wide the screen is next to how tall. It reads the
+window's size when it is called, so it needs no <code>begin()</code> first; a window with no height
+yet is <code>MEDIUM</code>.</p>
+
+<p>Reach for a breakpoint when the layout has to become a different layout. Using one to pick a
+<em>size</em> undoes the work the scale already did, and is how a layout ends up right on exactly one
+machine. <a href="/examples/ui/07_responsive.html">The responsive example</a> turns a sidebar and its
+content from a row into a column as the window is resized.</p>
+
+<h2>Fonts</h2>
+
+<p>The interface draws all its text in one font, named by <code>[ui] font</code>, at sizes measured
+from <code>[ui] font_size</code>.</p>
+
+<p>Left empty, the default, it is raylib's built-in font: no file, no licence, and it works on every
+platform. It is a bitmap font, so the scale its text is drawn at is rounded to a whole number — 1, 2,
+3 — and it stays sharp instead of going blurry; text steps in size as the window grows rather than
+sliding.</p>
+
+<p>A font of your own is a file in <code>resources/</code>, named relative to it:</p>
+
+<pre data-lang="toml">
+[ui]
+font = "ui.ttf"
+font_size = 24
+</pre>
+
+<p>It is loaded through <a href="ref:rmp::assets::load_font"><code>rmp::assets::load_font</code></a>,
+so it works the same loose in <code>resources/</code> and packed in a release. It follows the scale
+exactly. It is rasterised at the theme's <code>font_size</code> times the scale, and again whenever
+that changes, so medium text is drawn at exactly the size it was rasterised at and stays sharp as the
+window changes; the other sizes are drawn from that same rasterisation, scaled. A font file that is missing or cannot be read
+does not switch the interface off: it falls back to the built-in font and says so once,
+<samp>UI: [ui] font '…' could not be loaded; using the built-in font</samp>.</p>
+
+<p><code>font_size</code> is the medium step in design units, a whole number from 6 to 200; the small
+and large steps start at 0.8 and 1.4 times it.</p>

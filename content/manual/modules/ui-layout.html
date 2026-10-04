@@ -1,0 +1,396 @@
+<!--
+title: Interface layout
+description: Rows, columns, panels, stacks, grids and scrolling lists, and the three ways anything in rmp::ui is sized — fit, grow and fixed — in design units that follow the screen.
+order: 23
+-->
+<h1>Interface layout</h1>
+
+<p class="lede">Everything inside <code>begin()</code> and <code>end()</code> arranges itself in a
+centred column, which is the right answer for a menu and the wrong one for anything with structure.
+Containers are how you get structure: they nest, they take their contents as a lambda, and every
+size they take is in design units, so a layout drawn for the <code>[window]</code> resolution keeps
+its proportions on any screen.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void quit();">
+rmp::ui::begin();
+rmp::ui::panel([&amp;] {
+    rmp::ui::text("Really quit?");
+    rmp::ui::row({ .grow_x = true }, [&amp;] {
+        if (rmp::ui::button("Yes")) quit();
+        rmp::ui::spacer();
+        rmp::ui::button("No");
+    });
+});
+rmp::ui::end();
+</pre>
+
+<p>The contents are a lambda, and that is the reason there is no closing call to forget: the
+container closes when the lambda returns. Capture with <code>[&amp;]</code> when the body needs your
+variables, which is most of the time.</p>
+
+<table>
+<thead><tr><th>Container</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::row"><code>row</code></a></td><td>Its children left to right.</td></tr>
+<tr><td><a href="ref:rmp::ui::column"><code>column</code></a></td><td>Its children top to bottom.</td></tr>
+<tr><td><a href="ref:rmp::ui::panel"><code>panel</code></a></td><td>A column with a background, padding and rounded corners: a dialog, a card.</td></tr>
+<tr><td><a href="ref:rmp::ui::center"><code>center</code></a></td><td>Fills the space it is given and puts its contents in the middle of it.</td></tr>
+<tr><td><a href="ref:rmp::ui::stack"><code>stack</code></a> and <a href="ref:rmp::ui::layer"><code>layer</code></a></td><td>Layers in the same box, the later ones on top.</td></tr>
+<tr><td><a href="ref:rmp::ui::grid"><code>grid</code></a> and <a href="ref:rmp::ui::cell"><code>cell</code></a></td><td>Equal columns, as many rows as it takes.</td></tr>
+<tr><td><a href="ref:rmp::ui::scroll"><code>scroll</code></a></td><td>Clips its contents and scrolls them.</td></tr>
+<tr><td><a href="ref:rmp::ui::spacer"><code>spacer</code></a></td><td>Not a container: it eats the space left over, or leaves a gap of a given size.</td></tr>
+</tbody>
+</table>
+
+<h2>The frame begin() opens</h2>
+
+<p><a href="ref:rmp::ui::begin"><code>begin()</code></a> opens two boxes before anything of yours: a
+root that fills the screen, and one column inside it that everything you declare goes into. The
+column is as big as its contents, and the root places it — in the middle, unless you say otherwise.
+<a href="ref:rmp::ui::FrameOptions"><code>FrameOptions</code></a> says otherwise:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::FrameOptions::placement"><code>placement</code></a></td><td><code>Align::CENTER</code></td><td>Where the column sits on the screen.</td></tr>
+<tr><td><a href="ref:rmp::ui::FrameOptions::gap"><code>gap</code></a></td><td>the theme's <code>gap</code></td><td>Between the things in the column.</td></tr>
+<tr><td><a href="ref:rmp::ui::FrameOptions::padding"><code>padding</code></a></td><td>the theme's <code>panel_padding</code></td><td>Kept clear around the edge of the screen.</td></tr>
+</tbody>
+</table>
+
+<p><a href="ref:rmp::ui::Align"><code>Align</code></a> has the nine values you would guess, a
+three-by-three grid of the vertical (<code>TOP</code>, <code>CENTER</code>, <code>BOTTOM</code>)
+crossed with the horizontal (<code>LEFT</code>, <code>CENTER</code>, <code>RIGHT</code>):
+<code>TOP_LEFT</code>, <code>TOP_CENTER</code>, <code>TOP_RIGHT</code>, <code>CENTER_LEFT</code>,
+<code>CENTER</code>, <code>CENTER_RIGHT</code>, <code>BOTTOM_LEFT</code>, <code>BOTTOM_CENTER</code>
+and <code>BOTTOM_RIGHT</code>. A HUD in the corner is a placement and a smaller gap:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static int score = 0; static int lives = 3;">
+rmp::ui::begin({ .placement = rmp::ui::Align::TOP_LEFT, .gap = 4 });
+rmp::ui::text("Score " + std::to_string(score));
+rmp::ui::text("Lives " + std::to_string(lives), { .color = rmp::ui::ColorRole::MUTED });
+rmp::ui::end();
+</pre>
+
+<p>On Android and iOS the root also keeps 24 design units clear at every edge, for the status bar
+and the notch.</p>
+
+<p>Inside a scene, <code>_draw()</code> can hold more than one pair — the score in one corner, a
+button in another — and they are drawn as parts of the same frame. In a game that runs its own loop,
+keep to one pair per frame.</p>
+
+<h2>Sizing: fit, grow, fixed</h2>
+
+<p>Each axis of a box is sized one of three ways, and there is no fourth:</p>
+
+<table>
+<thead><tr><th>Sizing</th><th>Written</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td>Fit</td><td>nothing: the default</td><td>As big as its contents need.</td></tr>
+<tr><td>Grow</td><td><a href="ref:rmp::ui::BoxOptions::grow_x"><code>grow_x</code></a>, <a href="ref:rmp::ui::BoxOptions::grow_y"><code>grow_y</code></a></td><td>Fill the space its parent offers on that axis — along a row or a column, shared with the siblings that grow too.</td></tr>
+<tr><td>Fixed</td><td><a href="ref:rmp::ui::BoxOptions::width"><code>width</code></a>, <a href="ref:rmp::ui::BoxOptions::height"><code>height</code></a> above 0</td><td>That many design units, whatever else is set.</td></tr>
+</tbody>
+</table>
+
+<p>A box that fits its contents, holding children that grow into it, is the pairing that makes the
+buttons of a menu the same width: the column is as wide as its widest button, and every other button
+grows to match.</p>
+
+<p>The fields are interleaved by axis — <code>grow_x</code>, <code>width</code>, <code>grow_y</code>,
+<code>height</code> — and not grouped by kind, because designated initialisers have to be written in
+declaration order. This way round the most ordinary thing anyone writes, a sidebar of a fixed width
+that fills the height, is legal:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::panel({ .box = { .width = 240, .grow_y = true } }, [&amp;] {
+    rmp::ui::text("Sections");
+});
+</pre>
+
+<h3>Grow fills the parent, not the screen</h3>
+
+<p data-fw-grep="src/rmp/ui/widgets.cpp::content\.layout\.sizing\.width = size_fit\(\);">The column
+that <code>begin()</code> opens fits its contents. So <code>grow_x</code> on something directly
+inside it fills the width of that column — the width of the widest thing next to it — and not the
+width of the screen. A bar that has to be a given size gets that size: a fixed <code>width</code>
+or <code>height</code>, in design units, which the scale turns into pixels with everything else.
+Everything that grows inside it then has something to grow into:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::begin({ .placement = rmp::ui::Align::TOP_CENTER });
+rmp::ui::row({ .width = 760 }, [&amp;] {
+    rmp::ui::text("Inventory");
+    rmp::ui::spacer();
+    rmp::ui::text("24 / 40", { .color = rmp::ui::ColorRole::MUTED });
+});
+rmp::ui::end();
+</pre>
+
+<p>A fixed width is a fixed number of design units: on a window wider than the <code>[window]</code>
+resolution's shape, there is room left at the sides, because the scale follows the tighter axis.</p>
+
+<h2>Gap, padding and where children sit</h2>
+
+<p>Rows, columns and panels take <a href="ref:rmp::ui::BoxOptions"><code>BoxOptions</code></a> — a
+panel inside its <code>.box</code> — and three of its fields decide the space around things:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::BoxOptions::gap"><code>gap</code></a></td><td>the theme's <code>gap</code>, 12</td><td>Between children, in design units.</td></tr>
+<tr><td><a href="ref:rmp::ui::BoxOptions::padding"><code>padding</code></a></td><td>none; a panel's is the theme's <code>panel_padding</code>, 20</td><td>Inside the container, the same on all four sides.</td></tr>
+<tr><td><a href="ref:rmp::ui::BoxOptions::items"><code>items</code></a></td><td><code>Align::CENTER</code></td><td>Where the children sit in the space left over.</td></tr>
+</tbody>
+</table>
+
+<p><code>items</code> is the one that makes a card look like a card: a column of text is centred
+unless it is told to hug the left.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::column({ .gap = 6, .items = rmp::ui::Align::CENTER_LEFT }, [&amp;] {
+    rmp::ui::text("Rabbit", { .color = rmp::ui::ColorRole::PRIMARY });
+    rmp::ui::text("Level 7", { .color = rmp::ui::ColorRole::MUTED, .size = 14 });
+});
+</pre>
+
+<h3>Spacers</h3>
+
+<p><a href="ref:rmp::ui::spacer"><code>spacer()</code></a> grows on both axes and eats the space left
+over, which is how two things are pushed to opposite ends of a row. The row has to have space left
+over for it to eat, so it is given a width or set to grow:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::panel({ .box = { .width = 300 } }, [&amp;] {
+    rmp::ui::row({ .grow_x = true }, [&amp;] {
+        rmp::ui::text("Health");
+        rmp::ui::spacer(); // shoves what follows to the right
+        rmp::ui::text("999");
+    });
+});
+</pre>
+
+<p><code>spacer(n)</code> is the other one: a fixed box of <code>n</code> by <code>n</code> design
+units, for breathing room in one place without changing the container's gap.</p>
+
+<h2>Panels</h2>
+
+<p>A <a href="ref:rmp::ui::panel"><code>panel</code></a> is a column with a background, which is what
+makes it visible, padding of the theme's <code>panel_padding</code>, and the theme's
+<code>corner_radius</code>. <a href="ref:rmp::ui::PanelOptions"><code>PanelOptions</code></a> holds the
+layout in <code>.box</code> and the look after it:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::PanelOptions::box"><code>box</code></a></td><td><code>{}</code></td><td>The layout, as a column takes it, except that its padding defaults to the theme's <code>panel_padding</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::PanelOptions::background"><code>background</code></a></td><td>the theme's <code>panel</code></td><td>The fill. <code>{ 0, 0, 0, 0 }</code> means the theme's.</td></tr>
+<tr><td><a href="ref:rmp::ui::PanelOptions::radius"><code>radius</code></a></td><td>the theme's <code>corner_radius</code></td><td>Of the corners, in design units; 0 is square.</td></tr>
+<tr><td><a href="ref:rmp::ui::PanelOptions::border"><code>border</code></a></td><td>none</td><td>An outline colour. Left unset, the theme's <code>border</code> is drawn only when the theme's <code>border_width</code> is above 0 — in the light theme, not in the dark one.</td></tr>
+<tr><td><a href="ref:rmp::ui::PanelOptions::border_width"><code>border_width</code></a></td><td>1</td><td>The width of an outline you set, in design units.</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::panel({ .box = { .width = 260, .height = 70 }, .border = rmp::ui::current_theme().border },
+               [&amp;] {
+                   rmp::ui::center([&amp;] {
+                       rmp::ui::text("nothing here", { .color = rmp::ui::ColorRole::MUTED });
+                   });
+               });
+</pre>
+
+<h2>Centring and layers</h2>
+
+<p><a href="ref:rmp::ui::center"><code>center()</code></a> grows on both axes and puts its contents
+in the middle of what it grew into — so it centres within its parent, and its parent decides how much
+room that is: a panel of a fixed size, a grid cell.</p>
+
+<p><a href="ref:rmp::ui::stack"><code>stack()</code></a> puts things on top of each other. Every child
+of a stack has to be a <a href="ref:rmp::ui::layer"><code>layer()</code></a>; each layer fills the
+stack, centres what is in it, and is drawn over the layers written before it:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::Texture portrait;">
+rmp::ui::panel({ .box = { .width = 260, .height = 90 } }, [&amp;] {
+    rmp::ui::stack([&amp;] {
+        rmp::ui::layer([&amp;] {
+            rmp::ui::image(portrait, { .grow = true, .tint = CLITERAL(Color){ 255, 255, 255, 60 } });
+        });
+        rmp::ui::layer([&amp;] {
+            rmp::ui::text("PAUSED", { .color = rmp::ui::ColorRole::DANGER });
+        });
+    });
+});
+</pre>
+
+<p>The explicit <code>layer()</code> is not ceremony: it is what tells the layout which things are
+meant to overlap and which are ordinary children. And because layers overlap, they take no room of
+their own — a stack is as big as the space its parent gives it, so it goes inside something with a
+size, like the panel above. In a box that only fits its contents, a stack has no size at all and
+its layers spill over whatever comes next.</p>
+
+<h2>Grids</h2>
+
+<p>A <a href="ref:rmp::ui::grid"><code>grid</code></a> lays its items out in equal columns and starts
+a new row when one fills. Each item goes in a <a href="ref:rmp::ui::cell"><code>cell()</code></a>,
+which is what lets the grid count them; the layout engine underneath wraps text, not boxes, so the
+rows are built as real rows:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="struct Item { rmp::Texture icon; }; static Item inventory[8];">
+rmp::ui::grid(4, [&amp;] {
+    for (auto &amp;item : inventory)
+        rmp::ui::cell([&amp;] { rmp::ui::image(item.icon); });
+});
+</pre>
+
+<p>Every cell in a row is the same width, its share of the row, and what is in it is centred. A
+<code>cell()</code> outside a grid is a plain box, so the mistake shows on screen instead of breaking
+the frame.</p>
+
+<p>With <a href="ref:rmp::ui::GridOptions::columns"><code>columns</code></a> at 0 the grid works out
+how many cells of <a href="ref:rmp::ui::GridOptions::min_cell"><code>min_cell</code></a> design units
+fit in the width it had last frame, and works it out again as the window changes. An inventory then
+reflows on a phone held upright instead of staying at the number someone typed on a desktop. This is
+also the row that wraps: there is no wrap flag on <code>row()</code>, because
+<code>grid({ .columns = 0 })</code> is one.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static const char *names[] = { &quot;Sword&quot;, &quot;Shield&quot;, &quot;Potion&quot;, &quot;Rope&quot; };">
+rmp::ui::panel({ .box = { .width = 480 } }, [&amp;] {
+    rmp::ui::grid({ .columns = 0, .min_cell = 88, .id = "inventory" }, [&amp;] {
+        for (const char *name : names)
+            rmp::ui::cell([&amp;] { rmp::ui::text(name, { .size = 13 }); });
+    });
+});
+</pre>
+
+<p data-fw-grep="src/rmp/ui/containers.cpp::if \(columns &lt;= 0\) columns = 4;">Until the grid has been
+laid out once — its first frame — and whenever not even one cell fits, it uses four columns.</p>
+
+<p><a href="ref:rmp::ui::GridOptions"><code>GridOptions</code></a>:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>columns</code></td><td>0</td><td>How many; 0 is as many as fit.</td></tr>
+<tr><td><code>min_cell</code></td><td>96</td><td>The narrowest a cell may be, when <code>columns</code> is 0.</td></tr>
+<tr><td><a href="ref:rmp::ui::GridOptions::gap"><code>gap</code></a></td><td>the theme's <code>gap</code></td><td>Between cells and between rows.</td></tr>
+<tr><td><a href="ref:rmp::ui::GridOptions::padding"><code>padding</code></a></td><td>none</td><td>Inside the grid.</td></tr>
+<tr><td><a href="ref:rmp::ui::GridOptions::grow_x"><code>grow_x</code></a></td><td><code>true</code></td><td>Take the width it is offered.</td></tr>
+<tr><td><a href="ref:rmp::ui::GridOptions::grow_y"><code>grow_y</code></a></td><td><code>false</code></td><td>Fill the parent's height instead of fitting the rows.</td></tr>
+<tr><td><a href="ref:rmp::ui::GridOptions::id"><code>id</code></a></td><td>none</td><td>Which grid it is, from frame to frame. See below.</td></tr>
+</tbody>
+</table>
+
+<p>To work out its columns, a grid finds its own width from last frame. A grid with an
+<code>id</code> finds itself by that name; one without is found by its order among the unnamed grids
+on screen, which a grid that comes and goes before it changes. Name the ones that share a screen with
+others that come and go.</p>
+
+<h2>Scrolling</h2>
+
+<p><a href="ref:rmp::ui::scroll"><code>scroll()</code></a> clips its contents to its own box and
+scrolls them: with the mouse wheel, or by dragging inside it — with a finger on a phone, with the
+mouse on a desktop. It stops at the end of the contents. Neither gesture needs a line of code:</p>
+
+<pre data-include="examples/ui/05_inventory/src/panels/list.cpp"></pre>
+
+<p>How big the area is follows the sizing rules. By default it grows on both axes, so in a panel of
+a fixed height it fills the panel, as the list above does. Where everything around it only fits its
+contents, it is as tall as what is in it, up to the room the screen leaves — and that is where it
+starts to clip. <a href="ref:rmp::ui::ScrollOptions::height"><code>height</code></a> makes it a
+window of a fixed size onto a longer list:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static int level_count = 30; void play_level(int);">
+rmp::ui::scroll({ .height = 200, .id = "levels" }, [&amp;] {
+    for (int i = 1; i &lt;= level_count; i++) {
+        if (rmp::ui::button("Level " + std::to_string(i))) play_level(i);
+    }
+});
+</pre>
+
+<p><a href="ref:rmp::ui::ScrollOptions"><code>ScrollOptions</code></a>:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::ScrollOptions::horizontal"><code>horizontal</code></a></td><td><code>false</code></td><td>Clip and scroll left to right.</td></tr>
+<tr><td><a href="ref:rmp::ui::ScrollOptions::vertical"><code>vertical</code></a></td><td><code>true</code></td><td>Clip and scroll top to bottom.</td></tr>
+<tr><td><a href="ref:rmp::ui::ScrollOptions::gap"><code>gap</code></a></td><td>the theme's <code>gap</code></td><td>Between children.</td></tr>
+<tr><td><a href="ref:rmp::ui::ScrollOptions::padding"><code>padding</code></a></td><td>none</td><td>Inside the area.</td></tr>
+<tr><td><a href="ref:rmp::ui::ScrollOptions::grow_x"><code>grow_x</code></a>, <a href="ref:rmp::ui::ScrollOptions::width"><code>width</code></a></td><td><code>true</code>, 0</td><td>Fill the parent's width, or a fixed one.</td></tr>
+<tr><td><a href="ref:rmp::ui::ScrollOptions::grow_y"><code>grow_y</code></a>, <a href="ref:rmp::ui::ScrollOptions::height"><code>height</code></a></td><td><code>true</code>, 0</td><td>Fill the parent's height, or a fixed one.</td></tr>
+<tr><td><a href="ref:rmp::ui::ScrollOptions::id"><code>id</code></a></td><td>none</td><td>Which area it is, from frame to frame.</td></tr>
+</tbody>
+</table>
+
+<p>Inside the area, children are laid out top to bottom whichever way it scrolls; a strip that
+scrolls sideways is a <code>row()</code> inside a horizontal area. How far an area has scrolled is
+remembered by the area, and an area without an <code>id</code> is told apart by its order among the
+unnamed ones, as a grid is — so one that shares a screen with areas that come and go gets a name.</p>
+
+<p>What is scrolled out of view cannot be clicked: only the part of a control inside the area takes
+the pointer. Moving the focus with the keyboard or a gamepad does not scroll the area, so a control
+reached that way can be out of view.</p>
+
+<h2>Images and progress bars</h2>
+
+<p><a href="ref:rmp::ui::image"><code>rmp::ui::image</code></a> draws a texture. With no options it is
+drawn at its own size, its pixels taken as design units, so an icon grows with the rest of the
+interface instead of shrinking into nothing on a big screen.
+<a href="ref:rmp::ui::ImageOptions"><code>ImageOptions</code></a> changes that:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::ImageOptions::grow"><code>grow</code></a></td><td><code>false</code></td><td>Fill the space available on both axes; the picture is stretched to it.</td></tr>
+<tr><td><a href="ref:rmp::ui::ImageOptions::width"><code>width</code></a>, <a href="ref:rmp::ui::ImageOptions::height"><code>height</code></a></td><td>0</td><td>A size in design units; 0 is the texture's own.</td></tr>
+<tr><td><a href="ref:rmp::ui::ImageOptions::tint"><code>tint</code></a></td><td><code>WHITE</code></td><td>Multiplies the picture's colours; <code>WHITE</code> leaves them as they are.</td></tr>
+</tbody>
+</table>
+
+<p>The texture is copied on the way in, so passing a temporary is safe — but what is copied is a
+handle to something on the GPU, so the texture itself still has to be loaded when the frame is drawn.
+Keep it in an <a href="ref:rmp::Texture"><code>rmp::Texture</code></a> that outlives the screen, and
+pass that:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static rmp::Texture icon;">
+rmp::ui::image(icon, { .width = 40, .height = 40 });
+</pre>
+
+<p><a href="ref:rmp::ui::progress"><code>rmp::ui::progress</code></a> is a bar, filled to a fraction
+from 0 to 1 — clamped, so a health of -5 draws empty rather than going wrong:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static float health = 0.72f; static float mana = 0.35f;">
+rmp::ui::progress(health, { .width = 180 });
+rmp::ui::progress(mana, { .width = 180, .height = 8, .fill = SKYBLUE });
+</pre>
+
+<p><a href="ref:rmp::ui::ProgressOptions"><code>ProgressOptions</code></a>:
+<a href="ref:rmp::ui::ProgressOptions::width"><code>width</code></a> (0 fills the space available),
+<a href="ref:rmp::ui::ProgressOptions::height"><code>height</code></a> (by default 0.6 of the theme's
+type size), <a href="ref:rmp::ui::ProgressOptions::radius"><code>radius</code></a> (by default half
+the height, for round ends), <a href="ref:rmp::ui::ProgressOptions::fill"><code>fill</code></a> and
+<a href="ref:rmp::ui::ProgressOptions::track"><code>track</code></a> (the theme's
+<code>primary</code> and <code>surface</code> unless set), and
+<a href="ref:rmp::ui::ProgressOptions::id"><code>id</code></a>.</p>
+
+<h2>Naming a container</h2>
+
+<p>Containers are anonymous unless you give them an <code>id</code> —
+<a href="ref:rmp::ui::BoxOptions::id"><code>BoxOptions::id</code></a>, and the same field on a
+panel's <code>.box</code>, a grid, a scroll area and a progress bar. A named one is the same element
+from frame to frame, whatever else is on screen. Nothing needs it for a row, a column or a panel;
+it is what a test uses to find one, and for grids and scroll areas it is their identity, as above.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::panel({ .box = { .id = "inventory" } }, [&amp;] {
+    rmp::ui::text("Inventory");
+});
+</pre>
+
+<h2>A whole layout</h2>
+
+<p><code>examples/ui/02_layout</code> puts most of this page on one screen — a toolbar with a spacer,
+a card of a row and a column, a stack, a centred placeholder — with bars that move so it is clear
+the layout is rebuilt every frame:</p>
+
+<pre data-include="examples/ui/02_layout/src/main.cpp"></pre>

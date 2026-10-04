@@ -1,0 +1,253 @@
+<!--
+title: Audio
+description: Sound effects and music by name, three volume buses a settings screen can move, and a sound device that opens itself — or is quietly absent.
+order: 60
+-->
+<h1>Audio</h1>
+
+<p class="lede"><a href="ref:rmp::audio"><code>rmp::audio</code></a> plays a sound by its name and
+a song by its name, and that is most of it. There is no device to open, nothing to load first,
+no stream to feed and nothing to unload: the framework does each of those at the moment it has to
+be done, and on a machine with no sound at all, every call quietly does nothing.</p>
+
+<h2>Playing a sound</h2>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::audio::play("coin");
+</pre>
+
+<p data-fw-grep="src/rmp/audio.cpp::EXTENSIONS = \{ ..wav., ..ogg., ..mp3., ..qoa. \}">The name is <em>logical</em>: <code>"coin"</code> finds <code>coin.wav</code>,
+<code>coin.ogg</code>, <code>coin.mp3</code> or <code>coin.qoa</code> in <code>resources/</code>,
+trying them in that order and taking the first that exists. Re-export a sound in another format
+and the code does not change. A name that already ends in an audio extension —
+<code>"coin.ogg"</code> — is taken exactly as written.</p>
+
+<p>The first <a href="ref:rmp::audio::play"><code>play()</code></a> of a name loads the file; every
+later one costs nothing, because the sound stays loaded until the game ends. A sound comes out of
+the <a href="/manual/modules/assets.html#the-pack">pack</a> in a release and out of the folder while
+you work, like every other asset.</p>
+
+<h3>How it sounds</h3>
+
+<p>A second argument changes one play, and only that play. Its fields, in the order a designated
+initialiser has to write them:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::audio::PlayOptions::volume"><code>volume</code></a></td><td><code>1</code></td><td>0 to 1, for this play; multiplied by the <code>SFX</code> bus and by <code>MASTER</code>.</td></tr>
+<tr><td><a href="ref:rmp::audio::PlayOptions::pitch"><code>pitch</code></a></td><td><code>1</code></td><td>2 is an octave up, 0.5 an octave down. Zero, a negative number or a NaN plays at 1.</td></tr>
+<tr><td><a href="ref:rmp::audio::PlayOptions::pan"><code>pan</code></a></td><td><code>0</code></td><td>-1 is the left speaker, 0 the centre, 1 the right; clamped to that range.</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::audio::play("hit", { .volume = 0.7f, .pitch = 1.2f });
+rmp::audio::play("door", { .pan = -0.8f });   // mostly from the left
+rmp::audio::play("step", { .pitch = rmp::random::range(0.9f, 1.1f) });
+</pre>
+
+<p>The last line is the cheapest trick in game audio: the same footstep at a slightly different
+pitch each time stops sounding like a recording. With a fixed
+<a href="/manual/modules/random.html">seed</a>, it is also the same sequence of footsteps every
+run.</p>
+
+<h3>Sounds overlap</h3>
+
+<p data-fw-grep="src/rmp/audio.cpp::constexpr int VOICES = 4;">Playing a sound that is still playing starts it again on another voice instead of cutting the
+first one off, so a machine gun sounds like one and not like a stuck record. Each sound has up to
+four voices; when all four are busy, the one that has been playing longest is cut. The voices
+share the loaded samples, so a voice costs a few bytes, not a second copy of the sound.</p>
+
+<h2>Music</h2>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class LevelScene : public rmp::Scene {
+    void _ready() override { rmp::audio::music("level1"); }
+};
+</pre>
+
+<p><a href="ref:rmp::audio::music"><code>music()</code></a> starts a track, looping, and replaces
+whatever was playing. There is one track at a time. The name is logical, the same as for
+<code>play()</code>.</p>
+
+<p>Asking for the track that is already playing is <em>not</em> a restart. A scene that asks for
+its song in <code>_ready()</code> can be changed to itself every time the player dies, and the song
+carries on instead of jumping back to the beginning. The platformer asks for its music in every
+level's <code>_ready()</code> and the music plays straight through from one level to the next.</p>
+
+<p>A track that is not looped plays once and stops, which is what a jingle wants. Asking for it
+again once it has finished starts it again:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::audio::music("victory", false);   // once, then silence
+</pre>
+
+<p><a href="ref:rmp::audio::stop_music"><code>stop_music()</code></a>, or
+<code>music("")</code>, stops the music and lets the track go.
+<a href="ref:rmp::audio::music_playing"><code>music_playing()</code></a> says whether anything is
+playing right now.</p>
+
+<p>The new track is loaded before the old one stops, so asking for a song that does not exist
+leaves the current one playing, and says so once. A name that came to nothing is remembered and
+not searched for again.</p>
+
+<h3>Streamed, from memory</h3>
+
+<p>Music is streamed: it is decoded a little at a time while it plays, so the minutes of sound it
+would decode to never exist in memory at once. The encoded file itself is held in memory while it
+plays, which is what lets a song come out of the pack — a few megabytes for a few minutes of
+<code>.ogg</code>. The stream is fed once per frame by the framework, so music keeps playing under
+a pause menu that freezes the scene below it.</p>
+
+<aside class="callout warning"><span class="callout-title">Not through raylib</span><p>raylib's
+own <code>LoadMusicStream()</code> opens the file by itself and never sees the pack, so a song
+loaded that way is missing from a release that ships one. Play music with
+<code>rmp::audio::music()</code>.</p></aside>
+
+<h2>The files it reads</h2>
+
+<table>
+<thead><tr><th>Format</th><th>As a sound</th><th>As music</th></tr></thead>
+<tbody>
+<tr><td><code>.wav</code></td><td>yes, found by its logical name, first</td><td>yes</td></tr>
+<tr><td><code>.ogg</code></td><td>yes, second</td><td>yes</td></tr>
+<tr><td><code>.mp3</code></td><td>yes, third</td><td>yes</td></tr>
+<tr><td><code>.qoa</code></td><td>yes, fourth</td><td>yes</td></tr>
+<tr><td><code>.xm</code>, <code>.mod</code></td><td>no</td><td>yes, by the full name: <code>music("theme.xm")</code></td></tr>
+<tr><td><code>.flac</code></td><td>no</td><td>no: raylib is built without its decoder</td></tr>
+</tbody>
+</table>
+
+<p>A short effect is best as <code>.wav</code>, which needs no decoding; music is best as
+<code>.ogg</code>, which is small.</p>
+
+<h2>Volume: three buses</h2>
+
+<p>A settings screen offers three volumes, and those are the three buses of
+<a href="ref:rmp::audio::Bus"><code>rmp::audio::Bus</code></a>:</p>
+
+<dl>
+<dt><code>MASTER</code></dt><dd>Everything.</dd>
+<dt><code>MUSIC</code></dt><dd>The music, under <code>MASTER</code>.</dd>
+<dt><code>SFX</code></dt><dd>Every sound effect, under <code>MASTER</code>, multiplied by each play's own volume.</dd>
+</dl>
+
+<p>Each is a fraction from 0 to 1, and they multiply: music at 0.8 under a master of 0.5 plays at
+40 percent. They start at the values in <code>[audio]</code>:</p>
+
+<pre data-lang="toml">
+[audio]
+master = 1.0
+music  = 0.8
+sfx    = 1.0
+</pre>
+
+<p>A volume is a fraction of full, not a gain, so a value past 1 is refused when the
+<code>.toml</code> is read rather than turned into clipping:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[audio]
+music = 1.5
+</pre>
+
+<p>At run time, <a href="ref:rmp::audio::set_volume"><code>set_volume()</code></a> moves a bus and
+<a href="ref:rmp::audio::volume"><code>volume()</code></a> reads it. A new volume takes effect at
+once on what is already playing — effects still ringing out keep their own volume and are scaled
+by the new <code>SFX</code>. The value is clamped to 0..1, and a NaN is ignored rather than
+stored, so one bad slider value cannot silence the game.</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class SoundSettings : public rmp::Scene {
+    float _music = rmp::audio::volume(rmp::audio::Bus::MUSIC);
+    float _effects = rmp::audio::volume(rmp::audio::Bus::SFX);
+
+    void _draw() override {
+        rmp::ui::begin();
+        if (rmp::ui::slider("Music", &amp;_music, 0, 1))
+            rmp::audio::set_volume(rmp::audio::Bus::MUSIC, _music);
+        if (rmp::ui::slider("Effects", &amp;_effects, 0, 1))
+            rmp::audio::set_volume(rmp::audio::Bus::SFX, _effects);
+        if (rmp::ui::button("Back")) rmp::Scene::pop();
+        rmp::ui::end();
+    }
+};
+</pre>
+
+<p>Neither call opens the sound device, so a settings screen can show and move its sliders in a
+game that has not made a sound yet. The buses are not saved for you; a game that wants the
+player's volumes next time keeps them with <a href="/manual/modules/saving.html">rmp::save</a>, as
+<a href="/examples/ui/04_settings.html">examples/ui/04_settings</a> does.</p>
+
+<h2>The sound device</h2>
+
+<p>A game does not call <code>InitAudioDevice()</code> or <code>CloseAudioDevice()</code>. The device
+opens the first time something needs it — a <code>play()</code>, a <code>music()</code>, or a
+<a href="ref:rmp::assets::load_sound"><code>rmp::assets::load_sound()</code></a> — so a game with no
+sound never opens it. On the way out, the voices and the music are released before the device
+closes, in the order that does not crash. A game that opens the device itself — older code, a
+raylib example pasted in — keeps it: the framework closes only a device it opened.</p>
+
+<p><a href="ref:rmp::audio::available"><code>available()</code></a> says whether the device is open
+and working. It is false until the first sound, and asking does not open anything.</p>
+
+<h3>A machine with no sound</h3>
+
+<p>A CI runner, a server, a laptop with no output: the device fails to open, and that is not an
+error. The framework says so once —</p>
+
+<p><samp>AUDIO: no sound device on this machine; sound is off and every rmp::audio call is a silent no-op from here on</samp></p>
+
+<p>— and the game runs, silent. The open is tried once: a footstep sixty times a second does not
+pay for a failing device sixty times a second. Because this is a fact about the machine and not a
+mistake in the game, <code>[dev] strict</code> does not abort on it, and a strict debug build
+still runs on a machine with no speakers.</p>
+
+<p>A game that does not want sound at all can take the audio module out of raylib, which makes
+the binary smaller. The game still compiles unchanged, and behaves exactly as it does on a machine
+with no device:</p>
+
+<pre data-lang="toml">
+[raylib]
+disabled_modules = ["raudio"]
+</pre>
+
+<h3>On the web</h3>
+
+<p>Browsers keep a page silent until the player has clicked, touched it or pressed a key. That is
+the browser's rule, and no game gets round it: music started on the title screen is heard from the
+player's first click or key press on. A gamepad button does not count, because browsers do not
+treat it as a gesture, so a player on a gamepad alone hears nothing until then.</p>
+
+<h2>A sound you hold yourself</h2>
+
+<p>For raylib's own sound functions there is a handle:
+<code>rmp::assets::load_sound()</code> returns an <a href="ref:rmp::Sound"><code>rmp::Sound</code></a>
+that converts to raylib's <code>Sound</code>, opening the device first if it has to.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Sound beep = rmp::assets::load_sound("beep.wav");
+PlaySound(beep);
+</pre>
+
+<p>It and <code>play()</code> do not get in each other's way. <code>play()</code> never plays the
+sound it loaded, only voices that share its samples, so a volume, pitch or pan it sets never lands
+on the <code>rmp::Sound</code> you hold.</p>
+
+<h2>When a sound is not there</h2>
+
+<p>A name that finds no file, or finds one that does not decode, plays nothing, and says which of
+the two it was, once:</p>
+
+<ul>
+<li><samp>AUDIO: no sound called "…" in resources/ …</samp></li>
+<li><samp>AUDIO: no music called "…" in resources/</samp></li>
+<li><samp>AUDIO: "…" is in resources/ but could not be decoded (raylib here reads .wav, .ogg, .mp3 and .qoa)</samp></li>
+</ul>
+
+<p>These are mistakes in the game, so under <code>[dev] strict</code> the first of them aborts a
+debug build. Looking a logical name up is not counted as a
+<a href="/manual/modules/assets.html#when-a-load-fails">failed load</a>: trying four extensions to
+find one file is not three failures, so a game whose sounds are <code>.ogg</code> boots with
+nothing failed. It also means a sound that is missing altogether is caught by the warning, not by
+the boot count.</p>

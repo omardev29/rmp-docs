@@ -1,0 +1,457 @@
+<!--
+title: Interface
+description: rmp::ui draws menus, HUDs and settings screens in immediate mode — a main menu is three calls — and plays the same with a mouse, a finger, a keyboard or a gamepad.
+order: 22
+-->
+<h1>Interface</h1>
+
+<p class="lede"><a href="ref:rmp::ui"><code>rmp::ui</code></a> is the interface layer: menus, HUDs,
+dialogs and settings screens. A main menu is three calls between a <code>begin()</code> and an
+<code>end()</code>, and it comes out centred, sized for the screen it is on, and playable with a
+mouse, a finger, a keyboard or a gamepad without a line about any of them.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void play(); void quit();">
+rmp::ui::begin();
+if (rmp::ui::button("Play")) play();
+if (rmp::ui::button("Quit")) quit();
+rmp::ui::end();
+</pre>
+
+<p>No coordinates, no sizes, no fonts and no hit boxes. Everything else on these pages is what you
+reach for when the default is not what you want, and you only meet it when you do:</p>
+
+<ul>
+<li><a href="/manual/modules/ui-layout.html">Interface layout</a> — rows, columns, panels, grids,
+scrolling lists, and how big each thing is.</li>
+<li><a href="/manual/modules/ui-controls.html">Interface controls</a> — checkboxes, sliders,
+dropdowns and text fields, which write straight into your variables.</li>
+<li><a href="/manual/modules/ui-style.html">Interface style</a> — themes, variants, sizes,
+breakpoints and fonts.</li>
+</ul>
+
+<h2>Immediate mode</h2>
+
+<p>There are no widget objects. A call to <a href="ref:rmp::ui::button"><code>button()</code></a>
+both draws the button for this frame and answers whether it was pressed, and the next frame asks
+again. What persists from one frame to the next is your data; what is rebuilt every frame is the
+picture. So a menu that depends on the game's state is an <code>if</code>, and a label that changes
+is a string you build where you call it:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static int score = 0; static bool has_save = false; void load();">
+rmp::ui::begin();
+rmp::ui::text("Score: " + std::to_string(score));
+if (has_save &amp;&amp; rmp::ui::button("Continue")) load();
+rmp::ui::end();
+</pre>
+
+<p>A temporary string is safe there. Every string handed to the interface is copied the moment it is
+passed, into memory that lasts until the frame is drawn, so <code>std::to_string(score)</code> dying
+at the end of the line changes nothing. That memory is a few kilobytes per frame; a frame that
+somehow needs more has its labels cut short and the log says so once:
+<samp>UI: text arena full (… bytes); labels are being truncated</samp>.</p>
+
+<h2>Where it goes</h2>
+
+<p>In a game made of scenes, a scene's interface goes in its
+<a href="ref:rmp::Scene::_draw"><code>_draw()</code></a>. That hook runs in screen space after the
+scene's map and objects have been drawn, so the interface sits on top of the world and stays put
+while the camera moves:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class PauseScene : public rmp::Scene {
+    void _draw() override {
+        rmp::ui::begin();
+        rmp::ui::text("Paused");
+        if (rmp::ui::button("Resume")) rmp::Scene::pop();
+        rmp::ui::end();
+    }
+};
+</pre>
+
+<p>The frame is cleared for you with the theme's <code>background</code> colour, unless the scene
+sets <a href="ref:rmp::Scene::background"><code>background</code></a> itself. A scene underneath
+another one keeps drawing its interface when the scene on top lets it (see
+<a href="/manual/core/scenes.html#what-a-scene-lets-through">what a scene lets through</a>), and the
+framework treats every scene's <code>begin()</code>/<code>end()</code> pair as part of one frame.</p>
+
+<p>A game that runs its own loop with <code>RMP_ENTRY_POINT</code> calls the pair between
+<code>BeginDrawing()</code> and <code>EndDrawing()</code>, after whatever the interface should sit on
+top of, and clears the screen itself:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void draw_world();">
+BeginDrawing();
+ClearBackground(rmp::ui::current_theme().background);
+draw_world();
+rmp::ui::begin();
+if (rmp::ui::button("Quit")) rmp::app::quit();
+rmp::ui::end();
+EndDrawing();
+</pre>
+
+<p>There is nothing to start and nothing to stop. The interface starts itself on the first
+<a href="ref:rmp::ui::begin"><code>begin()</code></a> — by which time there is a window — so a game
+that never draws an interface never allocates one, and the entry point shuts it down for you while
+the window is still open.</p>
+
+<h2>The three rules</h2>
+
+<p>That is all of them.</p>
+
+<ol>
+<li><strong><a href="ref:rmp::ui::end"><code>end()</code></a> draws.</strong> Everything between
+<code>begin()</code> and <code>end()</code> is laid out and drawn when <code>end()</code> runs, so the
+pair goes where the drawing is: in <code>_draw()</code>, or between <code>BeginDrawing()</code> and
+<code>EndDrawing()</code>.</li>
+<li><strong>One pair at a time.</strong> Pairs do not nest: a second <code>begin()</code> before the
+<code>end()</code> of the first is ignored, with <samp>UI: begin() called twice without end(); ignoring
+the second one</samp> in the log. A widget called outside any pair draws nothing and returns
+<code>false</code>. In a game of scenes each scene can have its pair in the same frame; in a loop of
+your own, it is one pair per frame.</li>
+<li><strong>Interaction uses the previous frame's layout.</strong> When <code>button("Play")</code>
+has to answer, this frame's layout does not exist yet — it is computed in <code>end()</code> — so the
+button is hit-tested against where it was last frame. A control cannot be clicked on the very first
+frame it appears, which is 16 ms at 60 frames a second, and while the interface is moving the place
+you can click trails what you see by one frame.</li>
+</ol>
+
+<p>The third rule is the cost of immediate mode, and the alternative is worse. Laying the interface
+out twice per frame would mean running your code twice, and a <code>score++</code> inside a button's
+<code>if</code> would count double.</p>
+
+<h2>Buttons and text</h2>
+
+<p><a href="ref:rmp::ui::button"><code>rmp::ui::button</code></a> returns <code>true</code> on the
+frame it is pressed: the pointer released over it, having been pressed on it — press, drag off and
+let go, and nothing happens — or, while it has the focus, Enter, Space or the gamepad's bottom face
+button. It reads the way it looks:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void start_game(); void delete_save(); static bool has_save = false;">
+if (rmp::ui::button("Start", { .style = rmp::ui::Variant::PRIMARY })) start_game();
+if (rmp::ui::button("Delete save", { .style = rmp::ui::Variant::DANGER, .enabled = has_save }))
+    delete_save();
+</pre>
+
+<p><a href="ref:rmp::ui::ButtonOptions"><code>ButtonOptions</code></a> has four fields, written in
+this order:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::ButtonOptions::style"><code>style</code></a></td><td><code>Variant::NORMAL</code></td><td>What the button means — normal, primary, danger, outline, ghost. The theme decides what that looks like; see <a href="/manual/modules/ui-style.html#variants">variants</a>.</td></tr>
+<tr><td><a href="ref:rmp::ui::ButtonOptions::size"><code>size</code></a></td><td>the theme's</td><td><code>Size::SMALL</code>, <code>MEDIUM</code> or <code>LARGE</code>, or a number of design units. See <a href="/manual/modules/ui-style.html#sizes">sizes</a>.</td></tr>
+<tr><td><a href="ref:rmp::ui::ButtonOptions::enabled"><code>enabled</code></a></td><td><code>true</code></td><td><code>false</code> draws it in the theme's disabled colours; it cannot be pressed and the focus skips it.</td></tr>
+<tr><td><a href="ref:rmp::ui::ButtonOptions::id"><code>id</code></a></td><td>none</td><td>A name that stays the same whatever the label says. See <a href="#labels-are-ids">labels are ids</a>.</td></tr>
+</tbody>
+</table>
+
+<p>The order matters, because C++20 requires designated initialisers in declaration order:
+<code>{ .style = …, .enabled = false }</code> is right, and <code>{ .enabled = false, .style = … }</code>
+is refused by GCC and warned about by Clang. Every options struct in <code>rmp::ui</code> is ordered
+the way its fields are most likely to be written, so the order you would write them in is usually
+the one that compiles; when a compiler complains about designator order, that is what it means.</p>
+
+<p>A button fills the width it is offered. In <code>begin()</code>'s column that is the width of the
+widest thing in it, which is why the buttons of a menu come out the same width without anyone
+measuring anything; in a row, the buttons share the row. Its height is at least the theme's
+<a href="ref:rmp::ui::Theme::min_touch_size"><code>min_touch_size</code></a> — 44 design units, a
+target a thumb can hit — scaled with its type size.</p>
+
+<p><a href="ref:rmp::ui::text"><code>rmp::ui::text</code></a> draws a string, in one of the theme's
+colours, at one of its sizes:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::text("Game over", { .size = rmp::ui::Size::LARGE });
+rmp::ui::text("Progress since the last save is lost.", { .color = rmp::ui::ColorRole::MUTED });
+rmp::ui::text("v1.0.2", { .color = rmp::ui::ColorRole::MUTED, .size = 14, .wrap = false });
+</pre>
+
+<p><a href="ref:rmp::ui::TextOptions"><code>TextOptions</code></a> is
+<a href="ref:rmp::ui::TextOptions::color"><code>color</code></a> — a
+<a href="ref:rmp::ui::ColorRole"><code>ColorRole</code></a>, not a colour —
+<a href="ref:rmp::ui::TextOptions::size"><code>size</code></a> and
+<a href="ref:rmp::ui::TextOptions::wrap"><code>wrap</code></a>. With <code>wrap</code> on, the
+default, a line too long for the space it is given breaks between words; off, it is never broken.</p>
+
+<h2>Labels are ids</h2>
+
+<p>The interface keeps a little state of its own about each control: whether the pointer is over it,
+whether a press started on it, whether it has the focus, the colour it is fading towards, whether a
+dropdown is open. It finds that state again every frame by the control's label. Two controls with the
+same label in one <code>begin()</code>/<code>end()</code> are told apart by their order — the second
+"Back" is a different control from the first — so the common case needs nothing.</p>
+
+<p>Order is what breaks when the interface is conditional. A control that appears or disappears
+before others with the same label renumbers them, and the hover, the focus or the fade moves to a
+different control with nothing in your code having changed. The
+<code>id</code> field is the escape: a name that is the same control whatever else is on screen.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="struct Slot { const char *name; bool used; }; static Slot slots[3]; void erase(int);">
+for (int i = 0; i &lt; 3; i++) {
+    if (!slots[i].used) continue;
+    rmp::ui::text(slots[i].name);
+    std::string id = "erase" + std::to_string(i);
+    if (rmp::ui::button("Erase", { .id = id.c_str() })) erase(i);
+}
+</pre>
+
+<p>A label that <em>changes</em> is a new control each time it does. A button that reads "Music: on"
+and then "Music: off" loses the focus when it is pressed from the keyboard, because the control that
+had it is gone, and the focus goes back to the first control on the screen. An <code>id</code> keeps it
+the same control:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static bool music = true;">
+if (rmp::ui::button(music ? "Music: on" : "Music: off", { .id = "music" })) music = !music;
+</pre>
+
+<p>Containers have no id unless you give them one; see
+<a href="/manual/modules/ui-layout.html#naming-a-container">naming a container</a>.</p>
+
+<h2>Focus, keyboard and gamepad</h2>
+
+<p>Every control is focusable, in the order it is declared, and nothing in your code asks for it.
+The widgets you already wrote can be played with a keyboard or a gamepad:</p>
+
+<table>
+<thead><tr><th>Does</th><th>Keyboard</th><th>Gamepad</th></tr></thead>
+<tbody>
+<tr><td>Next control</td><td>Tab, Down</td><td>d-pad down, left stick down</td></tr>
+<tr><td>Previous control</td><td>Shift+Tab, Up</td><td>d-pad up, left stick up</td></tr>
+<tr><td>Press, tick, open</td><td>Enter, keypad Enter, Space</td><td>bottom face button</td></tr>
+<tr><td>Move a slider</td><td>Left, Right</td><td>d-pad left and right, left stick</td></tr>
+</tbody>
+</table>
+
+<p>Past the last control the focus wraps to the first, and holding a direction walks the list after a
+short pause. These keys are read by the interface itself, from raylib; they are not
+<a href="/manual/modules/input.html">rmp::input</a> actions, and redefining an action does not change
+them. The focus moves between controls of the previous frame, for the same reason hit testing does.</p>
+
+<h3>Nothing to start</h3>
+
+<p data-fw-grep="src/rmp/ui/focus.cpp::void end_pass_focus\(\)">A screen that declares something
+focusable and has nothing focused gives the focus to its first control. A game-over scene with one
+"Play again" button on it answers Enter and the gamepad's bottom button the moment it appears.</p>
+
+<p>Having the focus and showing it are two things. The focus ring — the theme's
+<a href="ref:rmp::ui::Theme::focus"><code>focus</code></a> colour,
+<a href="ref:rmp::ui::Theme::focus_ring"><code>focus_ring</code></a> design units wide — appears once
+the player touches the keyboard or the gamepad, and goes away again on a click. Someone playing with
+a mouse does not find an outline on the first button of every menu; someone with a controller sees
+where they are as soon as they reach for it.</p>
+
+<h3>Moving it yourself</h3>
+
+<p><a href="ref:rmp::ui::focus"><code>rmp::ui::focus()</code></a> gives the focus to a control by
+its label — the first one with that label — or by the <code>id</code> it was given, and shows the
+ring straight away, because you asked for it. An empty string clears it, and by the rule above the
+screen's first control then takes it.
+<a href="ref:rmp::ui::focused"><code>rmp::ui::focused()</code></a> names what has it, or gives
+<code>""</code>.</p>
+
+<p data-fw-grep="src/rmp/ui/focus.cpp::detail::focus_by_id\(detail::peek_element_id\(id\)\.id, id\);">It
+looks the label up among the controls of the <code>begin()</code>/<code>end()</code> being described,
+so the place to call it is inside the pair, before the control it names — once, the first time the
+screen is drawn. Called outside a pair, in a scene's <code>_ready()</code> for instance, it can miss
+when more than one scene draws an interface, and the focus lands on the first control instead:</p>
+
+<pre data-lang="cpp" data-harness="members">
+bool _focused = false;
+
+void _draw() override {
+    rmp::ui::begin();
+    if (!_focused) {
+        rmp::ui::focus("Continue"); // not the first button: the one the player most likely wants
+        _focused = true;
+    }
+    rmp::ui::button("New game");
+    rmp::ui::button("Continue");
+    rmp::ui::end();
+}
+</pre>
+
+<p><a href="ref:rmp::ui::set_navigation_enabled"><code>rmp::ui::set_navigation_enabled(false)</code></a>
+turns keyboard and gamepad handling off, for a game that drives the focus itself;
+<a href="ref:rmp::ui::navigation_enabled"><code>navigation_enabled()</code></a> says whether it is on.
+It starts on. With it off, clicks and taps still work, but no control has the focus, and a text field
+types only while it has the focus, so text fields do not take typing either.</p>
+
+<h3>Scenes on top of scenes</h3>
+
+<p>When two scenes draw, the one on top holds the focus. A scene underneath that input cannot reach
+— the scene above left <a href="ref:rmp::Scene::input_below"><code>input_below</code></a> at
+<code>false</code> — is drawn exactly as usual, and nothing in it can be hovered, focused or clicked:
+a HUD under an open pause menu is visible and inert, and neither scene says so. When the scene on
+top sets <code>input_below</code>, the one underneath can hold the focus and the arrows walk between
+the two.</p>
+
+<h3>A button in the HUD</h3>
+
+<p>The scene the player plays in reads its own keys — and a HUD there with a button on it takes the
+focus by the rule above. Enter, Space and the bottom face button would then press that button every
+time the player jumps or shoots with one of them. Turning navigation off while the game is played,
+and on again for the menu, keeps the button for the pointer. The setting belongs to the interface and
+not to a scene, so it outlives them: every scene that shows a menu turns it on in its
+<code>_ready()</code>, and the playing scene turns it off again when it comes back:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class PauseScene : public rmp::Scene {
+    void _ready() override { rmp::ui::set_navigation_enabled(true); }
+    void _draw() override {
+        rmp::ui::begin();
+        if (rmp::ui::button("Resume")) rmp::Scene::pop();
+        rmp::ui::end();
+    }
+};
+
+class GameScene : public rmp::Scene {
+    void _ready() override { rmp::ui::set_navigation_enabled(false); }
+    void _resume() override { rmp::ui::set_navigation_enabled(false); }
+    void _draw() override {
+        rmp::ui::begin({ .placement = rmp::ui::Align::TOP_RIGHT });
+        if (rmp::ui::button("Pause")) rmp::Scene::push&lt;PauseScene&gt;();
+        rmp::ui::end();
+    }
+};
+</pre>
+
+<h2>Telling the game to keep its hands off</h2>
+
+<p>The interface reads the pointer and the keyboard itself, and the game reads them too. Two
+functions say when the game should leave them alone:</p>
+
+<ul>
+<li><a href="ref:rmp::ui::wants_pointer"><code>rmp::ui::wants_pointer()</code></a> — the pointer is
+over a control, a slider is being dragged, or a dropdown's list is open.</li>
+<li><a href="ref:rmp::ui::wants_keyboard"><code>rmp::ui::wants_keyboard()</code></a> — a text field
+has the focus, and the keyboard is its.</li>
+</ul>
+
+<p>Both answer for the last frame in which the interface drew, until it draws again, so they read
+the same in <code>_update()</code> and on the line after <code>end()</code>. In a game of scenes
+you rarely call them: an action read by name through <code>rmp::input</code> already asks them, which
+is the subject of <a href="/manual/modules/input.html#who-hears-a-press">who hears a press</a>. In a
+loop of your own, with raylib's input, they are the check:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void shoot(); void walk();">
+if (!rmp::ui::wants_pointer() &amp;&amp; IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) shoot();
+if (!rmp::ui::wants_keyboard() &amp;&amp; IsKeyDown(KEY_W)) walk();
+</pre>
+
+<h2>Touch</h2>
+
+<p>raylib reports the first touch as the mouse, so a menu works on Android and iOS with no extra
+code. Three things change underneath on those two:</p>
+
+<ul>
+<li><strong>Hover only while a finger is down.</strong> A touch screen has no pointer at rest, and
+the last place tapped would otherwise stay lit up.</li>
+<li><strong>No button is shorter than <code>min_touch_size</code></strong>, even a small one: a
+small button on a phone is still pressed with a thumb.</li>
+<li><strong>The edges are kept clear.</strong> <code>begin()</code> keeps 24 design units free at
+every edge of the screen, on top of its own padding, for the status bar and the notch —
+<code>[android.display] into_cutout</code> draws the game behind the notch, which is right for a
+background and wrong for a menu.</li>
+</ul>
+
+<h2>Scale and design units</h2>
+
+<p>Every size in <code>rmp::ui</code> — a theme's padding, a panel's width, a text's size — is in
+<strong>design units</strong>: pixels at the resolution <code>[window] width</code> and
+<code>height</code> declare in <code>raylib_multiplatform.toml</code>. That block is the resolution
+you design for, and the interface is drawn as if the window were that size. One number turns design
+units into pixels:</p>
+
+<pre data-lang="text">
+scale = clamp(min(window width / [window] width, window height / [window] height), 0.5, 4)
+</pre>
+
+<p>Designed at 800×450 and played at 1920×1080, everything is 2.4 times bigger; in a window of
+1280×720, 1.6 times. It is <code>min()</code> and not <code>max()</code> because what does not fit is
+worse than what is left over: the tighter side wins and the interface stays on screen. The clamp stops
+the two absurd ends, a window too small to read and a monitor that turns a button into a
+billboard.</p>
+
+<p>raylib's built-in font is a bitmap, and a bitmap drawn at 1.73 times is a smear, so with it the
+<em>text</em> scale is rounded to a whole number — 1, 2, 3 — and the text steps instead of sliding.
+A font of your own keeps the exact scale; see <a href="/manual/modules/ui-style.html#fonts">fonts</a>.</p>
+
+<p><a href="ref:rmp::ui::scale"><code>rmp::ui::scale()</code></a> reads the factor in use.
+<a href="ref:rmp::ui::set_scale"><code>rmp::ui::set_scale()</code></a> pins it — an "interface
+size" option in a settings screen — and <code>0</code> goes back to automatic. A pinned scale is used
+as it is, without the clamp. <code>[ui] scale</code> pins it from the start; it is <code>0</code>,
+automatic, unless you set it:</p>
+
+<pre data-lang="toml">
+[ui]
+scale = 1.5
+</pre>
+
+<p>Scale makes everything bigger or smaller together. Changing the <em>shape</em> of a layout on a
+narrow screen is a different tool, the breakpoint, in
+<a href="/manual/modules/ui-style.html#breakpoints-and-scale">interface style</a>.</p>
+
+<h2>Configuration</h2>
+
+<p>The <code>[ui]</code> section of <code>raylib_multiplatform.toml</code> holds five keys, and with
+all of them at their defaults a menu is still three calls:</p>
+
+<table>
+<thead><tr><th>Key</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>theme</code></td><td><code>"dark"</code></td><td>Which theme the game starts with, <code>"dark"</code> or <code>"light"</code>. See <a href="/manual/modules/ui-style.html#themes">themes</a>.</td></tr>
+<tr><td><code>font</code></td><td><code>""</code></td><td>A font file in <code>resources/</code>; empty is raylib's built-in font. See <a href="/manual/modules/ui-style.html#fonts">fonts</a>.</td></tr>
+<tr><td><code>font_size</code></td><td><code>20</code></td><td>The theme's type size, in design units: a whole number from 6 to 200.</td></tr>
+<tr><td><code>scale</code></td><td><code>0</code></td><td>0 is automatic; a number from 0 to 8 pins it.</td></tr>
+<tr><td><code>max_elements</code></td><td><code>512</code></td><td>The most elements the interface lays out in one frame, from 16 to 65536.</td></tr>
+</tbody>
+</table>
+
+<p><code>max_elements</code> is what sizes the interface's memory, and it is a ceiling, not a guess.
+Every control is more than one element — a button is its box and its label — so a long list counts
+quickly. Past the ceiling the interface stops laying anything out until the game is restarted, and
+says so once, naming the key:
+<samp>UI: more than max_elements (…) elements in one frame. The interface will not lay out again until
+the game is restarted.</samp> Raise it, or draw less at once:</p>
+
+<pre data-lang="toml">
+[ui]
+max_elements = 1024
+</pre>
+
+<h2>What is underneath</h2>
+
+<p>The layout engine is <a href="https://github.com/nicbarker/clay">Clay</a>, and none of its types
+appear in <code>rmp/ui.h</code>, so code written against <code>rmp::ui</code> does not depend on it.
+It is still there to use. Include <code>&lt;clay.h&gt;</code> and write Clay's own elements between
+<code>begin()</code> and <code>end()</code>: they join the same tree, are laid out in the same pass
+and drawn by the same renderer. Two things to know before doing it: <code>begin()</code> has already
+opened two elements — a root that fills the screen and the column inside it — so yours become
+children of that column; and Clay does not copy strings, so a string built at runtime has to outlive
+<code>end()</code>. <a href="/manual/raylib/clay.html">Dropping to Clay</a> has the rest of the rules,
+and <a href="/examples/ui/03_clay_direct.html">the Clay example</a> does it next to
+<code>rmp::ui</code> calls in the same frame.</p>
+
+<h2>The examples</h2>
+
+<p>Every example is a small project the framework builds and boots in CI, and each of these is one
+idea:</p>
+
+<ul>
+<li><a href="/examples/ui/01_menu.html">Menu</a> — the three-call menu, a confirm screen, a HUD, one
+screen per file.</li>
+<li><a href="/examples/ui/02_layout.html">Layout</a> — rows, columns, panels, stacks, spacers,
+images and progress bars.</li>
+<li><a href="/examples/ui/03_clay_direct.html">Clay direct</a> — Clay's own API next to
+<code>rmp::ui</code>.</li>
+<li><a href="/examples/ui/04_settings.html">Settings</a> — every control, writing into one struct
+that is saved.</li>
+<li><a href="/examples/ui/05_inventory.html">Inventory</a> — a grid that works out its columns and a
+scrolling list.</li>
+<li><a href="/examples/ui/06_style.html">Style</a> — both themes, every variant and size.</li>
+<li><a href="/examples/ui/07_responsive.html">Responsive</a> — one layout that turns from a row into
+a column on a narrow screen.</li>
+</ul>
+
+<p>The main menu of the first one is the whole idea in one file:</p>
+
+<pre data-include="examples/ui/01_menu/src/screens/main_menu.cpp"></pre>

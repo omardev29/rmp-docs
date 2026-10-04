@@ -1,0 +1,346 @@
+<!--
+title: Tilemaps
+description: Levels designed in LDtk (or Tiled): the scene draws the map, stops solid objects at its walls, and turns what you placed in the editor into objects.
+order: 50
+-->
+<h1>Tilemaps</h1>
+
+<p class="lede">A level is designed in an editor and loaded by name. Every scene has a
+<a href="ref:rmp::Scene::map"><code>map</code></a>: the scene draws it under everything, stops
+solid objects at its solid cells, and the enemies, coins and doors you placed in the editor turn
+up in the game as objects. The editor stops being a file format and becomes the place where the
+level is made.</p>
+
+<h2>Loading a level</h2>
+
+<p>The map is a field of the scene. Assign it in <code>_ready()</code>:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+map = rmp::assets::load_map("world.ldtk");
+</pre>
+
+<p>That is all it takes for the level to be on screen and solid. There is no <code>draw()</code> to
+call: the scene draws the map first, inside the camera, so the objects stand on it and the HUD
+your <code>_draw()</code> paints stays on top. A scene that never assigns its map — a menu — has an
+empty one, which costs nothing.</p>
+
+<p><a href="ref:rmp::assets::load_map"><code>load_map()</code></a> picks the reader by the file's
+extension:</p>
+
+<table>
+<thead><tr><th>File</th><th>Editor</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td><code>.ldtk</code></td><td><a href="https://ldtk.io">LDtk</a></td><td>The one the framework tests and keeps up to date.</td></tr>
+<tr><td><code>.json</code></td><td><a href="https://www.mapeditor.org/">Tiled</a></td><td>Read as it is, with the tests it has. It gets nothing new.</td></tr>
+</tbody>
+</table>
+
+<p>LDtk is the primary one because it is the more modern editor — auto-layers, IntGrid, entities
+with typed fields, worlds of many levels, and a JSON format it documents and has kept stable since
+1.5 — and holding two readers to the same level of testing is more than it is worth. Whichever
+made it, a map is the same <a href="ref:rmp::Tilemap"><code>rmp::Tilemap</code></a> afterwards:
+nothing past the parser knows which editor drew it.</p>
+
+<p>A map is not shared the way a texture is. It belongs to one scene, moves rather than copies,
+and is read from the file each time it is loaded; the tileset images it draws with are ordinary
+textures and are shared.</p>
+
+<h2>What the scene does with it</h2>
+
+<dl>
+<dt>Draws it</dt>
+<dd>Underneath every object, layer by layer from the bottom, inside the scene's
+<a href="ref:rmp::Scene::camera"><code>camera</code></a>.</dd>
+<dt>Stops solid objects at its solid cells</dt>
+<dd>An object that is <a href="ref:rmp::Object::solid"><code>solid</code></a> and not
+<a href="ref:rmp::Object::immovable"><code>immovable</code></a> cannot move into a solid cell: the
+floor holds the player up, a wall stops it, a ceiling ends a jump, and the
+<a href="ref:rmp::behavior::Platformer"><code>Platformer</code></a> behavior counts the floor as
+ground. A coin, a trigger, a bullet or a platform the game moves by hand is not stopped.</dd>
+<dt>Becomes the edge of the world</dt>
+<dd>An object whose <a href="ref:rmp::Object::edges"><code>edges</code></a> say what to do at the
+edge of the world — clamp, bounce, wrap — and whose
+<a href="ref:rmp::Object::bounds"><code>bounds</code></a> are left empty takes the map's bounds
+as that edge rather than the view's, so a player clamped to the world is clamped to the
+level.</dd>
+</dl>
+
+<p>Movement against the map is worked out one axis at a time — across, then down — so a player
+running along a floor made of separate tiles does not catch on the seams between them. A fast
+object moves in steps of at most half a cell, so a fall faster than a tile per frame still lands
+on the floor instead of passing through it. The camera is the one thing to set yourself, and it
+is one line: <code>camera.limits = map.bounds();</code> keeps the view inside the level.</p>
+
+<h2>Levels from LDtk</h2>
+
+<p>An LDtk project can hold many levels. Without a name, <code>load_map()</code> loads the first;
+with one, it loads the level of that identifier:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+map = rmp::assets::load_map("world.ldtk", "Desert");
+</pre>
+
+<p>Starting from <code>""</code> — the first level, whatever it is called — means renaming or
+reordering levels in LDtk does not stop the game starting at the beginning. A name the project
+does not have loads nothing and the log lists the names it does have.</p>
+
+<h3>Setting up the project</h3>
+
+<ul>
+<li><strong>Images next to it.</strong> The tileset images go in <code>resources/</code> beside the
+<code>.ldtk</code>. LDtk stores paths relative to the project, and only their file name is kept,
+because <code>resources/</code> is flat. A tileset image that is not there is a warning naming the
+file and a failed load; the level still loads, and that tileset draws nothing. A tileset must be a picture
+<code>load_texture()</code> reads, such as a PNG; LDtk's built-in icon atlas has no file and draws
+nothing either.</li>
+<li data-fw-grep="src/rmp/ldtk.cpp::same_word\(text\(value, .identifier.\), .solid.\)"><strong>Solid cells.</strong> An IntGrid layer value whose identifier is <code>solid</code> makes
+every cell painted with it solid. So does any tile tagged <code>solid</code> through its tileset's
+enum for tile marking, even under another tile. Either is compared without case, because LDtk's
+default identifier style saves <code>solid</code> as <code>Solid</code>.</li>
+<li><strong>Layers.</strong> Tiles, AutoLayer, and IntGrid layers with an auto-layer ruleset are
+drawn, bottom to top, each with its own grid size, offset and opacity, every tile flipped and faded
+as LDtk placed it. A layer hidden in LDtk is not drawn and is still solid, which is the shape of a
+collision layer nobody needs to see.</li>
+<li><strong>Levels in separate files.</strong> With "Save levels to separate files" on, each level
+is a <code>.ldtkl</code> beside the project; copy them into <code>resources/</code> too. Loading a
+<code>.ldtkl</code> on its own is refused, because its tilesets and layer definitions live in the
+<code>.ldtk</code>.</li>
+<li><strong>The format.</strong> The reader follows the JSON format of LDtk 1.5 and later. A project
+saved by an older LDtk is read anyway and says once that saving it again in a current LDtk is the
+fix.</li>
+</ul>
+
+<p>Not read: level backgrounds, parallax, IntGrid values other than <code>solid</code>, and the
+fields of a level itself.</p>
+
+<h3>The world</h3>
+
+<p>In LDtk's GridVania and Free layouts every level has a place in one world, and the map keeps
+it: <a href="ref:rmp::Tilemap::bounds"><code>bounds()</code></a> is where the level sits in the
+world, and every position the map hands out — objects, points, solid cells — is in those same world
+units. A level loaded at <code>x = 720</code> starts at 720, not at 0. The linear layouts have no
+world, and each of their levels starts at 0,0.</p>
+
+<p>That is what makes walking from one level into the next a single <code>if</code>.
+<a href="ref:rmp::Tilemap::neighbour_at"><code>neighbour_at(point)</code></a> names the other
+level of the world at a point, or <code>""</code> while the point is still in this level or in no
+level at all. Change to that level and put the player at the same position, which still means the
+same place, because the coordinates are the world's:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="struct Player : rmp::Object {};">
+class Level : public rmp::Scene {
+public:
+    Level(std::string name, Vector2 arrival) : _name(std::move(name)), _arrival(arrival) {}
+
+private:
+    void _ready() override {
+        map = rmp::assets::load_map("world.ldtk", _name);
+        _player = spawn&lt;Player&gt;({ .position = _arrival }).handle();
+        camera.follow = _player;
+        camera.limits = map.bounds();
+    }
+
+    void _update(float delta) override {
+        const rmp::Object *player = _player.get();
+        if (player == nullptr) return;
+        const char *next = map.neighbour_at(player-&gt;position);
+        if (next[0] != '\0') rmp::Scene::change&lt;Level&gt;(next, player-&gt;position);
+    }
+
+    std::string _name;
+    Vector2 _arrival;
+    rmp::Handle&lt;rmp::Object&gt; _player;
+};
+</pre>
+
+<p><a href="ref:rmp::Tilemap::level"><code>level()</code></a> is the identifier of the level
+loaded. The platformer in <a href="/examples/games/07_platformer.html">examples/games/07_platformer</a>
+is a world of three levels side by side in a GridVania layout, walked through exactly like this:
+<a href="fw:examples/games/07_platformer/src/scenes/level.cpp#L132-L140">level.cpp</a>.</p>
+
+<h2>Objects from the editor</h2>
+
+<p>An LDtk entity, or an object on a Tiled object layer, is a
+<a href="ref:rmp::MapObject"><code>rmp::MapObject</code></a>: a type, a position, a size and a set
+of properties. A factory says what to make of each type, and
+<a href="ref:rmp::Tilemap::spawn_objects"><code>spawn_objects()</code></a> runs them all:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="struct Goblin : rmp::Object { int hp = 0; };">
+class LevelScene : public rmp::Scene {
+    void _ready() override {
+        map = rmp::assets::load_map("world.ldtk");
+        map.on_object("Goblin", [](rmp::Scene &amp;scene, const rmp::MapObject &amp;o) {
+            auto &amp;goblin = scene.spawn&lt;Goblin&gt;({ .position = o.position });
+            goblin.hp = o.property_int("hp", 20);
+        });
+        map.spawn_objects(*this);
+        camera.limits = map.bounds();
+    }
+};
+</pre>
+
+<p>Three things in it matter:</p>
+
+<ul>
+<li><a href="ref:rmp::Tilemap::on_object"><code>on_object()</code></a> is called <em>after</em>
+<code>load_map()</code>. Factories belong to the map that is loaded when they are registered:
+on an empty map they register nothing, and the next <code>load_map()</code> starts with none.</li>
+<li>A second factory for the same type replaces the first. Two factories for one type is never
+what anybody means, and running both would spawn the object twice.</li>
+<li>The position is the <strong>centre</strong>, as it is for every
+<a href="ref:rmp::Object"><code>rmp::Object</code></a>. The editors give a corner or a pivot; the
+conversion is done once, when the map is read, so no factory has to.</li>
+</ul>
+
+<h3>Properties</h3>
+
+<p>LDtk's entity fields and Tiled's custom properties are read by name. Every accessor takes a
+fallback, which is what comes back when the object has no property by that name, when the field
+was left empty in the editor, or when it holds another kind of value:</p>
+
+<table>
+<thead><tr><th>In LDtk</th><th>In Tiled</th><th>Read with</th></tr></thead>
+<tbody>
+<tr><td>Int</td><td>int</td><td><a href="ref:rmp::MapObject::property_int"><code>property_int(key, fallback)</code></a>; a float is cut towards zero</td></tr>
+<tr><td>Float</td><td>float</td><td><a href="ref:rmp::MapObject::property_float"><code>property_float(key, fallback)</code></a>; an int is read too</td></tr>
+<tr><td>Bool</td><td>bool</td><td><a href="ref:rmp::MapObject::property_bool"><code>property_bool(key, fallback)</code></a></td></tr>
+<tr><td>String, Multilines</td><td>string, file</td><td><a href="ref:rmp::MapObject::property_string"><code>property_string(key, fallback)</code></a></td></tr>
+<tr><td>Enum</td><td></td><td><code>property_string</code>: the value's name</td></tr>
+<tr><td>Color</td><td></td><td><code>property_string</code>: <code>"#rrggbb"</code></td></tr>
+<tr><td>EntityRef</td><td></td><td><code>property_string</code>: the <code>iid</code> of the entity it points at</td></tr>
+<tr><td>Point</td><td></td><td><a href="ref:rmp::MapObject::property_point"><code>property_point(key)</code></a>: the world position of the centre of that cell</td></tr>
+<tr><td>Array&lt;Point&gt;</td><td></td><td><code>property_point(key, i)</code> for each <code>i</code> below <a href="ref:rmp::MapObject::property_count"><code>property_count(key)</code></a></td></tr>
+</tbody>
+</table>
+
+<p>A point comes back in the same world units as <code>position</code>, so a patrol route drawn in
+LDtk is used as it comes:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="struct Bat : rmp::Object { float speed = 0; std::vector&lt;Vector2&gt; route; };">
+map.on_object("Bat", [](rmp::Scene &amp;s, const rmp::MapObject &amp;o) {
+    auto &amp;bat = s.spawn&lt;Bat&gt;({ .position = o.position });
+    bat.speed = o.property_float("speed", 50);
+    for (int i = 0; i &lt; o.property_count("patrol"); i++) {
+        bat.route.push_back(o.property_point("patrol", i));
+    }
+    if (bat.route.empty()) bat.route.push_back(o.position);
+});
+</pre>
+
+<p>Not read: arrays of anything but points, and the FilePath and Tile field types.</p>
+
+<h3>Linking objects to each other</h3>
+
+<p>Every LDtk entity has an <a href="ref:rmp::MapObject::iid"><code>iid</code></a>, a unique
+identifier, and an EntityRef field holds the <code>iid</code> of the entity it points at. Making
+the link is up to the game: keep the <code>iid</code> on the object, and compare.</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="struct Key : rmp::Object { std::string opens; }; struct Door : rmp::Object { std::string iid; };">
+map.on_object("Key", [](rmp::Scene &amp;s, const rmp::MapObject &amp;o) {
+    auto &amp;key = s.spawn&lt;Key&gt;({ .position = o.position });
+    key.opens = o.property_string("opens"); // the iid of a Door
+});
+map.on_object("Door", [](rmp::Scene &amp;s, const rmp::MapObject &amp;o) {
+    auto &amp;door = s.spawn&lt;Door&gt;({ .position = o.position });
+    door.iid = o.iid;
+});
+</pre>
+
+<p>An <code>iid</code> also outlives the scene, which makes it the way to remember that a coin was
+collected or a door opened when the player walks back into a level: the platformer keeps the
+<code>iid</code>s of what is gone in an <a href="ref:rmp::global"><code>rmp::global</code></a> and
+skips them in its factories.</p>
+
+<h3>Objects with no factory</h3>
+
+<p>A type nobody registered still comes out, as a plain invisible
+<code>rmp::Object</code> with the position and the size, immovable. Whether it is solid depends on
+what it was:</p>
+
+<ul>
+<li>A <strong>Tiled</strong> object with an area — a rectangle drawn on an object layer — is
+solid. That is the right default for a wall or a platform drawn as a shape.</li>
+<li>A Tiled point, or anything with no width or no height, is a marker and is not solid: an
+invisible collider at a spawn point is not what anybody drew.</li>
+<li>An <strong>LDtk</strong> entity is never solid on its own. Its box is only how big it looks in
+the editor; walls in LDtk are IntGrid.</li>
+</ul>
+
+<h2>Levels from Tiled</h2>
+
+<p>A Tiled map is the <code>.json</code> Tiled saves. What the reader expects of it:</p>
+
+<ul>
+<li><strong>CSV tile layers.</strong> A map whose layers are compressed or base64 is refused, and
+the log says where the setting is: Map, Map Properties, Tile Layer Format, CSV. CSV is Tiled's
+default for a new map.</li>
+<li><strong>Tilesets embedded, or saved as JSON.</strong> A tileset kept in a <code>.tsx</code>
+file is XML, which is not read: embed it in the map, or save the tileset as <code>.tsj</code>.
+Until then that tileset draws nothing, none of its tiles are solid, and the load counts as
+failed. The tileset image is looked up by its file name in <code>resources/</code>.</li>
+<li><strong>Solid tiles.</strong> Every tile of a layer whose class is <code>solid</code> is solid;
+so is a tile the tileset gives a bool property <code>solid</code> set to true.</li>
+<li><strong>Objects.</strong> The object's class is its <code>type</code>, its name is
+<code>name</code>, and <code>rotation</code> and <code>gid</code> are Tiled's. Rectangles, ellipses,
+points and polygons are placed by their top-left corner and tile objects by their bottom-left, and
+both arrive at their centre. Objects come out in the order the layer has them.</li>
+</ul>
+
+<p>Tiled maps have no world: <code>level()</code> and <code>neighbour_at()</code> answer
+<code>""</code>, and the map starts at 0,0.</p>
+
+<h2>Asking the map</h2>
+
+<p>The scene uses the map for drawing and collision; the same questions are open to the game,
+in world units:</p>
+
+<table>
+<thead><tr><th>Call</th><th>Answers</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Tilemap::solid_at"><code>solid_at(point)</code></a></td><td>Whether a solid cell is under a point, on any layer.</td></tr>
+<tr><td><a href="ref:rmp::Tilemap::solid_in"><code>solid_in(rect)</code></a></td><td>Whether a solid cell covers any part of a rectangle. Every cell under it is checked, not only the corners. Touching is not covering: a box standing on the floor is not in the floor.</td></tr>
+<tr><td><a href="ref:rmp::Tilemap::tile_at"><code>tile_at(layer, column, row)</code></a></td><td>The tile in one cell of one layer, as its global tile id; 0 for an empty cell. Layers count from 0 at the bottom, and the cell is in that layer's own grid. For LDtk it is the topmost tile of the cell.</td></tr>
+<tr><td><a href="ref:rmp::Tilemap::bounds"><code>bounds()</code></a></td><td>The level's rectangle in the world.</td></tr>
+<tr><td><a href="ref:rmp::Tilemap::tile_size"><code>tile_size()</code></a></td><td>One cell of the map's grid.</td></tr>
+<tr><td><a href="ref:rmp::Tilemap::layer_count"><code>layer_count()</code></a>, <a href="ref:rmp::Tilemap::object_count"><code>object_count()</code></a></td><td>How many tile layers and how many objects it holds.</td></tr>
+</tbody>
+</table>
+
+<p>An enemy that turns round at the edge of its platform, rather than walking off it, asks whether
+there is floor just ahead of its feet:</p>
+
+<pre data-lang="cpp" data-harness="object">
+// Walking right: is there anything to stand on one pixel ahead and one below?
+const Rectangle body = world_collider();
+const Vector2 ahead{ body.x + body.width + 1, body.y + body.height + 1 };
+if (!scene()-&gt;map.solid_at(ahead)) velocity.x = -velocity.x;
+</pre>
+
+<p><a href="ref:rmp::Tilemap::draw"><code>draw()</code></a> is public for a game that wants the
+map drawn somewhere else in its own order. The scene already draws it, so calling it as well
+draws it twice.</p>
+
+<h2>A whole level, from the platformer</h2>
+
+<p><a href="/examples/games/07_platformer.html">examples/games/07_platformer</a> is built on one
+LDtk project, <code>examples/games/07_platformer/resources/world.ldtk</code>: three levels —
+Meadow, Desert and Snowfield — side by side in a GridVania world, an IntGrid layer called
+Collisions whose one value is <code>Solid</code>, a tileset whose enum tags mark the solid tiles,
+and entities with fields: coins with a <code>value</code>, walkers and bats with a
+<code>patrol</code> route of points, a moving platform with a <code>to</code> point, a key whose
+<code>opens</code> is an EntityRef to its door, signs with text and an arrow enum. This is the
+scene that plays any one of those levels, whole — loading it, a factory per entity, the camera,
+and the walk into the next level:</p>
+
+<pre data-include="examples/games/07_platformer/src/scenes/level.cpp"></pre>
+
+<h2>When a map cannot be read</h2>
+
+<p>A map that is missing or does not parse is an empty map:
+<a href="ref:rmp::Tilemap::valid"><code>valid()</code></a> is false, every query answers zero,
+empty or false, and <code>on_object()</code> registers nothing. The game runs, on a level with
+nothing in it. Each reason is said in the log in words that name the file and the fix — the
+compressed layers, the <code>.tsx</code> tileset, the level LDtk keeps in a file that is not in
+<code>resources/</code>, the level name that is not in the project. A map file that is missing,
+or does not parse, counts as a <a href="/manual/modules/assets.html#when-a-load-fails">failed
+load</a>, and so does a tileset image that is not there, so the boot check in CI sees them.</p>

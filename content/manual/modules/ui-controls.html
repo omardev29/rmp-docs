@@ -1,0 +1,220 @@
+<!--
+title: Interface controls
+description: Checkboxes, sliders, dropdowns and text fields: each takes a pointer to your variable, writes to it, and says on which frame it changed.
+order: 24
+-->
+<h1>Interface controls</h1>
+
+<p class="lede">Four controls own a value: a checkbox, a slider, a dropdown and a text field. Each
+one takes a pointer to <em>your</em> variable and writes to it, and that is the whole of their state
+model — there is no widget object holding a copy, and nothing to keep in sync.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="struct Settings { bool fullscreen = false; float music = 0.5f; int quality = 1; char name[24] = &quot;Player&quot;; }; static Settings settings; static const char *const QUALITY[] = { &quot;Low&quot;, &quot;Medium&quot;, &quot;High&quot; };">
+rmp::ui::begin();
+rmp::ui::checkbox("Fullscreen", &amp;settings.fullscreen);
+rmp::ui::slider("Music", &amp;settings.music, 0.0f, 1.0f);
+rmp::ui::dropdown("Quality", &amp;settings.quality, QUALITY, 3);
+rmp::ui::text_input("Name", settings.name, sizeof(settings.name));
+rmp::ui::end();
+</pre>
+
+<h2>The state model</h2>
+
+<p>Every control reads your variable and writes it back in the same call, so what is on screen is
+what is in your struct because it was read this frame. Delete the screen and the settings still
+exist: they were never the interface's. The struct stays plain data, which is also what makes it
+easy to save:</p>
+
+<pre data-include="examples/ui/04_settings/include/settings.h"></pre>
+
+<p>Each control returns <code>true</code> on the frame its value changed, so "do something when it
+changes" reads the way it sounds:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="struct Settings { bool fullscreen = false; }; static Settings cfg; void apply(const Settings &amp;);">
+if (rmp::ui::checkbox("Fullscreen", &amp;cfg.fullscreen)) apply(cfg);
+</pre>
+
+<p>The pointer is yours and is not kept past the call. A null one draws nothing and returns
+<code>false</code>.</p>
+
+<p>What the interface does keep is the state that means nothing to your game — whether a dropdown is
+open, whether a slider is being dragged — and it keeps it by the control's id, which is its label
+unless you give it an <code>id</code>. The rules are the ones for buttons, in
+<a href="/manual/modules/ui.html#labels-are-ids">labels are ids</a>.</p>
+
+<h2>What they have in common</h2>
+
+<p>Each control is a row: its label on the left, the control itself after it. The row fills the width
+it is offered and is focusable as one thing, so the focus ring goes around the whole row and the
+keyboard and gamepad reach it like a button (see
+<a href="/manual/modules/ui.html#focus-keyboard-and-gamepad">focus, keyboard and gamepad</a>). The label
+is drawn at the theme's <code>font_size</code>.</p>
+
+<p>All four options structs have the two fields buttons have:</p>
+
+<ul>
+<li><strong><code>enabled</code></strong> — <code>false</code> draws the control in the theme's
+disabled colours; it cannot be changed, and the focus skips it. A control that is unavailable right
+now reads better disabled than missing: a menu whose items appear and disappear is a menu nobody can
+learn.</li>
+<li><strong><code>id</code></strong> — a name that is the same control whatever its label says, for
+two controls that share a label on a screen that changes.</li>
+</ul>
+
+<h2>Checkbox</h2>
+
+<p><a href="ref:rmp::ui::checkbox"><code>rmp::ui::checkbox</code></a> flips a <code>bool</code> when
+its row is clicked, or when it is pressed — Enter, Space, the bottom face button — while it has the
+focus. It returns <code>true</code> on the frame it flipped:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static bool light = false;">
+if (rmp::ui::checkbox("Light theme", &amp;light))
+    rmp::ui::set_theme(light ? rmp::ui::theme_light() : rmp::ui::theme_dark());
+</pre>
+
+<p>The box is filled with the theme's <code>primary</code> and carries a dot when the value is
+<code>true</code>, and is the theme's <code>surface</code> inside a <code>border</code> when it is
+<code>false</code> — a difference that reads at a glance without a tick, which the built-in font
+does not have. Its size is the theme's
+<code>control_size</code>.
+<a href="ref:rmp::ui::CheckboxOptions"><code>CheckboxOptions</code></a> is
+<a href="ref:rmp::ui::CheckboxOptions::enabled"><code>enabled</code></a> and
+<a href="ref:rmp::ui::CheckboxOptions::id"><code>id</code></a>.</p>
+
+<h2>Slider</h2>
+
+<p><a href="ref:rmp::ui::slider"><code>rmp::ui::slider</code></a> sets a <code>float</code> between a
+minimum and a maximum:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static float music = 0.8f; static float sensitivity = 0.35f;">
+if (rmp::ui::slider("Music", &amp;music, 0.0f, 1.0f))
+    rmp::audio::set_volume(rmp::audio::Bus::MUSIC, music);
+rmp::ui::slider("Sensitivity", &amp;sensitivity, 0.0f, 1.0f, { .step = 0.05f });
+</pre>
+
+<ul>
+<li><strong>With the pointer</strong>, press on the rail and drag: the value follows where the
+pointer is along it. The area that takes the press is a little taller than the rail, which is
+thinner than a finger. While a drag lasts the slider holds the pointer — <code>wants_pointer()</code>
+stays true — even when the pointer leaves the rail.</li>
+<li><strong>With the keyboard or a gamepad</strong>, while it has the focus, Left and Right — or the
+d-pad, or the left stick — move it one step per press, then twelve steps a second while held. A step
+is <code>step</code>, or 5 % of the range when there is none, so a controller can move a slider of
+any range.</li>
+</ul>
+
+<p>The value is clamped to the range, and snapped to <code>step</code> when there is one, on every
+call — not only when it is touched. A variable that starts outside the range is corrected on the
+first frame, and the slider returns <code>true</code> for that frame like for any other change.
+Nothing is drawn when <code>max</code> is not above <code>min</code>.</p>
+
+<p><a href="ref:rmp::ui::SliderOptions"><code>SliderOptions</code></a>:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::SliderOptions::width"><code>width</code></a></td><td>0</td><td>Of the rail, in design units; 0 fills the space available.</td></tr>
+<tr><td><a href="ref:rmp::ui::SliderOptions::step"><code>step</code></a></td><td>0</td><td>0 is continuous; otherwise the value snaps to <code>min</code> plus a multiple of it.</td></tr>
+<tr><td><a href="ref:rmp::ui::SliderOptions::enabled"><code>enabled</code></a></td><td><code>true</code></td><td>As above.</td></tr>
+<tr><td><a href="ref:rmp::ui::SliderOptions::show_value"><code>show_value</code></a></td><td><code>true</code></td><td>Draw the position after the rail, as a percentage of the range.</td></tr>
+<tr><td><a href="ref:rmp::ui::SliderOptions::id"><code>id</code></a></td><td>none</td><td>As above.</td></tr>
+</tbody>
+</table>
+
+<p>The number <code>show_value</code> draws is where the handle is, not the value: a slider from 0 to
+60 standing at 30 shows 50%. A screen that wants the value itself turns it off and draws it with
+<code>text()</code>.</p>
+
+<h2>Dropdown</h2>
+
+<p><a href="ref:rmp::ui::dropdown"><code>rmp::ui::dropdown</code></a> picks one string of an array.
+The value it writes is an index into that array:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static int quality = 1; void apply_quality(int);">
+static const char *const QUALITY[] = { "Low", "Medium", "High", "Ultra" };
+if (rmp::ui::dropdown("Quality", &amp;quality, QUALITY, 4)) apply_quality(quality);
+</pre>
+
+<p>A click on it opens the list, which floats over whatever is below instead of pushing it down the
+screen. A click on an item picks it and closes the list; a click anywhere else closes it. The return
+value is <code>true</code> when a different item was picked. While the list is open it is in front
+of everything else in the scene: <code>wants_pointer()</code> is true wherever the pointer is, and a
+click on the list does not reach what is behind it.</p>
+
+<p>Pressed from the keyboard or a gamepad, while it has the focus, a dropdown opens and closes its
+list; picking an item in the list is done with the pointer.</p>
+
+<p>The index is clamped into the array on every call, so a value read from an old save cannot point
+past the end of a shorter list. Nothing is drawn when the array is null or <code>count</code> is not
+above 0. The strings are copied as they are drawn, so they only have to live through the call.
+<a href="ref:rmp::ui::DropdownOptions"><code>DropdownOptions</code></a> is
+<a href="ref:rmp::ui::DropdownOptions::width"><code>width</code></a> — of the field, in design
+units, 0 filling the space available — <a href="ref:rmp::ui::DropdownOptions::enabled"><code>enabled</code></a>
+and <a href="ref:rmp::ui::DropdownOptions::id"><code>id</code></a>. Two dropdowns that both have a
+"Low" in them are still two lists: an item belongs to its dropdown, not to its text.</p>
+
+<h2>Text field</h2>
+
+<p><a href="ref:rmp::ui::text_input"><code>rmp::ui::text_input</code></a> edits a
+<code>char</code> buffer of yours. It writes into it, NUL-terminated, and never past
+<code>capacity - 1</code>:</p>
+
+<pre data-lang="cpp" data-harness="function">
+static char name[24] = "";
+rmp::ui::text_input("Name", name, sizeof(name), { .placeholder = "your name" });
+</pre>
+
+<p>A click on the field gives it the focus, and so does reaching it with Tab or the d-pad. While it
+has the focus, typed characters are added at the end — printable ASCII, the characters from space to
+<code>~</code> — and Backspace removes the last one, repeating while it is held. A blinking
+<code>_</code> marks the end of the text. There is no caret to move, no selection and no clipboard.
+Typing arrives through raylib's <code>GetCharPressed()</code>; the field does not open an on-screen
+keyboard on Android or iOS.</p>
+
+<p>The return value is <code>true</code> on the frames the text changed.
+<a href="ref:rmp::ui::TextInputOptions"><code>TextInputOptions</code></a>:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::TextInputOptions::width"><code>width</code></a></td><td>0</td><td>Of the field, in design units; 0 fills the space available.</td></tr>
+<tr><td><a href="ref:rmp::ui::TextInputOptions::enabled"><code>enabled</code></a></td><td><code>true</code></td><td>As above.</td></tr>
+<tr><td><a href="ref:rmp::ui::TextInputOptions::placeholder"><code>placeholder</code></a></td><td>none</td><td>Shown in the theme's <code>text_muted</code> while the field is empty and does not have the focus. It is copied, so a temporary is fine.</td></tr>
+<tr><td><a href="ref:rmp::ui::TextInputOptions::id"><code>id</code></a></td><td>none</td><td>As above.</td></tr>
+</tbody>
+</table>
+
+<p>An empty label draws the field alone. A <code>capacity</code> below 2 — no room for a character and
+its terminator — draws nothing.</p>
+
+<h3>The keyboard is the field's</h3>
+
+<p>While a text field has the focus, <a href="ref:rmp::ui::wants_keyboard"><code>rmp::ui::wants_keyboard()</code></a>
+is true, and every <a href="/manual/modules/input.html">rmp::input</a> action reads its keys, gamepad
+buttons and sticks as not pressed; only its mouse buttons still count. Typing "Wolf" into a name
+field does not walk the player across the level.</p>
+
+<aside class="callout warning" data-fw-grep="src/rmp/ui/focus.cpp::if \(!capture\.keyboard\) \{"><span class="callout-title">The field keeps the focus</span>
+<p>A text field holds the focus until the game moves it. While it has it, Tab, the arrows and the
+d-pad do not move the focus on, and a click on another control does not take it away — so a player
+who reaches the field with a controller stays in it. Give the focus back from code with
+<a href="ref:rmp::ui::focus"><code>rmp::ui::focus()</code></a>: an empty name clears it, and the screen's
+first control takes it. Enter, read from raylib, is a natural moment:</p>
+<pre data-lang="cpp" data-harness="function">
+static char name[24] = "";
+rmp::ui::text_input("Name", name, sizeof(name));
+if (rmp::ui::focused() == "Name" &amp;&amp; IsKeyPressed(KEY_ENTER)) rmp::ui::focus("");
+</pre>
+</aside>
+
+<h2>A settings screen</h2>
+
+<p><a href="/examples/ui/04_settings.html">The settings example</a> puts all four on one screen over
+the <code>Settings</code> struct above: toggles, two volume sliders that drive the audio buses, a
+stepped slider, two dropdowns and a name field, with Revert and Apply buttons that are disabled until
+something changes, and the struct saved with <a href="ref:rmp::save"><code>rmp::save</code></a> when
+it is applied.</p>
+
+<pre data-lang="shell">
+rmp example 04_settings
+</pre>

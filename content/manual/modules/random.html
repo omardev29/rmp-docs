@@ -1,0 +1,136 @@
+<!--
+title: Random
+description: Random numbers you can reproduce: one seeded generator for the whole game, with the handful of shapes a game actually asks for.
+order: 80
+-->
+<h1>Random</h1>
+
+<p class="lede"><a href="ref:rmp::random"><code>rmp::random</code></a> is one generator of random
+numbers for the whole game, and the sequence it gives depends on one number, its seed. Every launch
+gets a different seed, so the game varies; the same seed gives the same numbers in the same order,
+so a run can be repeated — for a roguelike's shareable seed, a bug report, a replay, or a test that
+gives the same answer every time.</p>
+
+<h2>The numbers</h2>
+
+<pre data-lang="cpp" data-harness="function">
+const float angle = rmp::random::range(0.0f, 360.0f);
+const int damage = rmp::random::range(3, 6);         // 3, 4, 5 or 6
+const bool critical = rmp::random::chance(0.25f);    // one time in four
+const Vector2 spark = rmp::random::in_circle(80);    // a point within 80 units of the centre
+const Vector2 heading = rmp::random::direction();    // a unit vector, any angle
+</pre>
+
+<table>
+<thead><tr><th>Call</th><th>Gives</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::random::value"><code>value()</code></a></td><td>A float from 0 up to, never reaching, 1.</td></tr>
+<tr><td><a href="ref:rmp::random::range"><code>range(min, max)</code></a> with floats</td><td>A float from <code>min</code> up to, never reaching, <code>max</code>.</td></tr>
+<tr><td><code>range(min, max)</code> with ints</td><td>An int from <code>min</code> to <code>max</code>, <em>both included</em>, as raylib's <code>GetRandomValue()</code> counts — swapping one for the other does not change a game. When <code>max</code> is not above <code>min</code>, <code>min</code>.</td></tr>
+<tr><td><a href="ref:rmp::random::chance"><code>chance(p)</code></a></td><td><code>true</code> with probability <code>p</code>: 0 is never, 1 is always.</td></tr>
+<tr><td><a href="ref:rmp::random::in_circle"><code>in_circle(radius)</code></a></td><td>A point spread evenly over the whole disc, not bunched at the middle and not only on the rim.</td></tr>
+<tr><td><a href="ref:rmp::random::direction"><code>direction()</code></a></td><td>A vector of length 1, pointing anywhere.</td></tr>
+<tr><td><a href="ref:rmp::random::index"><code>index(count)</code></a></td><td>An index from 0 to <code>count - 1</code>; 0 for a count of 0 or less, so it needs no check before it is used.</td></tr>
+</tbody>
+</table>
+
+<p>The two <code>range()</code>s are told apart by their arguments, so both have to be the same
+type. A float and an int together is a question with two answers, and the compiler says so
+rather than picking one:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="is ambiguous">
+const float x = rmp::random::range(0, 1.5f);
+</pre>
+
+<p>Write <code>range(0.0f, 1.5f)</code>.</p>
+
+<h3>Picking and shuffling</h3>
+
+<p><code>index()</code> picks one of a list:</p>
+
+<pre data-lang="cpp" data-harness="function">
+const std::vector&lt;std::string&gt; greetings = { "Hello!", "Nice day.", "Watch out." };
+const std::string &amp;line = greetings[rmp::random::index(static_cast&lt;int&gt;(greetings.size()))];
+</pre>
+
+<p>and shuffles one, from the last element down, each swapped with one at or before it:</p>
+
+<pre data-lang="cpp" data-harness="function">
+std::vector&lt;int&gt; bag = { 0, 1, 2, 3, 4, 5, 6 };
+for (int i = static_cast&lt;int&gt;(bag.size()) - 1; i &gt; 0; i--) {
+    std::swap(bag[i], bag[rmp::random::index(i + 1)]);
+}
+</pre>
+
+<p>That is the falling-block game's bag in
+<a href="/examples/games/06_tetris.html">examples/games/06_tetris</a>: every seven pieces are the
+seven pieces in a shuffled order, which is fairer than one at random each time, and with the same
+seed it is the same game (<a href="fw:examples/games/06_tetris/src/main.cpp#L221-L233">main.cpp</a>).
+<a href="/examples/games/03_space_invaders.html">examples/games/03_space_invaders</a> gives every
+alien a shooting period of its own with <code>range(4.0f, 9.0f)</code>, so that a whole formation
+started on the same frame does not fire as one gun.</p>
+
+<h2>The seed</h2>
+
+<p data-fw-grep="src/rmp/app.cpp::rmp::random::seed\(static_cast<uint64_t>\(">The framework seeds the generator once, when the game starts, from the clock, so a game that
+never mentions seeds plays differently each time it is launched.
+<a href="ref:rmp::random::current_seed"><code>current_seed()</code></a> is the seed the sequence
+running now started from — the number to print in a bug report or show on a roguelike's pause
+screen:</p>
+
+<pre data-lang="cpp" data-harness="function">
+TraceLog(LOG_INFO, "seed %llu",
+         static_cast&lt;unsigned long long&gt;(rmp::random::current_seed()));
+</pre>
+
+<p><a href="ref:rmp::random::seed"><code>seed(n)</code></a> starts the sequence again from
+<code>n</code>. Called with the number a player typed, or the one from the bug report, it gives
+the same numbers in the same order:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class RunScene : public rmp::Scene {
+public:
+    explicit RunScene(uint64_t seed) : _seed(seed) {}
+
+private:
+    void _ready() override {
+        rmp::random::seed(_seed); // the same seed, the same dungeon
+    }
+
+    uint64_t _seed;
+};
+</pre>
+
+<p><code>current_seed()</code> is always the truth, even before anything has called
+<code>seed()</code>: a run nobody seeded starts from a fixed default seed, and reports that one.</p>
+
+<h3>What "the same run" takes</h3>
+
+<p>The seed fixes the sequence of numbers; it does not fix who asks for them. There is one
+generator for the whole game — the behaviors use it too: a
+<a href="ref:rmp::behavior::Spawner"><code>Spawner</code></a> with jitter draws each interval's
+jitter from it — so a run repeats when the same things ask for numbers in the same order. Anything that
+differs from one run to the next — what the player pressed, and when — changes which number goes
+where. Seeding at the start of a level and generating the level at once, before any of that
+happens, is what makes a seeded level the same level every time.</p>
+
+<h3>Tests are reproducible on their own</h3>
+
+<p>The seed from the clock is set by the entry point, and a test does not go through the entry
+point. So a test of anything that varies — a spawner's jitter, a wander, a shake — starts from the
+same default seed every time it runs and gives the same answer, without seeding anything. A test
+that fails one time in twenty teaches everyone to ignore a red test.</p>
+
+<h2>Why not rand()</h2>
+
+<p>The C library's <code>rand()</code> keeps its state in one global that every library in the
+process shares, so any of them calling <code>srand()</code> changes your sequence, and the low bits
+of what it returns are poor. raylib's <code>GetRandomValue()</code> keeps its state inside raylib
+and seeds it from the clock. <code>rmp::random</code> is a generator of the framework's own, so the
+game and its tests decide where a sequence starts. It is xoshiro128++: sixteen bytes of state, no
+allocation, and good enough for a game by a wide margin.</p>
+
+<aside class="callout warning"><span class="callout-title">Not for secrets</span><p>A sequence
+you can reproduce from one number is a sequence someone else can predict. Nothing that has to be
+unguessable — a token, a password, shuffling cards for real money — belongs on
+<code>rmp::random</code>.</p></aside>

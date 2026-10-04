@@ -1,0 +1,193 @@
+<!--
+title: Ads
+description: Interstitial and rewarded AdMob ads on Android, and the same calls compiling to nothing everywhere else, so ad code needs no #ifdef.
+order: 90
+-->
+<h1>Ads</h1>
+
+<p class="lede"><a href="ref:rmp::ads"><code>rmp::ads</code></a> shows Google AdMob ads of two
+kinds: <em>interstitials</em>, the full-screen ads between levels, and <em>rewarded</em> ads, which
+the player chooses to watch in exchange for something. They are real on Android and do nothing on
+every other platform, so the same game code builds on all {{count:targets}} targets without a
+single <code>#ifdef</code>.</p>
+
+<h2>Every ad goes the same way</h2>
+
+<p>An ad has to be downloaded before it can be shown, and that takes seconds. So each kind is
+three calls — ask for one early, check whether it has arrived, show it — and a shown ad is used
+up:</p>
+
+<table>
+<thead><tr><th></th><th>Interstitial</th><th>Rewarded</th></tr></thead>
+<tbody>
+<tr><td>Start loading one</td><td><a href="ref:rmp::ads::request_interstitial"><code>request_interstitial()</code></a></td><td><a href="ref:rmp::ads::request_rewarded"><code>request_rewarded()</code></a></td></tr>
+<tr><td>Has it loaded?</td><td><a href="ref:rmp::ads::is_interstitial_loaded"><code>is_interstitial_loaded()</code></a></td><td><a href="ref:rmp::ads::is_rewarded_loaded"><code>is_rewarded_loaded()</code></a></td></tr>
+<tr><td>Show it</td><td><a href="ref:rmp::ads::show_interstitial"><code>show_interstitial()</code></a></td><td><a href="ref:rmp::ads::show_rewarded"><code>show_rewarded()</code></a></td></tr>
+<tr><td>The reward</td><td></td><td><a href="ref:rmp::ads::take_reward_earned"><code>take_reward_earned()</code></a> and <a href="ref:rmp::ads::reward_amount"><code>reward_amount()</code></a></td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="raymob/app/src/admob/java/com/raylib/raymob/AdmobBridge.java::onAdFailedToLoad">Request as soon as you know you might want one — when the game starts, when a level starts —
+and again after each one is shown, because showing it consumes it. Showing when nothing has
+loaded does nothing. A request that fails — no connection, no ad to fill it — leaves
+<code>is_*_loaded()</code> false and is not retried for you; asking again is the game's
+decision.</p>
+
+<h2>Interstitials</h2>
+
+<p>An interstitial belongs at a natural break, where the player has stopped anyway: between two
+levels, after a game over. Request it while the level is being played, and show it on the way out
+if it made it in time:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class GameScene : public rmp::Scene {
+    void _ready() override { rmp::ads::request_interstitial(); } // loads while the level is played
+};
+
+class GameOverScene : public rmp::Scene {
+    void _draw() override {
+        rmp::ui::begin();
+        if (rmp::ui::button("Play again")) {
+            if (rmp::ads::is_interstitial_loaded()) rmp::ads::show_interstitial();
+            rmp::Scene::change&lt;GameScene&gt;();
+        }
+        rmp::ui::end();
+    }
+};
+</pre>
+
+<p>An ad that has not arrived is simply skipped: the player is never kept waiting for one.</p>
+
+<h2>Rewarded ads</h2>
+
+<p>A rewarded ad is a deal with the player — watch this, get that — and the deal is only kept when
+the player watched enough of it. So the reward does not come from <code>show_rewarded()</code>. It
+arrives later, through <code>take_reward_earned()</code>, which is true once for each reward
+earned and clears itself; <code>reward_amount()</code> is then the amount set on the ad unit in
+AdMob. A player who closes the ad early gets nothing, and no code has to say so.</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class ShopScene : public rmp::Scene {
+    void _ready() override { rmp::ads::request_rewarded(); }
+
+    void _update(float delta) override {
+        if (rmp::ads::take_reward_earned()) {
+            _coins += rmp::ads::reward_amount();
+            rmp::ads::request_rewarded(); // the next one, for next time
+        }
+    }
+
+    void _draw() override {
+        rmp::ui::begin();
+        rmp::ui::text("Coins: " + std::to_string(_coins));
+        if (rmp::ads::is_rewarded_loaded()) {
+            if (rmp::ui::button("Watch an ad for coins")) rmp::ads::show_rewarded();
+        } else {
+            rmp::ui::button("Ad not ready", { .enabled = false });
+        }
+        rmp::ui::end();
+    }
+
+    int _coins = 0;
+};
+</pre>
+
+<p>Two things in it are worth copying:</p>
+
+<ul>
+<li><strong>The button is only live when there is an ad.</strong> A button that does nothing when
+pressed reads as a broken game; a disabled one says "not yet" honestly.</li>
+<li><strong>The reward is polled, every frame.</strong> The flag waits until it is taken, so it
+does not matter on which frame the ad network reports it.</li>
+</ul>
+
+<p>Do not put progress behind an ad that may never load. On a bad connection
+<code>is_rewarded_loaded()</code> can stay false for a long time, and a player who cannot continue
+without an ad is a player who uninstalls.</p>
+
+<p><a href="/examples/ads/02_rewarded.html">examples/ads/02_rewarded</a> is this flow, end to end;
+<a href="/examples/ads/01_interstitial.html">examples/ads/01_interstitial</a> shows both kinds side
+by side.</p>
+
+<h2>Everywhere but Android</h2>
+
+<p>Off Android — the desktops, the web, iOS — every call compiles and does nothing:
+<code>is_*_loaded()</code> is always false, <code>take_reward_earned()</code> never fires and
+<code>reward_amount()</code> is 0. The code above runs unchanged on a laptop: the buttons say "not
+ready" and the rest of the game is there to work on. Ads on iOS are not implemented.</p>
+
+<p>A game in plain C, which has no namespace to call into, uses the C functions underneath
+directly. They are in <code>&lt;admob.h&gt;</code>, one for each of the calls above, with the same
+meaning and the same no-op off Android:</p>
+
+<pre data-lang="c" data-harness="c99">
+#include &lt;admob.h&gt;
+
+void level_finished(void) {
+    if (IsInterstitialAdLoaded()) ShowInterstitialAd();
+    RequestInterstitialAd();
+}
+
+void every_frame(int *coins) {
+    if (TakeRewardEarned()) *coins += GetRewardAmount();
+}
+</pre>
+
+<h2>Configuring AdMob</h2>
+
+<p>The ids live in <code>[android.admob]</code>:</p>
+
+<pre data-lang="toml">
+[android.admob]
+enabled         = true
+app_id          = "ca-app-pub-3940256099942544~3347511713"
+interstitial_id = "ca-app-pub-3940256099942544/1033173712"
+rewarded_id     = "ca-app-pub-3940256099942544/5224354917"
+</pre>
+
+<dl>
+<dt><code>app_id</code></dt>
+<dd>Your AdMob app's id. It goes into the Android manifest.</dd>
+<dt><code>interstitial_id</code>, <code>rewarded_id</code></dt>
+<dd>The ad unit each kind is loaded from.</dd>
+</dl>
+
+<aside class="callout warning"><span class="callout-title">These are Google's test ids</span>
+<p>The values above are the defaults, and they are the ids Google publishes for testing: they serve
+test ads. Replace them with your own before you publish — and not before. Clicking
+real ads from your own build is the fastest way to get an AdMob account suspended, so keep the
+test ids until the day the game goes out.</p></aside>
+
+<h3>Turning ads off</h3>
+
+<pre data-lang="toml">
+[android.admob]
+enabled = false
+</pre>
+
+<p>With <code>enabled = false</code>, AdMob is not in the Android build at all: no Google Mobile
+Ads library, no advertising-id permission, nothing started when the app opens, and nothing to
+declare about advertising ids in Google Play's Data safety form. The game's code does not change:
+the calls keep compiling and do nothing, exactly as they do on desktop. The same happens on its
+own when <code>android</code> is not among the targets the game builds, however it was left out —
+there is no Android build to put ads in.</p>
+
+<p>With ads on, the app asks for the internet permission whatever
+<code>[android.permissions] internet</code> says, because an ad has to be downloaded.</p>
+
+<p><code>enabled</code> is a switch, and only <code>true</code> or <code>false</code> is
+accepted:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[android.admob]
+enabled = "no"
+</pre>
+
+<h2>Consent</h2>
+
+<aside class="callout danger"><span class="callout-title">Not implemented</span><p>Showing ads to
+players in the European Economic Area or the United Kingdom requires a consent platform certified
+by Google, and the framework does not ship one. With ads on, that traffic is served badly or not
+at all until the game adds one. Google's own, the User Messaging Platform, is already inside the
+Google Mobile Ads library the build links, so adding it is a consent request and a form in the
+Android code, not a new dependency.</p></aside>

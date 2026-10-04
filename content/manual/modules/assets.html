@@ -1,0 +1,314 @@
+<!--
+title: Assets
+description: Put your files in resources/ and load them by name; the handles count themselves, free themselves, and read the same from loose files or from an encrypted pack.
+order: 40
+-->
+<h1>Assets</h1>
+
+<p class="lede">A game's pictures, sounds, fonts and levels live in one folder,
+<code>resources/</code>, and are loaded by their file name. What comes back is a handle that knows
+how many copies of it exist and frees what it loaded when the last one goes. The same call reads
+the loose files while you work and a single packed, encrypted file in a release, and the game
+never has to know which.</p>
+
+<h2>Loading by name</h2>
+
+<p>Everything in <a href="ref:rmp::assets"><code>rmp::assets</code></a> takes the name of a file in
+<code>resources/</code>, not a path. A scene loads what it needs in <code>_ready()</code>, keeps the
+handle as a member, and hands it to raylib wherever raylib wants the picture:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class TitleScene : public rmp::Scene {
+    rmp::Texture _logo;
+
+    void _ready() override { _logo = rmp::assets::load_texture("logo.png"); }
+    void _draw() override { DrawTexture(_logo, 40, 40, WHITE); }
+};
+</pre>
+
+<p>There is nothing to unload. When the scene ends, <code>_logo</code> goes with it, and with it
+the texture — unless something else still holds the same one.</p>
+
+<p>One loader per kind of thing, each returning its own handle:</p>
+
+<table>
+<thead><tr><th>Call</th><th>Returns</th><th>For</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::assets::load_texture"><code>load_texture(name)</code></a></td><td><a href="ref:rmp::Texture"><code>rmp::Texture</code></a></td><td>A picture on the GPU, to draw.</td></tr>
+<tr><td><a href="ref:rmp::assets::load_image"><code>load_image(name)</code></a></td><td><a href="ref:rmp::Image"><code>rmp::Image</code></a></td><td>A picture in memory, to read pixels from or make a texture out of.</td></tr>
+<tr><td><a href="ref:rmp::assets::load_font"><code>load_font(name, size)</code></a></td><td><a href="ref:rmp::Font"><code>rmp::Font</code></a></td><td>A <code>.ttf</code> or <code>.otf</code>, baked at one size.</td></tr>
+<tr><td><a href="ref:rmp::assets::load_sound"><code>load_sound(name)</code></a></td><td><a href="ref:rmp::Sound"><code>rmp::Sound</code></a></td><td>A short sound, decoded into memory. Most games play sounds by name with <a href="/manual/modules/audio.html">rmp::audio</a> instead.</td></tr>
+<tr><td><a href="ref:rmp::assets::load_sheet"><code>load_sheet(name)</code></a></td><td><a href="ref:rmp::SpriteSheet"><code>rmp::SpriteSheet</code></a></td><td>An Aseprite file, with its frames and tags. See <a href="/manual/modules/sprites.html">Sprites</a>.</td></tr>
+<tr><td><a href="ref:rmp::assets::load_map"><code>load_map(name)</code></a></td><td><a href="ref:rmp::Tilemap"><code>rmp::Tilemap</code></a></td><td>A level made in LDtk or Tiled. See <a href="/manual/modules/tilemaps.html">Tilemaps</a>.</td></tr>
+<tr><td><a href="ref:rmp::assets::load_data"><code>load_data(name)</code></a></td><td><code>std::vector&lt;unsigned char&gt;</code></td><td>The bytes of any other file.</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Texture player = rmp::assets::load_texture("player.png");
+rmp::Image mask = rmp::assets::load_image("mask.png");
+rmp::Font title = rmp::assets::load_font("title.ttf", 48);
+rmp::Sound jump = rmp::assets::load_sound("jump.wav");
+rmp::SpriteSheet hero = rmp::assets::load_sheet("hero.aseprite");
+std::vector&lt;unsigned char&gt; dialogue = rmp::assets::load_data("dialogue.json");
+</pre>
+
+<h3>A name is a file name</h3>
+
+<p>The name is the file's name inside <code>resources/</code> — <code>"jump.wav"</code>, never
+<code>"resources/jump.wav"</code> and never an absolute path. The folder where those names are
+looked up is set by the build, so the same name works however the game was started.</p>
+
+<p>Keep every file directly in <code>resources/</code>. The pack described below stores files by
+their bare name and does not look into subfolders, so a file in a subfolder loads while you
+develop and is missing from the release that ships the pack. A release configure that finds a
+subfolder in <code>resources/</code> warns about it for that reason.</p>
+
+<h3>The fonts are baked at a size</h3>
+
+<p>A font is turned into a texture of glyphs at the size you ask for, and the size is part of what
+identifies it: <code>load_font("ui.ttf", 16)</code> and <code>load_font("ui.ttf", 32)</code> are two
+fonts, two textures. Ask for the size you draw at.</p>
+
+<h2>The handles</h2>
+
+<p><code>rmp::Texture</code>, <code>rmp::Image</code>, <code>rmp::Font</code>,
+<code>rmp::Sound</code> and <code>rmp::SpriteSheet</code> are the same thing for different raylib
+types: a <a href="ref:rmp::detail::Resource">counted reference</a> to one loaded resource. Each
+converts to the raylib struct it wraps, so every raylib function that takes a
+<code>Texture2D</code> takes an <code>rmp::Texture</code>.</p>
+
+<h3>Copies share</h3>
+
+<p>Loading a name that is already loaded does not load it again. The name is the key, and the
+second load hands back the resource the first one made, with one more reference to it. A copy of a handle is
+one more reference too:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Texture a = rmp::assets::load_texture("enemy.png");
+rmp::Texture b = rmp::assets::load_texture("enemy.png"); // the same texture, loaded once
+rmp::Texture c = a;                                      // and one more reference to it
+</pre>
+
+<p>That is what lets a hundred enemies each hold their picture without anyone deciding who owns
+it: each holds a handle, the texture is on the GPU once, and it goes when the last enemy does. A
+move takes the reference over and leaves the moved-from handle empty.</p>
+
+<h3>When they free</h3>
+
+<p>A resource is unloaded when the last handle to it goes out of scope — a scene ending, an object
+being destroyed, a member being assigned something else. Whatever is still held when the game
+ends is released by the framework before the window closes, because a texture freed after the
+GPU context is gone is a crash. A handle that outlives that, such as a <code>static</code> one, is
+simply empty from then on.</p>
+
+<p>Since a handle is the owner, there is one mistake the types refuse: keeping the raylib struct
+and letting the handle go.</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="deleted function">
+Texture2D player = rmp::assets::load_texture("player.png");
+</pre>
+
+<p>If that compiled, the handle would be a temporary that died at the end of the line, taking the
+texture with it, and <code>player</code> would be a texture that had already been unloaded. Only a
+handle that is still alive converts; keep the <code>rmp::Texture</code> and pass it to raylib where
+raylib wants the picture.</p>
+
+<p>Loading in <code>_ready()</code> and keeping the handle is the shape to use. Loading in
+<code>_draw()</code> every frame is a search of the loaded resources every frame, and if no other
+handle holds the resource it is loaded and freed again each time.</p>
+
+<h3>Handles that are empty</h3>
+
+<p>A handle can hold nothing: one that was never assigned, one that was moved from, and one whose
+load failed. <a href="ref:rmp::detail::Resource::valid"><code>valid()</code></a> says which, and
+so does the handle in an <code>if</code>:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Texture logo = rmp::assets::load_texture("logo.png");
+if (!logo) TraceLog(LOG_WARNING, "no logo: the title is drawn as text");
+</pre>
+
+<p>An empty handle converts to a zeroed raylib struct, and raylib draws nothing for one of those.
+A missing picture is a hole in the frame, not a crash.</p>
+
+<h3>What is not a handle</h3>
+
+<p>The handles come from the loaders. A texture you make yourself with raylib —
+<code>LoadTextureFromImage()</code>, <code>LoadRenderTexture()</code>, a model from
+<code>LoadModel()</code> — is a plain raylib struct, under raylib's own rule: what you load, you
+unload. The types <code>rmp::Music</code>, <code>rmp::Shader</code> and
+<code>rmp::RenderTexture</code> exist, but nothing in <code>rmp::assets</code> returns one; music is
+played by name through <a href="/manual/modules/audio.html">rmp::audio</a>.</p>
+
+<p>An <code>rmp::Image</code> is read through its handle and not changed: the image belongs to
+every handle that loaded the same name. Making a texture from it is the usual use.</p>
+
+<h2>Any other file: load_data</h2>
+
+<p>A level in your own format, a shader's source, a JSON table of items: <code>load_data()</code>
+returns the bytes, as a vector that frees itself. It is not cached, so each call reads the file
+again, and it is empty when the file is not there.</p>
+
+<pre data-lang="cpp" data-harness="function">
+const std::vector&lt;unsigned char&gt; bytes = rmp::assets::load_data("intro.txt");
+const std::string intro(bytes.begin(), bytes.end());
+</pre>
+
+<p>It reads from the pack in a release exactly as the other loaders do. The Aseprite and map
+loaders are built on it.</p>
+
+<h2>Plain raylib works too</h2>
+
+<p>The <code>rmp::assets</code> functions are the short way, not the only one. When a pack is in
+use, raylib's own file loading is routed through it, so a raylib loader given a path inside
+<code>resources/</code> finds the packed copy:</p>
+
+<pre data-lang="cpp" data-harness="function">
+Model ship = LoadModel(RMP_RESOURCES_PATH "ship.obj"); // in a release, read from the pack
+// ... and raylib's rule for what raylib loads:
+UnloadModel(ship);
+</pre>
+
+<p>That covers models and the files they pull in behind your back — an <code>.obj</code>'s
+<code>.mtl</code> and the textures it names — as well as shaders, fonts and textures loaded through
+raylib directly. The path has to start with the macro the build defines for the folder,
+RMP_RESOURCES_PATH: only files inside it are answered from the pack, so a save file elsewhere on
+disk that happens to share a name with a packed one is never mistaken for it.</p>
+
+<aside class="callout warning"><span class="callout-title">The exception</span><p>raylib's
+<code>LoadMusicStream()</code> opens the file itself and never sees the pack, so a song loaded
+that way exists only as a loose file. <code>rmp::audio::music("song")</code> reads it through the
+pack like everything else.</p></aside>
+
+<h2>Where resources/ is</h2>
+
+<p>The build tells the game where its folder is. A debug build reads the absolute path of the
+project's <code>resources/</code>, so the game finds its files whichever folder it is started from.
+A release build (<code>rmp build release</code>) reads <code>./resources/</code>, which is where the
+released archive puts the folder, beside the executable: start a release from the folder it is
+in.</p>
+
+<p>An example with a <code>resources/</code> of its own reads that one and not the game's; one
+without reads the game's.</p>
+
+<h2>The pack</h2>
+
+<p data-fw-grep="CMakeLists.txt::file\(GLOB PACK_FILES LIST_DIRECTORIES false">A release does not have to ship a folder of loose files. <code>rmp pack</code> bundles every
+file directly in <code>resources/</code> into one file, <code>resources.rres</code>, inside that same
+folder, encrypted. The container format is <a href="https://github.com/raysan5/rres">rres</a>, by
+raylib's author, and the packer is part of the framework, so nothing has to be installed or
+bought.</p>
+
+<pre data-lang="shell">
+rmp pack      # resources/ into resources/resources.rres
+rmp run       # the game now reads the pack
+rmp unpack    # delete the pack: the game reads the loose files again
+</pre>
+
+<p>At startup the framework looks for <code>resources.rres</code> in the game's resources folder.
+If it is there, every load asks the pack first; if not, the loose files are read. The log says
+which:</p>
+
+<ul>
+<li><samp>ASSETS: Using resource pack … (… entries)</samp></li>
+<li><samp>ASSETS: No resource pack found, using loose files from …</samp></li>
+</ul>
+
+<p><a href="ref:rmp::assets::using_pack"><code>rmp::assets::using_pack()</code></a> answers the
+same question in code. There is no call to make for any of it: the entry point calls
+<a href="ref:rmp::assets::init"><code>rmp::assets::init()</code></a> before the first scene, which
+finds the pack, and <a href="ref:rmp::assets::shutdown"><code>rmp::assets::shutdown()</code></a>
+after the last.</p>
+
+<h3>The loose files are the fallback</h3>
+
+<p>A name the pack does not have — a picture you added after packing — is read from the loose
+files instead, with a warning such as <samp>ASSETS: '…' not found in pack, falling back to loose
+file</samp>. In development that means you can keep working after <code>rmp pack</code> without
+packing again. In a release that ships only the pack there is no loose file to fall back to, and
+the load fails, which is what the warning is there to tell you before a player does.</p>
+
+<h3>Which releases ship it</h3>
+
+<p>The release jobs build the pack where the packer can run on the machine that builds the
+game:</p>
+
+<table>
+<thead><tr><th>Release</th><th>What its resources/ holds</th></tr></thead>
+<tbody>
+<tr><td>Linux on glibc (x64, arm64, and both DRM builds), Windows x64, macOS, FreeBSD, OpenBSD, NetBSD</td><td><code>resources.rres</code> alone.</td></tr>
+<tr><td><code>linux-x64-musl</code>, <code>linux-riscv64-glibc</code>, <code>windows-arm64</code></td><td>The loose files, and a <code>PACK_SKIPPED.txt</code> saying why: these are cross-compiled, and the packer they build cannot run on the machine that builds them.</td></tr>
+<tr><td>Web, iOS</td><td>The loose files: the folder is preloaded into the page, or copied into the app.</td></tr>
+<tr><td>Android</td><td>The loose files, copied into the APK's assets. A <code>resources.rres</code> is left out of the APK, because the pack cannot be opened from inside one.</td></tr>
+</tbody>
+</table>
+
+<p>The game does not care: a folder with a pack is read through the pack, and one without is read
+file by file.</p>
+
+<h3>The password</h3>
+
+<p>The pack is encrypted with AES, under a key derived from one password, which is set in the
+<code>.toml</code> and reaches both the packer and the game from there:</p>
+
+<pre data-lang="toml">
+[resources]
+rres_password = "a phrase of your own"
+</pre>
+
+<p>An empty password is refused, because it would ship a pack encrypted with a key of nothing
+rather than one with no encryption:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[resources]
+rres_password = ""
+</pre>
+
+<p data-fw-grep="thirdparty/rres/rres-raylib.h::\.nb_passes = 3">Each file read from the pack derives its key again (Argon2i, 16 MiB, three passes). That is a
+cost paid when something loads, never while the game runs.</p>
+
+<aside class="callout warning"><span class="callout-title">What the encryption is for</span>
+<p>It stops someone opening your game's folder and copying the art out of it. It does not stop
+someone determined: the password is inside the executable you give them, the names of the files
+in the pack are stored in the clear, and on the releases that ship loose files there is no
+encryption at all. It is a lock on the door, not a safe.</p></aside>
+
+<p><code>rmp new</code> writes a random password into the new game's <code>.toml</code>, so each game
+has one of its own. Leave the key out and the framework's default applies, which is the same for
+everyone.</p>
+
+<h2>When a load fails</h2>
+
+<p>A load that finds nothing returns an empty handle, and the game keeps running. A missing
+texture is a gap on the screen; a missing font, sound or sheet is empty in the same way. Nothing
+throws: the framework has no exceptions anywhere.</p>
+
+<p>The failure is still counted.
+<a href="ref:rmp::assets::requested_loads"><code>requested_loads()</code></a> is how many loads the
+game asked for, and <a href="ref:rmp::assets::failed_loads"><code>failed_loads()</code></a> how many
+of them failed, which means:</p>
+
+<ul>
+<li>a name that is neither in the pack nor in the folder;</li>
+<li>an <code>.aseprite</code> file that cannot be read as one;</li>
+<li>a map file that does not parse, or a Tiled map whose tileset file cannot be read.</li>
+</ul>
+
+<p>A file that is there and does not decode — a broken PNG, say — is an empty handle and a line
+from raylib in the log, and is not in the count.</p>
+
+<h3>How CI notices</h3>
+
+<p data-fw-grep="src/rmp/app.cpp::SmokeTest_ReportBoot\(rmp::assets::failed_loads\(\), rmp::assets::requested_loads\(\)\)">When the game boots under the smoke test, the framework prints one line once the first scene
+is ready:</p>
+
+<p><samp>RAY_TEST_BOOT_OK assets_failed=0 …</samp></p>
+
+<p><code>rmp test smoke</code> on your machine requires <code>assets_failed=0</code>, and so do the
+CI boots of the Linux x64 and arm64 builds and of Windows x64, and the boot of every example: a game that asks for a file it does not ship fails the build instead of reaching
+a player as a blank sprite. The other boots in CI check that the game started and drew, not
+this count.</p>
+
+<p>The count covers what is loaded by the time the first scene's <code>_ready()</code> has run. A
+file loaded later, by a level the boot never reaches, is outside it.</p>

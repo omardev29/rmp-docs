@@ -1,0 +1,250 @@
+<!--
+title: Sprites
+description: What an object looks like: a texture, or an Aseprite file whose tags are the animations you play by name.
+order: 45
+-->
+<h1>Sprites</h1>
+
+<p class="lede">An object's <a href="ref:rmp::Object::sprite"><code>sprite</code></a> is its
+picture. It is either a plain texture or a sheet read straight out of an Aseprite file, with the
+frames, the time each one shows for and the named animations you drew. You save in Aseprite, and
+the game has the new animation.</p>
+
+<h2>A picture</h2>
+
+<p>Give the sprite a texture and the object draws it, centred on its position and turned, scaled
+and flipped with it:</p>
+
+<pre data-lang="cpp" data-harness="object">
+sprite.texture = rmp::assets::load_texture("ship.png");
+</pre>
+
+<p>An object with a sprite draws the sprite; one without draws its
+<a href="ref:rmp::Object::shape"><code>shape</code></a>. The rest of
+<a href="ref:rmp::Sprite"><code>rmp::Sprite</code></a> says how the picture is put on the
+screen:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Sprite::texture"><code>texture</code></a></td><td>empty</td><td>A loose picture, for an object that does not animate.</td></tr>
+<tr><td><a href="ref:rmp::Sprite::sheet"><code>sheet</code></a></td><td>empty</td><td>An Aseprite sheet. When there is one, it is drawn and <code>texture</code> is not.</td></tr>
+<tr><td><a href="ref:rmp::Sprite::source"><code>source</code></a></td><td><code>{0,0,0,0}</code></td><td>The part of <code>texture</code> to draw; all of it when empty. A sheet chooses its own frame and ignores this.</td></tr>
+<tr><td><a href="ref:rmp::Sprite::origin"><code>origin</code></a></td><td><code>{0.5, 0.5}</code></td><td>Which point of the picture sits on the object's position, as a fraction of its size: the centre by default, <code>{0.5, 1}</code> for the middle of the bottom edge. Rotation turns about it too.</td></tr>
+<tr><td><a href="ref:rmp::Sprite::size"><code>size</code></a></td><td><code>{0,0}</code></td><td>The size to draw at, before the object's <code>scale</code>; the picture's own size when empty.</td></tr>
+<tr><td><a href="ref:rmp::Sprite::tint"><code>tint</code></a></td><td><code>WHITE</code></td><td>Multiplies the picture's colours. White leaves them alone; its alpha fades the picture.</td></tr>
+<tr><td><a href="ref:rmp::Sprite::speed"><code>speed</code></a></td><td><code>1</code></td><td>How fast a sheet animates: 2 is twice as fast, 0 is frozen, -1 runs backwards.</td></tr>
+</tbody>
+</table>
+
+<p>A handful of the object's own fields act on the picture as well:
+<a href="ref:rmp::Object::scale"><code>scale</code></a> multiplies its size,
+<a href="ref:rmp::Object::rotation"><code>rotation</code></a> turns it,
+<a href="ref:rmp::Object::flip_x"><code>flip_x</code></a> and
+<a href="ref:rmp::Object::flip_y"><code>flip_y</code></a> mirror it,
+<a href="ref:rmp::Object::visible"><code>visible</code></a> hides it without taking the object out
+of the game, and <a href="ref:rmp::Object::layer"><code>layer</code></a> decides what is drawn on
+top of what.</p>
+
+<h3>Flipping and tinting</h3>
+
+<p>Drawing a character twice, once facing each way, is unnecessary: flip it. Flipping mirrors the
+picture in place and costs nothing. Only the picture: a collider moved sideways with an
+<code>offset</code> stays on the side it was put.</p>
+
+<pre data-lang="cpp" data-harness="object">
+if (velocity.x &lt; 0) flip_x = true;
+if (velocity.x &gt; 0) flip_x = false;
+</pre>
+
+<p>The tint is a colour every pixel of the picture is multiplied by. A flash of red when hit, a
+ghost at half opacity:</p>
+
+<pre data-lang="cpp" data-harness="object">
+sprite.tint = RED;                 // the hit flash
+sprite.tint = Fade(WHITE, 0.5f);   // half transparent, colours unchanged
+sprite.tint = WHITE;               // back to the picture as drawn
+</pre>
+
+<h3>One frame of a bigger picture</h3>
+
+<p>A texture that holds many pictures — a sheet of tiles, a set of icons — is drawn one part at a
+time through <code>source</code>, in the texture's pixels:</p>
+
+<pre data-lang="cpp" data-harness="object">
+sprite.texture = rmp::assets::load_texture("items.png");
+sprite.source = Rectangle{ 32, 0, 16, 16 }; // the third 16-pixel icon of the first row
+</pre>
+
+<p>For anything that animates, use a sheet instead: it knows its own frames and how long each one
+lasts.</p>
+
+<h2>An animated sheet</h2>
+
+<p><a href="ref:rmp::assets::load_sheet"><code>rmp::assets::load_sheet()</code></a> reads an
+<code>.aseprite</code> or <code>.ase</code> file, and <a href="ref:rmp::Sprite::play"><code>play()</code></a>
+starts one of its animations by name:</p>
+
+<pre data-lang="cpp" data-harness="object">
+sprite.sheet = rmp::assets::load_sheet("player.aseprite");
+sprite.play("idle");
+</pre>
+
+<p>The names are yours. They are the <em>tags</em> in your Aseprite file: the framework does not
+know or expect an <code>idle</code> or a <code>walk</code>, and <code>play("idle")</code> works
+because the file has a tag called that. A tag is a run of frames with a name, and each frame shows
+for the time you gave it in Aseprite, so the animation plays at the speed you drew it at.</p>
+
+<h3>Choosing the animation every frame</h3>
+
+<p><code>play()</code> starts a tag only when it is not already playing it. That makes the natural
+way to write it — say, every frame, which animation the object should be showing — the right one:
+the walk is not restarted sixty times a second while the player walks.</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Player : public rmp::Object {
+    void _ready() override {
+        sprite.sheet = rmp::assets::load_sheet("player.aseprite");
+        sprite.play("idle");
+    }
+
+    void _update(float delta) override {
+        if (velocity.y != 0) {
+            sprite.play("jump");
+        } else if (velocity.x != 0) {
+            sprite.play("walk");
+        } else {
+            sprite.play("idle");
+        }
+    }
+};
+</pre>
+
+<p>The platformer in <a href="/examples/games/07_platformer.html">examples/games/07_platformer</a>
+does exactly this for its player, with a <code>hurt</code> tag on top and the art turned to face
+the way it moves: <a href="fw:examples/games/07_platformer/src/objects/player.cpp#L64-L76">player.cpp</a>.</p>
+
+<h3>Once, and then stop</h3>
+
+<p>An animation plays in a loop unless you say otherwise. With <code>loop</code> false it stops
+<em>on</em> its last frame — not after it, so a death animation does not vanish into a blank frame
+— and <a href="ref:rmp::Sprite::finished"><code>finished()</code></a> turns true:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Enemy : public rmp::Object {
+public:
+    void die() {
+        sprite.play("die", false);
+        _dying = true;
+    }
+
+private:
+    void _update(float delta) override {
+        if (_dying &amp;&amp; sprite.finished()) destroy();
+    }
+
+    bool _dying = false;
+};
+</pre>
+
+<p>A tag that has finished is no longer "already playing", so asking for it again starts it
+again. A one-shot animation is asked for once, when the thing it shows happens, and not every
+frame.</p>
+
+<h3>The rest of the clock</h3>
+
+<dl>
+<dt><a href="ref:rmp::Sprite::playing"><code>playing()</code></a></dt>
+<dd>The name of the tag playing, or <code>""</code>.</dd>
+<dt><a href="ref:rmp::Sprite::stop"><code>stop()</code></a></dt>
+<dd>Holds the current frame, as a finished animation does.</dd>
+<dt><a href="ref:rmp::Sprite::frame_index"><code>frame_index()</code></a> and <a href="ref:rmp::Sprite::set_frame"><code>set_frame(i)</code></a></dt>
+<dd>The frame showing, as an index into the whole sheet, and a way to put it somewhere. A sheet
+nobody called <code>play()</code> on shows its first frame and stays there, so a sheet used as a
+set of still pictures — a door closed and open, an icon per item — is driven with
+<code>set_frame()</code> alone.</dd>
+<dt><a href="ref:rmp::Sprite::speed"><code>speed</code></a></dt>
+<dd>Multiplies how fast the frames go by: 2 shows each for half its time. Negative plays the tag
+backwards.</dd>
+</dl>
+
+<p>The clock moves in the update pass, after the object has moved, and not when it is drawn. A
+scene that is still updated under a pause menu keeps animating; one frozen under it holds its
+frames, and picks up where it was when it resumes. A long frame — the game hitched for a moment —
+advances as many animation frames as the time covered, so an animation keeps time on a slow
+machine instead of slowing down with it.</p>
+
+<h2>The Aseprite workflow</h2>
+
+<p><a href="https://www.aseprite.org/">Aseprite</a> files are read directly; there is no export
+step and no JSON beside the picture. The whole of the workflow is:</p>
+
+<ol>
+<li>Draw the frames on one canvas. The canvas is the size of every frame.</li>
+<li>Set each frame's duration (Frame Properties). That time, in milliseconds, is how long the
+frame shows in the game.</li>
+<li>Tag each animation: select its frames and add a tag with the name you will pass to
+<code>play()</code>. The tag's direction is honoured: Forward, Reverse, or Ping-pong, which plays
+to the end and back.</li>
+<li>Save the <code>.aseprite</code> into <code>resources/</code>.</li>
+</ol>
+
+<p data-fw-grep="include/rmp/assets.h::constexpr int MAX_TAG_NAME = 32;">Every visible layer is blended into the frame, the way Aseprite shows it with the Normal blend
+mode; a hidden layer is left out, so a sketch or a reference layer can stay in the file. Other
+blend modes are not reproduced — merge such a layer down in Aseprite if it matters. RGBA,
+grayscale and indexed sprites all load. A tag's name is kept up to
+<a href="ref:rmp::MAX_TAG_NAME">31 characters</a>.</p>
+
+<p>All the frames are packed side by side into one texture, so a hundred enemies drawn from the
+same sheet are one texture and one name in the resource table: loading
+<code>"bat.aseprite"</code> for each of them loads it once. Each object's sprite still has its own
+clock, so they do not flap in step unless they started together. The packed texture is as wide as
+all the frames together; a GPU has a largest texture it accepts, which a long animation of large
+frames can reach.</p>
+
+<h3>Directions from movement</h3>
+
+<p>The <a href="ref:rmp::behavior::TopDown"><code>rmp::behavior::TopDown</code></a> behavior
+chooses the tag for you from the direction the object faces: it plays <code>walk_e</code>,
+<code>walk_n</code> and the rest when the sheet has them, and <code>walk</code> with
+<code>flip_x</code> when it does not, so a sheet with two, four or eight directions works without
+configuration. Its tag names are fields you can change.</p>
+
+<h2>Collision and the picture</h2>
+
+<p>An object with no <code>shape</code> and no <a href="ref:rmp::Object::collider"><code>collider</code></a>
+collides as its sprite: the rectangle the current frame covers. That is right until the picture
+includes air, hair or a cape, which is most characters, and then a smaller collider is one line:</p>
+
+<pre data-lang="cpp" data-harness="object">
+sprite.sheet = rmp::assets::load_sheet("player.aseprite");
+collider = rmp::rect({ 12, 20 });   // the body, not the whole 24-pixel frame
+collider.offset = { 0, 2 };         // standing on the bottom edge of the frame
+</pre>
+
+<h2>When something is wrong</h2>
+
+<p>A tag that is not in the sheet warns once and changes nothing — the frame already showing
+stays, rather than the sprite going blank, and the console does not fill at sixty lines a
+second:</p>
+
+<p><samp>SPRITE: no animation tag "jmup" in this sheet. It has 4: the names are the tags in your .aseprite.</samp></p>
+
+<p><code>play()</code> on a sprite with no sheet says so the same way. Both are mistakes in the
+game, and with <code>[dev] strict</code> on, the first of them aborts a debug build, so it is met
+in the debugger instead of scrolling past in a log. Release builds never carry it:</p>
+
+<pre data-lang="toml">
+[dev]
+strict = true
+</pre>
+
+<p>A file that is not an Aseprite file — the wrong file, a cut-short download, a PNG renamed — is
+refused before it is parsed, comes back as an empty sheet, and counts as a
+<a href="/manual/modules/assets.html#when-a-load-fails">failed load</a>:</p>
+
+<p><samp>SHEET: [player.aseprite] is not an .aseprite file this can read</samp></p>
+
+<p>On a machine with no GPU — a test, a server — the sheet's texture is empty and everything else
+is there: the frames, their durations and the tags, which is what lets the animation clock be
+tested without a window.</p>
