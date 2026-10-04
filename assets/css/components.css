@@ -18,7 +18,13 @@
   font: 600 0.8rem var(--font-ui);
   color: var(--text-muted);
 }
-.code-head .file { font-family: var(--font-code); font-weight: 700; color: var(--text); }
+.code-head .file {
+  min-width: 0;            /* a long path breaks inside the block, not past the screen */
+  overflow-wrap: anywhere;
+  font-family: var(--font-code);
+  font-weight: 700;
+  color: var(--text);
+}
 .code-head a { color: var(--text-muted); }
 .code-head .spacer { margin-left: auto; }
 pre {
