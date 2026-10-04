@@ -72,6 +72,10 @@ class GrammarTest(unittest.TestCase):
         self.assertTrue(self.one("rmp::Widget::current").static)
         self.assertTrue(self.one("rmp::Widget::detail_tick").internal)
 
+    def test_a_title_line_names_a_group_and_documents_nothing(self):
+        margin = self.one("rmp::Widget::margin")
+        self.assertEqual((margin.group, margin.doc, margin.covered), ("Sizes", "", False))
+
     def test_private_is_not_api(self):
         self.assertNotIn("rmp::Widget::_hidden", self.by)
 

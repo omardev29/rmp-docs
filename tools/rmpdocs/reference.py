@@ -59,9 +59,15 @@ def slug_q(qualname: str) -> str:
     return qualname.replace("::", "-")
 
 
+EXPOSED: set[str] = set()   # reference.toml [expose]: shown although internal
+
+
 def hidden(e: Entity) -> bool:
-    """Not API: internal, private, deleted, or inside something that is."""
+    """Not API: internal, private, deleted, or inside something that is --
+    unless reference.toml exposes it or what it is inside."""
     while e is not None and e.kind != "file":
+        if e.qualname in EXPOSED:
+            return e.deleted
         if e.internal or e.deleted:
             return True
         e = e.parent
@@ -76,6 +82,8 @@ class Reference:
         self.pages: list[RefPage] = []
         self.index: dict[str, str] = {}       # qualname -> url[#anchor]
         self.expose = {k: v for k, v in config.get("expose", {}).items()}
+        EXPOSED.clear()
+        EXPOSED.update(self.expose)
         self.hide = config.get("hide", {})
 
     # -- reading -------------------------------------------------------------
@@ -164,7 +172,8 @@ class Reference:
             if owner is None:
                 continue
             ns = self.namespace_of(owner)
-            url = self.index.get(owner.qualname) or f"reference/namespaces/{slug_q(ns)}.html"
+            url = (self.index.get(owner.qualname) or f"reference/namespaces/{slug_q(ns)}.html")
+            url = url.split("#", 1)[0]   # the owner's own entry may carry an anchor
             anchor = self.member_anchor(None, e) if owner is e else \
                 f"{anchor_id(owner.name)}-{anchor_id(e.name)}"
             if owner is e and e.kind in ("class", "struct", "enum"):

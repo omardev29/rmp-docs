@@ -29,6 +29,8 @@ import re
 from dataclasses import dataclass, field
 
 BANNER = re.compile(r"^\s*//\s*-{10,}\s*$")
+# `// ---- transform -----------`: a title inside a class, for what follows.
+MARKER = re.compile(r"^\s*//\s*-{3,}\s+(\S.*?)\s*-{3,}\s*$")
 ATTR = re.compile(r"\[\[[^\]]*\]\]\s*")
 
 
@@ -219,6 +221,8 @@ class HeaderReader:
         for m in re.finditer("\n", text):
             self.line_starts.append(m.end())
         self.banners = self._banners()
+        self.markers = [(i + 1, m.group(1)) for i, l in enumerate(self.lines)
+                        if (m := MARKER.match(l)) and not BANNER.match(l)]
         self.root = Entity("file", path.rsplit("/", 1)[-1], "", path, 1)
 
     # -- positions --------------------------------------------------------------
@@ -271,11 +275,13 @@ class HeaderReader:
         k = line - 1
         while k > floor:
             raw = self.lines[k - 1]
-            if BANNER.match(raw):
+            if BANNER.match(raw) or MARKER.match(raw):
                 break
             s = raw.strip()
             if s.startswith("//"):
-                block.insert(0, strip_comment_line(raw))
+                # A linter's instruction is not documentation.
+                if not re.match(r"//\s*NOLINT", s):
+                    block.insert(0, strip_comment_line(raw))
                 k -= 1
                 continue
             break
@@ -289,6 +295,7 @@ class HeaderReader:
         access = "private" if kind == "class" else "public"
         floor_line = self.line_of(start) - 1
         group, group_doc, group_banner = "", "", None
+        group_from = 0
         prev_end_line = -10
         prev_entity = None
         run_doc = ""
@@ -311,6 +318,11 @@ class HeaderReader:
                     group_banner = idx
                     group = text.split("\n", 1)[0].strip().rstrip(".")
                     group_doc = text
+                    group_from = last
+            # ...or a `// ---- title ----` line, when that is nearer.
+            for mline, title in self.markers:
+                if floor_line < mline < line and mline > group_from:
+                    group, group_doc, group_from = title[0].upper() + title[1:], "", mline
 
             if raw_line.lstrip().startswith("#"):
                 pos = self.preprocessor(line, owner, conditions, floor_line)

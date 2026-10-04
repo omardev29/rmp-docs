@@ -55,6 +55,9 @@ public:
 
     virtual void _ready() {}
 
+    // ---- sizes ---------------------------------------------------------
+    float margin = 0;
+
 private:
     int _hidden = 0;
 };
