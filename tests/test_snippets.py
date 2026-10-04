@@ -93,6 +93,24 @@ class StaticRuleTest(unittest.TestCase):
     def test_a_harnessed_block_is_recorded(self):
         self.assertEqual(self.build_with('<pre data-lang="cpp" data-harness="function">int x;</pre>'), [])
 
+    def test_a_mistake_looks_like_one_and_says_what_the_compiler_answers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ("site.toml", "reference.toml", "FRAMEWORK_REF"):
+                shutil.copy(DOCS / name, root / name)
+            shutil.copytree(DOCS / "templates", root / "templates")
+            (root / "content").mkdir()
+            (root / "content" / "index.html").write_text(
+                "<!--\ntitle: T\ndescription: A page.\n-->\n<h1>T</h1>\n"
+                '<pre data-lang="cpp" data-harness="function" data-expect="error" '
+                'data-error="no matching function">rmp::ui::button(42);</pre>\n'
+                '<pre data-lang="cpp" data-harness="function">int fine = 0;</pre>\n')
+            site = Site(framework=FRAMEWORK, docs=root).build(write=False)
+            body = next(p for p in site.pages if p.url == "index.html").body
+        self.assertEqual(body.count("expect-error"), 1)
+        self.assertIn("Does not compile", body)
+        self.assertIn("saying among other things: <code>no matching function</code>", body)
+
 
 if __name__ == "__main__":
     unittest.main()

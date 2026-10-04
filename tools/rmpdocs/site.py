@@ -322,6 +322,13 @@ class Site:
                 lang = "text"
             highlighted = highlight(code, lang)
             head = ""
+            mistake = lang in ("cpp", "c") and pre.get("data-expect") == "error"
+            if mistake:
+                # A mistake shown on purpose looks like one, and says what the
+                # compiler answers: the words the compile tier checks it prints.
+                pre.attrs["class"] = " ".join([*pre.classes(), "expect-error"])
+                caption = caption or "Does not compile"
+                toml_out = ""
             if caption:
                 inner = (f'<a class="file" href="{html.escape(link)}">{html.escape(caption)}</a>'
                          if link else f'<span class="file">{html.escape(caption)}</span>')
@@ -332,6 +339,9 @@ class Site:
             attr_text = "".join(f' {k}="{html.escape(v)}"' for k, v in attrs.items())
             said = (f'<pre class="compiler-output" data-lang="text">{html.escape(toml_out, quote=False)}</pre>'
                     if toml_out else "")
+            if mistake and pre.get("data-error"):
+                said = ('<p class="compiler-output">The compiler refuses it, saying among other things: '
+                        f'<code>{html.escape(pre.get("data-error"), quote=False)}</code></p>')
             markup = (f'<div class="code-block{(" " + extra) if extra else ""}"{attr_text}>{head}'
                       f'<pre data-lang="{lang}"><code>{highlighted}</code></pre>{said}</div>')
             replace(pre, dom.Raw(markup, pre.line))
