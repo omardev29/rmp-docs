@@ -1,0 +1,180 @@
+<!--
+title: Scenes
+description: A scene is one screen of the game — a menu, a level, a pause overlay — and the stack of them is how the game moves from one to the next.
+order: 20
+-->
+<h1>Scenes</h1>
+
+<p class="lede">A scene is one context of the game, with its own state, its own update and its
+own drawing: a main menu is a scene, a level is a scene, a pause overlay is a scene. The game is a
+stack of them, and moving between screens is putting one on that stack or taking one off.</p>
+
+<h2>A scene is a class</h2>
+
+<p>Derive from <a href="ref:rmp::Scene"><code>rmp::Scene</code></a> and override what the scene
+needs. Every hook has an empty default, so a scene that only draws overrides only
+<code>_draw()</code>:</p>
+
+<pre data-lang="cpp">
+#include &lt;rmp/scene.h&gt;
+#include &lt;rmp/ui.h&gt;
+#include &lt;rmp/app.h&gt;
+
+class MainMenuScene : public rmp::Scene {
+    void _draw() override {
+        rmp::ui::begin();
+        if (rmp::ui::button("Play")) rmp::Scene::change&lt;GameScene&gt;();
+        if (rmp::ui::button("Quit")) rmp::app::quit();
+        rmp::ui::end();
+    }
+};
+</pre>
+
+<p>The game starts with one scene, named once in <code>src/main.cpp</code>:</p>
+
+<pre data-lang="cpp">
+RMP_GAME(MainMenuScene);
+</pre>
+
+<p>The underscore is a rule that holds across the whole framework: a method whose name starts
+with <code>_</code> is one the framework calls on your type. You override it; you never call it.
+Its other half is <code>on_</code>: a function you hand to the framework, which it calls when
+something happens.</p>
+
+<h2>The hooks</h2>
+
+<p>These are the methods a scene overrides, and when each one runs.</p>
+
+<table>
+<thead><tr><th>Hook</th><th>Runs</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Scene::_ready"><code>_ready()</code></a></td><td>Once, when the scene enters the stack. The window exists by then, so this is where assets load.</td></tr>
+<tr><td><a href="ref:rmp::Scene::_update"><code>_update(float delta)</code></a></td><td>Every frame, unless a scene on top of it freezes it (see below). <code>delta</code> is the seconds since the last frame.</td></tr>
+<tr><td><a href="ref:rmp::Scene::_draw"><code>_draw()</code></a></td><td>Every frame, in screen space, after the scene's objects and its map have been drawn.</td></tr>
+<tr><td><a href="ref:rmp::Scene::_suspend"><code>_suspend()</code></a></td><td>When another scene is pushed on top of this one. It is still alive and still owns everything it owned.</td></tr>
+<tr><td><a href="ref:rmp::Scene::_resume"><code>_resume()</code></a></td><td>When the scene on top of it comes off again.</td></tr>
+<tr><td><a href="ref:rmp::Scene::_end"><code>_end()</code></a></td><td>Once, when the scene leaves the stack for good. Not on a suspend.</td></tr>
+</tbody>
+</table>
+
+<p>It is <code>_end</code> and not <code>_exit</code> because <code>exit()</code> is a function of
+the C library, and a member with that name in a class you write would hide it.</p>
+
+<h2>Moving between scenes</h2>
+
+<p>The four calls that change the stack are static, because navigation is a service and not a
+property of one scene: <code>rmp::Scene::change&lt;GameScene&gt;()</code> reads the same from
+inside a scene, from a callback, or from anywhere else.</p>
+
+<table>
+<thead><tr><th>Call</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Scene::change"><code>change&lt;T&gt;(args...)</code></a></td><td>Clears the stack and starts <code>T</code>. Every scene that was on it gets <code>_end()</code>, top down.</td></tr>
+<tr><td><a href="ref:rmp::Scene::push"><code>push&lt;T&gt;(args...)</code></a></td><td>Puts <code>T</code> on top. The scene underneath is suspended, not ended.</td></tr>
+<tr><td><a href="ref:rmp::Scene::replace"><code>replace&lt;T&gt;(args...)</code></a></td><td>Swaps the top scene only. Whatever is under it is untouched and stays suspended.</td></tr>
+<tr><td><a href="ref:rmp::Scene::pop"><code>pop()</code></a></td><td>Takes the top scene off and resumes the one under it.</td></tr>
+</tbody>
+</table>
+
+<p><code>replace</code> is the one that is easy to overlook: it is level 3 becoming level 4
+without disturbing the pause menu that put you there.</p>
+
+<h3>All of it happens at the end of the frame</h3>
+
+<p>These calls record what to do and return; the change happens when the frame ends. That is
+not an optimisation. Most of these calls come from inside the very scene that is about to go away
+— <code>if (rmp::ui::button("Play")) change&lt;GameScene&gt;()</code> sits in the
+<code>_draw()</code> of the menu that disappears — and destroying the menu there would pull the
+floor out from under the code that is still running in it.</p>
+
+<p>The same scene asked for twice in one frame is pushed once: two end conditions that fire in the
+same frame do not stack two game-over screens.</p>
+
+<p>Popping the last scene is refused with a warning, because the app would be left with nothing to
+draw — a black window on a desktop, and on iOS no way back at all. To leave, call
+<code>rmp::app::quit()</code>.</p>
+
+<h3>Passing data to the next scene</h3>
+
+<p>The arguments of <code>change</code>, <code>push</code> and <code>replace</code> go to the new
+scene's constructor, so data crosses a transition the way it crosses into any object:</p>
+
+<pre data-lang="cpp">
+class GameScene : public rmp::Scene {
+public:
+    GameScene(int level, Difficulty difficulty) : _level(level), _difficulty(difficulty) {}
+
+private:
+    int _level;
+    Difficulty _difficulty;
+};
+
+rmp::Scene::change&lt;GameScene&gt;(3, Difficulty::HARD);
+</pre>
+
+<p>No dictionary to look things up in, and no globals. To use designated initialisers, give the
+struct a name — <code>change&lt;GameScene&gt;(GameScene::Start{ .level = 3 })</code> — because a
+braced list cannot deduce its type through a variadic template. That is C++, not a choice of the
+framework's.</p>
+
+<h2>What a scene lets through</h2>
+
+<p>When a scene is pushed on top of another, three fields decide what still reaches the one
+underneath:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Scene::updates_below"><code>updates_below</code></a></td><td><code>false</code></td><td>The scene below keeps running.</td></tr>
+<tr><td><a href="ref:rmp::Scene::draws_below"><code>draws_below</code></a></td><td><code>true</code></td><td>The scene below stays on screen.</td></tr>
+<tr><td><a href="ref:rmp::Scene::input_below"><code>input_below</code></a></td><td><code>false</code></td><td>The scene below still sees input.</td></tr>
+</tbody>
+</table>
+
+<p>The defaults are a pause menu. Push a scene that touches none of them, and the world underneath
+freezes, stays visible, and stops hearing the keyboard — which is why a pause scene in this
+framework sets no policy at all:</p>
+
+<pre data-lang="cpp">
+class PauseScene : public rmp::Scene {
+    void _draw() override {
+        rmp::ui::begin();
+        if (rmp::ui::button("Resume")) rmp::Scene::pop();
+        if (rmp::ui::button("Menu")) rmp::Scene::change&lt;MainMenuScene&gt;();
+        rmp::ui::end();
+    }
+};
+</pre>
+
+<h2>What else a scene holds</h2>
+
+<dl>
+<dt><a href="ref:rmp::Scene::camera"><code>camera</code></a></dt>
+<dd>What part of the world is on screen. A scene that never touches it draws in screen units,
+exactly as if it were not there. See <a href="ref:rmp::Camera"><code>rmp::Camera</code></a>.</dd>
+<dt><a href="ref:rmp::Scene::map"><code>map</code></a></dt>
+<dd>The level, loaded from a file made in a level editor. The scene draws it under everything and
+collides against its solid tiles; a menu scene simply never sets it.</dd>
+<dt><a href="ref:rmp::Scene::gravity"><code>gravity</code></a></dt>
+<dd>The world's gravity in units per second squared, <code>{ 0, 980 }</code> by default. Each
+object says how much of it applies to it, and none does until it asks.</dd>
+<dt><a href="ref:rmp::Scene::background"><code>background</code></a></dt>
+<dd>The colour the frame is cleared with. <code>BLANK</code>, the default, means the theme's.
+Only the lowest scene that is drawn chooses it: the ones above are drawn over it.</dd>
+</dl>
+
+<h2>Objects belong to a scene</h2>
+
+<p>A scene owns its objects. <a href="ref:rmp::Scene::spawn"><code>spawn&lt;T&gt;()</code></a>
+makes one, puts it in the scene and calls its <code>_ready()</code>; the object is updated and
+drawn with the scene, and ends with it. The reference it returns is good for the rest of the
+frame:</p>
+
+<pre data-lang="cpp">
+auto &amp;bullet = spawn({ .position = muzzle });
+bullet.velocity = aim * 900;
+</pre>
+
+<p>Kept across frames, the reference can dangle, because a destroyed object's memory goes at
+the end of the frame it was destroyed in. What to keep instead is a handle, which knows when its
+object is gone.</p>

@@ -1,0 +1,16 @@
+<!--
+title: The framework
+description: How the framework is put together, and why it is built the way it is.
+order: 1
+-->
+<h1>The framework</h1>
+
+<p class="lede">What the framework is made of, and the reasons behind the shape it has. You do not
+need any of this to make a game; it is here for when you want to know why.</p>
+
+<p>Three things, in short. The <code>rmp</code> library, compiled once and linked by your game: the
+headers under <code>include/rmp/</code>, one per module, and their implementation under
+<code>src/rmp/</code>. One configuration file, <code>raylib_multiplatform.toml</code>, which
+<code>tools/configure.py</code> turns into what CMake, Gradle and Xcode read, so they cannot
+disagree with it. And CI that builds the game for {{count:targets}} targets, starts it, and checks
+that it drew.</p>

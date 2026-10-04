@@ -1,0 +1,5 @@
+[fam]
+version = "1"
+url = "https://example.com/"
+licence = "OFL"
+files = [{ name = "fam.woff2", sha256 = "85eef603a5ba1e97b01e91587659f671a94a34903f85ac15026e7ab5bad30fab" }]

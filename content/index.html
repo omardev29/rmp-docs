@@ -1,0 +1,35 @@
+<!--
+title: raylib_multiplatform
+description: A C++20 framework for shipping raylib games to every platform from one codebase, with CI that builds them, boots them and checks they draw.
+-->
+<h1>raylib_multiplatform</h1>
+
+<p class="lede">A C++20 framework for shipping <a href="https://www.raylib.com/">raylib</a> games to
+{{count:targets}} targets from one codebase — Windows, Linux, macOS, the web, Android, iOS and
+the three BSDs — with CI that builds every one of them, boots it, and checks it put pixels on the
+screen.</p>
+
+<p>You write the game. A main menu is three calls:</p>
+
+<pre data-lang="cpp">
+rmp::ui::begin();
+if (rmp::ui::button("Play")) play();
+if (rmp::ui::button("Quit")) quit();
+rmp::ui::end();
+</pre>
+
+<p>That is a centred, responsive menu that a mouse, a keyboard, a gamepad and a finger can all use.
+No coordinates, no sizes, no fonts to load. Everything else the framework has is there when that
+default is not what you want, and costs nothing until then.</p>
+
+<p>Underneath, it is raylib, and raylib stays yours: inside a scene you call
+<code>DrawTexture</code>, <code>DrawCircle</code> or <code>BeginMode2D</code> exactly as you
+would without the framework. What the framework adds lives under <code>rmp::</code>, one header
+per module, and a game includes only the ones it uses.</p>
+
+<div class="cards">
+<a class="card" href="/getting-started/index.html"><strong>Getting started</strong><span>Install <code>rmp</code>, make a game, and build it up one step at a time.</span></a>
+<a class="card" href="/manual/index.html"><strong>Manual</strong><span>Every part of the framework, explained: scenes, objects, input, the interface, assets, saving.</span></a>
+<a class="card" href="/reference/index.html"><strong>Reference</strong><span>Every public name, read from the headers themselves.</span></a>
+<a class="card" href="/framework/index.html"><strong>The framework</strong><span>How it is built, and why it is built that way.</span></a>
+</div>

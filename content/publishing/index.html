@@ -1,0 +1,18 @@
+<!--
+title: Publishing
+description: How a version of your game becomes a release, and where it can go from there.
+order: 1
+-->
+<h1>Publishing</h1>
+
+<p class="lede">A release is a git tag. <code>rmp deploy</code> checks the version the way CI will,
+tags it and pushes the tag; CI then builds every target your game has turned on and attaches them
+to a GitHub release.</p>
+
+<pre data-lang="shell">
+rmp deploy 1.2.0
+</pre>
+
+<p>The version comes from the tag and from nowhere else: <code>v1.2.0</code> becomes the version
+name on every platform, and the Android version code, so there is no number in the project to
+forget to bump.</p>

@@ -1,0 +1,68 @@
+<!--
+title: Getting started
+description: Install the rmp command once, make a game with it, and run it.
+order: 1
+-->
+<h1>Getting started</h1>
+
+<p class="lede"><code>rmp</code> is the one command: it makes a game, builds it, runs it, tests
+it and ships it. You install it once, and every game you make has its own copy.</p>
+
+<h2>What you need</h2>
+
+<ul>
+<li><strong>Python 3.11</strong> or newer, <strong>CMake</strong> and <strong>Ninja</strong> on your PATH, and a C++ compiler.</li>
+<li><strong>git</strong>, to get the framework and to keep your game in.</li>
+<li>On Linux, the X11 development libraries:</li>
+</ul>
+
+<pre data-lang="shell">
+sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
+</pre>
+
+<h2>Install rmp</h2>
+
+<p>Clone the framework into your home folder:</p>
+
+<pre data-lang="shell">
+cd ~
+git clone https://github.com/omardev29/raylib_multiplatform
+</pre>
+
+<p>Then put that folder on your PATH, once, in the file your shell reads when it starts:</p>
+
+<table>
+<thead><tr><th>Shell</th><th>Run once</th></tr></thead>
+<tbody>
+<tr><td>bash on Linux</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.bashrc</code></td></tr>
+<tr><td>bash on macOS</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.bash_profile</code></td></tr>
+<tr><td>zsh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.zshrc</code></td></tr>
+<tr><td>ksh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.profile</code></td></tr>
+<tr><td>PowerShell and cmd</td><td><code>[Environment]::SetEnvironmentVariable("Path", "$HOME\raylib_multiplatform;" + [Environment]::GetEnvironmentVariable("Path", "User"), "User")</code></td></tr>
+</tbody>
+</table>
+
+<p>On Windows, PowerShell also has to be allowed to run a script from your own disk, once:
+<code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>. Open a new terminal so the PATH
+takes effect, and check:</p>
+
+<pre data-lang="shell">
+rmp help
+</pre>
+
+<h2>Make a game</h2>
+
+<pre data-lang="shell">
+rmp new my_game
+cd my_game
+rmp run
+</pre>
+
+<p><code>rmp new</code> makes a folder with the framework, the build and CI for every target, and
+a small game in <code>src/</code> to start from. <code>rmp run</code> builds it and opens the
+window.</p>
+
+<p>The new game's <code>raylib_multiplatform.toml</code> has your game's name in it, and app ids
+that start with <code>com.example.</code>. Set real ones before your first release:
+<code>rmp deploy</code> refuses to tag a release while they are placeholders, because a Google Play
+app id can never change once it is published.</p>

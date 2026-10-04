@@ -1,0 +1,188 @@
+/* Every colour and every size the site uses, in one place. Nothing else in
+   the stylesheet writes a colour: it names one of these. The contrast gate in
+   tools/build.py reads THIS file and fails a pair below its ratio, so a token
+   changed here is checked before anybody has to squint at it. */
+
+@font-face {
+  font-family: "Source Serif 4";
+  src: url("../fonts/source-serif-4/source-serif-4-latin-wght-normal.woff2") format("woff2");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Source Serif 4";
+  src: url("../fonts/source-serif-4/source-serif-4-latin-wght-italic.woff2") format("woff2");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("../fonts/inter/inter-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../fonts/jetbrains-mono/jetbrains-mono-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fallbacks reshaped to the real fonts' metrics, so the swap moves nothing:
+   the line that wraps before the font arrives wraps in the same place after. */
+@font-face {
+  font-family: "Serif Fallback";
+  src: local("Georgia"), local("Times New Roman");
+  size-adjust: 94%;
+  ascent-override: 110%;
+  descent-override: 35.6%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Sans Fallback";
+  src: local("Arial"), local("Helvetica"), local("Liberation Sans");
+  size-adjust: 107.1%;
+  ascent-override: 90.4%;
+  descent-override: 22.5%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Mono Fallback";
+  src: local("Courier New"), local("Liberation Mono");
+  size-adjust: 100%;
+  ascent-override: 102%;
+  descent-override: 30%;
+  line-gap-override: 0%;
+}
+
+:root {
+  --font-prose: "Source Serif 4", "Serif Fallback", Georgia, serif;
+  --font-ui: "Inter", "Sans Fallback", system-ui, sans-serif;
+  --font-code: "JetBrains Mono", "Mono Fallback", ui-monospace, monospace;
+
+  --size-prose: 1.125rem;
+  --leading-prose: 1.68;
+  --measure: 70ch;
+  --size-code: 0.86em;
+  --weight-code: 700;
+  --weight-keyword: 800;
+
+  --radius: 6px;
+  --gap: 1.5rem;
+  --header-h: 3.5rem;
+  --sidebar-w: 17rem;
+  --toc-w: 15rem;
+  --touch: 44px;
+
+  color-scheme: light;
+  /* LIGHT. Paper and ink. */
+  --bg: #fbfaf7;
+  --bg-raised: #ffffff;
+  --bg-sunken: #f2efe8;
+  --text: #22201c;
+  --text-muted: #5d5850;
+  --accent: #3a55c4;
+  --accent-text: #ffffff;
+  --border: #e3ded4;
+  --border-strong: #c9c2b4;
+  --focus: #3a55c4;
+  --mark: #fff1b8;
+  --note: #eef1fb;
+  --note-edge: #3a55c4;
+  --warn: #fbf0e6;
+  --warn-edge: #b4560f;
+  --danger: #fbecec;
+  --danger-edge: #b3261e;
+
+  /* Code, on --bg-sunken. */
+  --code-text: #22201c;
+  --code-k: #7a2a8c;
+  --code-t: #0d6464;
+  --code-f: #2f47ad;
+  --code-s: #8a4508;
+  --code-n: #a1305a;
+  --code-c: #66625a;
+  --code-p: #9b3a1f;
+  --code-m: #7c5200;
+  --code-a: #4f5f10;
+  --code-v: #9a2f68;
+}
+
+/* DARK. #121216 is the framework's own theme_dark background, so the docs
+   look like the UI the reader is about to build. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121216;
+    --bg-raised: #1a1a20;
+    --bg-sunken: #1c1c23;
+    --text: #e8e6e1;
+    --text-muted: #a8a49c;
+    --accent: #8fa6ff;
+    --accent-text: #121216;
+    --border: #2b2b34;
+    --border-strong: #3d3d48;
+    --focus: #8fa6ff;
+    --mark: #4a4220;
+    --note: #1b1f30;
+    --note-edge: #8fa6ff;
+    --warn: #2a2018;
+    --warn-edge: #f0a35e;
+    --danger: #2c1818;
+    --danger-edge: #f28b82;
+
+    --code-text: #e8e6e1;
+    --code-k: #d7a6ff;
+    --code-t: #6fd6c6;
+    --code-f: #9db8ff;
+    --code-s: #e6b673;
+    --code-n: #f09ab6;
+    --code-c: #96949c;
+    --code-p: #ff9d7a;
+    --code-m: #e8c46a;
+    --code-a: #b7d47a;
+    --code-v: #f0a0d0;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121216;
+  --bg-raised: #1a1a20;
+  --bg-sunken: #1c1c23;
+  --text: #e8e6e1;
+  --text-muted: #a8a49c;
+  --accent: #8fa6ff;
+  --accent-text: #121216;
+  --border: #2b2b34;
+  --border-strong: #3d3d48;
+  --focus: #8fa6ff;
+  --mark: #4a4220;
+  --note: #1b1f30;
+  --note-edge: #8fa6ff;
+  --warn: #2a2018;
+  --warn-edge: #f0a35e;
+  --danger: #2c1818;
+  --danger-edge: #f28b82;
+
+  --code-text: #e8e6e1;
+  --code-k: #d7a6ff;
+  --code-t: #6fd6c6;
+  --code-f: #9db8ff;
+  --code-s: #e6b673;
+  --code-n: #f09ab6;
+  --code-c: #96949c;
+  --code-p: #ff9d7a;
+  --code-m: #e8c46a;
+  --code-a: #b7d47a;
+  --code-v: #f0a0d0;
+}
+
+@media (max-width: 599px) {
+  :root {
+    --size-prose: 1.0625rem;
+  }
+}

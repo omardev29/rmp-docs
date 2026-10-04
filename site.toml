@@ -1,0 +1,67 @@
+# The site's own settings. Everything a page could get wrong by typing it is
+# NOT here: counts, lists and tables come from the framework at FRAMEWORK_REF.
+
+[site]
+title = "raylib_multiplatform"
+framework_repo = "https://github.com/omardev29/raylib_multiplatform"
+docs_repo = "https://github.com/omardev29/rmp-docs"
+base_url = "https://omardev29.github.io/rmp-docs/"
+
+# The tabs across the top, in order. Each is a folder of content/ with an
+# index.html; reference/ is generated from the headers.
+[[sections]]
+id = "getting-started"
+title = "Getting started"
+
+[[sections]]
+id = "manual"
+title = "Manual"
+
+[[sections]]
+id = "examples"
+title = "Examples"
+
+[[sections]]
+id = "publishing"
+title = "Publishing"
+
+[[sections]]
+id = "framework"
+title = "Framework"
+
+[[sections]]
+id = "reference"
+title = "Reference"
+
+[budgets]
+page_kb = 400       # one built page, HTML only
+css_kb = 80         # every stylesheet together, before it is concatenated
+js_kb = 40          # every script together
+search_kb = 400     # assets/search.json, fetched when search first opens
+
+[links]
+# Where a link may leave the site to. A prefix, https only.
+allow = [
+  "https://github.com/omardev29/",
+  "https://www.raylib.com/",
+  "https://github.com/raysan5/",
+  "https://github.com/nicbarker/clay",
+  "https://www.python.org/downloads/",
+  "https://cmake.org/",
+  "https://ldtk.io/",
+  "https://www.mapeditor.org/",
+  "https://www.aseprite.org/",
+  "https://emscripten.org/",
+  "https://developer.android.com/",
+  "https://developer.apple.com/",
+  "https://itch.io/",
+  "https://firebase.google.com/",
+  "https://docs.github.com/",
+  "https://openfontlicense.org/",
+  "https://en.cppreference.com/",
+]
+
+[forbidden]
+# Phrases a page may never contain. The framework stopped being a template,
+# and the Justfile is gone.
+phrases = ["this template", "just run", "just test", "just build", "Justfile"]

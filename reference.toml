@@ -1,0 +1,6 @@
+# What the reference shows, and where. Everything else about it -- every
+# signature, sentence and line number -- comes from include/rmp/*.h.
+
+[pages]
+# The types that get a page of their own.
+classes = ["rmp::Scene", "rmp::Camera"]

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{page_title}}</title>
+<meta name="description" content="{{description}}">
+<meta name="color-scheme" content="light dark">
+<link rel="preload" href="{{root}}assets/fonts/source-serif-4/source-serif-4-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{root}}assets/site.css">
+<link rel="icon" href="{{root}}assets/icon.svg" type="image/svg+xml">
+<script src="{{root}}assets/js/theme-boot.js"></script>
+<script src="{{root}}assets/js/site.js" defer></script>
+</head>
+<body data-root="{{root}}" data-page="{{path}}">
+<a class="skip-link" href="#main">Skip to the content</a>
+<header class="site-header">
+<button class="icon-button nav-toggle" type="button" aria-controls="nav-dialog" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span class="visually-hidden">Menu</span></button>
+<a class="brand" href="{{root}}index.html">raylib<span>_multiplatform</span></a>
+<nav class="sections" aria-label="Sections">{{sections}}</nav>
+<div class="header-tools">
+<button class="icon-button search-open" type="button" aria-keyshortcuts="/ Control+K"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="label">Search</span><kbd>/</kbd></button>
+<button class="icon-button theme-toggle" type="button" aria-label="Colour theme"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg><span class="label">Auto</span></button>
+</div>
+</header>
+<div class="shell{{shell_class}}">
+<aside class="sidebar" aria-label="{{section_title}}">{{nav}}</aside>
+<main id="main" class="page">
+{{breadcrumbs}}
+{{toc_top}}
+<article class="prose">
+{{content}}
+</article>
+{{pager}}
+<footer class="page-footer">
+<span>Documents <a href="{{framework_url}}/tree/{{ref}}">raylib_multiplatform at <code>{{ref_short}}</code></a>, checked against it.</span>
+<span><a href="{{docs_url}}/blob/main/{{source}}">This page's source</a></span>
+</footer>
+</main>
+<aside class="toc" aria-label="On this page">{{toc}}</aside>
+</div>
+<dialog id="nav-dialog" class="nav-dialog" aria-label="Navigation">
+<button class="icon-button dialog-close" type="button">Close</button>
+<nav class="sections" aria-label="Sections">{{sections}}</nav>
+{{nav}}
+</dialog>
+</body>
+</html>

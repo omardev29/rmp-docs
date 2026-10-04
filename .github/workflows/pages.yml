@@ -1,0 +1,163 @@
+# Builds the site against the framework at FRAMEWORK_REF, checks it, looks at
+# it in a browser, and deploys it to GitHub Pages.
+#
+#   resolve   which framework commit, and the build image it pins
+#   check     in that image: actionlint, the unit tests, the build and every gate
+#   browser   the built site in Chromium: no errors, no sideways scroll on a
+#             phone, the theme switch, search; screenshots to look at
+#   deploy    main and manual runs only, and only when both of the above passed
+#
+# No secrets anywhere: the framework repository is public, and so is the image.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      ref: ${{ steps.r.outputs.ref }}
+      image: ${{ steps.r.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Which framework commit
+        id: r
+        run: |
+          set -euo pipefail
+          REF=$(tr -d '[:space:]' < FRAMEWORK_REF)
+          if ! printf '%s' "$REF" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "FALLA: FRAMEWORK_REF is not a 40-hex commit: '$REF'"; exit 1
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          # The image is the framework's own pin, read from its ci.yml at that
+          # commit -- not a fourth copy of the digest kept here.
+          curl -fsSL "https://raw.githubusercontent.com/omardev29/raylib_multiplatform/$REF/.github/workflows/ci.yml" -o ci.yml
+          IMAGE=$(sed -nE "s/^ *PINNED_IMAGE: '([^']+)'.*/\1/p" ci.yml)
+          case "$IMAGE" in
+            ghcr.io/omardev29/raylib-build@sha256:*) ;;
+            *) echo "FALLA: no digest-pinned image in the framework's ci.yml at $REF"; exit 1 ;;
+          esac
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "framework $REF, image $IMAGE"
+
+  check:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: ${{ needs.resolve.outputs.image }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: omardev29/raylib_multiplatform
+          ref: ${{ needs.resolve.outputs.ref }}
+          path: framework
+
+      - name: The checkout is FRAMEWORK_REF
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/framework"
+          GOT=$(git -C framework rev-parse HEAD)
+          test "$GOT" = "${{ needs.resolve.outputs.ref }}" || {
+            echo "FALLA: checked out $GOT, FRAMEWORK_REF says ${{ needs.resolve.outputs.ref }}"; exit 1; }
+          echo "  ok    framework at $GOT"
+
+      - name: actionlint
+        run: |
+          set -euo pipefail
+          command -v shellcheck >/dev/null || { echo "FALLA: no shellcheck, actionlint would skip every run: block"; exit 1; }
+          actionlint -color
+
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Build, and every gate
+        run: python3 tools/build.py build --framework framework
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: site
+          path: _site/
+          include-hidden-files: true
+          retention-days: 7
+
+  browser:
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: site
+          path: _site
+
+      # Hash-pinned: pip refuses any file that is not the one listed. The
+      # Chromium build is keyed to the Playwright version, so that pins it too.
+      - name: Playwright and Chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet --require-hashes -r tests/browser/requirements.txt
+          .venv/bin/playwright install chromium --with-deps
+
+      - name: The site in a browser
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+        run: .venv/bin/python tests/browser/check_site.py _site screenshots
+
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: warn
+
+  deploy:
+    needs: [check, browser]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: site
+          path: _site
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d  # v6.0.0
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
+        with:
+          path: _site/
+
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1

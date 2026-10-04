@@ -1,0 +1,19 @@
+<!--
+title: Reference
+description: Every public name in the framework, read from its headers at the commit this site documents.
+order: 1
+-->
+<h1>Reference</h1>
+
+<p class="lede">Every page in this section is generated from the framework's headers, at the commit
+the footer names. A signature here is the header's signature, a sentence is the header's comment,
+and every entry links to the line that declares it.</p>
+
+<ul>
+<li><a href="ref:rmp::Scene"><code>rmp::Scene</code></a> — a scene, and the stack of scenes.</li>
+<li><a href="ref:rmp::Camera"><code>rmp::Camera</code></a> — what part of the world a scene shows.</li>
+</ul>
+
+<p>Two conventions hold everywhere. A name starting with <code>_</code> is a hook: you override
+it, the framework calls it. A name in <code>detail</code> — <code>rmp::detail</code>, or a member
+called <code>detail_</code>something — belongs to the framework's own tests and is not shown.</p>
