@@ -16,15 +16,17 @@ its frame loop or its own ending: UIKit does, and Apple rejects an app that quit
 Xcode project. The steps, from the game's folder:</p>
 
 <pre data-lang="shell">
-git submodule update --init                    # fetch the raylib-iOS fork
-cd thirdparty/raylib-ios/projects/scripts
-./build-ios-xcframework.sh                     # raylib.xcframework: device + simulator
-cd ../../../..
-python3 tools/configure.py                     # writes ios/project.yml from the .toml
+git submodule update --init thirdparty/raylib-ios    # the raylib-iOS fork; a clone leaves it empty
+python3 tools/configure.py                           # writes ios/project.yml from the .toml
+(cd thirdparty/raylib-ios/projects/scripts &amp;&amp; bash build-ios-xcframework.sh)   # device + simulator
 cd ios
-xcodegen generate                              # ios/my_game.xcodeproj
+xcodegen generate                                    # ios/my_game.xcodeproj
 open my_game.xcodeproj
 </pre>
+
+<p><code>raylib.xcframework</code> is built once, and again only when the submodule moves. Run
+<code>configure.py</code> with the submodule in place: it is what writes the iOS licence notice,
+which credits the fork.</p>
 
 <p>A simulator build needs no signing at all, and is what CI builds:</p>
 
@@ -42,8 +44,8 @@ pinned at one commit. The fork exists for availability only: a submodule that po
 else's repository fails for ever the day that repository goes away.</p>
 
 <p>The fork is what gives raylib an iOS backend: UIKit for the app, and OpenGL ES 3.0 through ANGLE,
-which runs it on Metal. Its script builds raylib into <code>raylib.xcframework</code>, with a slice for
-devices and one for the simulator, and the app embeds ANGLE's two frameworks next to it. Because
+which runs it on Metal. Its script builds raylib into <code>raylib.xcframework</code>, with a device
+slice and the simulator's, and the app embeds ANGLE's two frameworks next to it. Because
 raylib comes prebuilt, <code>[raylib] disabled_modules</code> cannot reach it, and
 <code>configure.py</code> says so when both are set:
 <samp>[raylib] disabled_modules has no effect on iOS: it links the prebuilt raylib.xcframework from
@@ -92,7 +94,8 @@ id, a <code>com.example.</code> placeholder is refused for a release.</p>
 <p>On every other target the game has a <code>main()</code>. On iOS it does not: UIKit owns the run
 loop, and raylib's iOS backend calls three functions instead — one when the app is ready, one per
 frame, one when it is destroyed. <a href="ref:RMP_GAME"><code>RMP_GAME</code></a> writes those three
-on iOS, and nothing in the game changes.</p>
+on iOS — it expands to <a href="ref:RMP_IOS_FUNCS"><code>RMP_IOS_FUNCS</code></a> there — and
+nothing in the game changes.</p>
 
 <p>The process does not start inside the app's bundle, where <code>resources/</code> is, so before
 anything loads the framework moves into it. The bundle is read-only; saves go to the app's
@@ -162,8 +165,8 @@ xcrun simctl launch --console booted com.yourname.yourgame
 
 <p>iOS is in the full lane: on a release, or when the full lane is asked for. On a pinned macOS
 runner and a pinned Xcode, CI builds the xcframework from the fork, generates the project, builds the
-simulator app, and checks the bundle: that it has an <code>Info.plist</code> with a bundle
-identifier, and that <code>resources/</code> is inside it. Starting the app in the simulator is a
+simulator app, unsigned, and checks the bundle: that its executable is a Mach-O, that it has an
+<code>Info.plist</code> with a bundle identifier, and that <code>resources/</code> is inside it. Starting the app in the simulator is a
 step of its own, run only when the repository variable <code>IOS_SIMULATOR_TEST</code> is
 <code>true</code>: the simulator on the hosted runners does not boot reliably, and a gate that fails
 for the runner's reasons would teach everyone to ignore it.</p>

@@ -196,7 +196,8 @@ does not reads every action as not pressed, so a game running under a HUD that t
 simply does not shoot.</li>
 <li><strong>The pointer.</strong> A press and a release on the same object call its
 <a href="ref:rmp::Object::on_click"><code>on_click</code></a>; holding and moving calls its
-<a href="ref:rmp::Object::on_drag"><code>on_drag</code></a>. The topmost object under the pointer
+<a href="ref:rmp::Object::on_drag"><code>on_drag</code></a> with the movement in world units, taken
+through the scene's camera. The topmost object under the pointer
 wins, and the UI gets first refusal: a button drawn over the world takes the click, and the object
 under it never hears it. This comes before everything else so a click is acted on in the frame it
 happened.</li>
@@ -240,11 +241,13 @@ after the move, not before.</li>
 
 <p>An object spawned during this pass gets its <code>_ready()</code> at once, inside the
 <code>spawn()</code> call, and its first <code>_update</code> on the next frame. A behavior added
-during the pass is the same.</p>
+during the pass is the same. One spawned before the pass — from the pointer's callbacks or the
+scene's <code>_update</code> — is updated in this one; one spawned after it, from a collision, waits
+for the next frame like the rest.</p>
 
 <h3 id="collision">Collision</h3>
 
-<p>Once every object of the scene has moved, the scene's pairs are found and dealt with, in three
+<p>Once every object of the scene has moved, the scene's pairs are found and dealt with, in four
 passes, and the order of the passes is the point:</p>
 
 <ol>
@@ -254,7 +257,11 @@ bullet passing through a coin is told, and keeps going.</li>
 <li><strong>Separate</strong> the pairs that are both solid: each moves half the overlap, or the
 movable one moves all of it when the other is immovable. A push that would end inside a solid cell
 of the map is undone, so a moving platform cannot shove the player through a wall.</li>
-<li><strong>Notify</strong>, last, so your code reads the positions as they were resolved.</li>
+<li><strong>Notify</strong>, so your code reads the positions as they were resolved.</li>
+<li><strong>Take the velocity out of the contact</strong>: whoever was pushed loses the part of its
+velocity going into what pushed it, and keeps the rest. After the notification, so a
+<code>_collision</code> reads the velocity it hit with, and a bounce that turns it round is left
+alone.</li>
 </ol>
 
 <p data-fw-grep="src/rmp/collision.cpp::if \(a_was\) a\._collision\(b\);\s+if \(a_was\) collide_behaviors\(a, b\);\s+if \(b_was\) b\._collision\(a\);\s+if \(b_was\) collide_behaviors\(b, a\);\s+if \(a_was\) Storage::notify_collision\(a, b\);\s+if \(b_was\) Storage::notify_collision\(b, a\);">For

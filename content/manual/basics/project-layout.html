@@ -192,7 +192,9 @@ game, and a launcher icon is an input of the build, not an asset the game loads.
 <p>The folder is yours, name included: <code>[icon] source</code> is the only thing that has to agree
 with it. When the file is missing the build warns and keeps whatever icons already exist instead of
 failing. Resizing it into the Android icons needs Pillow, the Python imaging library; a machine
-without it keeps the icons it has, because only the Android and iOS builds use them.</p>
+without it keeps the icons it has, because only the Android and iOS builds use them. The Windows
+<code>.ico</code> needs Pillow too: without it a build of your own makes an <code>.exe</code> with no
+icon, and CI's Windows jobs install it and fail an <code>.exe</code> that came out without one.</p>
 
 <h2>What the build generates</h2>
 

@@ -56,9 +56,9 @@ file it built without running it — its format, its architecture, what it links
 <tr><td><code>linux-x64-musl</code></td><td>full</td><td>Checked: linked against musl, with no glibc symbol in it. A software-rendered build of the game is booted inside Alpine Linux with nothing installed.</td></tr>
 <tr><td><code>linux-x64-glibc-drm</code></td><td>full</td><td>Booted through DRM/KMS on a virtual display the kernel provides. Checked: it links <code>libdrm</code> and no X11 or Wayland; its real glibc floor is printed.</td></tr>
 <tr><td><code>linux-arm64-glibc-drm</code></td><td>full</td><td>Checked statically: aarch64, <code>libdrm</code>, no X11 or Wayland. Not run: a virtual display would not answer the question a Raspberry Pi's own display pipeline does.</td></tr>
-<tr><td><code>windows-x64</code></td><td>every push</td><td>Booted on a real Windows runner with Mesa's software OpenGL next to the <code>.exe</code>, with the player's data folder set to a path that is not ASCII and a save written there and read back. The zip is checked to carry no Mesa file.</td></tr>
-<tr><td><code>windows-arm64</code></td><td>full</td><td>Cross-compiled; checked statically (ARM64 PE) and never run.</td></tr>
-<tr><td><code>macos</code></td><td>full</td><td>Checked: a universal Mach-O with both slices. A software-rendered build of the game is booted on the runner.</td></tr>
+<tr><td><code>windows-x64</code></td><td>every push</td><td>Checked: a PE whose imports are all part of Windows 10, carrying its icon when <code>[icon] source</code> exists. Booted on a real Windows runner with Mesa's software OpenGL next to the <code>.exe</code> and the compiler off <code>PATH</code>, with the player's data folder set to a path that is not ASCII and a save written there and read back. The zip is checked to carry no Mesa file.</td></tr>
+<tr><td><code>windows-arm64</code></td><td>full</td><td>Cross-compiled; checked statically — an ARM64 PE, its imports all part of Windows 10, its icon — and never run.</td></tr>
+<tr><td><code>macos</code></td><td>full</td><td>Checked: a universal Mach-O with both slices, neither asking for a newer macOS than the deployment target — 10.15, and 11 for arm64. A software-rendered build of the game is booted on the runner.</td></tr>
 <tr><td><code>ios</code></td><td>full</td><td>Engine and simulator app built; the bundle checked for its identifier and its <code>resources/</code>. The simulator boot is off unless <code>IOS_SIMULATOR_TEST</code> is <code>true</code>.</td></tr>
 <tr><td><code>web</code></td><td>every push</td><td>Booted in headless Chromium: a screenshot of the canvas is measured, and a save is written to IndexedDB and read back.</td></tr>
 <tr><td><code>android</code></td><td>every push</td><td>Debug APK and signed App Bundle built. Checked: the manifest and native library in the APK, the bundle's signature and signer, and that the bundle was compiled as a release. Not run, unless Firebase Test Lab is configured — then on a real phone, on full runs.</td></tr>
@@ -132,9 +132,12 @@ cached between runs.</li>
 <li><strong>The runners and Xcode.</strong> Runner images by explicit label, never
 <code>-latest</code>, and on macOS an explicit Xcode version, with a step that fails and lists
 what is installed when the pinned one is gone. A label fixes the operating system, not every tool
-GitHub installs on it: the Windows jobs build with the compilers the runner image carries.</li>
+GitHub installs on it: the Windows jobs build with the compilers the runner image carries, and
+print which one built the <code>.exe</code>.</li>
 <li><strong>Every download</strong> the other jobs make — Ninja and XcodeGen on macOS, Mesa and
-UPX on Windows — at a fixed version, checked against its <code>sha256</code>. Chromium for the
+UPX on Windows — at a fixed version, checked against its <code>sha256</code>; Pillow, which the
+Windows jobs install to make the icon, comes from PyPI with <code>pip --require-hashes</code>, so
+no other file is accepted. Chromium for the
 web test comes through Playwright, pinned by <code>package-lock.json</code>. The Alpine image the
 musl build is tested in is named by its digest.</li>
 <li><strong>Every GitHub Action</strong>, by the full commit it resolves to, with the tag in a
@@ -201,6 +204,8 @@ print a line starting with <code>FAIL</code> or <code>FALLA</code> that says wha
 <tr><td>A step that configures or generates, on a tag</td><td>The tag is not <code>vMAJOR.MINOR.PATCH</code>.</td><td><code>rmp deploy</code> checks it before tagging.</td></tr>
 <tr><td>A build step</td><td>The code does not compile on that platform's compiler.</td><td><code>rmp build release</code></td></tr>
 <tr><td>A runtime test</td><td>The game did not boot, lost an asset, drew nothing, or crashed on the way out. The captured output is printed above the verdict.</td><td><code>rmp test smoke</code>, <code>rmp test render</code></td></tr>
+<tr><td><em>the .exe imports nothing Windows does not ship</em>, in <code>windows / x64</code> or <code>windows / arm64</code></td><td>The <code>.exe</code> needs a DLL a player's Windows does not have — a compiler runtime linked dynamically — or lacks the icon <code>[icon] source</code> promises. The step names the DLL and how to link it in.</td><td><code>python tools/binary_check.py windows build/my_game.exe</code></td></tr>
+<tr><td><em>every slice runs on the macOS the build declares</em>, in <code>apple / macos</code></td><td>A slice of the binary asks for a newer macOS than <code>CMAKE_OSX_DEPLOYMENT_TARGET</code>; the step names the slice and the version.</td><td><code>python3 tools/binary_check.py macos build/my_game --min-os 10.15</code></td></tr>
 <tr><td><em>It runs on older distributions than this one</em></td><td>The Linux binary needs a newer glibc than <code>[linux] glibc</code>; the step lists the symbols that ask for it.</td><td><code>tools/glibc_check.sh</code> on the binary</td></tr>
 <tr><td>A BSD job, after everything else passed</td><td>Most often the package mirror. If the step <em>The VM script reached its end</em> failed, the build script stopped early without saying so.</td><td><code>sh tools/render_check.sh Ninja "" my_game</code> runs its check anywhere</td></tr>
 <tr><td>The AAB check in <code>android / build</code></td><td>The bundle is signed by a key other than the one the secrets name, or its certificate has errors.</td><td><a href="/publishing/google-play.html#signing">Google Play</a></td></tr>

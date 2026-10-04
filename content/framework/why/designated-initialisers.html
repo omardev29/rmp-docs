@@ -46,16 +46,37 @@ rmp::ui::column({ .width = 240, .grow_y = true }, [] {
 rmp::ui::end();
 </pre>
 
-<p>Written the other way round, <code>{ .grow_y = true, .width = 240 }</code> breaks the rule, and
-what happens next depends on the compiler. GCC refuses it: <em>designator order for field … does not
-match declaration order</em>. Clang accepts it with a warning, <code>-Wreorder-init-list</code>,
-and initialises the fields in declaration order anyway. A game is built with more than one
-compiler on its way to every target — the NetBSD build uses GCC — so an order that compiles with a
-warning on your machine is an order that can stop a build somewhere else. Treat that warning as an
-error.</p>
+<p>Written the other way round, it does not compile:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="declaration order">
+rmp::ui::begin();
+rmp::ui::column({ .grow_y = true, .width = 240 }, [] {
+    rmp::ui::text("Inventory");
+});
+rmp::ui::end();
+</pre>
+
+<p>GCC and MSVC refuse it on their own. Clang, left to itself, only warns
+(<code>-Wreorder-init-list</code>) and initialises the fields in declaration order anyway — and
+Clang is what <code>[dev] compiler</code> builds your debug builds with unless you choose another,
+while CI builds the Windows x64 release and the NetBSD one with GCC. A game that built clean on the
+laptop would fail on those builds twenty minutes into CI.</p>
+
+<p data-fw-grep="CMakeLists.txt::set\(RMP_STRICT_CXX_FLAGS -Werror=reorder-init-list\)\s+endif\(\)\s+target_compile_options\(rmp PUBLIC">So the framework makes Clang refuse it too. The
+<code>rmp</code> library carries <code>-Werror=reorder-init-list</code> for Clang and AppleClang as
+a public option, which every game, example and test that links it inherits, and Android's native
+build, which the NDK's Clang compiles, carries the same flag. Your own build gives the answer
+above, and so does every build in CI that could have disagreed with it. The iOS app, which Xcode
+builds from a project of its own, is compiled without the flag and would only warn; the same source
+goes through the other builds, which refuse it.</p>
+
+<p data-fw-grep="CMakeLists.txt::check_cxx_source_compiles\(&quot;\s+struct Box \{ bool grow_x = false; float width = 0; bool grow_y = false; \};\s+int main\(\) \{ Box b\{ \.grow_y = true, \.width = 8 \};">A configure that builds the tests checks that this
+holds: it reads the options back off the <code>rmp</code> target and compiles one initialiser out
+of order and the same one in order with them. The first must fail and the second must compile, or
+the configure stops and says which.</p>
 
 <p data-fw-grep="include/rmp/ui.h::Sizing is interleaved by axis — x then y — rather than grouped by kind">Because
-of that, every options struct in the framework is declared in the order its fields are most likely
+the rule cannot be switched off, every options struct in the framework is declared in the order its fields are most likely
 to be written, rather than alphabetically or by importance. Sizing comes first, then appearance,
 then identity: in <code>rmp::ui</code>, an <code>id</code> is the last field of every struct
 that has one. And the sizing fields of a

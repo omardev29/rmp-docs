@@ -120,12 +120,25 @@ land on top of a platform instead of being shoved off its side. If neither is im
 half the way; if one is, the other moves all of it; two immovable objects overlapping are a mistake in
 the level, and neither is moved.</p>
 
-<p>Pushing apart moves positions and leaves velocities alone. An object resting on a solid object
-under gravity keeps gaining downward speed, and is pushed back out each frame, until something sets
-its <code>velocity.y</code> to zero — which is what the
-<a href="ref:rmp::behavior::Platformer"><code>Platformer</code></a> behavior does when it stands on
-ground, and what a game does in <code>_collision()</code> for anything else that lands. The map's
-solid cells are different, and do stop the velocity.</p>
+<p data-fw-grep="src/rmp/collision.cpp::if \(b_was\) Storage::notify_collision\(b, a\);[\s\S]{0,1500}?const float into = o\.velocity\.x \* p\.out\.x \+ o\.velocity\.y \* p\.out\.y;\s+if \(into &lt; 0\) \{">Whoever is pushed also loses the part of its velocity going <em>into</em> the contact, and nothing
+else: a box resting on another under gravity is pushed back up every frame, and without this its
+downward speed would grow every frame too, so that when the one underneath moved away it would drop
+at whatever all that resting added up to. With it, the box starts falling from rest; a jump off it
+keeps its jump, because moving away from the contact is not moving into it; and sliding along a
+wall keeps the slide. The map's solid cells, <a href="#the-maps-solid-cells">below</a>, zero the
+velocity along the axis they stop.</p>
+
+<p>That happens after the reports, so a <code>_collision()</code> or an <code>on_collision</code>
+reads the velocity the object hit with — to measure an impact, or to bounce. A bounce that turns the
+velocity round points it away from the contact, and loses nothing:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Puck : public rmp::Object {
+    void _collision(rmp::Object &amp;other) override {
+        if (other.solid) velocity.x = -velocity.x;   // still the speed it hit with
+    }
+};
+</pre>
 
 <h2>Layers and masks</h2>
 

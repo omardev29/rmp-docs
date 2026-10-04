@@ -52,8 +52,12 @@ way to write a rectangular <code>shape</code>. When both are given, <code>shape<
 </table>
 
 <p>They are written as designated initialisers, and C++20 requires those in the order the fields are
-declared, which is the order of this table: GCC refuses any other order and Clang warns. The order
-is the one they are naturally written in — where, how big, what it looks like, how it moves.</p>
+declared, which is the order of this table. GCC and MSVC refuse any other order, and the framework
+turns Clang's warning about it into an error too, so an order that compiles on your machine
+compiles on every target. The order is the one they are naturally written
+in — where, how big, what it looks like, how it moves.
+<a href="/framework/why/designated-initialisers.html">Designated initialisers</a> has the
+reasons.</p>
 
 <h3>The reference is good for the frame</h3>
 
@@ -68,10 +72,21 @@ Kept across frames, it can dangle. What to keep instead is a <a href="#keeping-a
 everything else the options set, and anything you write on the returned reference — like the
 bullet's velocity above — comes after <code>_ready()</code>.</p>
 
-<p>An object spawned while the scene's objects are being updated, from another object's
-<code>_update()</code> or a behavior, gets its <code>_ready()</code> at once and its first
-<code>_update()</code> on the next frame. One spawned from the scene's own <code>_update()</code> is
-updated in the same frame, because the scene runs before its objects.</p>
+<p>Its first <code>_update()</code> depends on where in the frame it was spawned, because the
+scene's objects are updated in one pass, after the pointer and the scene's own
+<code>_update()</code> and before collision:</p>
+
+<table>
+<thead><tr><th>Spawned from</th><th>First <code>_update()</code></th></tr></thead>
+<tbody>
+<tr><td>the scene's <code>_update()</code>, an <code>on_click</code> or an <code>on_drag</code></td><td>this frame: the pass has not started</td></tr>
+<tr><td>an object's <code>_update()</code>, a behavior's</td><td>the next frame: the pass is under way</td></tr>
+<tr><td>a <code>_collision()</code> or an <code>on_collision</code></td><td>the next frame: the pass is over</td></tr>
+</tbody>
+</table>
+
+<p>Wherever it comes from, its <code>_ready()</code> runs at once, inside the <code>spawn()</code>
+call.</p>
 
 <h3>Spawning from somewhere else</h3>
 
@@ -363,8 +378,11 @@ and the old handle stays empty instead of pointing at a stranger, which is the c
 stored indices.</p>
 
 <p><code>handle&lt;Goblin&gt;()</code> makes a typed one, whose <code>-&gt;</code> reaches the
-goblin's own fields without a cast. The framework is built without run-time type information, so
-that conversion is not checked: take a typed handle only from an object that is that type.</p>
+goblin's own fields without a cast. That conversion is not checked: <code>get()</code> is a
+<code>static_cast</code>, not a <code>dynamic_cast</code>, because nothing in the framework uses
+run-time type information and a handle resolved every frame should not pay for the lookup. Take a
+typed handle only from an object that is that type; a type that is not an object at all is refused
+when it compiles.</p>
 
 <h2>Callbacks</h2>
 
@@ -386,7 +404,7 @@ coin.on_click([](rmp::Object &amp;self) { self.scale = { 1.5f, 1.5f }; });
 <tbody>
 <tr><td><a href="ref:rmp::Object::on_collision"><code>on_collision</code></a></td><td>Every frame it touches another object, after the hooks.</td><td>Itself and the other object.</td></tr>
 <tr><td><a href="ref:rmp::Object::on_click"><code>on_click</code></a></td><td>When the pointer is pressed on it and released on it.</td><td>Itself.</td></tr>
-<tr><td><a href="ref:rmp::Object::on_drag"><code>on_drag</code></a></td><td>Every frame the pointer moves while held, after being pressed on it.</td><td>Itself and how far the pointer moved since the last frame, in screen pixels.</td></tr>
+<tr><td><a href="ref:rmp::Object::on_drag"><code>on_drag</code></a></td><td>Every frame the pointer moves while held, after being pressed on it.</td><td>Itself and how far the pointer moved since the last frame, in world units.</td></tr>
 </tbody>
 </table>
 
@@ -407,17 +425,21 @@ one drawn on top is the one pressed.</p>
 <p>The <a href="ref:rmp::ui"><code>rmp::ui</code></a> gets first refusal: a press on a button drawn
 over the world goes to the button, never to the object under it.</p>
 
-<p><code>on_drag</code> hands over the movement in screen pixels. Under a camera that is not zoomed
-that is world units too; with a zoom, divide by it:</p>
+<p>A drag is two lines, because <code>on_drag</code> hands over the movement in world units, the
+units of <code>position</code>:</p>
 
 <pre data-lang="cpp" data-harness="scene">
 auto &amp;card = spawn({ .position = { 200, 200 }, .size = { 60, 90 } });
 card.on_drag([](rmp::Object &amp;self, Vector2 moved) {
-    const float zoom = self.scene()-&gt;camera.zoom;
-    self.position.x += moved.x / zoom;
-    self.position.y += moved.y / zoom;
+    self.position.x += moved.x;
+    self.position.y += moved.y;
 });
 </pre>
+
+<p data-fw-grep="src/rmp/collision.cpp::const Vector2 was = scene\.camera\.to_world\(\s*Vector2\{ screen\.x - pixels\.x, screen\.y - pixels\.y \}\);\s+Storage::notify_drag\(\*captured, Vector2\{ at\.x - was\.x, at\.y - was\.y \}\);">The
+movement is where the pointer is in the world minus where it was, both taken through the scene's
+camera — not the pixels divided by the zoom — so the card stays under the finger at any zoom and
+under a rotated camera too.</p>
 
 <h3>rmp::Callback</h3>
 

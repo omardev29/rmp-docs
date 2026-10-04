@@ -210,6 +210,11 @@ chooses the tag for you from the direction the object faces: it plays <code>walk
 <code>flip_x</code> when it does not, so a sheet with two, four or eight directions works without
 configuration. Its tag names are fields you can change.</p>
 
+<p>Draw the frames that have no direction in their name — <code>walk</code>, <code>idle</code> —
+facing right: the behavior mirrors them while the object faces left. A tag with a direction is
+drawn for that direction and played unflipped, so <code>walk_w</code> shows exactly as you drew
+it. <a href="/manual/core/behaviors.html#topdown">TopDown</a> has the rest.</p>
+
 <h2>Collision and the picture</h2>
 
 <p>An object with no <code>shape</code> and no <a href="ref:rmp::Object::collider"><code>collider</code></a>

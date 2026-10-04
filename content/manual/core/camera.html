@@ -204,7 +204,9 @@ without anything written:</p>
 <ul>
 <li>an object's <code>edges</code>, when its <code>bounds</code> are empty and the scene has no map, use
 the camera's view as the edge of the world;</li>
-<li><code>on_click</code> and <code>on_drag</code> find the object under the pointer through it;</li>
+<li><code>on_click</code> and <code>on_drag</code> find the object under the pointer through it, and
+<code>on_drag</code> hands over the movement through it, in world units, so a dragged object stays
+under the finger at any zoom;</li>
 <li><code>rmp::input::pointer()</code> answers in world units through it;</li>
 <li>the <a href="ref:rmp::behavior::Parallax"><code>Parallax</code></a> behavior scrolls each layer by
 how far the view has moved.</li>

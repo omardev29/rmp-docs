@@ -143,7 +143,8 @@ struct Blink {
 <code>{ .every = 0.2f }</code> stops compiling — which is the whole design. The name is the fence: you
 can read what is in <code>ours</code>, and it is not yours to write. The catalogue follows the same
 rule, and where a value in it is worth reading it has a function that says so —
-<code>Platformer::on_ground()</code> reads <code>ours</code> for you. <a href="ref:rmp::Sprite"><code>rmp::Sprite</code></a>
+<a href="ref:rmp::behavior::Platformer::grounded"><code>Platformer::grounded()</code></a> reads
+<code>ours</code> for you. <a href="ref:rmp::Sprite"><code>rmp::Sprite</code></a>
 keeps its animation state the same way.</p>
 
 <h2>None of them chooses for you</h2>
@@ -187,6 +188,12 @@ two, four or eight directions works with nothing configured. The names are yours
 in your file — and <code>idle</code>, <code>walk</code> and the direction suffixes are fields you can
 change. Without a sheet it only sets <code>flip_x</code>.</p>
 
+<p data-fw-grep="src/rmp/behaviors.cpp::if \(rmp::animation::detail::tag_index\(self\.sprite\.sheet\.raw\(\), tag\) &gt;= 0\) \{\s+// &quot;walk_w&quot; is drawn facing west; mirroring it would face it east\.\s+self\.flip_x = false;">The mirroring assumes one thing about your art: <strong>what has no direction of its own faces
+right</strong>. <code>flip_x</code> is set while the object faces left, so a plain <code>walk</code>,
+<code>idle</code> and a sprite with no sheet must be drawn facing east to come out facing west. A tag
+with a direction suffix is drawn for that direction, so it plays unflipped: <code>walk_w</code> is
+your west-facing art, shown as you drew it.</p>
+
 <h3>Platformer</h3>
 
 <pre data-lang="cpp" data-harness="scene">
@@ -198,13 +205,21 @@ hero.add&lt;rmp::behavior::Platformer&gt;({ .speed = 200, .jump = 650, .air_jump
 jumps, reading <code>move_left</code>, <code>move_right</code> and <code>ui_accept</code> unless you name
 others. <code>jump</code> is the upward speed a jump starts with, <code>gravity</code> its own pull while
 in the air, and <code>air_jumps = 1</code> is a double jump. It makes the object solid when it is added,
-and applies its own gravity instead of the scene's, which keeps the height of a jump exact.</p>
+and applies its own gravity instead of the scene's, so a jump reaches the same height whatever the
+scene's <code>gravity</code> is.</p>
+
+<p data-fw-grep="src/rmp/behaviors.cpp::void Platformer::_ready\(Object &amp;self\) \{[\s\S]*?self\.gravity_scale = 0;">That is why adding it sets the object's
+<a href="ref:rmp::Object::gravity_scale"><code>gravity_scale</code></a> to 0. A heavier character is
+its own field, <code>get&lt;rmp::behavior::Platformer&gt;()-&gt;gravity = 3000</code>; setting
+<code>gravity_scale</code> again afterwards does not replace the behavior's gravity but adds the
+scene's on top of it, and the character falls with both.</p>
 
 <p>Two fields separate a platformer that feels right from one that does not, and players never name
 either — they only notice when they are missing. <code>coyote_time</code> keeps a jump available for a
 moment after walking off a ledge, and <code>jump_buffer</code> remembers a jump pressed just before
-landing and fires it on landing. <code>on_ground()</code> says whether it was standing on something at
-its last update: a solid object, or a solid cell of the map, just under its feet.</p>
+landing and fires it on landing. <code>grounded()</code> says whether it was standing on something at
+its last update: a solid object, or a solid cell of the map, just under its feet, while not moving
+up.</p>
 
 <h3>Runner</h3>
 

@@ -1,6 +1,6 @@
 <!--
 title: Desktop and BSD archives
-description: What is in the zip CI makes for each Windows, macOS, Linux and BSD target, what the Linux glibc floor is, and what compressing with UPX costs.
+description: What is in the zip CI makes for each Windows, macOS, Linux and BSD target, what each asks of a player's machine — no DLL, macOS 10.15, the Linux glibc floor — and what compressing with UPX costs.
 order: 20
 -->
 <h1>Desktop and BSD archives</h1>
@@ -162,21 +162,36 @@ image, and its floor is neither lowered nor checked.</li>
 
 <h2>Windows</h2>
 
-<p><code>windows-x64</code> and <code>windows-arm64</code>, the second compiled with MSVC for ARM64
-on an x64 machine. A release build opens no console window behind the game.</p>
+<p><code>windows-x64</code> and <code>windows-arm64</code>: the first built with the Windows
+runner's MinGW GCC, the second compiled with MSVC for ARM64 on an x64 machine. A release build opens
+no console window behind the game.</p>
 
 <ul>
-<li><strong>The icon.</strong> Windows keeps a program's icon inside the <code>.exe</code>.
-When Pillow is installed on the machine that runs <code>tools/configure.py</code>, it turns
-<code>[icon] source</code> into a multi-resolution <code>.ico</code> that the build embeds; without
-Pillow the <code>.exe</code> is built without one, and nothing fails over it.</li>
+<li data-fw-grep="tools/binary_check.py::&quot;libstdc\+\+-6\.dll&quot;: &quot;MinGW's C\+\+ runtime: link it with -static&quot;"><strong>Nothing to
+install.</strong> A player's machine has Windows and nothing else, so the compiler's C and C++
+runtimes are linked into the <code>.exe</code> — MinGW with <code>-static</code>, MSVC with the
+static C runtime — and the zip carries no DLL. Each Windows job reads the import tables of the
+<code>.exe</code> it ships with <code>tools/binary_check.py</code> and fails on any DLL that is not
+part of Windows 10, naming it and saying how to link it in instead. A <code>libstdc++-6.dll</code>
+or a <code>VCRUNTIME140.dll</code> in that list is a game that starts on the machine that built it
+and nowhere else.</li>
+<li data-fw-grep=".github/workflows/_windows.yml::if \(Test-Path cmake/generated/app_icon\.rc\) \{ \$check \+= &quot;--require-icon&quot; \}"><strong>The icon.</strong> Windows keeps a program's icon inside the
+<code>.exe</code>. <code>tools/configure.py</code> turns <code>[icon] source</code> into a
+multi-resolution <code>.ico</code> that the build embeds, and making it needs Pillow: on your own
+machine, a build without Pillow goes on without an icon and nothing fails over it. The Windows jobs
+install Pillow at a version and with checksums pinned in <code>thirdparty/FROZEN_VERSIONS.md</code>,
+fail when <code>[icon] source</code> exists and no icon resource came out of it, and check that the
+<code>.exe</code> they ship carries the icon.</li>
 <li><strong>The windowing backend.</strong> <code>[windows] backend</code> is
 <code>"glfw"</code> by default; <code>"win32"</code> and <code>"rgfw"</code> drop GLFW for a
 smaller <code>.exe</code> and cover less — gamepads, several monitors, the clipboard.</li>
 <li><strong>Tested on a real Windows.</strong> CI starts the x64 <code>.exe</code> with Mesa's
-software OpenGL placed beside it, since the runners have no GPU, and checks it draws. Those
-DLLs are deleted before packaging, and the packaging step fails if one of them is in the zip: a
-copy shipped by mistake would force software rendering on every player.</li>
+software OpenGL placed beside it, since the runners have no GPU, and checks it draws. It starts it
+with the compiler's folder, and every folder holding a MinGW runtime DLL, taken off
+<code>PATH</code>: Windows looks for an imported DLL on <code>PATH</code>, so a runner with MinGW
+there would start an <code>.exe</code> that no player's machine can. The Mesa DLLs are deleted
+before packaging, and the packaging step fails if one of them is in the zip: a copy shipped by
+mistake would force software rendering on every player.</li>
 </ul>
 
 <h2>macOS</h2>
@@ -184,6 +199,16 @@ copy shipped by mistake would force software rendering on every player.</li>
 <p><code>macos-build.zip</code> holds one executable with both an arm64 and an x86_64 slice, for
 Apple silicon and Intel Macs, next to its <code>resources/</code> folder. It is a plain executable,
 not an <code>.app</code> bundle. CI checks both slices are in the file.</p>
+
+<p data-fw-grep="tools/binary_check.py::ARCH_FLOOR = \{&quot;arm64&quot;: \(11, 0\)\}">It opens on macOS 10.15 on an Intel Mac and on macOS 11 on Apple silicon. Every slice of a Mach-O
+records the oldest macOS it runs on, and a Mac older than that refuses to open it, with no message
+that says why; left to itself the toolchain records the version of the SDK it built with, which is
+the runner's own macOS. So <code>CMakeLists.txt</code> sets
+<code>CMAKE_OSX_DEPLOYMENT_TARGET</code> to 10.15, the first macOS whose C++ library has the
+<code>std::filesystem</code> that <a href="ref:rmp::save"><code>rmp::save</code></a> uses, and the
+arm64 slice starts at 11.0 even when the deployment target is lower, because that is the first
+macOS that ran on Apple silicon. The macOS job reads the minimum out of each slice with
+<code>tools/binary_check.py macos</code> and fails on one above those.</p>
 
 <h2>Signing</h2>
 

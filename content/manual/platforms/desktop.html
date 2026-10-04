@@ -35,16 +35,40 @@ credits instead.</p>
 
 <h2>Windows</h2>
 
-<p>Windows is <code>windows-x64</code> and <code>windows-arm64</code>. A release is built with
-MSVC and linked statically, the C runtime included, so the player installs nothing: the archive is
-the <code>.exe</code>, <code>resources/</code> and the licence notices. A release build is a
-windowed program — no console opens behind the game — and a debug build keeps its console for the
-log.</p>
+<p>Windows is <code>windows-x64</code> and <code>windows-arm64</code>. The archive is the
+<code>.exe</code>, <code>resources/</code> and the licence notices, and the player installs nothing:
+a player double-clicking the game has no compiler installed, so raylib and the compiler's own C and
+C++ runtimes are linked into the <code>.exe</code>. A release build is a windowed program — no
+console opens behind the game — and a debug build keeps its console for the log.</p>
+
+<p data-fw-grep="CMakeLists.txt::if\(MSVC\)\s+set\(CMAKE_MSVC_RUNTIME_LIBRARY &quot;MultiThreaded\$&lt;\$&lt;CONFIG:Debug&gt;:Debug&gt;&quot;\)\s+elseif\(MINGW\)\s+add_link_options\(-static\)">How depends on the compiler, and the
+build does it for both. MinGW links with <code>-static</code>, so libstdc++, libgcc and winpthread
+are inside the <code>.exe</code> instead of in <code>libstdc++-6.dll</code> and
+<code>libgcc_s_seh-1.dll</code> next to a compiler the player does not have. MSVC builds with the
+static C runtime, <code>/MT</code> (<code>/MTd</code> in a debug build), so no Visual C++
+Redistributable is needed. The Universal C Runtime is part of Windows 10 and stays a DLL. No
+<code>/arch:</code> option is set either: the x64 build stays on the SSE2 every x64 processor has,
+where AVX2 would stop the game with an illegal instruction on a processor without it.</p>
+
+<p data-fw-grep="tools/binary_check.py::&quot;ucrtbase\.dll&quot;: &quot;the Universal C Runtime, part of Windows since 10&quot;">What
+the <code>.exe</code> still asks the loader for is Windows itself, and CI holds it to that:
+<code>tools/binary_check.py windows</code> reads the import table and the delay-load table of the
+<code>.exe</code> each Windows job ships, and fails on any DLL that is not part of every Windows 10
+— <code>KERNEL32</code>, <code>USER32</code>, <code>GDI32</code>, <code>SHELL32</code>,
+<code>WINMM</code> and the Universal C Runtime are what a game imports, and <code>OPENGL32</code>
+too with the <code>win32</code> and <code>rgfw</code> backends. It needs only Python's standard
+library, so it runs on your own build too:</p>
+
+<pre data-lang="shell">
+python tools/binary_check.py windows build/my_game.exe
+</pre>
 
 <p>The icon is inside the <code>.exe</code>, because that is where Windows looks for it:
 <code>configure.py</code> turns <code>[icon] source</code> into a multi-resolution
-<code>.ico</code> and the build embeds it. Making the <code>.ico</code> needs Pillow; without it the
-build goes on without an icon rather than failing.</p>
+<code>.ico</code> and the build embeds it. Making the <code>.ico</code> needs Pillow; without it a
+build of your own goes on without an icon rather than failing. CI's Windows jobs install a pinned
+Pillow, and fail when <code>[icon] source</code> exists and the <code>.exe</code> they built does not
+carry it.</p>
 
 <h3>The windowing backend</h3>
 
@@ -87,7 +111,9 @@ unsigned executable packed by UPX is a shape Windows Defender associates with ma
 machines quarantine it. If your builds are signed, add the Windows targets to
 <code>[upx] enabled</code>.</p>
 
-<p><code>windows-arm64</code> is cross-compiled with MSVC on an x86-64 machine. That machine cannot
+<p>CI builds <code>windows-x64</code> with the compiler CMake finds first on the Windows runner, its
+MinGW GCC, and prints which one in the log, because the runner image decides it.
+<code>windows-arm64</code> is cross-compiled with MSVC on an x86-64 machine. That machine cannot
 run the ARM64 resource packer, so the archive ships <code>resources/</code> as loose files with a
 <code>PACK_SKIPPED.txt</code> that says why; the game reads loose files when there is no pack.</p>
 
@@ -96,6 +122,15 @@ run the ARM64 resource packer, so the archive ships <code>resources/</code> as l
 <p>One target, <code>macos</code>, and one binary with both architectures in it: Apple silicon and
 Intel. The archive is that binary, <code>resources/</code> with the asset pack, and the licence
 notices. It draws with OpenGL 3.3, which raylib's build fixes on macOS.</p>
+
+<p data-fw-grep="CMakeLists.txt::set\(CMAKE_OSX_DEPLOYMENT_TARGET &quot;10\.15&quot; CACHE STRING">It opens on
+<strong>macOS 10.15</strong> on an Intel Mac and <strong>macOS 11</strong> on Apple silicon, the
+first macOS that ran there. The build sets that floor, <code>CMAKE_OSX_DEPLOYMENT_TARGET</code> in
+<code>CMakeLists.txt</code>, because left unset the toolchain writes its SDK's own version into the
+binary, and every Mac older than the one that built it refuses to open the game without saying why.
+10.15 is where Apple's C++ library starts to have <code>std::filesystem</code>, which
+<a href="ref:rmp::save"><code>rmp::save</code></a> uses. CI reads the minimum macOS out of each slice
+of the binary it ships and fails on one above the floor.</p>
 
 <p>Saves go to <code>~/Library/Application Support/&lt;name&gt;/</code>. <code>[save]
 portable</code> means nothing on macOS and is ignored, and <code>[upx]</code> refuses

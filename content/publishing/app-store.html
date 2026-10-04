@@ -69,16 +69,14 @@ from your game's folder:</p>
 registered and not checked out, since only iOS needs it:</p>
 
 <pre data-lang="shell">
-git submodule update --init
+git submodule update --init thirdparty/raylib-ios
 </pre>
 </li>
-<li><p><strong>Build the engine</strong>, the same way CI does:</p>
+<li><p><strong>Build the engine</strong>, <code>raylib.xcframework</code> with its device and
+simulator slices, the same way CI does. Once, and again only when the submodule moves:</p>
 
 <pre data-lang="shell">
-cd thirdparty/raylib-ios/projects/scripts
-chmod +x build-ios-xcframework.sh
-./build-ios-xcframework.sh
-cd ../../../..
+(cd thirdparty/raylib-ios/projects/scripts &amp;&amp; bash build-ios-xcframework.sh)
 </pre>
 </li>
 <li><p><strong>Set your team in the .toml</strong>, rather than in Xcode, so it survives the next
