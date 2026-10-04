@@ -29,7 +29,9 @@ opening and closing the window, beginning and ending the frame — and
 <a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a>, which takes three functions of yours
 and nothing else. The window and the frame are then yours to open and close, as in a plain raylib
 program, while the framework still writes the right loop for each target, opens the asset pack,
-clamps the frame time and reports to CI. Many of the framework's examples are written this way:</p>
+samples the input <code>rmp::input</code> reads once a frame, clamps the frame time, keeps Escape
+from closing the window and reports to CI. Many of the framework's examples are written this
+way:</p>
 
 <pre data-lang="cpp" data-harness="file">
 #include &lt;rmp/app.h&gt;
@@ -52,22 +54,26 @@ RMP_ENTRY_POINT(on_ready, on_frame, on_exit);
 
 <h3>Can I write my own <code>main()</code>?</h3>
 
-<p>In plain C, yes: a game whose <code>src/</code> holds no C++ is linked against raylib alone, and
-its <code>main()</code> is its own — on the targets where a program owns its loop, which the web and
-iOS are not. See <a href="/manual/raylib/plain-c.html">Plain C</a>. In C++ with the framework, the
+<p>In plain C, yes: a game whose <code>src/</code> holds no C++, and no <code>src/rmp/</code>, is
+linked against raylib alone, and its <code>main()</code> is its own — on the targets where a program
+owns its loop, which the web and iOS are not. See <a href="/manual/raylib/plain-c.html">Plain C</a>. In C++ with the framework, the
 entry-point macro writes <code>main()</code> for you, and a second one is a link error.</p>
 
 <h3>Does it use exceptions?</h3>
 
-<p>No. Nothing in the framework throws. A load that finds nothing gives an empty handle that draws
-nothing; <a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> raises a flag the loop reads;
-a mistake it can see is said once in the log.</p>
+<p data-fw-grep="include/rmp/assets.h::three places in src/rmp/save\.cpp">No. Nothing of the framework's
+throws to your code. A load that finds nothing gives an empty handle that draws nothing;
+<a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> raises a flag the loop reads; a mistake
+it can see is said once in the log. Where a standard-library call inside it can throw, the framework
+catches it and turns it into a value — three places in <code>rmp::save</code>.</p>
 
 <h3>Which C++?</h3>
 
 <p>C++20, with designated initialisers throughout: the options of a call are written by name —
 <code>rmp::ui::begin({ .placement = rmp::ui::Align::TOP_LEFT })</code> — in the order the struct
-declares them. A plain C game is C99.</p>
+declares them. Out of order is a compile error with every compiler the framework builds with: GCC
+and MSVC refuse it themselves, and every build gives Clang <code>-Werror=reorder-init-list</code> —
+CMake, Android and the generated Xcode project alike. A plain C game is C99.</p>
 
 <h2>Targets</h2>
 
@@ -97,10 +103,14 @@ workflows, so building every target, and publishing, happens on GitHub.</p>
 
 <h3>Does it run on a Raspberry Pi?</h3>
 
-<p>Two ways. <code>linux-arm64-glibc</code> runs on a Pi with a desktop, through X11 like any
-Linux. <code>linux-arm64-glibc-drm</code> runs on one without a desktop, drawing straight to the
-screen; CI builds and checks it, and cannot run it, because what it is for is the Pi's own display
-hardware. See <a href="/manual/platforms/desktop.html">Desktop</a>.</p>
+<p>There is a target made for one with no desktop installed: <code>linux-arm64-glibc-drm</code>,
+which draws straight to the screen. CI builds it and checks it is an ARM64
+binary linked against libdrm, and does not run it, because what it is for is the Pi's own display
+hardware, which no runner has. Its glibc floor is the one of the machine that built it, which CI
+prints whenever it builds it: compare it with the system on your Pi. <code>linux-arm64-glibc</code>, the
+ARM64 desktop build, asks for OpenGL 3.3 like every desktop build, and CI starts it on GitHub's ARM64
+runners under a virtual X server, never on a Pi. See
+<a href="/manual/platforms/desktop.html">Desktop</a>.</p>
 
 <h2>Players</h2>
 
@@ -121,7 +131,7 @@ directly, and those have to be on the machine that runs them.
 <tbody>
 <tr><td>Windows</td><td><code>%APPDATA%\&lt;name&gt;\</code>, or <code>saves\</code> next to the <code>.exe</code> with <code>[save] portable = true</code></td></tr>
 <tr><td>macOS</td><td><code>~/Library/Application Support/&lt;name&gt;/</code></td></tr>
-<tr><td>Linux and the BSDs</td><td><code>$XDG_DATA_HOME/&lt;name&gt;/</code> or <code>~/.local/share/&lt;name&gt;/</code>, or <code>saves/</code> next to the executable with <code>[save] portable = true</code></td></tr>
+<tr><td>Linux and the BSDs</td><td><code>$XDG_DATA_HOME/&lt;name&gt;/</code> or <code>~/.local/share/&lt;name&gt;/</code>, or <code>saves/</code> next to the executable with <code>[save] portable = true</code> — except on OpenBSD and NetBSD, which cannot say where the executable is, so the saves stay in the user's folder</td></tr>
 <tr><td>Web</td><td>IndexedDB, as the folder <code>/rmp_save/&lt;name&gt;/</code></td></tr>
 <tr><td>Android</td><td>The app's private storage, in <code>saves/</code></td></tr>
 <tr><td>iOS</td><td>The app's <code>Library/Application Support/</code></td></tr>
@@ -131,18 +141,24 @@ directly, and those have to be on the machine that runs them.
 <p><code>&lt;name&gt;</code> is <code>[project] name</code>. <a href="ref:rmp::save::directory"><code>rmp::save::directory()</code></a>
 says which folder a running game is using.</p>
 
-<h3>Why does my release show nothing when I double-click it?</h3>
+<h3>Does a release start from any folder?</h3>
 
-<p>A desktop release reads <code>./resources/</code> relative to the folder it was started from.
-Started from its own folder, as the archive is laid out, it finds them; started from anywhere else,
-it does not. See <a href="/manual/help/troubleshooting.html#a-release-build-finds-nothing">Troubleshooting</a>.</p>
+<p>Yes. A desktop release reads <code>./resources/</code>, and before it reads anything it moves into
+the executable's folder when there is a <code>resources/</code> in it — so a double-click, a shortcut
+or a terminal somewhere else all find the files the archive put next to it. OpenBSD and NetBSD are
+the exception: raylib cannot say where the executable is there, so the game reads
+<code>resources/</code> from the folder it was started in, and says so in its log. See
+<a href="/manual/platforms/desktop.html#running-a-release-build">Desktop</a>, and
+<a href="/manual/help/troubleshooting.html#a-release-build-finds-nothing">Troubleshooting</a> when
+it finds nothing.</p>
 
 <h2>The project</h2>
 
 <h3>Why is there no version in the .toml?</h3>
 
-<p>Because it comes from the git tag: <code>v1.2.3</code> is the version on every platform and the
-Android version code, so there is no number in the project to forget to change. See
+<p>Because it comes from the git tag: <code>v1.2.3</code> becomes the Android version name and
+version code and the iOS app's version, and CI makes the release from that tag, so there is no
+number in the project to forget to change. The desktop and web builds carry no version inside them. See
 <a href="/publishing/releases.html">Releases</a>.</p>
 
 <h3>How do I make the game smaller?</h3>

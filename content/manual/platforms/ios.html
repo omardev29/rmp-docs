@@ -66,16 +66,19 @@ not committed. What goes into it:</p>
 <tr><td><code>[window] title</code></td><td>The name under the app's icon.</td></tr>
 <tr><td><code>[window] orientation</code></td><td>The supported orientations: both landscapes, portrait, or all three for <code>"unspecified"</code>. The same key sets Android.</td></tr>
 <tr><td><code>[icon] source</code></td><td>The app icon.</td></tr>
-<tr><td><code>[ios.settings]</code></td><td>Raw Xcode build settings, copied in as they are.</td></tr>
+<tr><td><code>[ios.settings]</code></td><td>Raw Xcode build settings, copied in as they are — except an <code>OTHER_CPLUSPLUSFLAGS</code> of yours, which is added after the framework's own flags in that setting rather than replacing them.</td></tr>
 <tr><td>the git tag</td><td>The marketing version.</td></tr>
 </tbody>
 </table>
 
-<p>The rest is fixed: the game's <code>src/</code> and <code>include/</code> as sources; the whole of
+<p data-fw-grep="tools/configure.py::IOS_STRICT_CXX_FLAGS = &quot;-Werror=reorder-init-list&quot;">The
+rest is fixed: the game's <code>src/</code> and <code>include/</code> as sources; the whole of
 <code>resources/</code> copied into the app as a folder; the licence notices; a launch screen Xcode
 generates, without which iOS would run the game letterboxed at a legacy resolution; full screen with
-the status bar hidden; C++20; and RMP_PRODUCTION_BUILD at 0 in the Debug configuration and 1 in
-Release.</p>
+the status bar hidden; RMP_PRODUCTION_BUILD at 0 in the Debug configuration and 1 in Release; and
+C++20, with <code>-Werror=reorder-init-list</code>, the flag the CMake and Android builds give
+Clang: a designated initialiser out of declaration order is a compile error in Xcode too, as it is
+with GCC and MSVC, and not a warning that passes on one machine and fails on another.</p>
 
 <p>The deployment target has a floor because of <a href="ref:rmp::save"><code>rmp::save</code></a>:
 it uses <code>std::filesystem</code>, which Apple's C++ library only has from iOS 13. Below that the
@@ -171,5 +174,5 @@ step of its own, run only when the repository variable <code>IOS_SIMULATOR_TEST<
 <code>true</code>: the simulator on the hosted runners does not boot reliably, and a gate that fails
 for the runner's reasons would teach everyone to ignore it.</p>
 
-<p><code>[upx]</code> refuses <code>ios</code> by name: the app is signed, and compressing it would
-break the signature.</p>
+<p><code>[upx]</code> refuses <code>ios</code> by name, at its line, when the configuration is
+checked: the app is signed, and compressing it would break the signature.</p>

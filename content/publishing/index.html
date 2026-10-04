@@ -68,12 +68,14 @@ rmp deploy 1.0.0
 in it (<code>v1.2.0-rc1</code>), marked as a pre-release. Attached to it:</p>
 
 <ul>
-<li>A zip per desktop and BSD target: the executable, its assets packed into one file,
-<code>resources.rres</code>, in a <code>resources/</code> folder beside it, and
-<code>LICENSES.txt</code>.
+<li>A zip per desktop and BSD target: the executable, its assets in a <code>resources/</code>
+folder beside it — packed into one file, <code>resources.rres</code>, on most targets — and
+<code>LICENSES.txt</code>. The game finds its assets from whatever folder it is started in,
+except on NetBSD and OpenBSD, where it has to be started in its own.
 <a href="/publishing/desktop.html">Desktop and BSD archives</a>.</li>
-<li><code>web-build.zip</code>: the page, its script, the WebAssembly module and the preloaded
-assets. <a href="/publishing/web.html">The web build</a>.</li>
+<li><code>web-build.zip</code>: the page, its script, the WebAssembly module, the preloaded
+assets and the web build's own <code>LICENSES.txt</code>.
+<a href="/publishing/web.html">The web build</a>.</li>
 <li>The Android debug APK, and the signed App Bundle when the signing secrets are set.
 <a href="/publishing/google-play.html">Google Play</a>.</li>
 <li>The iOS engine as an xcframework, and a simulator build of the app.

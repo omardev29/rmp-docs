@@ -30,7 +30,7 @@ one and cannot read them.</p>
 <tbody>
 <tr><td><code>cmake/generated/</code></td><td>CMake: the project name, which raylib modules to build, the development compiler and linker, the web build's memory, the Windows icon.</td></tr>
 <tr><td><code>rmp/config.h</code>, generated</td><td>Your C and C++: the <code>RMP_</code> values, such as <code>RMP_WINDOW_WIDTH</code>.</td></tr>
-<tr><td><code>raymob/generated.properties</code> and the manifest</td><td>Gradle: the application id, the SDK levels, the permissions, the orientation, whether AdMob is in the build.</td></tr>
+<tr><td><code>raymob/generated.properties</code> and the manifest</td><td>Gradle: the application id, the SDK levels, the permissions, the orientation, the OpenGL ES version the game is compiled for, whether AdMob is in the build.</td></tr>
 <tr><td><code>ios/project.yml</code></td><td>XcodeGen, which makes the Xcode project: the bundle id, the deployment target, your <code>[ios.settings]</code>.</td></tr>
 <tr><td>the icons and the <code>LICENSES.txt</code> files</td><td>Every package the game ships in.</td></tr>
 </tbody>
@@ -72,8 +72,10 @@ height = 720
 </pre>
 
 <p>The file is laid over the defaults. A key you leave out takes its default, a section you leave
-out is entirely default, and a game whose <code>.toml</code> is deleted still builds, with a warning
-saying it is running on defaults. So a <code>.toml</code> holds only what the game changes:</p>
+out is entirely default, and a game whose <code>.toml</code> is deleted still builds through
+<code>cmake --preset debug</code>, with a warning saying it is running on defaults — though not through
+<code>rmp</code>, which finds the project by that file and, without it, says it is not inside one. So
+a <code>.toml</code> holds only what the game changes:</p>
 
 <pre data-lang="toml">
 [project]
@@ -97,7 +99,10 @@ bundle_id = "com.yourname.spacerocks"
 
 <p>The <code>.toml</code> that <code>rmp new</code> gives a game is the framework's own, with every key
 written out and a comment over each one saying what it does and why its default is what it is. It
-is worth reading once.</p>
+is worth reading once. <code>rmp new</code> writes the game's own values into it — its name, its
+placeholder store ids, a password of its own — and turns AdMob off and Android's OpenGL ES version
+down to 2.0, the two keys the framework sets the other way so that its CI builds those paths; see
+<a href="/manual/basics/project-layout.html#making-a-game">Project layout</a>.</p>
 
 <h3>Reading a value in your code</h3>
 
@@ -139,6 +144,24 @@ brackets is the commonest slip, and TOML would hand the string over a character 
 enabled = "all"
 </pre>
 
+<p>A stray pair of brackets the other way round is refused just as plainly:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[window]
+orientation = ["landscape"]
+</pre>
+
+<p>An empty value is refused too, wherever empty would mean nothing. A game with no title would
+have a blank title bar and no name under its icon:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[window]
+title = ""
+</pre>
+
+<p>Where empty does mean something, the key says what: <code>[linux] glibc = ""</code> builds against
+the glibc of the machine doing the build.</p>
+
 <p>And two keys that are each valid can still contradict each other. A frame cap of 15 frames a
 second makes every frame a fifteenth of a second long, but <code>[app] max_delta</code> hands the game
 at most a twentieth, so the game would run slow forever without anything saying why:</p>
@@ -179,12 +202,12 @@ defaults.</p>
 <table>
 <thead><tr><th>Section</th><th>What it decides</th></tr></thead>
 <tbody>
-<tr><td><a href="/reference/configuration.html#section-project"><code>[project]</code></a></td><td>The game's name: the executable, the CMake target, the Xcode scheme, the save folder and every artifact's name.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-project"><code>[project]</code></a></td><td>The game's name: the executable, the CMake target, the Xcode scheme, the save folder on desktops and the web, and every artifact's name.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-window"><code>[window]</code></a></td><td>The title, the size the window opens at — which is also the design resolution — the phone orientation, vsync and a frame cap.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-targets"><code>[targets]</code></a></td><td>Which platforms the game is built for, by group or by exact id.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-android"><code>[android]</code></a>, <a href="/reference/configuration.html#section-ios"><code>[ios]</code></a></td><td>The store identities, the oldest OS versions supported, the GL version Android asks for, the Play Store category. <code>[ios.settings]</code> passes raw Xcode build settings through, such as a signing team.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-android"><code>[android]</code></a>, <a href="/reference/configuration.html#section-ios"><code>[ios]</code></a></td><td>The store identities, the oldest OS versions supported, the OpenGL ES version Android is compiled for and requires, the Play Store category. <code>[ios.settings]</code> passes raw Xcode build settings through, such as a signing team.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-android-display"><code>[android.display]</code></a>, <a href="/reference/configuration.html#section-android-permissions"><code>[android.permissions]</code></a>, <a href="/reference/configuration.html#section-android-features"><code>[android.features]</code></a></td><td>Screen behaviour on Android (keep the screen on, hide the system bars, draw behind the notch), the permissions the app asks for, and the hardware the Play Store requires.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-android-admob"><code>[android.admob]</code></a></td><td>Whether AdMob is in the Android build at all, and the ad unit ids. See <a href="ref:rmp::ads"><code>rmp::ads</code></a>.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-android-admob"><code>[android.admob]</code></a></td><td>Whether AdMob is in the Android build at all — not unless the game turns it on — and the app and ad unit ids. See <a href="ref:rmp::ads"><code>rmp::ads</code></a>.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-icon"><code>[icon]</code></a></td><td>The picture every app icon is made from, and the colour behind Android's adaptive icon.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-app"><code>[app]</code></a></td><td>The longest step the game logic is ever handed, so a stalled frame is a moment of slow motion and not a teleport through a wall.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-ui"><code>[ui]</code></a></td><td>The theme, font, font size and scale <a href="ref:rmp::ui"><code>rmp::ui</code></a> starts with, and the ceiling on its layout tree.</td></tr>
@@ -194,9 +217,9 @@ defaults.</p>
 <tr><td><a href="/reference/configuration.html#section-resources"><code>[resources]</code></a></td><td>The password the asset pack is encrypted with.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-raylib"><code>[raylib]</code></a></td><td>raylib modules a game does not use, left out to shrink the binary.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-web"><code>[web]</code></a></td><td>The browser build's memory, whether it may grow, and which layer raylib talks to.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-linux"><code>[linux]</code></a>, <a href="/reference/configuration.html#section-windows"><code>[windows]</code></a></td><td>The windowing backend on each, native Wayland, and the oldest glibc a Linux binary may need.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-upx"><code>[upx]</code></a></td><td>Which shipped binaries are compressed with UPX.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-dev"><code>[dev]</code></a></td><td>Your machine only: the compiler and linker of debug builds, and whether a framework warning aborts a debug build. CI never reads it.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-linux"><code>[linux]</code></a>, <a href="/reference/configuration.html#section-windows"><code>[windows]</code></a></td><td>The windowing backend on each, native Wayland, and the oldest glibc the <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code> binaries may need.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-upx"><code>[upx]</code></a></td><td>Which shipped binaries are compressed with UPX. A target that cannot be compressed is refused by name, with the reason.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-dev"><code>[dev]</code></a></td><td>Debug builds only: their compiler and linker, and whether a framework warning aborts them. The debug builds CI runs its checks with read it too; the release and web builds that ship never do.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-deploy"><code>[deploy]</code></a>, <a href="/reference/configuration.html#section-deploy-itch"><code>[deploy.itch]</code></a>, <a href="/reference/configuration.html#section-deploy-firebase"><code>[deploy.firebase]</code></a></td><td>Whether a <code>LICENSES.txt</code> ships with the game, where a release is published on itch.io, and the Firebase project that runs the Android build on real phones.</td></tr>
 </tbody>
 </table>
@@ -205,8 +228,10 @@ defaults.</p>
 
 <p><code>[project] name</code> is the one value that names files. It has to be letters, digits,
 <code>_</code> and <code>-</code>, starting with a letter, because it becomes the executable on every
-operating system. Changing it after release changes where the saves are kept, and makes sealed saves
-from the old name unreadable, since their key is derived from it.</p>
+operating system. Changing it after release changes where the saves are kept on desktops and the web
+— Android and iOS keep them in a folder without it, and so does a <code>[save] portable</code> build
+that saves next to its executable — and, on every platform, makes sealed saves from the old name
+unreadable, since their key is derived from it.</p>
 
 <p><code>[window] width</code> and <code>height</code> are two things at once. On a desktop they are
 the size the window opens at. Everywhere, they are the <em>design resolution</em>: the size
@@ -251,11 +276,52 @@ never be renamed or moved, and getting it wrong means a new listing that starts 
 installs and reviews. That is why a release refuses the <code>com.example.</code> placeholders that
 <code>rmp new</code> writes. Set both before the first release.</p>
 
-<h3>[dev]: your machine, not the build that ships</h3>
+<h3>[android] gl_version: what the game is compiled for</h3>
 
-<p><code>[dev]</code> applies to debug builds on your machine and nowhere else. CI builds the release
-and web presets, which never read it, so nothing in it can change what ships. <code>compiler</code>
-picks the compiler of a debug build, <code>linker</code> a faster linker when one works, and
+<p data-fw-grep="raymob/app/src/main/cpp/gl_version.cmake::set\(\$\{OUT_DEFINE\} &quot;GRAPHICS_API_OPENGL_ES3&quot; PARENT_SCOPE\)"><code>[android] gl_version</code>
+decides what raylib and the game are compiled for on Android, and the manifest requires the same
+version. <code>"ES20"</code>, the default, compiles for OpenGL ES 2.0, which every Android device
+has. <code>"ES30"</code> compiles raylib's ES 3.0 path, links <code>libGLESv3</code> and asks EGL for
+a version 3 context, and the Play Store does not offer the game to a device without ES 3.0.
+<code>"ES31"</code> and <code>"ES32"</code> are refused, because raylib has no 3.1 or 3.2 path: they
+would compile the ES 3.0 one all the same and only hide the game from more devices.</p>
+
+<pre data-lang="toml" data-expect="reject">
+[android]
+gl_version = "ES31"
+</pre>
+
+<h3>[android.admob]: off until the game has an ad</h3>
+
+<p>Ads are opt-in. With <code>[android.admob] enabled = false</code>, the default and what
+<code>rmp new</code> writes, the Android build carries no Google Mobile Ads SDK, asks for no
+advertising-id permission and owes Play no advertising-id declaration; the
+<a href="ref:rmp::ads"><code>rmp::ads</code></a> calls still compile and do nothing, as they do on
+every other platform. AdMob also stays out of a build whose targets do not include Android.</p>
+
+<p>Turned on, the three ids go into the manifest and the SDK as they are written, and the SDK stops
+the app at startup over an app id it cannot read. So each one has to be a string, always, and while
+AdMob is on it has to have AdMob's shape: <code>ca-app-pub-</code>, sixteen digits, <code>~</code> and
+ten digits for <code>app_id</code>, and the same with a <code>/</code> for <code>interstitial_id</code>
+and <code>rewarded_id</code>. The defaults are Google's test ids, which have that shape. An empty
+id, a malformed one, or an app id where a unit id goes, is refused at its line:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[android.admob]
+enabled = true
+app_id  = ""
+</pre>
+
+<h3>[dev]: debug builds, not the build that ships</h3>
+
+<p data-fw-grep="CMakeLists.txt::if\(NOT PRODUCTION_BUILD AND RMP_DEV_TOOLCHAIN\)\s+include\(&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/cmake/generated/dev_toolchain\.cmake&quot; OPTIONAL\)"><code>[dev]</code> applies to debug builds and to nothing else. The release and web presets never
+read it, so nothing in it can change what ships. <code>compiler</code> picks the compiler of a debug
+build, when the machine has it, <code>linker</code> a faster linker when one works, and
 <code>strict = true</code> turns the first warning the framework prints about a mistake in the game —
 an action nobody defined, a <code>pop()</code> with nothing underneath — into an abort, in the
 debugger, at the line that caused it. Release builds compile that check out.</p>
+
+<p data-fw-grep="tools/render_check.sh::-DCMAKE_BUILD_TYPE=Debug \\\s+-DPRODUCTION_BUILD=OFF">Debug builds are not only the ones on your machine. CI checks a game with debug builds too —
+the software render check in a game's own CI is one, booting the game for a few frames — and those
+read <code>[dev]</code> exactly as yours do. So with <code>strict = true</code>, a warning the game
+triggers while CI boots it aborts the game and fails the check.</p>

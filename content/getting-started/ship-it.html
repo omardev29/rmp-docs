@@ -53,10 +53,14 @@ every push:</p>
 <ul>
 <li><code>config</code>: the <code>.toml</code>, the versions the framework pins, and the licence
 of every library in the game;</li>
-<li><code>render</code>: the game built for raylib's software renderer, booted, drawing a frame
-with something on it, and closing cleanly, with no window and no graphics card;</li>
-<li><code>smoke</code>: the game built as you run it, booted for a few frames, checked to have
-loaded every asset it asked for and drawn something.</li>
+<li data-fw-grep="tools/render_check.sh::RAY_TEST_BOOT_OK assets_failed=0 "><code>render</code>:
+the game built for raylib's software renderer and booted with no window and no graphics card,
+checked to have loaded every asset it asked for, drawn a frame with something on it, and run every
+frame it was given;</li>
+<li data-fw-grep="src/rmp/assets.cpp::void decode_failed\("><code>smoke</code>: the game built
+as you run it, booted for a few frames, and checked to have drawn something with no asset failing
+to load. A file that is missing fails, and so does one that is there and does not decode: a PNG cut
+short counts the same as no file at all.</li>
 </ul>
 
 <p>A boot only reaches the first scene, so <code>rmp test</code> says the game starts, loads its
@@ -72,12 +76,20 @@ repository on GitHub, and push to it:</p>
 git add -A
 git commit -m "Coin Rabbit"
 git remote add origin https://github.com/yourname/my_game.git
+git push -u origin main
+</pre>
+
+<p>The first push is git's own, because <code>-u</code> also tells git where <code>main</code>
+goes from then on. Every push after it is <code>rmp push</code>:</p>
+
+<pre data-lang="shell">
 rmp push
 </pre>
 
-<p><code>rmp push</code> is <code>git push</code> with one check in front of it: it will not push
-while a CI run of the repository is still going, because a new push cancels it. It needs the
-<code>gh</code> command to ask; without it, it says so and pushes.</p>
+<p data-fw-grep="tools/rmp.py::ctx\.run\(\[.git., .push.\]\)"><code>rmp push</code>
+is a plain <code>git push</code> with one check in front of it: it will not push while a CI run of the
+repository is still going, because a new push cancels it. It needs the <code>gh</code> command to
+ask; without it, it says so and pushes.</p>
 
 <p>Every push to <code>main</code> runs the fast lane: the checks above, and builds for Linux, the
 web, Windows and Android. Watch it on the repository's Actions tab.</p>
@@ -88,10 +100,11 @@ web, Windows and Android. Watch it on the repository's Actions tab.</p>
 rmp deploy 1.0.0
 </pre>
 
-<p><code>rmp deploy</code> checks everything a release needs before it makes a tag that cannot be
-quietly taken back: that every change is committed, that <code>v1.0.0</code> is not already a
-tag, that the commit is the one GitHub has, and that the <code>.toml</code> is valid with real ids
-in it. Then it tags the commit <code>v1.0.0</code> and pushes the tag.</p>
+<p data-fw-grep="tools/rmp.py::HEAD is not what origin/\{branch\} points at \(as of your last fetch\)"><code>rmp deploy</code> checks everything a release needs before it makes a tag that cannot be
+quietly taken back: that every change to a tracked file is committed, that <code>v1.0.0</code> is
+not already a tag, here or on GitHub, that the commit is the one your branch on GitHub points at
+as of your last fetch or push (it does not fetch), and that the <code>.toml</code> is valid with
+real ids in it. Then it tags the commit <code>v1.0.0</code> and pushes the tag.</p>
 
 <p>The tag is the version: there is no version number in the project to keep in step with it.
 For a tag, CI builds every target that <code>[targets]</code> has turned on, all

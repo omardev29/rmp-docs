@@ -124,20 +124,20 @@ the first that fails stops <code>rmp deploy</code> before it tags anything:</p>
 <li><p><strong>Nothing uncommitted.</strong> CI builds the commit, so a change that is only in
 your working tree would not be in the release. Staged or not, a change to a tracked file stops it
 (files git does not track are not part of any commit, and do not count):
-<samp>FALLA: uncommitted changes. Commit or stash them first.</samp></p></li>
+<samp>FAIL: uncommitted changes. Commit or stash them first.</samp></p></li>
 <li><p><strong>The tag is new here.</strong>
-<samp>FALLA: the tag v1.2.0 already exists here.</samp></p></li>
+<samp>FAIL: the tag v1.2.0 already exists here.</samp></p></li>
 <li><p><strong>The tag is new on <code>origin</code>.</strong> A version that has been pushed once
-is not cut again: <samp>FALLA: v1.2.0 is already on the remote. Releases are not re-cut; bump the
+is not cut again: <samp>FAIL: v1.2.0 is already on the remote. Releases are not re-cut; bump the
 version.</samp> When <code>origin</code> cannot be asked at all — no remote, no network — that
 stops it too, with what git said.</p></li>
 <li><p><strong>Your branch is on <code>origin</code>.</strong> CI checks the tag out from GitHub,
 so a tag on a commit that exists only on your machine builds nothing:
-<samp>FALLA: origin/main does not exist. Push the branch first:</samp></p></li>
+<samp>FAIL: origin/main does not exist. Push the branch first:</samp></p></li>
 <li><p><strong>The commit is the one <code>origin</code> has.</strong> <code>HEAD</code> must be
 exactly what <code>origin/&lt;branch&gt;</code> points at, as of your last fetch:
-<samp>FALLA: HEAD is not what origin/main points at (as of your last fetch).</samp> It suggests
-<code>rmp push</code>, which pushes unless a CI run is in flight.</p></li>
+<samp>FAIL: HEAD is not what origin/main points at (as of your last fetch).</samp> It suggests
+<code>rmp push</code>, which pushes unless <code>gh</code> reports a CI run in flight.</p></li>
 <li><p><strong>The configuration, the way CI will read it.</strong> <code>tools/configure.py</code>
 runs with the tag set the way CI sets it, so the whole <code>.toml</code> is validated, the tag is
 parsed into a version name and code, and — in a game, not in the framework's own repository —
@@ -222,9 +222,11 @@ the previous one, and these are its files. A target your game does not build has
 </table>
 
 <p>One file never reaches a release: the App Bundle CI signs with a throwaway key when your
-signing secrets are not set. It is uploaded to the run under its own artifact name, with
-<code>-NOT-FOR-PLAY</code> in its file name, and the release step never looks at that artifact —
-so a bundle Play would accept is the only kind a release can carry.</p>
+signing secrets are not set. It is uploaded to the run under its own artifact name,
+<code>android-unsigned-aab</code>, with <code>-NOT-FOR-PLAY</code> in its file name. The release
+job downloads every artifact of the run, that one included, and then leaves it out by name: it is
+not in <code>SHA256SUMS</code> and not in the list of files the release attaches — so a bundle
+Play would accept is the only kind a release can carry.</p>
 
 <h3>Checking a download</h3>
 
@@ -238,12 +240,14 @@ sha256sum -c --ignore-missing SHA256SUMS   # only the ones you downloaded
 
 <h3>The licence notices</h3>
 
-<p>Every archive carries <code>LICENSES.txt</code> beside the executable, the APK and the App
-Bundle carry it among their assets, and the iOS app carries it in its bundle. It is generated
-from the components block of <code>THIRD_PARTY_LICENSES.md</code>: the full notice of everything
-the game is built on, with a line saying which copies are modified. It is the only third-party
-notice the game ships, so turning it off needs a reason on record — where the credits are
-instead:</p>
+<p data-fw-grep="tools/configure.py::.web.: REPO / .cmake. / .generated. / .web. / .LICENSES\.txt.">Every desktop and BSD archive carries <code>LICENSES.txt</code> beside the executable,
+<code>web-build.zip</code> beside the page, the APK and the App Bundle among their assets, and the
+iOS app in its bundle. Each is generated from the components block of
+<code>THIRD_PARTY_LICENSES.md</code> for what that build contains: the full notice of every
+component in it, with a line saying which copies are modified. So the web's notice names none of the
+desktop-only pieces — GLFW, RGFW, glad, the Windows shims — that a <code>.wasm</code> does not
+contain, and only the Android one credits raymob. It is the only third-party notice the game
+ships, so turning it off needs a reason on record — where the credits are instead:</p>
 
 <pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
 [deploy]

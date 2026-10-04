@@ -95,7 +95,7 @@ hook a behavior does not declare costs nothing at all.</p>
 <tr><td><code>_late_update(Object &amp;self, float delta)</code></td><td>Every frame, after the object has moved, been held to its edges and had its animation advanced.</td></tr>
 <tr><td><code>_ready(Object &amp;self)</code></td><td>Once, when it is added.</td></tr>
 <tr><td><code>_draw(Object &amp;self)</code></td><td>Every frame the object is drawn, after its sprite or shape and before its own <code>_draw()</code>, in world units.</td></tr>
-<tr><td><code>_collision(Object &amp;self, Object &amp;other)</code></td><td>Once per frame for each object the object touches, right after the object's own <code>_collision()</code>.</td></tr>
+<tr><td><code>_collision(Object &amp;self, Object &amp;other)</code></td><td data-fw-grep="src/rmp/behavior.cpp::if \(!object\.alive\(\) \|\| !other\.alive\(\)\) break;">Once per frame for each object the object touches, right after the object's own <code>_collision()</code>. The walk stops after any behavior once either of the two is no longer alive: the behaviors after one that destroyed either object hear nothing, and if one was destroyed before the walk began, only the first behavior hears it. See <a href="/manual/core/collision.html#being-told">Collision</a>.</td></tr>
 <tr><td><code>_end(Object &amp;self)</code></td><td>When it is removed, replaced, or the object is destroyed.</td></tr>
 </tbody>
 </table>

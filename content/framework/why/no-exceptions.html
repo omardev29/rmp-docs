@@ -40,6 +40,14 @@ struct. A missing picture is a hole in the frame, not a dead process. The failur
 the boot line CI reads reports how many assets failed to load, and a boot with any failure is
 red.</p>
 
+<p data-fw-grep="src/rmp/assets.cpp::void decode_failed\(const char \*name\) \{\s+detail::loads\.failed\+\+;">A
+file that is there and does not decode — a picture, a sound, a song or a font cut short or
+corrupt — is a failed load in the same way: what comes back is empty, the failure is counted,
+and the log says so once per name. A font is no exception. raylib answers
+a font it cannot read with its own built-in one, and the framework does not take that for the file
+you asked for: you get an empty font, and nothing is kept under the file's name, so the same name
+is tried again the next time it is asked for.</p>
+
 <pre data-lang="cpp" data-harness="members">
 rmp::Texture _logo;
 
@@ -112,11 +120,12 @@ finishes, and the game shuts down in order.</p>
 
 <h2 id="the-standard-library">Exceptions from underneath</h2>
 
-<p data-fw-grep="src/rmp/save.cpp::\} catch \(\.\.\.\) \{">The C++ standard library does throw, in
-a few places the framework relies on — asking the operating system for random bytes, converting a
-Windows path to UTF-8 — and those are caught where they happen, inside <code>rmp::save</code>, and
-turned into a value: another source for the random bytes, an empty path that the caller already
-treats as "cannot be used". None of them escapes into your game.</p>
+<p data-fw-grep="include/rmp/assets.h::three places in src/rmp/save.cpp \(the random\s+// device, and a path converted on Windows\)">The
+C++ standard library does throw, in a few places the framework relies on — asking the operating
+system for random bytes, converting a Windows path to UTF-8 — and those are caught where they
+happen, in three places in <code>src/rmp/save.cpp</code>, and turned into a value: another source
+for the random bytes, an empty path that the caller already treats as "cannot be used". None of
+them escapes into your game.</p>
 
 <p data-fw-grep="include/rmp/math.h::Its resource wrappers\s+// throw RaylibException on a failed load, and this framework does not throw">It
 is also why the framework vendors only the math headers of raylib-cpp: its resource classes throw

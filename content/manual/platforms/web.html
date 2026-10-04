@@ -140,8 +140,11 @@ until the first click, touch or key.</p>
 
 <h2>Serving a build</h2>
 
-<p>Any static web server that serves the four files from one folder will run the game; the page is
-<code>&lt;name&gt;.html</code>. CI's web archive is those four files and the licence notices.
+<p data-fw-grep="tools/configure.py::&quot;web&quot;: REPO / &quot;cmake&quot; / &quot;generated&quot; / &quot;web&quot; / &quot;LICENSES.txt&quot;">Any
+static web server that serves the four files from one folder will run the game; the page is
+<code>&lt;name&gt;.html</code>. CI's web archive is those four files and a <code>LICENSES.txt</code>
+of the web's own, which credits what a web build contains and none of the desktop windowing
+libraries a <code>.wasm</code> does not carry.
 itch.io wants the page called <code>index.html</code>, and the framework's itch.io job uploads the
 build that way, so it plays in the page rather than as a download. More on hosting, size and the
 archive in <a href="/publishing/web.html">The web build</a>.</p>
@@ -150,7 +153,8 @@ archive in <a href="/publishing/web.html">The web build</a>.</p>
 
 <p>The web target is in the fast lane, on every push. CI builds it, checks the four files are there
 and not empty, and then plays it: the page is served from a local web server and opened in
-headless Chromium; the game must report that it booted, after writing a save to IndexedDB, reading
-it back and removing it; and after the game has had time to draw, the canvas is photographed and
+headless Chromium; the game must report that it booted with every asset loaded
+(<code>assets_failed=0</code>), after writing a save to IndexedDB, reading it back and removing it;
+and after the game has had time to draw, the canvas is photographed and
 measured for drawn pixels. When the render check fails, the picture of the canvas is kept with the
 run.</p>

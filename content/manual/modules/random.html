@@ -26,7 +26,7 @@ const Vector2 heading = rmp::random::direction();    // a unit vector, any angle
 <tbody>
 <tr><td><a href="ref:rmp::random::value"><code>value()</code></a></td><td>A float from 0 up to, never reaching, 1.</td></tr>
 <tr><td><a href="ref:rmp::random::range"><code>range(min, max)</code></a> with floats</td><td>A float from <code>min</code> up to, never reaching, <code>max</code>.</td></tr>
-<tr><td><code>range(min, max)</code> with ints</td><td>An int from <code>min</code> to <code>max</code>, <em>both included</em>, as raylib's <code>GetRandomValue()</code> counts — swapping one for the other does not change a game. When <code>max</code> is not above <code>min</code>, <code>min</code>.</td></tr>
+<tr><td><code>range(min, max)</code> with ints</td><td data-fw-grep="src/rmp/random.cpp::if \(max &lt;= min\) return min;">An int from <code>min</code> to <code>max</code>, <em>both included</em>, as raylib's <code>GetRandomValue()</code> counts. When <code>max</code> is not above <code>min</code>, <code>min</code> — where <code>GetRandomValue()</code> swaps the two, so <code>range(6, 3)</code> is always 6 and <code>GetRandomValue(6, 3)</code> is 3 to 6.</td></tr>
 <tr><td><a href="ref:rmp::random::chance"><code>chance(p)</code></a></td><td><code>true</code> with probability <code>p</code>: 0 is never, 1 is always.</td></tr>
 <tr><td><a href="ref:rmp::random::in_circle"><code>in_circle(radius)</code></a></td><td>A point spread evenly over the whole disc, not bunched at the middle and not only on the rim.</td></tr>
 <tr><td><a href="ref:rmp::random::direction"><code>direction()</code></a></td><td>A vector of length 1, pointing anywhere.</td></tr>

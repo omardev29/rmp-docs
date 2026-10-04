@@ -22,8 +22,15 @@ application_id = "com.yourname.yourgame"
 </pre>
 
 <p>Letters, digits and <code>_</code>, at least two parts separated by dots, each starting with
-a letter; no <code>-</code>, which Apple's bundle ids allow and Android's do not. <code>rmp new</code>
-writes <code>com.example.</code> followed by the game's name, and every <code>com.example.</code> id
+a letter; no <code>-</code>, which Apple's bundle ids allow and Android's do not, so the refusal
+names the hyphen and writes the id the way Android takes it:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[android]
+application_id = "com.yourname.your-game"
+</pre>
+
+<p><code>rmp new</code> writes <code>com.example.</code> followed by the game's name, and every <code>com.example.</code> id
 is treated as a placeholder: <code>rmp deploy</code> refuses to tag a release under one, and so does
 CI when a tag is pushed by hand —
 <samp>refusing to build a release with placeholder identifiers</samp>. Only you know whether the
@@ -98,10 +105,11 @@ game was compiled as a release.</p>
 
 <h3>Signing on your own machine</h3>
 
-<p>The same bundle can be built locally with Gradle. The signing configuration reads the key from
+<p>A release bundle can be built locally with Gradle. The signing configuration reads the key from
 the environment, never from a file in the repository:</p>
 
 <pre data-lang="shell">
+python3 tools/configure.py
 export ANDROID_KEYSTORE_FILE=/path/to/upload.jks
 export ANDROID_KEYSTORE_PASSWORD=...
 export ANDROID_KEY_ALIAS=upload
@@ -110,9 +118,20 @@ cd raymob &amp;&amp; ./gradlew bundleRelease
 </pre>
 
 <p>The bundle is written to <code>build/outputs/bundle/release/</code> inside
-<code>raymob/app/</code>. Without
-<code>ANDROID_KEYSTORE_FILE</code> it comes out unsigned, which is fine for a look and refused by
-Play. <code>rmp android</code> builds the debug APK, which is what you install on your own phone
+<code>raymob/app/</code>. Without <code>ANDROID_KEYSTORE_FILE</code> it comes out unsigned, which
+is fine for a look and refused by Play.</p>
+
+<p data-fw-grep="raymob/settings.gradle::&quot;raymob/generated\.properties is missing\.\\n&quot;">Gradle reads the game's identity from <code>raymob/generated.properties</code>, which only
+<code>tools/configure.py</code> writes — <code>rmp android</code> and a CMake configure run it for
+you. On a fresh clone, or after <code>rmp clean</code>, the file is not there and Gradle stops
+before building, saying to run <code>python3 tools/configure.py</code> first.</p>
+
+<p data-fw-grep="tools/configure.py::Untagged\n    builds get 0\.0\.0-dev / 1\.">It is not the bundle a tag builds. The version comes from the tag CI is building, and a local
+build has none, so its version name is <code>0.0.0-dev</code> and its version code
+<code>1</code>: a bundle to look at, not one to upload. What goes to Play is the bundle of the
+tag's run.</p>
+
+<p><code>rmp android</code> builds the debug APK, which is what you install on your own phone
 with <code>adb install -r</code>.</p>
 
 <h2>The version code</h2>
@@ -148,10 +167,16 @@ together, as one set.</li>
 16 KB ELF page alignment Play requires alongside that target.</li>
 <li><strong>The oldest Android</strong> is <code>[android] min_sdk</code>, 24 by default
 (Android 7.0), between 21 and 36.</li>
-<li><strong>Who is offered the app.</strong> <code>[android] gl_version</code> is the OpenGL ES
-version the app requires, <code>ES30</code> by default: devices without it are not offered it.
-<code>[android.features]</code> does the same for a gyroscope or an accelerometer the game cannot
-do without; <code>false</code> still declares the sensor, as optional.</li>
+<li data-fw-grep="raymob/app/src/main/cpp/gl_version.cmake::set\(\$\{OUT_GLES\} .GLESv3. PARENT_SCOPE\)"><strong>Who is offered the app.</strong> <code>[android] gl_version</code> is the OpenGL ES
+version the game is compiled for and the one the manifest requires, so devices without it are not
+offered the app. <code>"ES20"</code>, the default and what <code>rmp new</code> writes, reaches
+every device. <code>"ES30"</code> compiles raylib and the game for OpenGL ES 3.0, links
+<code>libGLESv3</code> and asks the device for a version-3 context: for a game that needs what
+raylib's ES 3.0 path adds. <code>"ES31"</code> and <code>"ES32"</code> are refused: raylib has no
+3.1 or 3.2 path, so they would compile for ES 3.0 all the same and only hide the game from more
+devices. <code>[android.features]</code> keeps the app from devices in the same way, for a
+gyroscope or an accelerometer the game cannot do without; <code>false</code> still declares the
+sensor, as optional.</li>
 <li><strong>What it asks for.</strong> Every permission is visible on the listing.
 <code>[android.permissions]</code> has <code>internet</code> and <code>vibration</code>, both off by
 default; <code>internet</code> is turned on regardless when AdMob is in the build.</li>
@@ -161,21 +186,38 @@ default.</li>
 
 <h2>Ads, and the Data safety form</h2>
 
-<p data-fw-grep="raylib_multiplatform.toml::^enabled = true"><code>[android.admob] enabled</code> is <code>true</code> in the .toml a new game starts with,
-with Google's official test ad ids. With it on, the Android build carries the Google Mobile Ads
-SDK, the <code>AD_ID</code> permission, and the duty to declare advertising-id collection in Play's
-Data safety form — and the <code>INTERNET</code> permission with it. A game without ads should turn
-it off; its <a href="ref:rmp::ads"><code>rmp::ads</code></a> calls, if it has any, still compile and
-do nothing:</p>
+<p data-fw-grep="tools/configure.py::&quot;admob&quot;: \{&quot;enabled&quot;: False,">Ads are off until the game turns them on: <code>[android.admob] enabled</code> is
+<code>false</code> by default, and in the .toml <code>rmp new</code> writes. Its
+<a href="ref:rmp::ads"><code>rmp::ads</code></a> calls, if it has any, compile and do nothing. On,
+the Android build carries the Google Mobile Ads SDK, the <code>AD_ID</code> permission and the
+<code>INTERNET</code> permission with it, and the duty to declare advertising-id collection in
+Play's Data safety form:</p>
 
 <pre data-lang="toml" data-file="raylib_multiplatform.toml">
 [android.admob]
-enabled = false
+enabled = true
 </pre>
 
-<p>A game with ads replaces the three test ids with its own before it publishes. Showing ads to
-players in the EEA or the UK requires a Google-certified consent platform, and the framework does
-not ship one: with ads on, that traffic is served badly or not at all until the game adds it.</p>
+<p>With <code>android</code> switched off in <code>[targets]</code>, none of that is built,
+whatever <code>enabled</code> says.</p>
+
+<p data-fw-grep="tools/configure.py::self\.pattern = r&quot;ca-app-pub-\[0-9\]\{16\}&quot;">The three ids, <code>app_id</code>, <code>interstitial_id</code> and
+<code>rewarded_id</code>, are Google's official test ids until you replace them with your own,
+which a game with ads does before it publishes. They go into the manifest and the SDK as they are
+written, and the SDK stops an app at startup over an app id it cannot read, so while ads are on
+each one has to have AdMob's shape — the app id <code>ca-app-pub-</code>, 16 digits,
+<code>~</code>, 10 digits; a unit id the same with a <code>/</code>. An empty id, a malformed one,
+or an app id and a unit id swapped is refused at its line:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[android.admob]
+enabled = true
+app_id  = "ca-app-pub-3940256099942544/1033173712"
+</pre>
+
+<p>Showing ads to players in the EEA or the UK requires a Google-certified consent platform, and
+the framework does not ship one: with ads on, that traffic is served badly or not at all until the
+game adds it.</p>
 
 <h2 id="real-devices-on-firebase-test-lab">Real devices on Firebase Test Lab</h2>
 
@@ -220,10 +262,12 @@ results are written there and fetched back into the run.</li>
 <p>The repository variables <code>FIREBASE_PROJECT</code> and <code>FIREBASE_DEVICE</code> are read
 too, and when set they win over the .toml.</p>
 
-<p>Test Lab runs on full runs only — a tag, or a run started by hand with <code>full</code> —
-after the Android build. It sends the <strong>debug</strong> APK and refuses anything else: the robot taps
-whatever it finds, ad banners included, and the debug build shows Google's test ads, where a
-release build would send invalid clicks to your real ad units. The results are kept with the run
+<p data-fw-grep="raymob/app/build.gradle::buildConfigField\(.String., .ADMOB_INTERSTITIAL_ID.">Test Lab runs on full runs only — a tag, or a run started by hand with <code>full</code> —
+after the Android build. It sends the <strong>debug</strong> APK and refuses anything else. The
+robot taps whatever it finds, ads included, and the debug build shows the ads of the same
+<code>[android.admob]</code> ids as the release: with ads on and your own ids in the .toml, the
+robot's taps are clicks on your real ad units, which AdMob counts as invalid traffic. The results
+are kept with the run
 for seven days as <code>firebase-testlab-results</code>. A failure there fails its own job and does
 not hold back the release.</p>
 

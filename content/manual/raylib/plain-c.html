@@ -9,37 +9,58 @@ order: 40
 runtime layer — <code>rmp::</code>, scenes, the interface, the asset pack. The other is everything
 around your code: the build for each target, the icons and identifiers generated from
 <code>raylib_multiplatform.toml</code>, the pinned toolchains, CI and the release. A game in plain
-C, with its own <code>main()</code> and nothing but <code>&lt;raylib.h&gt;</code>, keeps the second
-half and gives up the first.</p>
+C, with its own <code>main()</code> and raylib, keeps the second half and gives up the first.</p>
 
 <h2>The example</h2>
 
-<p><code>examples/plain_c</code> is that game: one C file, one include, a <code>while</code> loop of
-its own. Its header is the instructions and the list of what changes:</p>
+<p><code>examples/plain_c</code> is that game: one C file, raylib, the framework's headers that are
+plain C — <code>&lt;rmp/config.h&gt;</code> and <code>&lt;smoke_test.h&gt;</code> — and a
+<code>while</code> loop of its own. Its header is the recipe and the list of what changes:</p>
 
 <pre data-lang="c" data-include="examples/plain_c/src/main.c"></pre>
 
-<aside class="callout warning"><span class="callout-title">Careful</span><p>The first step in that
-header deletes <code>src/rmp/</code>, and at the framework's current source that stops the desktop
-build. <code>CMakeLists.txt</code> builds the framework's library from <code>src/rmp/</code> whether
-or not the game links it, and with the folder gone CMake refuses to configure, saying there are no
-sources for the target <code>rmp</code>. Delete <code>src/main.cpp</code> and
-<code>src/scenes/</code>, and keep <code>src/rmp/</code>: a game whose <code>src/</code> holds no
-<code>.cpp</code> file outside it is linked against raylib alone, and the library is built and left
-unused.</p></aside>
+<p>The recipe, from the folder of a game made with <code>rmp new</code>:</p>
+
+<pre data-lang="shell">
+rm src/main.cpp &amp;&amp; rm -r src/rmp/ src/scenes/
+cp &lt;the framework&gt;/examples/plain_c/src/main.c src/
+rmp run
+</pre>
+
+<p data-fw-grep=".github/workflows/ci.yml::RECIPE=\$\(sed -n 's\|\^//     \\\(rm src/main\\\.cpp">The
+framework's CI follows it on every commit, in a copy of a game freshly made with
+<code>rmp new</code>: it reads the first line out of the example and runs it, copies the file in as
+the second line says, and then, in place of <code>rmp run</code>, runs that game's render check —
+<code>rmp test render</code> — which has to build it, boot it with its one asset loaded, see a frame
+drawn and see it exit cleanly. The examples job boots the example itself like every other one.</p>
 
 <h2>How the build tells</h2>
 
-<p>Nothing in the configuration says "this is a C game". The build looks: when the game's
-<code>src/</code> has no <code>.cpp</code> file — <code>src/rmp/</code> aside — the game is compiled
-as C99 and linked against raylib and nothing else; no entry point of ours is compiled in, and no
-library of ours is linked. Put one <code>.cpp</code> file back and it is a framework game again,
-with the framework's entry point and library.</p>
+<p data-fw-grep="CMakeLists.txt::if\(RMP_SOURCES\)\s+add_library\(rmp STATIC">Nothing in the
+configuration says "this is a C game". The build looks: when the game's <code>src/</code> has no
+<code>.cpp</code> file outside <code>src/rmp/</code>, the game is compiled as C99 and linked against
+raylib and nothing else — no entry point of ours, no library of ours. With <code>src/rmp/</code>
+gone, CMake builds no framework library at all, and its configure says
+<samp>=== NO src/rmp/: no framework library, a plain C game ===</samp>.</p>
 
-<p>Both values the build defines for every game are still there:
-RMP_RESOURCES_PATH, with the folder the loose files are read from, and RMP_PRODUCTION_BUILD,
-<code>0</code> or <code>1</code>. So is everything <code>raylib_multiplatform.toml</code> sets,
-through the one header of ours that is plain <code>#define</code>s and works in C:</p>
+<p>The recipe deletes <code>src/rmp/</code> rather than leaving it unused, because two other parts
+of the pipeline look at the folder itself. Android's build compiles every <code>.c</code> and
+<code>.cpp</code> under <code>src/</code> into the game's library, <code>src/rmp/</code> with it when
+it is there. And a release decides by it what to ship in <code>resources/</code>: the pack while the
+folder is there, the loose files once it is gone (<a href="#the-release-packages">below</a>).</p>
+
+<p>Put a <code>.cpp</code> file back without <code>src/rmp/</code> and the configure stops, naming
+the problem: <samp>… has C++ sources and there is no src/rmp/, so no framework to link …</samp>. A
+C++ game keeps <code>src/rmp/</code>, and with it the framework's entry point and library.</p>
+
+<p>Both values the build defines for every game are still there: RMP_RESOURCES_PATH, the folder the
+files are read from — an absolute path to <code>resources/</code> in a debug build,
+<code>./resources/</code> in a release, and empty on Android, where the files sit at the root of the
+APK's assets — and RMP_PRODUCTION_BUILD, <code>0</code> or <code>1</code>.
+So is everything <code>raylib_multiplatform.toml</code> sets, through <code>rmp/config.h</code>, the
+one header of ours that is nothing but <code>#define</code>s. A plain C game's include path is
+raylib's, the game's <code>include/</code>, where <code>rmp/config.h</code> is, and
+<code>tests/</code>, where <code>smoke_test.h</code> is:</p>
 
 <pre data-lang="c" data-harness="c99" data-given="#include &lt;rmp/config.h&gt;">
 int main(void) {
@@ -55,8 +76,7 @@ int main(void) {
 }
 </pre>
 
-<p>A file that includes <code>rmp/config.h</code> has the window's size and title from the
-<code>.toml</code>, so renaming the game is still one line in one file.</p>
+<p>Renaming the game, or resizing its window, is still one line in one file.</p>
 
 <h2>What you keep</h2>
 
@@ -76,9 +96,10 @@ size generated from <code>[icon] source</code>.</li>
 <thead><tr><th>Given up</th><th>What it means</th></tr></thead>
 <tbody>
 <tr><td>Everything under <code>rmp::</code></td><td>Scenes, objects and behaviors, the interface, named input, audio by name, saves, random, ads. Your code is raylib's API and your own.</td></tr>
-<tr><td>The entry point</td><td>Your <code>main()</code> owns the loop, which is exactly what the web and iOS do not allow (below). No <code>[app] max_delta</code> clamp on <code>GetFrameTime()</code>, and no <code>rmp::app::quit()</code>: the loop ends when your condition says so.</td></tr>
-<tr><td>The asset pack</td><td>Reading <code>resources.rres</code> is the framework's runtime, and raylib alone cannot. A plain C game reads loose files only — and see <a href="#the-release-packages">the release packages</a>, which assume otherwise.</td></tr>
-<tr><td>The boot and render gates, until you call them</td><td>See <a href="#the-smoke-test">the smoke test</a>.</td></tr>
+<tr><td>The entry point</td><td>Your <code>main()</code> owns the loop, which is exactly what the web and iOS do not allow (below). No <code>[app] max_delta</code> clamp on <code>GetFrameTime()</code>, and no <code>rmp::app::quit()</code>: the loop ends when your condition says so. Escape stays raylib's exit key and closes the window, unless your code calls <code>SetExitKey(KEY_NULL)</code>.</td></tr>
+<tr><td>Starting a release from anywhere</td><td>The framework's entry point moves a desktop release into the executable's folder, so that <code>./resources/</code> is the one next to it. In plain C that is yours, and the example does it in a release with <code>ChangeDirectory(GetApplicationDirectory())</code>.</td></tr>
+<tr><td>The asset pack</td><td>Reading <code>resources.rres</code> is the framework's runtime, and raylib alone cannot. A plain C game reads loose files only, and its release ships them — see <a href="#the-release-packages">the release packages</a>.</td></tr>
+<tr><td>The boot and render reports</td><td>The entry point prints what CI looks for; a plain C game calls the same hooks itself. See <a href="#the-smoke-test">the smoke test</a>.</td></tr>
 </tbody>
 </table>
 
@@ -91,7 +112,7 @@ code owns the frame loop, and on the web and iOS it does not.</p>
 <thead><tr><th>Target</th><th>The file as it stands</th></tr></thead>
 <tbody>
 <tr><td>Windows, Linux, macOS, the BSDs</td><td>Runs.</td></tr>
-<tr><td>Android</td><td>Runs, by the file's own account: raylib's Android glue calls <code>main()</code>. The Android build compiles every <code>.c</code> and <code>.cpp</code> under <code>src/</code> into the game's library — <code>src/rmp/</code> with it, when it is there.</td></tr>
+<tr><td>Android</td><td>Runs, by the file's own account: raylib's Android glue calls <code>main()</code>.</td></tr>
 <tr><td>Web</td><td>Does not. The browser owns the loop and calls the game back once per frame; a <code>while</code> loop there needs <code>-s ASYNCIFY</code>, which this build deliberately does not have.</td></tr>
 <tr><td>iOS</td><td>Does not. UIKit never calls <code>main()</code>: raylib's iOS backend calls three functions instead, and they are what the framework's entry point exists to provide.</td></tr>
 </tbody>
@@ -106,72 +127,52 @@ enabled = ["all"]
 disabled = ["web", "ios"]
 </pre>
 
-<p>To have the web or iOS back, keep the framework's entry point: one include and one line of C++,
+<p>To have the web or iOS back, keep the framework's entry point:
 <a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a> with three functions of yours, which
-writes the right loop for every target and costs nothing else. Or write those two runners
-yourself.</p>
+writes the right loop for every target. It is C++, and that brings the rest of the framework back
+with it: a <code>.cpp</code> file in <code>src/</code> needs <code>src/rmp/</code>, the framework's
+library is built and linked again, and a release ships the pack instead of the loose files — which
+raylib's own loaders then read through the framework. Or write those two runners yourself.</p>
 
 <h2 id="the-smoke-test">The smoke test</h2>
 
 <p>CI does not take a build's word for it. It starts the game with <code>RAY_TEST_MAX_FRAMES</code>
-set, and requires three log lines: <code>RAY_TEST_BOOT_OK</code> with no failed asset,
-<code>RAY_TEST_RENDER_OK</code> for a frame read back with something on it, and
-<code>RAY_TEST_DONE_FRAMES</code> for a clean exit when the budget is spent. <code>rmp test
-render</code> and <code>rmp test smoke</code> ask for the same.</p>
+set, and requires three log lines: <code>RAY_TEST_BOOT_OK</code> with
+<code>assets_failed=0</code>, <code>RAY_TEST_RENDER_OK</code> for a frame read back with something
+on it, and <code>RAY_TEST_DONE_FRAMES</code> for a clean exit when the budget is spent.
+<code>rmp test render</code> asks for the same three. <code>rmp test smoke</code> asks for the
+first two only: it does not look for <code>RAY_TEST_DONE_FRAMES</code>.</p>
 
-<p>The example prints the first line by hand and nothing else, and its loop does not look at the
-frame budget: started that way, it runs until something kills it. A plain C game that has to pass
-the gates calls the hooks the framework's entry point calls, from the header-only
-<code>tests/smoke_test.h</code>, which is written to compile as C:</p>
-
-<pre data-lang="c" data-harness="c99" data-given="#include &lt;rmp/config.h&gt;
-#include &quot;../tests/smoke_test.h&quot;">
-int main(void) {
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | (RMP_WINDOW_VSYNC ? FLAG_VSYNC_HINT : 0));
-    InitWindow(RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT, RMP_WINDOW_TITLE);
-    SmokeTest_Begin(); /* reads RAY_TEST_MAX_FRAMES; does nothing outside a test */
-
-    Texture2D rabbit = LoadTexture(RMP_RESOURCES_PATH "rabbit.png");
-    SmokeTest_ReportBoot(rabbit.id == 0 ? 1 : 0, 1); /* failed, requested */
-
-    while (!WindowShouldClose() &amp;&amp; !SmokeTest_Done()) {
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-        DrawTexture(rabbit, GetScreenWidth() / 2 - rabbit.width / 2,
-                    GetScreenHeight() / 2 - rabbit.height / 2, WHITE);
-        SmokeTest_CaptureFrame(); /* after the last draw, before EndDrawing() */
-        EndDrawing();
-        SmokeTest_Tick();
-    }
-
-    UnloadTexture(rabbit);
-    CloseWindow();
-    return 0;
-}
-</pre>
-
-<p>Built from a game made with <code>rmp new</code>, that file passes the software render check
-that <code>rmp test render</code> runs. Three details in it are there because a gate checks them:</p>
+<p data-fw-grep="tests/smoke_test.h::static inline void SmokeTest_ReportBoot\(int assetsFailed, int assetsRequested\) \{">The
+framework's entry point calls the hooks that print them. A plain C game calls them itself, from
+<code>&lt;smoke_test.h&gt;</code>, which is written to compile as C. Every hook but one does nothing
+unless <code>RAY_TEST_MAX_FRAMES</code> is set; <code>SmokeTest_ReportBoot</code> prints its line on
+every run. The example shows where each one goes:</p>
 
 <ul>
-<li><strong>The include is by relative path.</strong> A plain C game's include path is its own
-<code>include/</code> and raylib's, and <code>tests/</code> is on neither, so
-<code>&lt;smoke_test.h&gt;</code> is not found; <code>"../tests/smoke_test.h"</code> is, from
-<code>src/</code>.</li>
-<li><strong>The vsync flag follows the <code>.toml</code>.</strong> The boot line reports whether the
-window asked for vsync, and the render check compares that with <code>[window] vsync</code>.</li>
-<li><strong>The asset count is yours to say.</strong> The framework counts the loads made through
-<code>rmp::assets</code>; with raylib's loaders the game reports its own, and
-<code>assets_failed</code> must be 0.</li>
+<li><strong><code>SmokeTest_Begin</code></strong> once, first: it reads the frame budget.</li>
+<li><strong><code>SmokeTest_ReportBoot</code></strong>, with how many assets failed and how many
+were asked for, once the window is open and the assets are loaded. The framework counts the loads
+made through <code>rmp::assets</code>; with raylib's loaders the game counts its own, and the failed
+count must be 0. The line also says whether the window asked for vsync, and the render check
+compares that with <code>[window] vsync</code> — which is why the example passes
+<code>FLAG_VSYNC_HINT</code> only when <code>RMP_WINDOW_VSYNC</code> says so.</li>
+<li><strong><code>SmokeTest_CaptureFrame</code></strong> after the last draw call and before
+<code>EndDrawing()</code>: the frame it reads back is the one about to be shown.</li>
+<li><strong><code>SmokeTest_Tick</code></strong> after <code>EndDrawing()</code>, and
+<strong><code>SmokeTest_Done</code></strong> in the loop's condition, so that the budget ends the
+loop the way the window's close button does.</li>
 </ul>
 
 <h2 id="the-release-packages">The release packages</h2>
 
-<p>CI packs <code>resources/</code> into <code>resources.rres</code> for the Linux x64 and ARM64
-targets — the glibc ones and the DRM ones — for Windows x64, macOS and the BSDs, and those packages
-ship the pack and not the loose files. A plain C game cannot read the pack, so on those targets a
-release made by CI as it stands has no assets it can open. The package steps live in the workflow
-files under <code>.github/workflows/</code>; for a plain C game, they have to ship the
-<code>resources/</code> folder instead of the pack. The other targets already ship loose files: the
-web and Android copy the folder, and Linux RISC-V, Linux musl and Windows ARM64, whose packer cannot
-run on the machine that builds them, ship it with a note saying so.</p>
+<p data-fw-grep="tools/ship_resources.sh::if \[ -d src/rmp \]; then">What goes in a release
+archive's <code>resources/</code> is decided by one script, <code>tools/ship_resources.sh</code>,
+which the packaging steps of the targets that pack call — the Linux glibc and DRM ones, macOS and
+the BSDs — and which the <code>windows-x64</code> job repeats in PowerShell. While
+<code>src/rmp/</code> is there it ships <code>resources.rres</code> alone, which the framework reads.
+Without it, it ships the loose files of <code>resources/</code>, the pack left out, and a
+<code>PACK_SKIPPED.txt</code> saying that this game is plain C and raw raylib cannot read the pack.
+Android copies the folder into the APK whatever the game is, and the targets whose packer cannot run on
+the machine that builds them — Linux RISC-V, Linux musl and Windows ARM64 — ship loose files with a
+note of their own.</p>

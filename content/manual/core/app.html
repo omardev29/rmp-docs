@@ -49,10 +49,13 @@ nothing refers to — and a self-registering object is exactly that. It would no
 would work on your desktop and find no scenes on the phone. So the scene is named where a C++
 program starts, in <code>main.cpp</code>, where the linker can see it.</p>
 
-<p>A program with no entry point, or with two, is a link error that names the symbol
-<code>rmp_entry_point_is_declared_exactly_once</code>: missing, or defined twice. That is clearer than
-the linker's own complaint about <code>main</code>, which does not say what to write or which file
-to look at.</p>
+<p data-fw-grep="src/rmp/app.cpp::RequireEntryPoint\(\) noexcept \{ rmp_entry_point_is_declared_exactly_once\(\); \}">A
+program with no entry point, or with two, is a link error that names the symbol
+<code>rmp_entry_point_is_declared_exactly_once</code>: missing, or defined twice. The linker's own
+complaint about <code>main</code> comes with it, and on its own it says neither what to write nor
+which file to look at. The framework asks for the symbol from a static initializer, the one kind of
+code every linker keeps, so the name is there even when the linker discards everything else
+unused.</p>
 
 <h2>Before the first scene</h2>
 
@@ -64,7 +67,9 @@ to look at.</p>
 different sequence every launch;</li>
 <li>switches on <code>[dev] strict</code> when the build is a debug build and the <code>.toml</code>
 asks for it;</li>
-<li>on iOS, moves into the app bundle, where the resources are;</li>
+<li>on iOS, moves into the app bundle, where the resources are; in a release build on a desktop,
+moves into the executable's folder when there is a <code>resources/</code> folder in it (see
+<a href="#where-a-release-finds-its-files">where a release finds its files</a>);</li>
 <li>opens the asset pack if there is one, so that a scene can load files from its first line;</li>
 <li>opens the window: always resizable, with vsync when <code>[window] vsync</code> is on, capped at
 <code>[window] fps</code> when that is not 0 (except on the web and iOS, which pace the frame
@@ -73,7 +78,27 @@ themselves), at <code>[window] width</code> by <code>height</code>, titled <code
 </ol>
 
 <p>So a scene's <code>_ready()</code> always runs with the window open and the assets available, which
-is why it is where a scene loads what it draws.</p>
+is why it is where a scene loads what it draws. Once that first <code>_ready()</code> has returned,
+the app turns raylib's exit key off, so that Escape belongs to the game; see
+<a href="#the-escape-key">the Escape key</a>.</p>
+
+<h3 id="where-a-release-finds-its-files">Where a release finds its files</h3>
+
+<p data-fw-grep="src/rmp/app.cpp::void enter_executable_folder\(\) \{[\s\S]*?std::filesystem::current_path\(folder, error\);">A
+release build reads its files from <code>./resources/</code>, and <code>.</code> is whatever folder
+the game was started from: a file manager, a shortcut or a terminal somewhere else would leave it
+loading nothing. So on Windows, Linux, macOS and FreeBSD a release moves into the folder the
+executable is in before anything is loaded, when that folder holds a <code>resources/</code>. The
+game starts the same from anywhere, and plain raylib calls with relative paths, such as
+<code>LoadTexture(RMP_RESOURCES_PATH "x.png")</code>, find their files too.</p>
+
+<p>When the executable's folder has no <code>resources/</code> — a release built in the project and
+started from the project's root, with the executable in <code>build/</code> — the game keeps the
+folder it was started from and says so in its log. On NetBSD and OpenBSD raylib's
+<code>GetApplicationDirectory()</code>, which the framework asks, has no code and answers nothing, so
+a release there always reads <code>resources/</code> from the folder it was started from, and logs
+that it does. The web, Android and iOS read the copy packaged with the game
+and never need it.</p>
 
 <h2>The frame</h2>
 
@@ -81,9 +106,10 @@ is why it is where a scene loads what it draws.</p>
 every property of the <a href="/manual/core/scenes.html">scene stack</a> is built on:</p>
 
 <ol>
-<li><strong>Input.</strong> The keyboard, mouse, touch and gamepads are read once, and the UI starts
-its frame. Reading once is what stops two scenes in the same frame disagreeing about what is held
-down.</li>
+<li data-fw-grep="include/rmp/app.h::rmp::app::detail::begin_frame\(\);[\s\\]+FRAME\(rmp::app::detail::step_delta\(\)\);"><strong>Input.</strong>
+The keyboard, the mouse — whose position raylib also takes from the first touch — and the first
+gamepad are read once, before anything of the game runs, and the UI starts its frame. Reading once is what stops two scenes in the same frame disagreeing about what is
+held down.</li>
 <li><strong>Update</strong>, from the bottom of the stack upwards, for every scene that is running.
 For each one: the pointer is offered to its objects (<a href="ref:rmp::Object::on_click"><code>on_click</code></a>,
 <a href="ref:rmp::Object::on_drag"><code>on_drag</code></a>), then the scene's
@@ -155,7 +181,7 @@ has been called, for code that wants to skip work on the way out.</p>
 <tbody>
 <tr><td>Desktops and the web</td><td>The frame loop ends after this frame, and the game shuts down.</td></tr>
 <tr><td>Android</td><td>The same, and the app's activity is finished, so that it goes away instead of leaving an empty task in the recent apps.</td></tr>
-<tr><td>iOS</td><td>Nothing. It logs a warning, once, and returns.</td></tr>
+<tr><td>iOS</td><td data-fw-grep="src/rmp/app.cpp::RMP_REPORT_ONCE\(&quot;APP: quit\(\) does nothing on iOS">Nothing. It logs a warning, once, and returns — except in a debug build with <code>[dev] strict = true</code>, where that warning aborts the app instead.</td></tr>
 </tbody>
 </table>
 
@@ -174,22 +200,36 @@ if (rmp::ui::button("Quit")) rmp::app::quit();
 
 <p><a href="/manual/platforms/ios.html">iOS</a> has the rest of what is different there.</p>
 
-<h3>The Escape key</h3>
+<h3 id="the-escape-key">The Escape key</h3>
 
-<p>On a desktop, the window closes when its close button is pressed, and also when raylib's exit
-key is pressed — Escape, unless the game says otherwise. The framework leaves raylib's default as it
-is. A game that wants Escape for something else, such as a pause menu, turns the exit key off once,
-in its first scene:</p>
+<p data-fw-grep="src/rmp/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">Escape does
+not close the game. raylib's <code>InitWindow()</code> makes Escape its exit key, which ends the
+frame loop when it is pressed, and in a game Escape means "back" or "pause":
+<a href="ref:rmp::ui"><code>rmp::ui</code></a> goes back on it, and the standard
+<code>ui_cancel</code> action is bound to it. So the app turns the exit key off, on every platform,
+right after the ready hook — the first scene's <code>_ready()</code> with <code>RMP_GAME</code>, your
+<code>on_ready()</code> with <code>RMP_ENTRY_POINT</code> — because that is where the window has
+just opened. The window's close button still closes it: that is the window asking, not a key.</p>
+
+<p>Because it happens after the ready hook, a <code>SetExitKey()</code> of your own there is
+overwritten. A game that wants a key to quit says so where it reads its keys, and
+<code>rmp::app::quit()</code> shuts down the same way the close button does:</p>
 
 <pre data-lang="cpp" data-harness="scene">
-SetExitKey(KEY_NULL);
+if (IsKeyPressed(KEY_ESCAPE)) rmp::app::quit();
 </pre>
+
+<p data-fw-grep="thirdparty/raylib/PATCHES.md::the Win32 backend closes on `CORE\.Input\.Keyboard\.exitKey` instead of on `KEY_ESCAPE` by name">The
+framework's copy of raylib is patched where a backend did not go through the exit key: the Win32
+backend closes on the exit key and not on Escape by name, and the DRM backend's terminal keyboard
+hands a lone Escape to the game instead of to the exit check. Both patches are listed in
+<code>thirdparty/raylib/PATCHES.md</code>.</p>
 
 <h2>The way out</h2>
 
-<p>However the game ends — <code>quit()</code>, the close button, the exit key — the shutdown is the
-same, and its order matters, because a texture released after the window is closed is a write into a
-graphics context that no longer exists:</p>
+<p>However the game ends — <code>rmp::app::quit()</code> or the window's close button — the shutdown
+is the same, and its order matters, because a texture released after the window is closed is a write
+into a graphics context that no longer exists:</p>
 
 <ol>
 <li>Every scene leaves the stack, top down, getting its <a href="ref:rmp::Scene::_end"><code>_end()</code></a>,
@@ -271,11 +311,22 @@ RMP_ENTRY_POINT(on_ready, on_frame, on_exit);
 <p>There is no scene stack and no objects, and the window and the drawing are yours: the hooks are
 <code>on_</code> and not <code>_</code> because they are functions you hand over. What the platform
 runners do around them is the same as for <code>RMP_GAME</code> — the asset pack opened before
-<code>on_ready</code> and closed after <code>on_exit</code>, the same clamped <code>delta</code>, the
-same <code>quit()</code>, the music fed every frame. What <code>RMP_GAME</code> adds is the part that
-reads <code>[window]</code>: with <code>RMP_ENTRY_POINT</code>, vsync and the frame cap are yours to
-set, like the window.</p>
+<code>on_ready</code> and closed after <code>on_exit</code>, a release moved next to its
+<code>resources/</code>, the exit key turned off after <code>on_ready</code>, the input devices read
+once before each <code>on_frame</code>, so that <a href="ref:rmp::input"><code>rmp::input</code></a>'s
+actions and <a href="ref:rmp::input::pointer_screen"><code>pointer_screen()</code></a> work in it as
+they do in a scene, the same clamped <code>delta</code>, the same <code>quit()</code>,
+the music fed every frame. What <code>RMP_GAME</code> adds is the part that reads
+<code>[window]</code>: with <code>RMP_ENTRY_POINT</code>, vsync and the frame cap are yours to set,
+like the window.</p>
+
+<p data-fw-grep="src/rmp/input.cpp::Vector2 pointer\(\) \{ return rmp::Scene::current\(\)\.camera\.to_world">One part of <code>rmp::input</code> needs a scene:
+<a href="ref:rmp::input::pointer"><code>pointer()</code></a> converts through the current scene's
+camera, and with no scene stack it reports that there is none — a warning, once, which
+<code>[dev] strict</code> turns into an abort in a debug build — and converts through a stand-in scene's camera, which matches the screen
+only while the window is the design size. Without scenes, use <code>pointer_screen()</code>.</p>
 
 <p>The UI examples are written this way, because a menu needs no scene. Plain C is one step further
 down: <a href="/manual/raylib/plain-c.html">Plain C</a> is a game with its own <code>main()</code>,
-raylib, and none of the framework at all.</p>
+raylib, and no framework library: what it keeps of the framework is the build, the
+<code>.toml</code>'s values from <code>rmp/config.h</code> and the C hooks CI boots it with.</p>

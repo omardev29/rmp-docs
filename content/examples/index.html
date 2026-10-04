@@ -9,8 +9,11 @@ order: 1
 project in its own folder under <code>examples/</code>, and {{count:games}} of them are whole games
 you can play from start to finish.</p>
 
-<p>Every example is built and started by CI on every change to the framework, headless, with a
-screenshot taken of it — so none of them can quietly stop working.</p>
+<p data-fw-grep="tools/examples_build.sh::What is NOT run: the header-only examples, which are compiled and have\s+# nothing to run\.">Every
+example is built by CI on every change to the framework, and every one that is a program — the
+plain C one included — is started, headless, with a screenshot taken of it, and has to boot with
+every asset loaded, draw and exit cleanly. An example that is a source file with no program in
+it is compiled, and has nothing to run. None of them can quietly stop working.</p>
 
 <p>From a clone of the framework, <code>rmp example</code> lists them, and one runs with its name or
 its path:</p>

@@ -37,11 +37,13 @@ be plainly marked as altered, and not presented as the original.</p>
 <p data-fw-grep="thirdparty/raylib/PATCHES.md::# This is a MODIFIED copy of raylib 6\.0\.0">So it is
 marked. <a href="fw:thirdparty/raylib/PATCHES.md"><code>thirdparty/raylib/PATCHES.md</code></a>
 says in its first line that the copy is modified, and lists every change by file, line and
-reason: build-system and
-platform-selection changes, so the windowing backend can be chosen from the <code>.toml</code>,
-and memory fixes in <code>raudio.c</code> taken from upstream. Each change is also commented at its
-site, nothing under <code>thirdparty/raylib/src/external/</code> is touched, and no
-document of the framework may describe its raylib as unchanged.</p>
+reason: build-system and platform-selection changes, so the windowing backend can be chosen from
+the <code>.toml</code>; two lines that make the Win32 and DRM backends obey
+<code>SetExitKey()</code>; one that makes Android's EGL ask for the OpenGL ES version raylib was
+compiled for; and fixes taken from upstream, three frees in <code>raudio.c</code> and the scissor
+of the software renderer in <code>thirdparty/raylib/src/external/rlsw.h</code>. Each change is
+also commented at its site, and no document of the framework may describe its raylib as
+unchanged.</p>
 
 <h2 id="components">Everything it carries</h2>
 
@@ -65,6 +67,7 @@ which platforms it reaches, and where its licence text is. The main ones:</p>
 <tr><td>raymob, the Android glue</td><td>MIT</td><td>modified</td><td>Android only</td></tr>
 <tr><td>raylib-iOS and ANGLE</td><td>zlib; BSD-3</td><td>unmodified</td><td>iOS only</td></tr>
 <tr><td>what raylib bundles: GLFW, miniaudio, the stb libraries, the decoders and loaders</td><td>zlib, MIT, public domain and similar</td><td>unmodified</td><td>where raylib uses them</td></tr>
+<tr><td>rlsw, raylib's software renderer</td><td>MIT</td><td>modified: a fix taken from upstream</td><td>every platform</td></tr>
 <tr><td>doctest</td><td>MIT</td><td>unmodified</td><td>nowhere: the framework's tests only</td></tr>
 </tbody>
 </table>
@@ -103,28 +106,36 @@ forgetting to is a red test, not a missing credit discovered after release.</p>
 
 <p data-fw-grep="tools/configure.py::This game is built on the software below\. Each notice is reproduced in">The
 same block is what <code>configure.py</code> generates the shipped notice from. There is one
-<code>LICENSES.txt</code> per family of packages — the desktop and web packages, the Android app,
-the iOS app — and each holds exactly the components that reach that family: the Android notice
-credits raymob and no other does; GLFW is in the desktop notice and not the Android one; doctest
-and anything not compiled into a game are in none. Each component's licence is reproduced in full,
-under a line saying whether this build's copy is unmodified, modified (naming its
-<code>PATCHES.md</code>) or partial. The framework's own MIT notice is in all of them, and the file
+<code>LICENSES.txt</code> per family of packages — the desktop packages, the web package, the
+Android app, the iOS app — and each holds exactly the components that reach that family: the
+Android notice credits raymob and no other does; GLFW is in the desktop notice and in neither the
+web nor the Android one, because the browser build talks to Emscripten's own JavaScript GLFW and
+contains no GLFW code; doctest and anything not compiled into a game are in none. Each component's licence is reproduced in full,
+under a line saying whether this build's copy is unmodified, modified or partial; a public-domain
+component, which owes no notice, gets a line saying so and where it comes from instead. The
+framework's own MIT notice is in all of them, and the file
 opens by saying the game is built on raylib, is not affiliated with it, and uses a modified
 copy.</p>
 
 <p>Where it goes:</p>
 
 <ul>
-<li><strong>Desktop, the BSDs and the web:</strong> next to the executable in every package the
-release builds.</li>
+<li><strong>Desktop and the BSDs:</strong> next to the executable in every package the release
+builds.</li>
+<li><strong>The web:</strong> in the package, beside the page and the <code>.wasm</code>.</li>
 <li><strong>Android:</strong> inside the APK and the App Bundle, among the app's assets.</li>
 <li><strong>iOS:</strong> at the root of the app bundle.</li>
 </ul>
 
 <p>A component whose licence text cannot be found stops the configure step: a missing notice is a
-licence problem, and the moment to act on it is before anything is built. The iOS build refuses
-to configure without the raylib-iOS checkout for the same reason, rather than ship a notice with
-the fork missing from it.</p>
+licence problem, and the moment to act on it is before anything is built.</p>
+
+<p data-fw-grep="tools/configure.py::warn\(message \+ &quot; before building for iOS\. No iOS notice was written\.&quot;\)">The
+iOS notice credits the raylib-iOS fork the app is built on, so it is never written without that
+checkout. A plain configure with <code>ios</code> among the targets and the checkout missing warns
+and writes no iOS notice; the iOS build in CI configures with <code>--require-notices</code>, which
+turns that warning into a refusal, rather than ship an app with no notice or one with the fork
+missing from it.</p>
 
 <h2 id="what-a-game-owes">What a game owes</h2>
 

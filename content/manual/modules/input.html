@@ -15,15 +15,21 @@ rmp::input::action("jump", KEY_SPACE, KEY_W, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
 if (rmp::input::just_pressed("jump")) jump();
 </pre>
 
-<p>It is one header, <code>#include &lt;rmp/input.h&gt;</code>, and it works on the scene stack: the
-devices are read once at the top of every frame of a game started with <code>RMP_GAME</code>, before
-any scene updates, so two scenes in the same frame cannot disagree about what is held down.</p>
+<p data-fw-grep="include/rmp/app.h::rmp::app::detail::begin_frame\(\);\s*\\\s*FRAME\(rmp::app::detail::step_delta\(\)\);">It
+is one header, <code>#include &lt;rmp/input.h&gt;</code>. The entry point reads the devices once at
+the top of every frame, before the frame hook runs, so every question asked during that frame gets
+the same answer. In a game started with <code>RMP_GAME</code> that is before any scene updates, and
+two scenes in the same frame cannot disagree about what is held down. A game that runs its own frame
+with <code>RMP_ENTRY_POINT</code> gets the same reading before its <code>on_frame</code>, and reads
+its actions there exactly as a scene does.</p>
 
-<aside class="callout warning" data-fw-grep="src/rmp/app.cpp::rmp::input::detail::begin_frame\(\);"><span class="callout-title">Careful</span>
-<p>A game that runs its own loop with <code>RMP_ENTRY_POINT</code> has no scene stack, and nothing
-reads the devices for <code>rmp::input</code>: every action reads as not pressed. Such a game asks
-raylib directly — <code>IsKeyDown()</code> and the rest — and can still ask the interface whether
-it wants the pointer, with <a href="ref:rmp::ui::wants_pointer"><code>rmp::ui::wants_pointer()</code></a>.</p></aside>
+<aside class="callout"><span class="callout-title">Without scenes</span>
+<p>A game written with <code>RMP_ENTRY_POINT</code> and no scenes has no scene stack, so the
+third rule of <a href="#who-hears-a-press">who hears a press</a> never applies to it, and the
+interface's two rules apply as they do anywhere.
+<a href="ref:rmp::input::pointer"><code>pointer()</code></a> goes through the camera of the scene on
+top, so with no scene it is a mistake the log names once, <samp>SCENE: current() with an empty stack …</samp>;
+such a game reads <a href="ref:rmp::input::pointer_screen"><code>pointer_screen()</code></a>.</p></aside>
 
 <h2>Actions</h2>
 
@@ -98,9 +104,10 @@ rmp::input::action("aim_left", KEY_Q, rmp::input::stick(GAMEPAD_AXIS_RIGHT_X, -1
 rmp::input::action("aim_right", KEY_E, rmp::input::stick(GAMEPAD_AXIS_RIGHT_X, 1));
 </pre>
 
-<p>The sign says which half counts: -1 is left or up, +1 right or down. Any other number is taken as
-its sign, because a stick has two halves and there is no third thing to mean. The half counts as
-pressed once the stick is past the dead zone, described below.</p>
+<p data-fw-grep="include/rmp/input.h::static_cast&lt;int8_t&gt;\(sign &lt; 0 \? -1 : 1\)">The sign
+says which half counts: -1 is left or up, +1 right or down. Any negative number is taken as -1 and
+any other, 0 included, as +1, because a stick has two halves and there is no third thing to mean.
+The half counts as pressed once the stick is past the dead zone, described below.</p>
 
 <h3>Which gamepad</h3>
 
@@ -227,7 +234,7 @@ the same code works on a desktop and on a phone, with no <code>#if</code>:</p>
 <thead><tr><th>Call</th><th>Gives</th></tr></thead>
 <tbody>
 <tr><td><a href="ref:rmp::input::pointer_screen"><code>pointer_screen()</code></a></td><td>Where it is, in pixels, from the top-left of the window.</td></tr>
-<tr><td><a href="ref:rmp::input::pointer"><code>pointer()</code></a></td><td>Where it is in the world, through the camera of the scene on top of the stack: what you compare an object's position with. The same as <code>pointer_screen()</code> while that camera has not moved.</td></tr>
+<tr><td><a href="ref:rmp::input::pointer"><code>pointer()</code></a></td><td data-fw-grep="src/rmp/camera.cpp::\.offset = Vector2\{ screen\.x / 2, screen\.y / 2 \}">Where it is in the world, through the camera of the scene on top of the stack: what you compare an object's position with. The same as <code>pointer_screen()</code> while that camera has not moved and the window is the size <code>[window] width</code> and <code>height</code> ask for. The camera puts its <a href="ref:rmp::Camera::position"><code>position</code></a>, which starts at the middle of that size, in the middle of the real window, so in a window of any other size — resized, or a phone's screen — the two differ even when the camera has not moved.</td></tr>
 <tr><td><a href="ref:rmp::input::pointer_delta"><code>pointer_delta()</code></a></td><td>How far it moved since the last frame, in pixels. Zero on the first frame.</td></tr>
 <tr><td><a href="ref:rmp::input::pointer_down"><code>pointer_down()</code></a></td><td>The left button, or a finger, is held.</td></tr>
 <tr><td><a href="ref:rmp::input::pointer_pressed"><code>pointer_pressed()</code></a></td><td>The frame it goes down.</td></tr>
@@ -295,9 +302,13 @@ scene says so. See <a href="/manual/core/scenes.html#what-a-scene-lets-through">
 through</a>.</li>
 </ol>
 
-<p>The interface's answers come from the last frame in which it drew. <code>_update()</code> runs
-before anything draws, so it reads the previous frame's — one frame of tolerance, which nobody
-notices — and the answer holds until the interface draws again.</p>
+<p data-fw-grep="src/rmp/ui/context.cpp::if \(this_pass\.index &lt; 0\) begin_capture_frame\(\);">The
+interface's answers come from the previous frame. <code>_update()</code> runs before anything
+draws, so it reads what the interface did last frame — one frame of tolerance, which nobody
+notices. In a game of scenes, a frame in which no scene draws any interface answers false to both,
+so a pause menu that pops while the pointer is over one of its buttons does not leave the game's
+mouse dead. The one exception is a slider being dragged, which keeps <code>wants_pointer()</code>
+true until the pointer comes up.</p>
 
 <p>For code that wants the reason and not the answer — a different cursor over the HUD, a raw read
 that should still respect the interface —
@@ -307,10 +318,11 @@ anything above the caller is holding that device: a scene on top, or the interfa
 
 <h3>What routing does not cover</h3>
 
-<p>The interface's own navigation is not an action. The arrow keys, Tab, the d-pad and the left
-stick move the focus between controls, Enter, Space and the bottom face button press the focused
-one, and Escape and the right face button back out of a text field or an open list — and
-<code>wants_keyboard()</code> is only about text fields. In a scene that draws a menu
+<p data-fw-grep="src/rmp/ui/focus.cpp::navigation\.x = capture\.keyboard \? 0 : nav\.x;">The
+interface's own navigation is not an action. Up, Down and Tab — and the d-pad and the left stick,
+up and down — move the focus between controls, and Left and Right move a focused slider. Enter,
+Space and the bottom face button press the focused one, and Escape and the right face button back
+out of a text field or an open list. <code>wants_keyboard()</code> is only about text fields. In a scene that draws a menu
 <em>and</em> reads <code>move_up</code>, the up arrow moves both. The usual shape keeps them apart:
 the menu is its own scene, pushed on top, and the game underneath is frozen or, by the third rule,
 deaf. A HUD in
@@ -330,18 +342,18 @@ says so:</p>
 rmp example 01_actions
 </pre>
 
-<aside class="callout warning" data-fw-grep="src/rmp/app.cpp::const bool closed = WindowShouldClose\(\);"><span class="callout-title">Escape closes the game</span>
-<p>On desktop, raylib treats Escape as the key that closes the window, and the game ends when the
-window says it should close — before the next frame, the one in which an action bound to
-<code>KEY_ESCAPE</code> would read as pressed. That includes the <code>pause</code> action above and
-<code>ui_cancel</code>. A game that wants Escape for itself hands it back to the game once the window
-exists, in its first scene's <code>_ready()</code> (see <a href="/manual/core/app.html#the-escape-key">the
-Escape key</a>):</p>
-<pre data-lang="cpp" data-harness="members">
-void _ready() override {
-    SetExitKey(KEY_NULL); // Escape belongs to the game now, not to raylib
-    rmp::input::action("pause", KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
-}
+<aside class="callout" data-fw-grep="src/rmp/app.cpp::void after_ready\(\) \{[^}]*?SetExitKey\(KEY_NULL\);"><span class="callout-title">Escape is the game's key</span>
+<p>raylib makes Escape the key that closes the window. The entry point takes that away once the
+ready hook has returned, in every runner and whoever opened the window, so an action bound to
+<code>KEY_ESCAPE</code> — the <code>pause</code> action above, <code>ui_cancel</code> — reads as
+pressed and the game carries on. The window's close button still closes it. Because it happens after
+the ready hook, a <code>SetExitKey()</code> of the game's own there, a first scene's
+<code>_ready()</code> included, is overwritten. A game that quits on a key says so with
+<a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> (see
+<a href="/manual/core/app.html#the-escape-key">the Escape key</a>):</p>
+<pre data-lang="cpp" data-harness="function">
+rmp::input::action("quit", KEY_Q, GAMEPAD_BUTTON_MIDDLE_LEFT);
+if (rmp::input::just_pressed("quit")) rmp::app::quit();
 </pre>
 </aside>
 

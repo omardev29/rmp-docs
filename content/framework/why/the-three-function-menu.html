@@ -53,7 +53,7 @@ does not.</li>
 
 <p>The second question is the one that keeps the API small. A pause menu is not a feature of the
 framework: it is a scene pushed on top of the game, and the defaults of a scene already make the
-world underneath freeze, stay visible and stop hearing the keyboard
+world underneath freeze, stay visible and stop hearing its actions and the pointer
 (<a href="/manual/core/scenes.html#what-a-scene-lets-through">Scenes</a>). A rigid-body physics
 world is not a feature either. An object's <code>position</code>, <code>rotation</code> and
 <code>velocity</code> are public fields, so a game that needs a tower that collapses can link a
@@ -98,6 +98,14 @@ body with a density, a restitution, a friction, a damping and gravity switched o
 <code>add&lt;rmp::behavior::TopDown&gt;({ .speed = 220 })</code>. The price of a base class would
 have been that line. <a href="/framework/why/designated-initialisers.html">Designated initialisers</a>
 explains why.</p></dd>
+
+<dt>Escape goes back; it does not quit</dt>
+<dd><p data-fw-grep="include/rmp/app.h::ESCAPE DOES NOT CLOSE THE GAME">raylib makes Escape the
+key that closes the window. In a game it is the key for "back" and "pause": a menu of
+<code>rmp::ui</code> goes back on it and the <code>ui_cancel</code> action is bound to it, so the
+entry point gives the key back to the game once the window is open, and a pause menu needs no line
+to keep Escape from ending the game. The game that does want to quit on it writes that one line,
+with <a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a>.</p></dd>
 
 <dt>Leaving is one call that returns</dt>
 <dd><p><a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> can be called from anywhere,

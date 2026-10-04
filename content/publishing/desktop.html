@@ -47,26 +47,46 @@ not, so both shapes run the same game. <code>rmp pack</code> makes the same pack
 <code>rmp unpack</code> deletes it.</p>
 
 <p>Three archives carry the loose files instead, with a <code>PACK_SKIPPED.txt</code> in
-<code>resources/</code> that says why: <code>linux-riscv64-glibc</code>,
-<code>linux-x64-musl</code> and <code>windows-arm64</code> are built by a compiler for another
-machine, so the packer comes out as a program for that machine too, and cannot run where the pack
-would have to be made.</p>
+<code>resources/</code> that says why. The packer is built the way the game is, and for these
+three it comes out as a program the machine making the archive cannot run.
+<code>linux-riscv64-glibc</code> and <code>windows-arm64</code> are built for another processor
+than the one that builds them, so the packer is a program for that processor.
+<span data-fw-grep=".github/workflows/_linux.yml::no /lib/ld-musl-x86_64\.so\.1 here"><code>linux-x64-musl</code>
+is built for the same processor, but its packer is linked against musl, and the glibc build image
+that makes the archive has no musl to run it with.</span></p>
 
-<h3>Start it from its own folder</h3>
+<p data-fw-grep="tools/ship_resources.sh::^if \[ -d src/rmp \]; then">A game written in plain C, without the framework's <code>src/rmp/</code> — the way out
+<code>examples/plain_c</code> shows — gets the loose files and a <code>PACK_SKIPPED.txt</code> in
+every archive: raw raylib cannot read the pack, and nothing of the framework's is there to read it
+for the game. <code>tools/ship_resources.sh</code> makes that choice for the packaging steps of
+<code>linux-x64-glibc</code>, <code>linux-arm64-glibc</code>, both DRM targets, macOS and the
+BSDs, and the <code>windows-x64</code> step makes the same one in PowerShell. The three archives
+above never call it: they always carry the loose files, and their note gives the reason of the
+paragraph above.</p>
 
-<p>A release build looks for <code>./resources/</code> — relative to the folder the game is
-started from, not to where the executable is. The iOS app changes into its bundle before it loads
-anything; a desktop build does not. Started from its own folder, it finds its assets:</p>
+<h3>It starts from any folder</h3>
 
-<pre data-lang="shell">
-cd my_game
-./my_game
-</pre>
+<p data-fw-grep="src/rmp/app.cpp::is_directory\(folder / RMP_RESOURCES_PATH, error\)">A release build reads <code>./resources/</code>, and <code>.</code> is the folder the game
+was started from — a file manager, a shortcut and a launcher each start it somewhere else. So
+before it opens the pack or loads anything, a desktop release moves into the folder that holds the
+executable, when that folder has a <code>resources/</code> beside it, and says so in the log. It is
+a change of directory rather than a different path, so a plain raylib call with a relative path
+under <code>resources/</code> finds its file too. The iOS app does the same with its bundle. A
+release with no <code>resources/</code> next to the executable — built in the project and started
+from the project's root — keeps reading the working directory's.</p>
 
-<p>Started from anywhere else, it finds neither the pack nor the loose files, and the log says
-<samp>ASSETS: No resource pack found, using loose files from …</samp> before every load fails.
-Whatever launches the game — a shortcut, a launcher, a store — has to start it in its own
+<p>NetBSD and OpenBSD are the exception: raylib cannot ask either system where an executable is,
+so there the game reads <code>resources/</code> from the working directory and logs
+<samp>ASSETS: this system does not say where the executable is, so … is read from the working
+directory, …</samp>. On those two, whatever launches the game has to start it in its own
 folder.</p>
+
+<p>On every desktop target it runs but NetBSD and OpenBSD, CI starts a release from somewhere
+other than its folder. <code>tools/shipped_check.sh</code> lays a software-rendered release out the way the archive ships
+it and starts it from another folder, on macOS and on the BSDs; on NetBSD and OpenBSD it starts it
+from its own and requires that log line instead. The Linux x64 and ARM64 jobs unzip the archive
+they ship and start it from another folder, the Windows job starts the <code>.exe</code> from one,
+and the musl and DRM runs start it from <code>/</code>.</p>
 
 <h2 id="where-the-saves-go">Where the saves go</h2>
 
@@ -78,7 +98,8 @@ folder.</p>
 <tbody>
 <tr><td><code>false</code> (the default)</td><td><code>%APPDATA%\my_game</code> on Windows,
 <code>~/Library/Application Support/my_game</code> on macOS, <code>~/.local/share/my_game</code>
-on Linux and the BSDs</td><td>installers, and Steam's cloud saves</td></tr>
+on Linux and the BSDs — or <code>$XDG_DATA_HOME/my_game</code> when that variable holds an
+absolute path</td><td>installers, and Steam's cloud saves</td></tr>
 <tr><td><code>true</code></td><td>a <code>saves/</code> folder next to the executable</td><td>a zip
 the player unpacks and runs — itch.io's downloads: deleting the folder deletes the game, saves
 included</td></tr>
@@ -90,8 +111,11 @@ included</td></tr>
 portable = true
 </pre>
 
-<p>Only Windows, Linux and the BSDs have a folder next to the executable to use; macOS ignores
-<code>portable</code>. When that folder cannot be written — a portable build copied somewhere
+<p data-fw-grep="src/rmp/save.cpp::if \(dir == nullptr \|\| dir\[0\] == '\\0' \|\| std::strcmp\(dir, &quot;\./&quot;\) == 0\) \{\n        TraceLog\(LOG_WARNING,">Only Windows, Linux and FreeBSD have a folder next to the executable to use. macOS ignores
+<code>portable</code>. NetBSD and OpenBSD cannot say where the executable is, so there a portable
+build logs <samp>SAVE: [save] portable: this system does not say where the executable is; saving
+in the user's folder instead</samp> and saves in the player's folder, as if <code>portable</code>
+were <code>false</code>. When the folder next to the executable cannot be written — a portable build copied somewhere
 read-only — the saves go to the player's folder instead and the log says so once, and a read
 looks in both and takes the newer save, so nothing is lost in silence.</p>
 
@@ -155,8 +179,10 @@ built that way and checked. The rest are built differently:</p>
 <li><strong>DRM</strong> links the system's <code>libdrm</code>, <code>libgbm</code> and
 <code>libEGL</code> directly, and those were built against the build machine's glibc, so its floor
 is the build machine's. Its job prints the floor the binary really has, on every run.</li>
-<li><strong><code>linux-riscv64-glibc</code></strong> is built with the cross compiler in CI's
-image, and its floor is neither lowered nor checked.</li>
+<li data-fw-grep=".github/workflows/_linux.yml::glibc_check\.sh build/\$\{\{ inputs\.project_name \}\} report\n\n      - name: Test \(static\) — binary exists, is RISC-V ELF"><strong><code>linux-riscv64-glibc</code></strong> is built with the cross compiler in CI's
+image against that image's own riscv64 glibc, so its floor is the build machine's too, and is
+not lowered. Its job prints the floor the binary really has, on every run, without failing on
+it.</li>
 <li><strong><code>linux-x64-musl</code></strong> has no glibc to ask for.</li>
 </ul>
 
@@ -189,9 +215,11 @@ smaller <code>.exe</code> and cover less — gamepads, several monitors, the cli
 software OpenGL placed beside it, since the runners have no GPU, and checks it draws. It starts it
 with the compiler's folder, and every folder holding a MinGW runtime DLL, taken off
 <code>PATH</code>: Windows looks for an imported DLL on <code>PATH</code>, so a runner with MinGW
-there would start an <code>.exe</code> that no player's machine can. The Mesa DLLs are deleted
-before packaging, and the packaging step fails if one of them is in the zip: a copy shipped by
-mistake would force software rendering on every player.</li>
+there would start an <code>.exe</code> that no player's machine can. The three Mesa DLLs —
+<code>opengl32.dll</code>, <code>libgallium_wgl.dll</code> and <code>dxil.dll</code> — are deleted
+before packaging, and the packaging step fails if <code>opengl32.dll</code> or
+<code>libgallium_wgl.dll</code> is in the zip: a copy shipped by mistake would force software
+rendering on every player.</li>
 </ul>
 
 <h2>macOS</h2>
@@ -251,8 +279,8 @@ The groups here are <code>all</code>, <code>linux</code>, <code>windows</code> a
 target. The default is <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code>. To turn
 compression off, empty <code>enabled</code>.</p>
 
-<p>Each target that cannot be compressed has its own reason, and naming one is an error that
-says it, not a setting that quietly does nothing:</p>
+<p>Each target that cannot be compressed has its own reason, and naming one, in either list, is
+an error that says it, not a setting that quietly does nothing:</p>
 
 <table>
 <thead><tr><th>Target</th><th>Why not</th></tr></thead>
@@ -263,8 +291,22 @@ says it, not a setting that quietly does nothing:</p>
 </tbody>
 </table>
 
-<p>The error comes when a build is packaged, from the step that asks
-<code>tools/configure.py</code> which binaries to compress.</p>
+<p data-fw-grep="tools/configure.py::The names in \[upx\]\. Refused HERE">The refusal comes from <code>tools/configure.py</code> like every other mistake in the
+.toml, at its line — on your machine, in <code>rmp test config</code>, long before a release would
+package anything:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[upx]
+enabled = ["macos"]
+</pre>
+
+<p>So does a name that is no target or group at all, and that message lists every name
+<code>[upx]</code> knows:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml" data-expect="reject">
+[upx]
+enabled = ["linux-x64"]
+</pre>
 
 <p>The trade-offs of the targets that can be compressed:</p>
 
@@ -288,5 +330,12 @@ max_size_mb = 0
 
 <p>UPX runs at its slowest and smallest setting, and every packed binary is verified with
 <code>upx -t</code> before it goes into the zip. The version is pinned with a checksum in
-<code>thirdparty/FROZEN_VERSIONS.md</code>. CI boots each binary before the packaging step
-compresses it; the compressed file itself is checked by <code>upx -t</code>, not started.</p>
+<code>thirdparty/FROZEN_VERSIONS.md</code>.</p>
+
+<p data-fw-grep=".github/workflows/_linux.yml::It is\n      # also the binary that ships, so a \[upx\]-packed one is started here\.">The default is exactly the targets whose packed binary CI starts: the
+<code>linux-x64-glibc</code> job unzips the archive it ships, compressed, and starts it on every
+push, and the <code>linux-arm64-glibc</code> job does the same on a full run, on a runner of its
+own architecture. On every other target, what CI starts is the binary before the packaging step
+compresses it, or a separate software-rendered build, or nothing, so a binary compressed there is
+checked by <code>upx -t</code> and never started. UPX supports those targets; turning it on for
+one ships a packed binary whose launch nothing has seen.</p>

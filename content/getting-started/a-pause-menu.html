@@ -71,7 +71,7 @@ of every scene decide what reaches the scene underneath it, and their defaults a
 menu:</p>
 
 <table>
-<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<thead><tr><th>Field</th><th>Default</th><th>When it is <code>true</code></th></tr></thead>
 <tbody>
 <tr><td><a href="ref:rmp::Scene::updates_below"><code>updates_below</code></a></td><td><code>false</code></td><td>The scene below keeps running.</td></tr>
 <tr><td><a href="ref:rmp::Scene::draws_below"><code>draws_below</code></a></td><td><code>true</code></td><td>The scene below stays on screen.</td></tr>
@@ -116,8 +116,6 @@ void GameScene::_ready() {
 
     // P, Escape, or the gamepad's Start button.
     rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
-    // raylib closes the window when Escape is pressed; this game uses Escape.
-    SetExitKey(KEY_NULL);
 
     auto &amp;player = spawn&lt;Player&gt;({
         .position = { ARENA.width / 2, ARENA.height / 2 },

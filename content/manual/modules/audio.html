@@ -212,6 +212,10 @@ with no device:</p>
 disabled_modules = ["raudio"]
 </pre>
 
+<p data-fw-grep="tools/configure.py::disabled_modules has no effect on iOS">Except on iOS, where
+the setting does nothing: the iOS build links a prebuilt raylib, built without it, and
+<code>configure.py</code> warns so when iOS is among the targets.</p>
+
 <h3>On the web</h3>
 
 <p>Browsers keep a page silent until the player has clicked, touched it or pressed a key. That is
@@ -240,9 +244,10 @@ on the <code>rmp::Sound</code> you hold.</p>
 the two it was, once:</p>
 
 <ul>
-<li><samp>AUDIO: no sound called "…" in resources/ …</samp></li>
-<li><samp>AUDIO: no music called "…" in resources/</samp></li>
+<li><samp>AUDIO: no sound called "…" in resources/ (looked for …)</samp></li>
+<li><samp>AUDIO: no music called "…" in resources/ (looked for …)</samp></li>
 <li><samp>AUDIO: "…" is in resources/ but could not be decoded (raylib here reads .wav, .ogg, .mp3 and .qoa)</samp></li>
+<li><samp>AUDIO: "…" is in resources/ but could not be streamed (raylib here reads .wav, .ogg, .mp3 and .qoa)</samp></li>
 </ul>
 
 <p>These are mistakes in the game, so under <code>[dev] strict</code> the first of them aborts a
@@ -250,4 +255,5 @@ debug build. Looking a logical name up is not counted as a
 <a href="/manual/modules/assets.html#when-a-load-fails">failed load</a>: trying four extensions to
 find one file is not three failures, so a game whose sounds are <code>.ogg</code> boots with
 nothing failed. It also means a sound that is missing altogether is caught by the warning, not by
-the boot count.</p>
+the boot count. A file that is found and does not decode is different: the sound or the song is
+there and broken, and that counts as a failed load, the way a broken picture does.</p>

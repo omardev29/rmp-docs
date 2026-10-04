@@ -147,9 +147,13 @@ this order:</p>
 </tbody>
 </table>
 
-<p>The order matters, because C++20 requires designated initialisers in declaration order:
+<p data-fw-grep="CMakeLists.txt::set\(RMP_STRICT_CXX_FLAGS -Werror=reorder-init-list\)">The order
+matters, because C++20 requires designated initialisers in declaration order:
 <code>{ .style = …, .enabled = false }</code> is right, and <code>{ .enabled = false, .style = … }</code>
-is refused by GCC and warned about by Clang. Every options struct in <code>rmp::ui</code> is ordered
+does not compile. GCC and MSVC refuse it on their own; Clang only warns, so wherever Clang compiles a
+game the framework adds <code>-Werror=reorder-init-list</code> — in the CMake builds, on Android and
+in the generated iOS project — and the mistake fails on the machine that made it, not later on
+another compiler. Every options struct in <code>rmp::ui</code> is ordered
 the way its fields are most likely to be written, so the order you would write them in is usually
 the one that compiles; when a compiler complains about designator order, that is what it means.</p>
 
@@ -236,8 +240,9 @@ them. The focus moves between controls of the previous frame, for the same reaso
 <a href="/manual/modules/ui-controls.html#text-field">text field</a> types only once it has the
 keyboard, which is not the same as having the focus, and Tab, Up and Down leave it like any other
 control. An open <a href="/manual/modules/ui-controls.html#dropdown">dropdown</a> takes Up and Down
-for its own items. On the desktop, Escape is also the key raylib closes the window with, unless the
-game turns that off; see <a href="/manual/core/app.html#the-escape-key">the Escape key</a>.</p>
+for its own items. Escape backs out and nothing more: raylib's habit of closing the window on it is
+switched off by the entry point (see <a href="/manual/core/app.html#the-escape-key">the Escape
+key</a>).</p>
 
 <h3>Nothing to start</h3>
 
@@ -356,11 +361,15 @@ but not where it has clipped its rows away. A click on a panel's background is t
 does not fall through to the game behind it. Plain text with nothing behind it is the exception, on
 purpose: a score drawn over the game does not stop the game being clicked through it.</p>
 
-<p>Both answer for the last frame in which the interface drew, until it draws again, so they read
-the same in <code>_update()</code> and on the line after <code>end()</code>. In a game of scenes
-you rarely call them: an action read by name through <code>rmp::input</code> already asks them, which
-is the subject of <a href="/manual/modules/input.html#who-hears-a-press">who hears a press</a>. In a
-loop of your own, with raylib's input, they are the check:</p>
+<p data-fw-grep="src/rmp/ui/context.cpp::if \(this_pass\.index &lt; 0\) begin_capture_frame\(\);">Each
+frame's answer stands until the next frame's first <code>begin()</code>, so they read the same in
+<code>_update()</code> and on the line after <code>end()</code>. In a game of scenes, a frame in which
+no scene calls <code>begin()</code> answers false to both — a pause menu that pops while the pointer
+is over one of its buttons does not leave the game's mouse dead — except that a slider being dragged
+keeps <code>wants_pointer()</code> true until the pointer comes up. A game that reads its
+actions by name through <code>rmp::input</code> rarely calls them, because such a read already asks
+them — the subject of <a href="/manual/modules/input.html#who-hears-a-press">who hears a press</a>.
+Wherever the game reads raylib's input directly, they are the check:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="void shoot(); void walk();">
 if (!rmp::ui::wants_pointer() &amp;&amp; IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) shoot();

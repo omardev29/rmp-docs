@@ -89,8 +89,8 @@ does not have loads nothing and the log lists the names it does have.</p>
 <ul>
 <li><strong>Images next to it.</strong> The tileset images go in <code>resources/</code> beside the
 <code>.ldtk</code>. LDtk stores paths relative to the project, and only their file name is kept,
-because <code>resources/</code> is flat. A tileset image that is not there is a warning naming the
-file and a failed load; the level still loads, and that tileset draws nothing. A tileset must be a picture
+because <code>resources/</code> is flat. A tileset image that is not there, or does not decode, is a
+warning naming the file and a failed load; the level still loads, and that tileset draws nothing. A tileset must be a picture
 <code>load_texture()</code> reads, such as a PNG; LDtk's built-in icon atlas has no file and draws
 nothing either.</li>
 <li data-fw-grep="src/rmp/ldtk.cpp::same_word\(text\(value, .identifier.\), .solid.\)"><strong>Solid cells.</strong> An IntGrid layer value whose identifier is <code>solid</code> makes
@@ -343,4 +343,5 @@ nothing in it. Each reason is said in the log in words that name the file and th
 compressed layers, the <code>.tsx</code> tileset, the level LDtk keeps in a file that is not in
 <code>resources/</code>, the level name that is not in the project. A map file that is missing,
 or does not parse, counts as a <a href="/manual/modules/assets.html#when-a-load-fails">failed
-load</a>, and so does a tileset image that is not there, so the boot check in CI sees them.</p>
+load</a>, and so does a tileset image that is not there or does not decode, so the boot check in CI
+sees them.</p>

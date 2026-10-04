@@ -75,11 +75,11 @@ are the exceptions, and they are few:</p>
 <p>If a pair of headers ever needed each other, one of them should not exist: they would be one module
 pretending to be two.</p>
 
-<p data-fw-grep="include/rmp/app.h::void begin_run\(\); // smoke test on, chdir into the bundle on iOS, assets open">The
+<p data-fw-grep="include/rmp/app.h::they exist so that this header names nothing from rmp::input,\s+// rmp::ui or rmp::assets">The
 technique that makes most of this possible is moving the call into a <code>.cpp</code>. The
-entry-point macros in <code>rmp/app.h</code> have to start the asset layer and close the UI, but
-naming <code>rmp::assets</code> or <code>rmp::ui</code> there would make every file with an entry
-point compile both. So the macros call a handful of functions declared in <code>rmp/app.h</code>
+entry-point macros in <code>rmp/app.h</code> have to start the asset layer, sample the input
+every frame and close the UI, but naming <code>rmp::assets</code>, <code>rmp::input</code> or
+<code>rmp::ui</code> there would make every file with an entry point compile all three. So the macros call a handful of functions declared in <code>rmp/app.h</code>
 and defined in <code>src/rmp/app.cpp</code>, which is the one file that includes the rest.</p>
 
 <h2 id="config">The one header every header includes</h2>
@@ -119,9 +119,6 @@ exists because <code>&lt;functional&gt;</code> measured 131 ms in every file tha
 <code>rmp/object.h</code>, which is every file with an object in it, and the part of
 <code>std::function</code> the framework needs is small. It turned out to have a second reason,
 in <a href="/framework/why/ownership.html#callbacks">Ownership</a>.</li>
-<li data-fw-grep="include/rmp/object.h::`const char \*` and not std::string_view, for the same reason"><a href="ref:rmp::Sprite::play"><code>Sprite::play()</code></a>
-takes a <code>const char *</code> and not a <code>std::string_view</code>, which measured 77 ms in
-the same files, because animation tags are string literals in practice.</li>
 <li data-fw-grep="include/rmp/math.h::The expensive part is the C library's &lt;math.h&gt;, not raymath's own"><code>rmp/math.h</code>
 is a header of its own because the C library's <code>&lt;math.h&gt;</code> under raymath is most of
 its cost, and <code>rmp/ui.h</code> must not make a file that only draws menus pay for it.</li>

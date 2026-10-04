@@ -1,6 +1,6 @@
 <!--
 title: Android
-description: The Android target: raymob around raylib, a Gradle build generated from the .toml, the application id, permissions and orientation, what gl_version really sets, and signing for the Play Store.
+description: The Android target: raymob around raylib, a Gradle build generated from the .toml, the application id, permissions and orientation, the OpenGL ES version a game compiles for, ads that are off until asked for, and signing for the Play Store.
 order: 30
 -->
 <h1>Android</h1>
@@ -50,8 +50,17 @@ without its installs and reviews. <code>rmp new</code> fills it with a <code>com
 placeholder; a release is refused while it still says so, by <code>rmp deploy</code> before it tags
 and by CI when a tag arrives.</p>
 
-<p>The id needs at least one dot, and every part starts with a letter. It also must not contain the
-string the build rewrites in raymob's sources on the way through, which is refused with the reason:</p>
+<p>The id needs at least one dot, every part starts with a letter, and it takes letters, digits,
+<code>_</code> and <code>.</code> and nothing else. A hyphen, which an iOS bundle id may contain, is
+refused with the id written the way Android takes it:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[android]
+application_id = "com.my-game.app"
+</pre>
+
+<p>It also must not contain the string the build rewrites in raymob's sources on the way through,
+which is refused with the reason:</p>
 
 <pre data-lang="toml" data-expect="reject">
 [android]
@@ -71,10 +80,10 @@ application_id = "com.raylib.raymob.mygame"
 <tr><td><code>[window] orientation</code></td><td>The activity's screen orientation: <code>"landscape"</code>, <code>"portrait"</code> or <code>"unspecified"</code>. The same key sets iOS.</td></tr>
 <tr><td><code>[android] min_sdk</code></td><td>The oldest Android the app installs on, as an API level from 21 to 36; 24, the default, is Android 7.0. The target SDK is fixed at 36, which Google Play requires.</td></tr>
 <tr><td><code>[android] category</code></td><td><code>android:appCategory</code>, how the Play Store files the app: <code>"game"</code> by default. It is not what puts the icon in the launcher; that part is fixed.</td></tr>
-<tr><td><code>[android] gl_version</code></td><td>The OpenGL ES version a device must have to be offered the app. See below.</td></tr>
+<tr><td><code>[android] gl_version</code></td><td>The OpenGL ES version raylib and the game are compiled for, and the one a device must have to be offered the app. See below.</td></tr>
 <tr><td><code>[android.display] keep_on</code></td><td>The screen never sleeps while the game runs.</td></tr>
 <tr><td><code>[android.display] immersive</code></td><td>The system bars are hidden.</td></tr>
-<tr><td><code>[android.display] into_cutout</code></td><td>The game draws behind the notch. <code>rmp::ui</code> keeps its own controls out of it, padding the interface by the safe area.</td></tr>
+<tr><td><code>[android.display] into_cutout</code></td><td data-fw-grep="src/rmp/ui/context.cpp::#if defined\(PLATFORM_ANDROID\) \|\| defined\(PLATFORM_IOS\)\s+// An approximation[^#]*return px\(24\.0f\);">The game draws behind the notch. raylib reports no safe area, so <code>rmp::ui</code> does not know where the notch is: on Android and iOS it pads every interface by a fixed 24 design units, whether this is on or off.</td></tr>
 <tr><td><code>[android.permissions] internet</code>, <code>vibration</code></td><td>The permissions the app asks for. Each one is shown on the Play listing, so ask for nothing you do not use. <code>vibration</code> is what raymob's <code>Vibrate</code> needs.</td></tr>
 <tr><td><code>[android.features] gyroscope</code>, <code>accelerometer</code></td><td><code>true</code> hides the app from devices without the sensor; <code>false</code> declares it optional.</td></tr>
 <tr><td><code>[icon] source</code>, <code>adaptive_background</code></td><td>Every launcher icon density, the round icon and the adaptive icon's foreground, made from one picture. That needs Pillow on the machine that configures.</td></tr>
@@ -96,14 +105,28 @@ into_cutout = false
 vibration = true
 </pre>
 
-<h3><code>gl_version</code> is a requirement, not a choice</h3>
+<h3><code>gl_version</code>: what the game draws with</h3>
 
-<p><code>[android] gl_version</code> — <code>"ES20"</code>, <code>"ES30"</code>,
-<code>"ES31"</code> or <code>"ES32"</code>, <code>"ES30"</code> by default — writes the manifest's
-<code>&lt;uses-feature android:glEsVersion&gt;</code>: devices without that version are not offered
-the app. It does not change how the game draws. raylib's Android build is compiled for OpenGL ES 2.0
-whatever this says, so a higher value only narrows who can install the game. A game that needs no
-more than raylib draws with can ask for <code>"ES20"</code>.</p>
+<p data-fw-grep="raymob/app/src/main/cpp/gl_version.cmake::set\(\$\{OUT_DEFINE\} &quot;GRAPHICS_API_OPENGL_ES3&quot; PARENT_SCOPE\)">
+<code>[android] gl_version</code> is <code>"ES20"</code>, the default, or <code>"ES30"</code>, and it
+decides three things together, so that what the game draws with and what the Play Store asks of a
+device cannot disagree. raylib and the game are compiled for that version —
+<code>GRAPHICS_API_OPENGL_ES2</code> or <code>GRAPHICS_API_OPENGL_ES3</code>. With
+<code>"ES30"</code> the game links OpenGL ES 3.0's library, and raylib asks EGL for a version-3
+context: the framework's copy of raylib is patched to ask for the version it was compiled for. And
+the manifest's <code>&lt;uses-feature android:glEsVersion&gt;</code> requires the same version, so a
+device without it is not offered the app.</p>
+
+<p><code>"ES20"</code> reaches every device. <code>"ES30"</code> is for a game that needs what
+raylib's OpenGL ES 3.0 path adds — its shaders are GLSL 300 es, as
+<a href="/manual/raylib/rlgl.html#shaders">rlgl and OpenGL</a> explains. There is no
+<code>"ES31"</code> or <code>"ES32"</code>: raylib has no 3.1 or 3.2 path, and asking for one would
+only hide the game from more devices:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[android]
+gl_version = "ES31"
+</pre>
 
 <h2>Assets and saves</h2>
 
@@ -134,22 +157,39 @@ void on_hit() {
 }
 </pre>
 
-<p><code>examples/platform/02_mobile_raymob</code> uses each of them; see
+<p><code>examples/platform/02_mobile_raymob</code> uses vibration, the on-screen keyboard, the
+accelerometer, the screen's orientation and keeping the screen on; see
 <a href="/examples/platform/02_mobile_raymob.html">its page</a>.</p>
 
 <h2>Ads</h2>
 
-<p><code>[android.admob] enabled</code> decides whether AdMob is in the build at all, and it is
-<code>true</code> in the <code>.toml</code> a new game starts with, set to Google's test ad units.
-<code>false</code> removes it completely: no Google Mobile Ads library, no advertising-ID permission,
+<p data-fw-grep="tools/configure.py::&quot;admob&quot;: \{&quot;enabled&quot;: False,">
+<code>[android.admob] enabled</code> decides whether AdMob is in the build at all, and it is off
+until a game turns it on: <code>false</code> is the default, and what <code>rmp new</code> writes into a new game's
+<code>.toml</code>. Off, there is no Google Mobile Ads library, no advertising-ID permission and
 nothing to declare about advertising in Play's Data safety form, and the
-<a href="ref:rmp::ads"><code>rmp::ads</code></a> calls still compile and do nothing. It also switches
-itself off when Android is not a target, and it forces the internet permission on when it is
-on.</p>
+<a href="ref:rmp::ads"><code>rmp::ads</code></a> calls still compile and do nothing. On, the app
+carries the SDK and starts it at launch, asks for the advertising-ID permission, and has the
+internet permission forced on with it. It switches itself off when Android is not a target,
+whatever it says.</p>
 
 <pre data-lang="toml">
 [android.admob]
-enabled = false
+enabled = true
+</pre>
+
+<p>The three ids, <code>app_id</code>, <code>interstitial_id</code> and <code>rewarded_id</code>, start
+as Google's test ids; replace them with your own from the AdMob console before publishing. They are
+strings, always, and while AdMob is on each must have the shape AdMob gives it — the app id
+<code>ca-app-pub-</code>, 16 digits, <code>~</code>, 10 digits; an ad unit id the same with a
+<code>/</code> — because the Google Mobile Ads SDK stops an app at startup over an app id it cannot
+read. An empty or malformed id is refused at its line, and one pasted where the other kind goes is
+named for what it is:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[android.admob]
+enabled = true
+app_id = "ca-app-pub-3940256099942544/1033173712"
 </pre>
 
 <p>The framework does not ship a consent form. Serving ads to players in the EEA or the UK requires

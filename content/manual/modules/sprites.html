@@ -155,7 +155,9 @@ frame.</p>
 
 <dl>
 <dt><a href="ref:rmp::Sprite::playing"><code>playing()</code></a></dt>
-<dd>The name of the tag playing, or <code>""</code>.</dd>
+<dd data-fw-grep="src/rmp/animation.cpp::void Sprite::stop\(\) \{\s*ours\.done = true;\s*ours\.elapsed = 0;\s*\}">The name of the tag last started with <code>play()</code>, or <code>""</code> before any has
+been. It keeps naming that tag after <code>stop()</code> and after a tag that does not loop has
+finished; <code>finished()</code> is what says the clock has stopped.</dd>
 <dt><a href="ref:rmp::Sprite::stop"><code>stop()</code></a></dt>
 <dd>Holds the current frame, as a finished animation does.</dd>
 <dt><a href="ref:rmp::Sprite::frame_index"><code>frame_index()</code></a> and <a href="ref:rmp::Sprite::set_frame"><code>set_frame(i)</code></a></dt>
@@ -183,9 +185,11 @@ step and no JSON beside the picture. The whole of the workflow is:</p>
 <li>Draw the frames on one canvas. The canvas is the size of every frame.</li>
 <li>Set each frame's duration (Frame Properties). That time, in milliseconds, is how long the
 frame shows in the game.</li>
-<li>Tag each animation: select its frames and add a tag with the name you will pass to
+<li data-fw-grep="src/rmp/animation.cpp::ours\.ping_pong = tag\.loop_animation_direction == ASE_ANIMATION_DIRECTION_PINGPONG;">Tag
+each animation: select its frames and add a tag with the name you will pass to
 <code>play()</code>. The tag's direction is honoured: Forward, Reverse, or Ping-pong, which plays
-to the end and back.</li>
+to the end and back. Aseprite's fourth direction, Ping-pong Reverse, is not: such a tag plays as
+Forward, and nothing says so.</li>
 <li>Save the <code>.aseprite</code> into <code>resources/</code>.</li>
 </ol>
 

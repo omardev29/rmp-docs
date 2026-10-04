@@ -12,22 +12,31 @@ and that is what this page is about.</p>
 
 <h2>Running a release build</h2>
 
-<p>One rule holds on every desktop, and it is the one most likely to surprise. A debug build reads
-its files from your project's <code>resources/</code> by its absolute path, so it finds them from
-wherever it is started. A release build reads <code>./resources/</code> — relative to the
-<em>working directory</em>, not to the executable. The archives CI makes put
-<code>resources/</code> next to the executable, so a release runs as shipped when it is started
-from its own folder.</p>
+<p>A debug build reads its files from your project's <code>resources/</code> by its absolute path,
+so it finds them from wherever it is started. A release reads <code>./resources/</code>, the folder
+the archives CI makes put next to the executable — and <code>.</code> is the working directory,
+which is wherever a file manager, a shortcut or a terminal happened to be. So before it opens
+anything, a desktop release moves into the executable's folder, when that folder has a
+<code>resources/</code> in it, and says so: <samp>ASSETS: reading … next to the executable, in
+…</samp>. It starts from anywhere.</p>
 
-<pre data-lang="shell">
-cd my_game-release
-./my_game
-</pre>
+<p data-fw-grep="tools/shipped_check.sh::cd &quot;\$BUILD/elsewhere&quot;">CI holds it to that. Every
+desktop job that starts a release starts it from a folder with no <code>resources/</code> in it —
+macOS and the BSDs through <code>tools/shipped_check.sh</code>, which runs on a laptop too — and the
+run has to boot with every asset loaded. The two exceptions to that folder are OpenBSD and NetBSD,
+started from their own folder for the reason below. The release is laid out as the archive ships
+it, except on DRM, whose run copies the project's own <code>resources/</code> folder next to the binary
+instead of the archive's.</p>
 
-<p>Started from somewhere else, it finds no asset pack and no loose files: its log says
-<samp>ASSETS: No resource pack found, using loose files from ./resources/</samp>, and every
-texture comes back empty. Only iOS moves into its own folder at start-up, because the operating
-system starts an app somewhere else.</p>
+<p>Where the executable's folder has no <code>resources/</code>, the release stays where it was
+started and reads the working directory's, saying
+<samp>ASSETS: no … next to the executable; reading the working directory's, …</samp> — which is
+what lets a release you build yourself, inside the project's <code>build/</code>, run from the
+project's folder. OpenBSD and NetBSD are the exception: raylib cannot say where the executable is
+on those two, so a release there reads <code>resources/</code> from the working directory and logs
+<samp>ASSETS: this system does not say where the executable is, so … is read from the working
+directory, …</samp>. Started from its own folder, it finds them; CI starts it from there on those
+two, and checks that the line is in the log.</p>
 
 <p>Every release archive also carries <code>LICENSES.txt</code>, the notices of everything the
 game is built from, unless <code>[deploy] licenses = false</code> says where the game shows its
@@ -89,8 +98,9 @@ backend = "win32"
 <p><code>rmp</code> comes as <code>rmp.ps1</code> for PowerShell and <code>rmp.cmd</code> for cmd,
 and PowerShell has to be allowed to run a local script once
 (<code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>). The launchers look for a Python
-3.11 or newer by asking each candidate, so the Microsoft Store's <code>python3</code> placeholder is
-skipped rather than run.</p>
+3.11 or newer by running each candidate once to ask its version, so the Microsoft Store's
+<code>python3</code> placeholder, which fails that question, is passed over instead of being handed
+the command.</p>
 
 <p><code>[dev] compiler</code> picks the compiler for your own debug builds — CI is never affected
 by it. On Windows that can be <code>"msvc"</code> or <code>"mingw"</code> as well as
@@ -133,15 +143,20 @@ binary, and every Mac older than the one that built it refuses to open the game 
 of the binary it ships and fails on one above the floor.</p>
 
 <p>Saves go to <code>~/Library/Application Support/&lt;name&gt;/</code>. <code>[save]
-portable</code> means nothing on macOS and is ignored, and <code>[upx]</code> refuses
-<code>macos</code> by name: the binary is code-signed, and compressing it would break the
-signature.</p>
+portable</code> means nothing on macOS and is ignored. <code>[upx]</code> refuses
+<code>macos</code> by name, at its line, in either list — the binary is code-signed, and compressing
+it would break the signature:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[upx]
+enabled = ["linux", "macos"]
+</pre>
 
 <p>Building on a Mac needs a Python 3.11 or newer: the <code>python3</code> macOS ships is older,
 and the launcher passes it by. The scripts under <code>tools/</code> are written for the bash 3.2
 macOS keeps, and <code>rmp</code> runs under zsh. <code>[dev] linker = "mold"</code> is refused, for
-the same reason as on Windows; the default, Apple's own linker, is what <code>"auto"</code> settles
-on.</p>
+the same reason as on Windows. <code>"auto"</code> skips mold there and tries lld, which it keeps
+only when the toolchain can link with it; otherwise the game links with Apple's own linker.</p>
 
 <h2>Linux</h2>
 
@@ -165,8 +180,8 @@ function came from, and the loader refuses to start one that asks for more than 
 binary built on a new distribution and copied to an older one does not start, with an error that
 names a version like <code>GLIBC_2.39</code> — and nothing about the build warned.</p>
 
-<p><code>[linux] glibc</code> is the oldest glibc the shipped binary may need, and the default is
-<code>"2.28"</code>:</p>
+<p><code>[linux] glibc</code> is the oldest glibc <code>linux-x64-glibc</code> and
+<code>linux-arm64-glibc</code> may need, and the default is <code>"2.28"</code>:</p>
 
 <table>
 <thead><tr><th><code>[linux] glibc</code></th><th>Starts on</th></tr></thead>
@@ -179,10 +194,12 @@ names a version like <code>GLIBC_2.39</code> — and nothing about the build war
 </table>
 
 <p>The floor costs the game nothing: everything it asks of a newer glibc is maths or threading
-functions that older ones also have. CI's Linux jobs build through <code>tools/linux_build.sh</code>,
-which compiles with <code>zig cc</code> against that version of glibc, and then
-<code>tools/glibc_check.sh</code> reads the finished binary and fails the build if any symbol asks
-for more. <code>rmp build release</code> on your own machine uses your compiler and your glibc; run
+functions that older ones also have. CI builds both through
+<code>tools/linux_build.sh</code>, which compiles with <code>zig cc</code> against that version of
+glibc, and then <code>tools/glibc_check.sh</code> reads the finished binary and fails the build if
+any symbol asks for more. It reaches no other target: RISC-V and DRM, below, are built against the
+glibc of the machine that builds them, and CI prints the floor each one ends up with instead of
+gating it. <code>rmp build release</code> on your own machine uses your compiler and your glibc; run
 <code>bash tools/linux_build.sh build</code> to build the way CI does.</p>
 
 <p>Nothing has to be installed on the player's side either. GLFW opens the X11 and OpenGL libraries
@@ -238,10 +255,12 @@ files, with a <code>PACK_SKIPPED.txt</code> saying so.</p>
 <h3>RISC-V</h3>
 
 <p><code>linux-riscv64-glibc</code> is cross-compiled for RISC-V on an x86-64 machine, with the
-build image's RISC-V compiler rather than <code>zig</code>. <code>[linux] glibc</code> does not
-reach it: the binary needs the glibc of the Ubuntu release the build image is made from, and no
-check reads its symbol versions. It ships loose resources for the same reason musl does. There is no
-RISC-V runner to start it on, so CI checks that it is a RISC-V executable and goes no further.</p>
+build image's RISC-V GNU toolchain rather than <code>zig</code>. <code>[linux] glibc</code> does not
+reach it: the binary needs the glibc of the Ubuntu release the build image is made from, and CI
+prints which version that is on every run, with <code>tools/glibc_check.sh</code>'s
+<code>report</code>, without gating it. It ships loose resources for the same reason musl does.
+There is no RISC-V runner to start it on, so CI checks that it is a RISC-V executable and goes no
+further.</p>
 
 <h3>DRM/KMS: no desktop at all</h3>
 
@@ -274,9 +293,10 @@ path, and to <code>~/.local/share/&lt;name&gt;/</code> otherwise. <code>[save] p
 true</code> puts them in <code>saves/</code> next to the executable.</p>
 
 <p><code>[upx]</code> compresses <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code> by
-default — the ones CI starts after packing, so a packed binary that would not launch is
-caught on a push. The others can be added to <code>[upx] enabled</code>; they are left out by
-default because nothing in CI runs their packed binary.</p>
+default — the ones whose packed archive CI starts, so a packed binary that would not launch is
+caught: on every push for <code>linux-x64-glibc</code>, in the full lane for
+<code>linux-arm64-glibc</code>. The others can be added to <code>[upx] enabled</code>; they are left
+out by default because nothing in CI runs their packed binary.</p>
 
 <h2>The BSDs</h2>
 
@@ -288,13 +308,14 @@ them as desktops like any other — the same GLFW backend, X11, OpenGL 3.3 and
 <p>CI builds each one inside a virtual machine running that system, as a release, checks the result
 is an executable, packs the resources and boots a software-rendered build of the game inside the
 machine. The build tools are installed from each system's own package mirrors, which publish no
-dated snapshots — the one part of CI that is not pinned. A BSD job that fails for no reason you can
-find in your own change is the first thing to suspect there.</p>
+dated snapshots, so their versions are not pinned and move with the mirror. A BSD job that fails for
+no reason you can find in your own change is the first thing to suspect there.</p>
 
 <p>Saves go to <code>~/.local/share/&lt;name&gt;/</code>, as on Linux. On OpenBSD and NetBSD
 raylib cannot say where the executable is, so <code>[save] portable = true</code> has no folder to
 use there and says <samp>SAVE: [save] portable: this system does not say where the executable is;
-saving in the user's folder instead</samp>. NetBSD builds without link-time optimisation, which its
+saving in the user's folder instead</samp>, and a release reads <code>resources/</code> from the
+folder it was started in (<a href="#running-a-release-build">above</a>). NetBSD builds without link-time optimisation, which its
 linker cannot read from a static library, and with a compiler that reports C++20 by an older
 number — Clay carries a one-line patch for it. <code>[upx]</code> leaves the BSDs out by default:
 UPX publishes no build for them.</p>

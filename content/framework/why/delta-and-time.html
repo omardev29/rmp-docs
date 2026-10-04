@@ -56,18 +56,27 @@ answer every run, and a test that fails one time in twenty teaches everyone to i
 <code>tools/seam_check.sh</code> fails the framework's tests if any file under
 <code>src/rmp/</code> or <code>include/rmp/</code> calls <code>GetFrameTime()</code>,
 <code>GetTime()</code>, reads the keyboard, the mouse or the gamepad, asks for the screen size, or
-uses raylib's random numbers — except a short list of files that are the seams themselves, each
-with the reason it is allowed. The same goes for the other things that change between two runs.
-Input is sampled in one place, into a snapshot a test can replace. Randomness comes from
+uses raylib's random numbers — except a short list of files, each with the reason it is allowed.
+All but one are the seams themselves; the other, the UI's text field, is listed as debt. The same goes for the other
+things that change between two runs. The game's input is sampled in one place,
+<code>rmp::input</code>, into a snapshot a test can replace, and the UI samples the pointer and the
+keys it navigates with through a sampler of its own that a test replaces the same way. Randomness comes from
 <a href="ref:rmp::random"><code>rmp::random</code></a>, one generator with a seed: a test keeps
 the fixed default and gets the same sequence every time, while a shipped game is seeded from the
 wall clock when it starts, and <a href="ref:rmp::random::current_seed"><code>current_seed()</code></a>
 tells you which run you are in.</p>
 
 <p data-fw-grep="src/rmp/ui/context.cpp::float frame_time\(\) \{ return test_mode\(\) \? 0\.0f : GetFrameTime\(\); \}">The
-UI is the one part that keeps a clock of its own, for the timing of its transitions and of a held
-arrow key. It reads raylib's frame time for those, and the layout tests run it in a mode where that
-time is 0, so a layout comes out the same on every run.</p>
+UI is the one part that keeps a clock of its own, for its transitions, its scrolling and a held
+arrow key. It reads raylib's frame time for those through one function of its own,
+<code>frame_time()</code>, which is the other clock seam <code>tools/seam_check.sh</code> allows.
+The layout tests run the UI in a mode where that time is 0, so a layout comes out the same on every
+run.</p>
+
+<p data-fw-grep="src/rmp/ui/controls.cpp::bool caret_on = typing &amp;&amp; \(static_cast&lt;int&gt;\(GetTime\(\) \* 2\.0\) % 2\) == 0;">The
+exception is the text field, the debt on that list. It blinks its caret from
+<code>GetTime()</code> and reads the typed characters and Backspace straight from raylib, so test
+mode does not stop the caret blinking, and no seam lets a test type into it.</p>
 
 <h3>So it plays the same at any frame rate</h3>
 

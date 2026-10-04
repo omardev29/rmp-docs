@@ -40,6 +40,13 @@ program with two entry points gets a duplicate definition of that name from the 
 with none is told that name is missing — instead of a message about <code>main</code> that says
 nothing to someone who never wrote one.</p>
 
+<p data-fw-grep="src/rmp/app.cpp::RequireEntryPoint\(\) noexcept \{ rmp_entry_point_is_declared_exactly_once\(\); \}">The
+reference is the constructor of an object at namespace scope in <code>src/rmp/app.cpp</code>,
+because a static initializer is the one kind of code every linker keeps. A reference from an
+ordinary function would not do: in a program with no entry point nothing calls that function, and
+a linker that discards unused sections throws it away, unresolved reference and all, before it
+reports anything. At run time the constructor calls the empty function once.</p>
+
 <h2 id="toml-values">The values from the .toml</h2>
 
 <p data-fw-grep="tools/configure.py::\(&quot;RMP_WINDOW_WIDTH&quot;, &quot;window\.width&quot;">Every value of
@@ -69,17 +76,17 @@ switched off for exactly these.</p>
 
 <h2 id="report-once">Said once</h2>
 
-<p data-fw-grep="src/rmp/internal.h::static const char rmp_report_site_ = 0;">Inside the framework,
+<p data-fw-grep="src/rmp/internal.h::static const char rmp_report_once_site = 0;">Inside the framework,
 one macro carries every diagnostic a game can trigger every frame — an action nobody defined, a
 tag that is not in the sprite sheet, a <code>pop()</code> with nothing underneath. It is
 RMP_REPORT_ONCE, in <code>src/rmp/internal.h</code>, and it is a macro because every place it is
 written needs a variable of its own, and only a macro can declare one there for you.</p>
 
 <pre data-lang="text">
-#define RMP_REPORT_ONCE(...)                                        \
-    do {                                                            \
-        static const char rmp_report_site_ = 0;                     \
-        ::rmp::detail::report_once(&amp;rmp_report_site_, __VA_ARGS__); \
+#define RMP_REPORT_ONCE(...)                                            \
+    do {                                                                \
+        static const char rmp_report_once_site = 0;                     \
+        ::rmp::detail::report_once(&amp;rmp_report_once_site, __VA_ARGS__); \
     } while (0)
 </pre>
 
@@ -113,8 +120,17 @@ a release build would quietly include everything meant only for debugging.</p>
 
 <p>The other is RMP_RESOURCES_PATH, the folder assets are read from: the absolute path of the
 project's <code>resources/</code> while you develop, so the game finds its assets from any working
-directory, and <code>./resources/</code> beside the executable in a release. Each executable gets
-its own, which is how an example with its own art reads its own folder.</p>
+directory, and <code>./resources/</code> in a release. That is the CMake builds, the desktops and
+the web. The two mobile builds define it their own way, the same in debug and release: the iOS
+project as <code>./resources/</code>, because the folder is copied into the app bundle under that
+name and the app moves into its bundle when it starts, and Android's native build as an empty
+string, because Gradle copies what is in <code>resources/</code> to the root of the APK's
+assets.
+On a desktop the entry point moves into
+the executable's folder when there is a <code>resources/</code> beside it, before the first asset
+is read, so that path means the same wherever the game was started from
+(<a href="/framework/the-frame.html#start-and-stop">One frame</a> has the detail). Each executable
+gets its own, which is how an example with its own art reads its own folder.</p>
 
 <p>The CMake options themselves keep CMake's own names, <code>PRODUCTION_BUILD</code> and
 <code>RESOURCES_PATH</code>: they live in CMake's cache and never reach the preprocessor. What C++

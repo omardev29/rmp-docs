@@ -11,7 +11,11 @@ it and ships it. You install it once, and every game you make has its own copy.<
 <h2>What you need</h2>
 
 <ul>
-<li><strong>Python 3.11</strong> or newer, <strong>CMake</strong> and <strong>Ninja</strong> on your PATH, and a C++ compiler.</li>
+<li data-fw-grep="CMakeLists.txt::^cmake_minimum_required\(VERSION 3\.30\)"><strong>Python 3.11</strong>
+or newer, <strong>CMake 3.30</strong> or newer and <strong>Ninja</strong> on your PATH, and a C++
+compiler. A Linux distribution's own <code>cmake</code> package can be older than 3.30, and an
+older CMake stops the first build before anything is compiled: <code>cmake --version</code> says
+which one you have.</li>
 <li><strong>git</strong>, to get the framework and to keep your game in.</li>
 <li>On Linux, the X11 development libraries:</li>
 </ul>
@@ -38,7 +42,7 @@ git clone https://github.com/omardev29/raylib_multiplatform
 <tr><td>bash on macOS</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.bash_profile</code></td></tr>
 <tr><td>zsh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.zshrc</code></td></tr>
 <tr><td>ksh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.profile</code></td></tr>
-<tr><td>PowerShell and cmd</td><td><code>[Environment]::SetEnvironmentVariable("Path", "$HOME\raylib_multiplatform;" + [Environment]::GetEnvironmentVariable("Path", "User"), "User")</code></td></tr>
+<tr><td>Windows: run it in PowerShell, and cmd sees it too</td><td><code>[Environment]::SetEnvironmentVariable("Path", "$HOME\raylib_multiplatform;" + [Environment]::GetEnvironmentVariable("Path", "User"), "User")</code></td></tr>
 </tbody>
 </table>
 
@@ -72,7 +76,7 @@ git commit -m "New game"
 
 <h2>What is yours</h2>
 
-<p>Most of the folder is the framework and the build, and you do not edit it. Your game is four
+<p>Most of the folder is the framework and the build, and you do not edit it. Your game is six
 places:</p>
 
 <table>
@@ -80,7 +84,9 @@ places:</p>
 <tbody>
 <tr><td><code>src/main.cpp</code></td><td>Where the game starts. It names the first scene, and that is all it does.</td></tr>
 <tr><td><code>src/scenes/</code></td><td>The scenes, one per file: <code>main_menu.h</code> and <code>main_menu.cpp</code> are the menu you just saw.</td></tr>
+<tr><td><code>include/</code></td><td>Your headers, when you want them apart from the code. This tutorial keeps each header beside its <code>.cpp</code> instead.</td></tr>
 <tr><td><code>resources/</code></td><td>Pictures and sounds, loaded by name. <code>rabbit.png</code> is the one on the menu.</td></tr>
+<tr><td><code>branding/icon.png</code></td><td>The app's icon: the Android and iOS icons, and the one inside the Windows <code>.exe</code>, are all made from this one picture. It is not in <code>resources/</code> because the game never loads it.</td></tr>
 <tr><td><code>raylib_multiplatform.toml</code></td><td>The game's name, its window, its app ids and which platforms to build.</td></tr>
 </tbody>
 </table>
@@ -98,7 +104,8 @@ app id can never change once it is published.</p>
 
 <p>The pages that follow turn the game <code>rmp new</code> made into a real one, a step at a time:
 <em>Coin Rabbit</em>, in which a rabbit gathers coins while bats close in on it. Each page shows
-every file it adds or changes, whole, and ends with a game that builds and runs.</p>
+every source file it adds or changes, whole, and the keys it sets in
+<code>raylib_multiplatform.toml</code>, and ends with a game that builds and runs.</p>
 
 <ol>
 <li><a href="/getting-started/your-first-scene.html">Your first scene</a>: a menu of your own, and a second screen to go to.</li>

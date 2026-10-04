@@ -7,8 +7,8 @@ order: 60
 
 <p class="lede">Every scene has a <a href="ref:rmp::Scene::camera"><code>camera</code></a>, an
 <a href="ref:rmp::Camera"><code>rmp::Camera</code></a>, which decides what part of the scene's world
-is on screen. A scene that never touches it draws exactly as if it were not there, so a one-screen
-game never notices it; a level bigger than the screen is three lines.</p>
+is on screen. Untouched, it is the identity while the window is the design size, and on any other
+window it keeps the design area centred; a level bigger than the screen is three lines.</p>
 
 <pre data-lang="cpp" data-harness="scene">
 auto &amp;player = spawn({ .position = { 400, 300 }, .size = { 16, 24 } });

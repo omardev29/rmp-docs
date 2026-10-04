@@ -42,10 +42,14 @@ runner with no sound card it runs against the audio library's null backend. It r
 the shuffled pass.</li>
 </ul>
 
-<p>What makes all of this possible without a window is the seam: time, input and randomness enter
-the framework at one place each, and a test replaces that place.
+<p data-fw-grep="tools/seam_check.sh::&quot;src/rmp/ui/controls\.cpp&quot;\s+# DEBT: the text caret and the character queue">What
+makes all of this possible without a window is the seam: time, input and randomness enter the
+framework through a few functions a test replaces — the game's clock and the UI's, the game's input
+sampler and the UI's own, and one random generator.
 <a href="/framework/why/delta-and-time.html">Time is a parameter</a> explains it, and
-<code>tools/seam_check.sh</code> fails if any other file starts reading them on its own.</p>
+<code>tools/seam_check.sh</code> fails if any other file starts reading them on its own. One file is
+on that list as debt rather than as a seam: the UI's text field reads the typed characters,
+Backspace and the clock for its caret straight from raylib.</p>
 
 <h2 id="layout">The UI, laid out headless</h2>
 
@@ -88,6 +92,12 @@ printed <samp>RAY_TEST_BOOT_OK assets_failed=0</samp> and
 <samp>the game did not boot, or an asset failed to load</samp>, or <samp>the game booted and drew
 nothing</samp>.</p>
 
+<p data-fw-grep="include/rmp/assets.h::nothing in the pack and nothing on disk, or a file that is there and does not\s+// decode">The
+count in <code>assets_failed</code> is of every load that gave nothing usable: a name with nothing
+behind it, and a file that is there and does not decode — a picture, a sound, a song or a font cut
+short. A corrupt file would otherwise leave a blank texture, silence or a stand-in font, and a boot
+that looked clean.</p>
+
 <p data-fw-grep="tests/smoke_test.h::if \(!IsWindowReady\(\)\) \{">The boot marker is a gate and not
 a message, which is a distinction worth stating: it is printed only when a window really exists.
 A boot marker that is always printed passes a game whose platform failed to start, and every job
@@ -97,16 +107,37 @@ that reads the log would agree.</p>
 folder, reads it back, compares and deletes it before it reports the boot. Where saves go is
 different on every platform, and this is how each one's folder is exercised at all.</p>
 
-<p>In CI the same markers are read on every target a runner can start, each in the most honest
-place available. The Linux desktop builds boot under a virtual X display. The musl build boots
+<p data-fw-grep="tests/configure_test.py::def test_every_boot_check_requires_assets_failed_0">In
+CI the same markers are read on every target a runner can start, each in the most honest
+place available, and every one of those checks wants <code>assets_failed=0</code> on the boot
+line, never the marker alone: a game with every texture missing still opens its window. A test
+reads every workflow, script and tool and fails on a check that looks for the marker without
+it. The Linux desktop builds boot under a virtual X display. The musl build boots
 inside a bare Alpine container with nothing installed, because needing something Alpine does not
 ship is exactly the bug that build can have. The DRM build boots on a virtual kernel display.
 Windows boots on its runner with its save folder under a path that is not ASCII, the kind a player
 called José has, and with the compiler off <code>PATH</code>, so that a DLL the runner has and a
 player does not cannot be found. macOS and the BSDs run the render stage under the software renderer. The web build
-is loaded in a headless browser that checks the canvas really has pixels on it. Android runs on a
-real device in Firebase Test Lab when a project is configured for it, and iOS is built for the
-simulator, where booting it is a step a repository switches on.</p>
+is loaded in a headless browser that checks the canvas really has pixels on it. iOS is built for
+the simulator, where booting it and reading the markers is a step a repository switches on.</p>
+
+<p data-fw-grep=".github/workflows/_firebase.yml::--type robo">Android is the exception: no CI job
+reads its markers. When a project is configured for it, the APK is started on a real device in
+Firebase Test Lab under a Robo test, which explores the app with no test code of its own and has no
+log to read the markers from. It proves the game starts on real hardware without crashing, and no
+more.</p>
+
+<p data-fw-grep="tools/shipped_check.sh::A release, laid out the way the archive ships it, started from SOMEWHERE ELSE\.">A
+release is also started the way a player starts it: from somewhere other than its own folder. A
+production build reads <code>./resources/</code>, and a boot started from the folder where
+<code>resources/</code> happens to be passes whether or not the game finds its files on its own.
+So <code>tools/shipped_check.sh</code> builds the release under the software renderer, lays it out
+as the archive ships it and starts it from another folder, and it must boot with
+<code>assets_failed=0</code>; the macOS and BSD jobs run it. Linux x64 and arm64 start the unzipped
+archive from another folder, Windows starts the <code>.exe</code> from one, and the musl and DRM
+containers start the game from <code>/</code>. On NetBSD and OpenBSD, which cannot say where an
+executable is, the check starts the release from its own folder and wants the line that says
+so.</p>
 
 <h2 id="binaries">What ships, read out of the binary</h2>
 
@@ -144,16 +175,24 @@ so the gate is seen red before it is trusted green.</p>
 <code>rmp test</code>, because it compiles all of them — runs one script, the same one CI runs:</p>
 
 <ol>
-<li>Every example has the shape of an entry point that works on every platform: a
-<code>main()</code> with its own <code>while</code> loop compiles everywhere and does not run on the
-web or iOS, so it is refused.</li>
+<li data-fw-grep="tools/examples_check.sh::OPT_OUT=&quot;examples/plain_c/src/main\.c&quot;">Every
+C++ example has the shape of an entry point that works on every platform: its own
+<code>int main()</code>, or a loop on <code>WindowShouldClose()</code>, compiles everywhere and does
+not run on the web or iOS, so it is refused. The one exception is the plain C example, which writes
+its own <code>main()</code> and loop on purpose; it is allowed only while its own comment keeps
+saying which platforms that rules out and why.</li>
 <li>Every example directory became a build target, and the number of targets is the number of
 directories — a pattern that stops matching would otherwise look exactly like a folder where
 everything passes.</li>
 <li>Every example with an entry point is built against the software renderer, booted for a budget
 of frames, and required to boot with no asset missing, draw, exit cleanly and leave a screenshot.
-The plain C example is built and not booted, because it is the one that opts out of the frame
-budget.</li>
+The plain C example is booted like the rest: it calls the C smoke-test hooks the entry point calls
+for every other example.</li>
+<li data-fw-grep="tools/examples_build.sh::rmp::input is read both ways a game is written \(tests/input_play\.cpp\)">The
+platformer is played to the end — <a href="#platformer">below</a> — and
+<code>tests/input_play.cpp</code> drives one program through the real desktop runner with keys
+pressed through the input seam, once with a hook that reads the input itself and once with a
+scene under <code>frame()</code>, and each press has to be seen exactly once.</li>
 </ol>
 
 <p>The screenshots are kept, because looking at a picture of every example is how most visual
@@ -201,7 +240,7 @@ a mistake that could be described precisely enough for a machine to reject it:</
 <tr><td><code>ownership</code></td><td>the framework allocates or frees memory by hand</td></tr>
 <tr><td><code>headers</code></td><td>a public header does not compile on its own, or lacks the <code>.toml</code> values</td></tr>
 <tr><td><code>cost</code></td><td>a public header's preprocessed size moved away from its budget</td></tr>
-<tr><td><code>configure</code></td><td><code>tools/configure.py</code> accepts something it should refuse, or the other way round</td></tr>
+<tr><td><code>configure</code></td><td><code>tools/configure.py</code> accepts something it should refuse, or the other way round, or the suite itself leaves a file the checkout generated changed</td></tr>
 <tr><td><code>rmp</code></td><td>the <code>rmp</code> command itself misbehaves — including when a file the framework tracks has not been classified as part of a new game or not</td></tr>
 <tr><td><code>binaries</code></td><td>the readers that judge a shipped <code>.exe</code> and Mac binary misread one — <a href="#binaries">above</a></td></tr>
 </tbody>
@@ -215,8 +254,9 @@ summary <code>rmp help test</code> prints for each.</p>
 <p data-fw-grep=".github/workflows/ci.yml::#   push / pull_request  -&gt;  fast lane: Linux x64, Web, Android, Windows x64">A
 push to the framework runs every stage of <code>rmp test</code> in its <code>lint</code> job — a
 test of the command checks that the two lists agree — boots every example, makes a new game with
-<code>rmp new</code> and runs that game's own checks, checks this documentation site against the
-commit, and builds the fast lane: Linux x64, the web, Android and Windows x64. A release tag
+<code>rmp new</code> and runs that game's own checks, follows the recipe at the top of
+<code>examples/plain_c/src/main.c</code> in a copy of that game and boots the result, checks this
+documentation site against the commit, and builds the fast lane: Linux x64, the web, Android and Windows x64. A release tag
 builds every target, and so can a run started by hand. The Linux jobs run inside a build image
 pinned by digest, with every compiler and tool already in it, so a build does not depend on a
 download succeeding.</p>

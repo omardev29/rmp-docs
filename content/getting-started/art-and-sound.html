@@ -138,8 +138,6 @@ void GameScene::_ready() {
 
     // P, Escape, or the gamepad's Start button.
     rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
-    // raylib closes the window when Escape is pressed; this game uses Escape.
-    SetExitKey(KEY_NULL);
 
     auto &amp;player = spawn&lt;Player&gt;({
         .position = { ARENA.width / 2, ARENA.height / 2 },
@@ -238,11 +236,12 @@ the object collides as as well, so the bigger bat bites from where it is drawn.<
 
 <h2>Sound</h2>
 
-<p><a href="ref:rmp::audio::play"><code>rmp::audio::play("coin")</code></a> plays a sound by name,
+<p data-fw-grep="src/rmp/audio.cpp::constexpr int VOICES = 4;"><a href="ref:rmp::audio::play"><code>rmp::audio::play("coin")</code></a> plays a sound by name,
 without its extension: <code>coin</code> finds <code>coin.wav</code>, <code>coin.ogg</code>,
 <code>coin.mp3</code> or <code>coin.qoa</code>, the first of them that exists. The sound is loaded
-the first time it is played and kept, and playing it again while it still sounds starts another
-voice instead of cutting the first one off. The bite's sound goes in <code>Health</code>'s
+the first time it is played and kept. Playing it again while it still sounds starts another
+voice instead of cutting the first one off, up to four at once; a fifth, while all four still
+sound, cuts off the one that has played longest. The bite's sound goes in <code>Health</code>'s
 <code>.on_damage</code>, which runs every time a life is lost, the last one too.</p>
 
 <p>The sound device opens with the first sound, so a game that plays none never opens it. A
@@ -319,6 +318,15 @@ as long as it is there; <code>rmp unpack</code> deletes it, and the loose files 
 Most of the desktop builds CI makes for a release ship the pack in place of the loose files.
 The pack is flat: it takes the files directly in <code>resources/</code> and not those in a
 folder inside it, so keep <code>resources/</code> flat too.</p>
+
+<p data-fw-grep="src/rmp/app.cpp::std::filesystem::current_path\(folder, error\)">A release for
+the desktop reads the <code>resources/</code> that sits next to its executable, so it starts the
+same from a file manager, a shortcut or a terminal open in some other folder: when there is one
+there, the game makes the executable's folder its working directory before it loads anything.
+When there is none, it stays in the folder it was started from and reads the
+<code>resources/</code> there. On NetBSD and OpenBSD raylib cannot tell where the
+executable is, so a release there reads the <code>resources/</code> of the folder it was started
+from, and its log says so: <samp>ASSETS: this system does not say where the executable is…</samp></p>
 
 <p>The encryption keeps casual hands off your files and nothing more. Its password is
 <code>[resources] rres_password</code> in the <code>.toml</code>, which <code>rmp new</code> made

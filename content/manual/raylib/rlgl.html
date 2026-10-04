@@ -53,8 +53,8 @@ sees only what was submitted before. The framework's own CI capture, in
 <code>tests/smoke_test.h</code>, flushes for exactly that reason before it reads a frame back.</p>
 
 <p>The batch is not the same size everywhere: rlgl sizes it at 8192 quads on OpenGL 3.3 and at 2048
-on OpenGL ES 2.0, so the same scene submits more often on the web and on Android than on a
-desktop.</p>
+on OpenGL ES, 3.0 as well as 2.0, so the same scene submits more often on the web and on Android than
+on a desktop.</p>
 
 <h2>Leave the state as you found it</h2>
 
@@ -101,17 +101,18 @@ everywhere. This is what the framework's build asks for at its current source:</
 <tr><td>macOS</td><td>OpenGL 3.3 — raylib's build fixes it there, and notes that Apple has marked OpenGL deprecated</td><td><code>RL_OPENGL_33</code></td></tr>
 <tr><td>Linux DRM/KMS</td><td>OpenGL ES 2.0, through EGL and GBM</td><td><code>RL_OPENGL_ES_20</code></td></tr>
 <tr><td>Web</td><td>OpenGL ES 2.0, which the browser provides as WebGL — with either <code>[web] backend</code></td><td><code>RL_OPENGL_ES_20</code></td></tr>
-<tr><td>Android</td><td>OpenGL ES 2.0, whatever <code>[android] gl_version</code> says (see below)</td><td><code>RL_OPENGL_ES_20</code></td></tr>
+<tr><td>Android</td><td>OpenGL ES 2.0, or 3.0 with <code>[android] gl_version = "ES30"</code> (see below)</td><td><code>RL_OPENGL_ES_20</code>, or <code>RL_OPENGL_ES_30</code></td></tr>
 <tr><td>iOS</td><td>OpenGL ES 3.0, through ANGLE, which runs it on Metal. The game is compiled for ES 3.0; raylib itself comes prebuilt from the raylib-iOS fork.</td><td><code>RL_OPENGL_ES_30</code></td></tr>
 <tr><td>The software renderer of <code>rmp test render</code> and CI's render checks</td><td>None: raylib rasterises on the CPU, into memory</td><td><code>RL_OPENGL_SOFTWARE</code></td></tr>
 </tbody>
 </table>
 
-<p><code>[android] gl_version</code> deserves its sentence. It writes the
-<code>&lt;uses-feature android:glEsVersion&gt;</code> line of the Android manifest — the version a
-device must have for the Play Store to offer it your game — and nothing else: the Android build
-compiles raylib for OpenGL ES 2.0 whatever it says. Setting it to <code>"ES30"</code>, the default,
-narrows who can install the game, and does not give the game OpenGL ES 3.0.</p>
+<p><code>[android] gl_version</code> is the one version a game chooses. <code>"ES20"</code>, the
+default, compiles raylib and the game for OpenGL ES 2.0; <code>"ES30"</code> compiles both for
+OpenGL ES 3.0, links ES 3.0's library and asks EGL for an ES 3.0 context. The manifest requires the
+same version, so <code>"ES30"</code> also hides the game from the devices without ES 3.0 on the Play
+Store: it is for a game that needs what raylib's ES 3.0 path adds. See
+<a href="/manual/platforms/android.html">Android</a>.</p>
 
 <p>Ask at run time rather than with a macro: <code>rlGetVersion()</code> is compiled into raylib
 itself, so it answers for the library the game really linked against.</p>
@@ -128,7 +129,7 @@ Shader glow{};
 void _ready() override {
     const char *glsl = "100";                               // ES 2.0: DRM, web, Android
     if (rlGetVersion() == RL_OPENGL_33) glsl = "330";       // the desktops
-    if (rlGetVersion() == RL_OPENGL_ES_30) glsl = "300es";  // iOS
+    if (rlGetVersion() == RL_OPENGL_ES_30) glsl = "300es";  // iOS, and Android on "ES30"
     glow = LoadShader(nullptr, TextFormat(RMP_RESOURCES_PATH "glow%s.fs", glsl));
 }
 
@@ -165,9 +166,12 @@ own GL calls, so raylib's queued drawing reaches the GPU before them.</li>
 raw call that changes it behind rlgl's back changes it for every draw that follows.</li>
 </ul>
 
-<p>raylib does lend out its loader. <code>rlGetProcAddress()</code> returns the address of a GL
-function through the same loader raylib used for itself — on the targets whose OpenGL is 3.3 or
-ES 2.0. On iOS and under the software renderer it returns null, so the call has to be checked:</p>
+<p data-fw-grep="thirdparty/raylib/src/rlgl.h::#if defined\(GRAPHICS_API_OPENGL_33\) \|\| defined\(GRAPHICS_API_OPENGL_ES2\)\s+func = RLGL\.loader\(procName\);">raylib
+does lend out its loader. <code>rlGetProcAddress()</code> returns the address of a GL function
+through the same loader raylib used for itself, in a raylib compiled for OpenGL 3.3 or OpenGL ES —
+2.0, or 3.0 on Android. Under the software renderer it returns null. On iOS it is the fork's prebuilt
+raylib that answers, and nothing in the framework calls it there or tests what it returns. So the
+call has to be checked:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="#include &lt;rlgl.h&gt;">
 using GetIntegerv = void (*)(unsigned int, int *);

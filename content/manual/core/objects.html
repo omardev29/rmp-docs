@@ -51,11 +51,13 @@ way to write a rectangular <code>shape</code>. When both are given, <code>shape<
 </tbody>
 </table>
 
-<p>They are written as designated initialisers, and C++20 requires those in the order the fields are
+<p data-fw-grep="tools/configure.py::IOS_STRICT_CXX_FLAGS = &quot;-Werror=reorder-init-list&quot;">They
+are written as designated initialisers, and C++20 requires those in the order the fields are
 declared, which is the order of this table. GCC and MSVC refuse any other order, and the framework
-turns Clang's warning about it into an error too, so an order that compiles on your machine
-compiles on every target. The order is the one they are naturally written
-in — where, how big, what it looks like, how it moves.
+turns Clang's warning about it into an error in the CMake build, in Android's native build and in
+the generated Xcode project, so an order that compiles on your machine compiles on every target.
+The order is the one they are naturally written in — where, how big, what it looks like, how it
+moves.
 <a href="/framework/why/designated-initialisers.html">Designated initialisers</a> has the
 reasons.</p>
 
@@ -91,8 +93,11 @@ call.</p>
 <h3>Spawning from somewhere else</h3>
 
 <p>Inside an object, <a href="ref:rmp::Object::scene"><code>scene()</code></a> is the scene it lives
-in, and spawning into it is <code>scene()-&gt;spawn(...)</code>. A behavior's callback and a map's
-object factory are handed the scene.</p>
+in, and spawning into it is <code>scene()-&gt;spawn(...)</code>. A
+<a href="ref:rmp::behavior::Spawner::on_spawn"><code>Spawner</code>'s <code>on_spawn</code></a> and a
+map's <a href="ref:rmp::Tilemap::on_object">object factory</a> are handed the scene; the other
+behavior callbacks, such as a <code>Timer</code>'s <code>on_timeout</code>, are handed the object, and
+reach the scene through its <code>scene()</code>.</p>
 
 <pre data-lang="cpp" data-harness="object">
 if (rmp::Scene *here = scene()) {
@@ -155,7 +160,7 @@ every field would be ceremony between you and the object you touch most often in
 <tr><td><a href="ref:rmp::Object::position"><code>position</code></a></td><td><code>{ 0, 0 }</code></td><td>The centre of the object, in world units.</td></tr>
 <tr><td><a href="ref:rmp::Object::velocity"><code>velocity</code></a></td><td><code>{ 0, 0 }</code></td><td>World units per second. The scene moves the object by it every frame.</td></tr>
 <tr><td><a href="ref:rmp::Object::scale"><code>scale</code></a></td><td><code>{ 1, 1 }</code></td><td>Multiplies the shape, the collider and the sprite.</td></tr>
-<tr><td><a href="ref:rmp::Object::rotation"><code>rotation</code></a></td><td><code>0</code></td><td>Degrees, as raylib counts them. It turns what is drawn; collision ignores it.</td></tr>
+<tr><td><a href="ref:rmp::Object::rotation"><code>rotation</code></a></td><td><code>0</code></td><td data-fw-grep="src/rmp/object.cpp::DrawRectanglePro\(dest, origin, object\.rotation, object\.shape\.color\);\s+\} else \{\s+DrawRectangleLinesEx\(">Degrees, as raylib counts them. It turns a sprite and a filled rectangle as they are drawn; an outlined rectangle is drawn unturned, and collision ignores it.</td></tr>
 <tr><td><a href="ref:rmp::Object::mass"><code>mass</code></a></td><td><code>1</code></td><td>Read only by <code>apply_force</code> and <code>apply_impulse</code>.</td></tr>
 </tbody>
 </table>

@@ -464,7 +464,7 @@ has the reasons and the measurements.</p>
 <tr><td><code>rmp/audio.h</code></td><td><a href="ref:rmp::audio"><code>rmp::audio</code></a>: sounds and music by name, three volume buses</td><td>raylib's raudio</td></tr>
 <tr><td><code>rmp/save.h</code></td><td><a href="ref:rmp::save"><code>rmp::save</code></a> and <a href="ref:rmp::Value"><code>rmp::Value</code></a>: save slots in the platform's own folder</td><td>cJSON, and Monocypher to seal a file</td></tr>
 <tr><td><code>rmp/random.h</code></td><td><a href="ref:rmp::random"><code>rmp::random</code></a>: one seeded generator you can replay</td><td>xoshiro128++, written out</td></tr>
-<tr><td><code>rmp/ads.h</code></td><td><a href="ref:rmp::ads"><code>rmp::ads</code></a>: interstitial and rewarded ads</td><td>raymob's AdMob bridge on Android; nothing anywhere else</td></tr>
+<tr><td><code>rmp/ads.h</code></td><td><a href="ref:rmp::ads"><code>rmp::ads</code></a>: interstitial and rewarded ads</td><td>raymob's AdMob bridge on Android, once <code>[android.admob] enabled</code> turns it on; nothing anywhere else</td></tr>
 <tr><td><code>rmp/math.h</code></td><td><a href="/reference/namespaces/rmp.html#header-math-h">arithmetic</a>: <code>+</code>, <code>-</code> and <code>*</code> on raylib's own vectors, and raylib-cpp's math classes for those who want methods</td><td>raylib's raymath, and the math headers of raylib-cpp</td></tr>
 <tr><td><code>rmp/behavior.h</code></td><td><a href="ref:rmp::behavior"><code>rmp::behavior</code></a>: the catalogue — movement, health, timers, spawners</td><td>the core's behavior engine</td></tr>
 <tr><td><code>rmp/scene.h</code></td><td><a href="ref:rmp::Scene"><code>rmp::Scene</code></a> and <a href="ref:rmp::Camera"><code>rmp::Camera</code></a></td><td>the core</td></tr>
@@ -494,7 +494,8 @@ device.</p>
 <code>rmp::Texture</code> converts to the <code>Texture2D</code> it wraps, so every raylib
 function that takes one takes it; a scene can open the camera and draw with raylib directly; and
 <a href="/examples/plain_c.html">a game in plain C</a> can skip the framework altogether and still
-be built for every target.</p>
+be built for every target but the two where the loop is not the game's to write, the web and
+iOS.</p>
 
 <h2 id="core">The core</h2>
 
@@ -544,7 +545,10 @@ density and a friction to bounce.</p></dd>
 
 <dt>The behavior engine</dt>
 <dd><p data-fw-grep="include/rmp/object.h::template &lt;class B&gt; const BehaviorOps &amp;ops_for\(\)">A
-behavior is any struct with an <code>_update(rmp::Object &amp;, float)</code>. The engine finds
+behavior is a struct with an <code>_update(rmp::Object &amp;, float)</code>, or a
+<code>_late_update</code> with the same signature when its whole job is to correct where the
+object ended up, as <a href="ref:rmp::behavior::GridSnap"><code>GridSnap</code></a> does, and no
+virtual functions, so that it stays an aggregate. The engine finds
 its optional hooks at compile time with <code>requires</code>, keeps one table of function
 pointers per type, and owns the struct through a <code>std::shared_ptr&lt;void&gt;</code> that
 carries its destructor. A behavior of yours and one of the catalogue's are the same kind of
@@ -560,16 +564,31 @@ with no <code>RMP_GAME</code> into a link error that names what is missing. The 
 and the iOS project compile <code>src/</code> as a whole into the app, framework and game
 together.</p>
 
+<p data-fw-grep="CMakeLists.txt::if\(RMP_SOURCES\)\s+add_library\(rmp STATIC">The library is
+built only when <code>src/rmp/</code> has sources. A game in plain C deletes that folder, and its
+build then has no framework library at all — only raylib, the game's own C, and the framework's
+headers that are plain C: <code>rmp/config.h</code> for the values of the <code>.toml</code> and
+<code>tests/smoke_test.h</code> for the CI's hooks.</p>
+
 <h2 id="raylib">raylib 6.0, modified</h2>
 
 <p>Under the core is <a href="https://www.raylib.com/">raylib</a> 6.0, vendored in
 <code>thirdparty/raylib</code>. The copy is modified, and says so: the zlib licence requires an
 altered copy to be plainly marked, and <a href="fw:thirdparty/raylib/PATCHES.md">its
-<code>PATCHES.md</code></a> lists every change — build-system and platform-selection patches, so
-the windowing backend can be chosen from the <code>.toml</code>, and fixes to
-<code>raudio.c</code> backported from upstream. Nothing raylib bundles under
-<code>thirdparty/raylib/src/external/</code> is touched. <a href="/framework/licences.html">Licences</a> has the
-rest.</p>
+<code>PATCHES.md</code></a> lists every change. Most are build-system and platform-selection
+patches, so the windowing backend can be chosen from the <code>.toml</code>. Two lines make the
+Win32 and DRM backends obey <code>SetExitKey()</code>, so that Escape stays the game's key on
+every backend; one makes Android's EGL ask for the OpenGL ES version raylib was compiled for. The
+rest are fixes backported from upstream: three frees in <code>raudio.c</code>, and the scissor of
+the software renderer, <code>thirdparty/raylib/src/external/rlsw.h</code> — the one change
+among the libraries raylib bundles.
+<a href="/framework/licences.html">Licences</a> has the rest.</p>
+
+<p data-fw-grep="tools/configure.py::- framework: \.\./thirdparty/raylib-ios/raylib\.xcframework">The
+iOS app is the one target that does not build this copy. It links a
+<code>raylib.xcframework</code> built from a fork, <code>omardev29/raylib-iOS</code>, pinned at
+tag <code>6.0.3-iOS</code> as the submodule <code>thirdparty/raylib-ios</code>, so the changes
+<code>PATCHES.md</code> lists are what every other target runs, not what iOS runs.</p>
 
 <p>raylib is built in modules, and the framework leans on most of them:</p>
 

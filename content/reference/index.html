@@ -1,13 +1,21 @@
 <!--
 title: Reference
-description: Every public name in the framework, read from its headers at the commit this site documents.
+description: Every public name in the framework, read from its headers, and every .toml key and rmp command, read from the tools that handle them, at the commit this site documents.
 order: 1
 -->
 <h1>Reference</h1>
 
-<p class="lede">Every page in this section is generated from the framework's headers, at the commit
-the footer names. A signature here is the header's signature, a sentence is the header's comment,
-and every entry links to the line that declares it.</p>
+<p class="lede">Every page in this section is generated from the framework, at the commit the
+footer names. The names come from its headers: a signature here is the header's signature, a
+sentence is the header's comment, and every entry links to the line that declares it.</p>
+
+<p>Two pages come from the framework's tools instead, run rather than parsed, so what they say is
+what the tool does: the configuration keys from <code>tools/configure.py --print-schema</code>,
+explained by the comments of the framework's own <code>.toml</code>, and the commands from
+<code>rmp help</code>. The values the <code>.toml</code> turns into macros, on the macros page, come
+from <code>configure.py</code> the same way. The macros the build passes to the compiler have no
+header to be read from: their entries are written for this site, and checked against the build
+files that set them.</p>
 
 <ul>
 <li><a href="/reference/namespaces/index.html">Namespaces</a> — <code>rmp</code> and its modules:
@@ -17,7 +25,11 @@ functions, its types and its options.</li>
 <a href="ref:rmp::Scene"><code>rmp::Scene</code></a>, <a href="ref:rmp::Object"><code>rmp::Object</code></a>,
 <a href="ref:rmp::Camera"><code>rmp::Camera</code></a> and the others.</li>
 <li><a href="/reference/behaviors/index.html">Behaviors</a> — the catalogue in <code>rmp::behavior</code>.</li>
-<li><a href="/reference/macros.html">Macros</a> — <code>RMP_GAME</code> and the rest.</li>
+<li><a href="/reference/macros.html">Macros</a> — <code>RMP_GAME</code> and the rest: the ones
+the headers define, the ones the <code>.toml</code> generates and the ones the build passes.</li>
+<li><a href="/reference/configuration.html">Configuration</a> — every key of
+<code>raylib_multiplatform.toml</code>, with its default.</li>
+<li><a href="/reference/commands.html">Commands</a> — every <code>rmp</code> command.</li>
 </ul>
 
 <p>Two conventions hold everywhere. A name starting with <code>_</code> is a hook: you override

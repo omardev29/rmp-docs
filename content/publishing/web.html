@@ -22,7 +22,7 @@ python3 -m http.server 8000 --directory build/web
 
 <p>Then open <code>http://localhost:8000/my_game.html</code>. Serve it: opening the file
 straight from disk does not work, because the page fetches the other files. Without the SDK, <code>rmp web</code> stops at the start with
-<samp>FALLA: the web build needs the emsdk: activate it first (source emsdk_env.sh, or
+<samp>FAIL: the web build needs the emsdk: activate it first (source emsdk_env.sh, or
 emsdk_env.ps1 on Windows), so that EMSDK is set</samp>.</p>
 
 <p><code>rmp web</code> is <code>cmake --preset web</code> and a build, with the output in
@@ -40,9 +40,10 @@ emsdk_env.ps1 on Windows), so that EMSDK is set</samp>.</p>
 </tbody>
 </table>
 
-<p><code>web-build.zip</code> holds these four and <code>LICENSES.txt</code>. The names come from
-<code>[project] name</code>; keep the files together in one folder, since the page finds the others
-by name next to itself.</p>
+<p data-fw-grep=".github/workflows/_web.yml::cp cmake/generated/web/LICENSES\.txt build/web/"><code>web-build.zip</code> holds these four and a <code>LICENSES.txt</code> of its own: the
+notices of what the web build contains, which leaves out what only the desktop builds link — GLFW,
+RGFW, glad, the Windows shims. The names come from <code>[project] name</code>; keep the files
+together in one folder, since the page finds the others by name next to itself.</p>
 
 <p>The <code>.data</code> file is whatever <code>resources/</code> holds when you build, as it is:
 the loose files, and also <code>resources.rres</code> if you have run <code>rmp pack</code> — in
@@ -113,8 +114,8 @@ dropped when it is linked.</li>
 running a loop of its own, which is what lets it build without Emscripten's ASYNCIFY: that
 rewrites every function that could be on the stack while the game waits, and the framework's own
 measurement of it was a quarter more <code>.wasm</code>.</li>
-<li><strong>raylib modules you do not use.</strong> <code>[raylib] disabled_modules</code> takes
-<code>rshapes</code>, <code>rmodels</code> or <code>raudio</code> out of the build. On a desktop
+<li data-fw-grep="tools/configure.py::^OPTIONAL_MODULES = \{&quot;rmodels&quot;, &quot;raudio&quot;\}$"><strong>raylib modules you do not use.</strong> <code>[raylib] disabled_modules</code> takes
+<code>rmodels</code> or <code>raudio</code> out of the build — the only two it accepts. On a desktop
 the linker has removed most of what you do not call already; the web and Android are where it
 shows.</li>
 <li><strong>Your assets</strong> make up the <code>.data</code>, as they are in
@@ -155,8 +156,9 @@ backend = "rgfw"
 <p>On every push — the web is in the fast lane — CI builds the game in its pinned image, checks
 that the four files exist and are not empty, and then plays it: it serves the folder, opens the
 page in headless Chromium, waits for the game to boot and draw, and takes a screenshot of the
-canvas. The run fails when the game does not report a clean boot, when a save written to
-IndexedDB does not read back, or when the share of the canvas that differs from its most common
+canvas. The run fails when the game does not report a clean boot — the console has to say
+<code>RAY_TEST_BOOT_OK assets_failed=0</code>, so an asset that is missing, or one that does not
+decode, fails it — when a save written to IndexedDB does not read back, or when the share of the canvas that differs from its most common
 colour is outside the range a real frame has — a blank canvas fails, and so does one that is all
 noise. An error in the browser's console fails it too, unless it is one of the few messages a
 headless browser prints on every clean run, and so does a file the page could not fetch. When the

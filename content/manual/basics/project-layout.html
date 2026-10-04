@@ -20,18 +20,19 @@ rmp run               # build it and play it
 
 <p>The name of the folder is the name of the game. <code>rmp new</code> writes it into
 <code>[project] name</code> and <code>[window] title</code>, and from there it becomes the executable,
-the CMake target, the Xcode scheme, the save folder and the name of every artifact CI uploads.
+the CMake target, the Xcode scheme, the save folder on desktops and the web, and the name of every
+artifact CI uploads.
 Because it becomes a file name on every operating system the game ships to, it has to be letters,
 digits, <code>_</code> and <code>-</code>, starting with a letter. A name that is not, or that is
 already taken by a target of the build (<code>rmp</code>, <code>raylib</code>,
 <code>unit_test</code> and the like), or that Windows reserves for a device (<code>con</code>,
-<code>nul</code>, <code>com1</code>…) is refused before anything is written, with a name it would
-accept instead.</p>
+<code>nul</code>, <code>com1</code>…) is refused before anything is written. When the trouble is a
+character, such as a space, the refusal suggests the name with it turned into <code>_</code>.</p>
 
 <p>The folder can be anywhere — <code>rmp new ~/games/space_rocks</code> makes
 <code>space_rocks</code> — except inside the framework itself. If it exists it has to be empty.</p>
 
-<p>Besides copying files, <code>rmp new</code> does five things to the new game:</p>
+<p>Besides copying files, <code>rmp new</code> does six things to the new game:</p>
 
 <ul>
 <li>Sets the store identities to placeholders built from the name:
@@ -42,7 +43,13 @@ becomes <code>com.example.my-game</code>. The two differ because Android ids tak
 published.</li>
 <li>Gives <code>[resources] rres_password</code> a random value of its own, so that games made from
 the framework do not share the key their asset packs are encrypted with.</li>
-<li>Writes a short <code>README.md</code> for the game.</li>
+<li>Starts the game without ads and on OpenGL ES 2.0: <code>[android.admob] enabled = false</code>,
+so the Android build carries no ads SDK and asks for no advertising permission until the game has an
+ad to show, and <code>[android] gl_version = "ES20"</code>, which every Android device has. The
+framework's own <code>.toml</code> sets both the other way, so that its CI builds the ads path and the
+ES 3.0 one.</li>
+<li>Writes a short <code>README.md</code> for the game, which says which parts of the folder are the
+game's.</li>
 <li>Makes it a git repository on a branch called <code>main</code>, with every file added and
 nothing committed yet. The raylib-iOS submodule is recorded at the commit the framework pins, with
 its folder left empty: <code>git submodule update --init</code> is only needed to build for iOS.</li>
@@ -88,9 +95,9 @@ my_game/
 ├── branding/icon.png           yours: the one picture every app icon is made from
 ├── README.md                   yours: written by rmp new
 ├── rmp  rmp.ps1  rmp.cmd       the command, for sh, PowerShell and cmd
-├── tools/                      configure.py, rmp.py, the licence check, the packer
+├── tools/                      configure.py, rmp.py, the licence check, the packer, CI's scripts
 ├── CMakeLists.txt              the build, driven by the .toml
-├── CMakePresets.json           the presets: debug, release, web, memory
+├── CMakePresets.json           the presets: debug, release, web, memory, lint
 ├── cmake/                      the build's helpers; cmake/generated/ appears here
 ├── raymob/                     the Android app shell (Gradle)
 ├── ios/                        the iOS scaffold; ios/project.yml appears here
@@ -149,13 +156,22 @@ CMake, no Gradle and no Xcode project; the next build finds it.</p>
 compiled once into a library called <code>rmp</code>, which the game links. That is why changing a
 scene recompiles the scene and not the framework.</p>
 
-<p>A game whose <code>src/</code> holds no C++ at all — <code>main.cpp</code>, the scenes and
-<code>src/rmp/</code> deleted, and a <code>main.c</code> in their place — is built as plain C: its own
-<code>main()</code>, raylib, and nothing of the framework's — <a href="/manual/raylib/plain-c.html">Plain C</a>
-explains it, and <code>examples/plain_c</code> is that shape.
-It keeps the builds, the generated identities and icons and the release pipeline, and gives up the
-asset pack, which raylib alone cannot read, and the web and iOS, whose frame loops belong to the
-browser and to UIKit and are written by the framework's entry point.</p>
+<p data-fw-grep="CMakeLists.txt::if\(RMP_SOURCES\)\s+add_library\(rmp STATIC">A game whose
+<code>src/</code> holds no C++ at all — <code>main.cpp</code>, the scenes and <code>src/rmp/</code>
+deleted, and a <code>main.c</code> in their place — is built as plain C: its own <code>main()</code>,
+raylib, and no framework library. With <code>src/rmp/</code> gone there is no <code>rmp</code>
+library to build, and none is built; a C++ file left in <code>src/</code> without it stops the
+configure with a message that says so. What the C game still includes from the framework is
+written in C: <code>rmp/config.h</code> for the <code>.toml</code>'s values, which is why
+<code>include/rmp/</code> stays, and <code>tests/smoke_test.h</code> for the boot checks CI runs.
+<a href="/manual/raylib/plain-c.html">Plain C</a> explains it, and <code>examples/plain_c</code> is
+that shape.</p>
+
+<p data-fw-grep="tools/ship_resources.sh::&gt; &quot;\$DEST/resources/PACK_SKIPPED\.txt&quot;">It keeps the
+builds, the generated identities and icons and the release pipeline. It gives up the asset pack,
+which raylib alone cannot read: its releases ship the loose files of <code>resources/</code>, with a
+<code>PACK_SKIPPED.txt</code> beside them saying why. And it gives up the web and iOS, whose frame
+loops belong to the browser and to UIKit and are written by the framework's entry point.</p>
 
 <h2>resources/</h2>
 
@@ -176,9 +192,12 @@ subfolder.</p>
 
 <p>Where the game looks for the folder depends on the build. On a desktop, a debug build reads the
 project's <code>resources/</code> by its absolute path, so the game finds its files whatever folder it
-is started from, and a release build reads <code>./resources/</code>, which is why a release ships the
-folder, or the pack in it, next to the executable. The web build preloads the files with the page,
-Android puts them in the APK's assets and iOS copies the folder into the app bundle.</p>
+is started from. A release build reads <code>./resources/</code>, and a release ships the folder, or
+the pack in it, next to the executable; at start it moves into the executable's folder when a
+<code>resources/</code> is there, so a player can start it from anywhere —
+<a href="/manual/core/app.html#where-a-release-finds-its-files">The app</a> has the detail, and the
+two BSDs where it cannot. The web build preloads the files with the page, Android puts them in the
+APK's assets and iOS copies the folder into the app bundle.</p>
 
 <h2>branding/</h2>
 
@@ -216,7 +235,9 @@ with the <code>.toml</code>, and <code>git status</code> stays clean after a bui
 <p>The app icons are generated too, into the Android resource folders and an asset catalogue under
 <code>ios/</code>, and ignored the same way.</p>
 
-<p><code>rmp clean</code> deletes <code>build/</code> and every generated file except the icons, which
-stay because making them again needs Pillow. The next build makes the rest again. Gradle and XcodeGen
+<p data-fw-grep="tools/rmp.py::CLEAN_PATHS = \(&quot;build&quot;, &quot;raymob/app/generated&quot;, &quot;raymob/generated\.properties&quot;,\s+&quot;cmake/generated&quot;, &quot;include/rmp/generated&quot;, &quot;ios/project\.yml&quot;\)"><code>rmp clean</code> deletes <code>build/</code> and every generated file except the Android and iOS
+icons, which stay because making the Android ones again needs Pillow. The Windows icon lives in
+<code>cmake/generated/</code> and is deleted with it, so after a clean a machine without Pillow builds
+an <code>.exe</code> with no icon. The next build makes the rest again. Gradle and XcodeGen
 never run CMake, so the Android and iOS builds run <code>tools/configure.py</code> themselves first;
 <code>rmp android</code> does.</p>

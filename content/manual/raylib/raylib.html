@@ -26,6 +26,7 @@ not:</p>
 <tr><td><code>SetConfigFlags()</code></td><td>Once, before the window opens: <code>FLAG_WINDOW_RESIZABLE</code>, plus <code>FLAG_VSYNC_HINT</code> when <code>[window] vsync = true</code>.</td></tr>
 <tr><td><code>SetTargetFPS()</code></td><td>Once, before the window opens, when <code>[window] fps</code> is above 0 — and never on the web or iOS, where the browser and the display link pace the frame.</td></tr>
 <tr><td><code>InitWindow()</code></td><td>Once, at <code>[window] width</code> × <code>height</code>, titled <code>[window] title</code>. Your first scene's <code>_ready()</code> runs after it, so a texture loads there.</td></tr>
+<tr><td><code>SetExitKey()</code></td><td>Once, with <code>KEY_NULL</code>, right after your first scene's <code>_ready()</code> returns. raylib's <code>InitWindow()</code> makes Escape the key that closes the window, and in a game Escape means "back" or "pause". See <a href="#escape-is-the-games-key">below</a>.</td></tr>
 <tr><td><code>WindowShouldClose()</code></td><td>Every frame, to see whether the player closed the window — except on the web and iOS, which have no such window and where it is never called.</td></tr>
 <tr><td><code>GetFrameTime()</code></td><td>Every frame, clamped to <code>[app] max_delta</code>, and handed to <code>_update(float delta)</code> as <code>delta</code>.</td></tr>
 <tr><td><code>BeginDrawing()</code> and <code>ClearBackground()</code></td><td>Every frame, cleared with the <a href="ref:rmp::Scene::background"><code>background</code></a> of the lowest scene being drawn, or the theme's when that is <code>BLANK</code>.</td></tr>
@@ -39,10 +40,13 @@ not:</p>
 calls <code>InitAudioDevice()</code> the first time a sound is loaded or played, so a game that
 never makes a sound never opens one.</p>
 
-<p>Before your first scene's <code>_ready()</code> the framework has also opened the asset pack,
-if there is one, and routed raylib's own file loading through it; seeded
-<a href="ref:rmp::random"><code>rmp::random</code></a>; and on iOS moved into the app bundle, where
-the resources are.</p>
+<p data-fw-grep="src/rmp/app.cpp::if \(!std::filesystem::is_directory\(folder / RMP_RESOURCES_PATH, error\)\)">Before
+your first scene's <code>_ready()</code> the framework has also opened the asset pack, if there is
+one, and routed raylib's own file loading through it; seeded
+<a href="ref:rmp::random"><code>rmp::random</code></a>; on iOS moved into the app bundle, where the
+resources are; and in a desktop release moved into the executable's folder, when there is a
+<code>resources/</code> in it, so that <code>./resources/</code> means the one shipped next to the
+game wherever it was started from — see <a href="/manual/platforms/desktop.html#running-a-release-build">Desktop</a>.</p>
 
 <h3>One frame, in order</h3>
 
@@ -50,10 +54,14 @@ the resources are.</p>
 write has a fixed place in it:</p>
 
 <ol>
-<li>The input devices are sampled, once, for the whole frame.</li>
-<li>The scenes are updated from the bottom of the stack upwards, skipping the ones a scene above
-freezes. For each one: its <code>_update(delta)</code>, then its objects, then the collision pass,
-then its camera, which follows where everything ended up.</li>
+<li>The input devices are sampled, once, for the whole frame — by the loop itself, which does
+the same before the frame hook of a game written with <code>RMP_ENTRY_POINT</code>.</li>
+<li data-fw-grep="src/rmp/scene.cpp::rmp::objects::detail::pointer\(scene\);\s+scene\._update\(delta\);">The
+scenes are updated from the bottom of the stack upwards, skipping the ones a scene above freezes.
+For each one: the pointer, first — a click or a drag on one of its objects calls that object's
+<code>on_click</code> or <code>on_drag</code> handler, so a handler can spawn or destroy before
+anything else looks — then its <code>_update(delta)</code>, then its objects, then the collision
+pass, then its camera, which follows where everything ended up.</li>
 <li><code>BeginDrawing()</code>, and the clear.</li>
 <li>Every scene that is visible, from the bottom up: <code>BeginMode2D()</code> with its camera,
 its map, its objects, <code>EndMode2D()</code>, and then its own <code>_draw()</code> — outside the
@@ -134,6 +142,28 @@ asked for. The <a href="ref:rmp::ui"><code>rmp::ui</code></a> controls read the 
 gamepad through a seam of their own, so a menu navigates with the arrow keys whether or not the
 game defines a single action.</p>
 
+<h3 id="escape-is-the-games-key">Escape is the game's key</h3>
+
+<p data-fw-grep="src/rmp/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">raylib's
+<code>InitWindow()</code> makes Escape its exit key: pressed, it closes the window. In a game it
+is the key for "back" and "pause" — <code>rmp::ui</code> goes back on it, and the
+<code>ui_cancel</code> action is bound to it — so the framework calls
+<code>SetExitKey(KEY_NULL)</code> once the window is open, right after the ready hook returns, on
+every target: after your first scene's <code>_ready()</code> with <code>RMP_GAME</code>, after your
+own <code>on_ready()</code> with <a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a>.
+Upstream raylib's Win32 and DRM backends close on Escape whatever the exit key is; the copy the
+framework ships is patched so that they obey it (<code>thirdparty/raylib/PATCHES.md</code>). The
+window's close button still closes the game: that is a request from the window, not a key.</p>
+
+<p>A <code>SetExitKey()</code> of your own in that first ready hook is overwritten. To quit on a
+key, say so where the game reads its keys, with
+<a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a>, which ends the game the way the close
+button does:</p>
+
+<pre data-lang="cpp" data-harness="function">
+if (IsKeyPressed(KEY_ESCAPE)) rmp::app::quit();
+</pre>
+
 <h3>In <code>_draw()</code>, screen space — and the world when you open the camera</h3>
 
 <p>A scene's <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a> runs after its map and its
@@ -193,7 +223,9 @@ void _draw() override {
 <p>The scene's own <a href="ref:rmp::Scene::map"><code>map</code></a> and objects are 2D and are
 drawn before <code>_draw()</code>, so a 3D scene simply has neither. <code>DrawCube()</code> and
 <code>DrawGrid()</code> live in raylib's <code>rmodels</code> module; a game that lists
-<code>"rmodels"</code> in <code>[raylib] disabled_modules</code> does not have them.</p>
+<code>"rmodels"</code> in <code>[raylib] disabled_modules</code> does not have them — except on iOS,
+where that setting has no effect, because iOS links a prebuilt raylib (see
+<a href="/manual/platforms/ios.html">iOS</a>).</p>
 
 <h3>What you load yourself</h3>
 
@@ -220,8 +252,9 @@ alternative is <a href="ref:rmp::assets::load_texture"><code>rmp::assets::load_t
 whose <a href="ref:rmp::Texture"><code>rmp::Texture</code></a> releases itself and converts to a
 <code>Texture2D</code> wherever raylib wants one.</p>
 
-<p>Two of raylib's loaders stay outside the pack, by raylib's design. <code>LoadMusicStream()</code>
-opens its file itself, so music loaded with it has to ship as a loose file;
+<p>One of raylib's loaders stays outside the pack, by raylib's design: <code>LoadMusicStream()</code>
+opens its file itself, so music loaded with it has to ship as a loose file — and a desktop archive
+that CI packs ships the pack alone (<code>tools/ship_resources.sh</code>).
 <a href="ref:rmp::audio::music"><code>rmp::audio::music()</code></a> streams from the pack instead.
 And the pack holds the files directly in <code>resources/</code>, not its subfolders.</p>
 

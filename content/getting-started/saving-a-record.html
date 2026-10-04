@@ -52,9 +52,10 @@ bool keep_if_best(int coins) {
 }
 </pre>
 
-<p>A save is an <a href="ref:rmp::Value"><code>rmp::Value</code></a>: a tree of numbers, strings,
-lists and keyed objects, the same shapes JSON has, so a save can grow into something with structure
-without changing how it is written. Assigning to a key creates it:
+<p data-fw-grep="include/rmp/save.h::enum class Type \{ NONE, BOOL, NUMBER, STRING, LIST, OBJECT \};">A
+save is an <a href="ref:rmp::Value"><code>rmp::Value</code></a>: a tree of the shapes JSON has,
+which are nothing (JSON's <code>null</code>), true or false, numbers, strings, lists and keyed
+objects. So a save can grow into something with structure without changing how it is written. Assigning to a key creates it:
 <code>record["coins"] = coins</code>.</p>
 
 <p><a href="ref:rmp::save::write"><code>rmp::save::write()</code></a> writes it to a
@@ -109,8 +110,6 @@ void GameScene::_ready() {
 
     // P, Escape, or the gamepad's Start button.
     rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
-    // raylib closes the window when Escape is pressed; this game uses Escape.
-    SetExitKey(KEY_NULL);
 
     auto &amp;player = spawn&lt;Player&gt;({
         .position = { ARENA.width / 2, ARENA.height / 2 },
@@ -315,7 +314,7 @@ after <code>[project] name</code>, where each platform keeps an application's da
 <table>
 <thead><tr><th>Platform</th><th>Folder</th></tr></thead>
 <tbody>
-<tr><td>Linux and the BSDs</td><td><code>~/.local/share/my_game</code></td></tr>
+<tr><td>Linux and the BSDs</td><td><code>~/.local/share/my_game</code>, or <code>my_game</code> in <code>$XDG_DATA_HOME</code> when that is set</td></tr>
 <tr><td>Windows</td><td><code>%APPDATA%\my_game</code></td></tr>
 <tr><td>macOS</td><td><code>~/Library/Application Support/my_game</code></td></tr>
 <tr><td>Android</td><td>the app's internal storage</td></tr>
@@ -326,8 +325,9 @@ after <code>[project] name</code>, where each platform keeps an application's da
 
 <p><a href="ref:rmp::save::directory"><code>rmp::save::directory()</code></a> says which folder it
 is on the machine the game is running on. <code>[save] portable = true</code> in the
-<code>.toml</code> puts saves in a folder next to the game instead, on Windows, Linux and the BSDs,
-which is what a game handed out as a zip file wants.</p>
+<code>.toml</code> puts saves in a <code>saves</code> folder next to the game's executable instead,
+on Windows, Linux and FreeBSD, which is what a game handed out as a zip file wants. NetBSD and
+OpenBSD cannot say where the executable is, so there the saves stay in the folder above.</p>
 
 <p>The file is a line of header and then the JSON, so anyone can read it in a text editor, and
 the framework notices if they change it: every save carries a checksum. <code>[save] encrypt = true</code> also seals it, which stops a

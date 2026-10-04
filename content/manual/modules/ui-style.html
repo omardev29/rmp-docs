@@ -5,10 +5,12 @@ order: 25
 -->
 <h1>Interface style</h1>
 
-<p class="lede">No call in <code>rmp::ui</code> takes a colour. A control says what it
-<em>means</em> — primary, danger, a muted line of text — and how important it is — small, medium,
-large — and the theme decides what that looks like. Restyling a game is then one theme, and no call
-site is revisited.</p>
+<p class="lede">No button, line of text or control in <code>rmp::ui</code> takes a colour. A
+control says what it <em>means</em> — primary, danger, a muted line of text — and how important it
+is — small, medium, large — and the theme decides what that looks like. Restyling a game is then
+one theme, and no call site is revisited. The few colours a call can be given belong to boxes and
+pictures — a panel's background and border, a progress bar's fill and track, an image's tint — and
+a panel or a bar left without one takes the theme's.</p>
 
 <pre data-lang="cpp" data-harness="function">
 rmp::ui::button("Start game", { .style = rmp::ui::Variant::PRIMARY, .size = rmp::ui::Size::LARGE });
@@ -85,7 +87,7 @@ it stops being legible.</p>
 <tr><td><a href="ref:rmp::ui::Theme::text_on_accent"><code>text_on_accent</code></a></td><td>The label of a primary or danger button, and the dot of a ticked checkbox.</td></tr>
 <tr><td><a href="ref:rmp::ui::Theme::primary"><code>primary</code></a>, <a href="ref:rmp::ui::Theme::primary_hover"><code>primary_hover</code></a>, <a href="ref:rmp::ui::Theme::primary_press"><code>primary_press</code></a></td><td>A primary button in its three states; also primary text, a ticked checkbox, the filled part of a slider and of a progress bar.</td></tr>
 <tr><td><a href="ref:rmp::ui::Theme::danger"><code>danger</code></a>, <a href="ref:rmp::ui::Theme::danger_hover"><code>danger_hover</code></a>, <a href="ref:rmp::ui::Theme::danger_press"><code>danger_press</code></a></td><td>A danger button in its three states; also danger text.</td></tr>
-<tr><td><a href="ref:rmp::ui::Theme::disabled"><code>disabled</code></a>, <a href="ref:rmp::ui::Theme::disabled_text"><code>disabled_text</code></a></td><td>The fill and the label of a control whose <code>enabled</code> is false.</td></tr>
+<tr><td><a href="ref:rmp::ui::Theme::disabled"><code>disabled</code></a>, <a href="ref:rmp::ui::Theme::disabled_text"><code>disabled_text</code></a></td><td>The fill and the label of a button or control whose <code>enabled</code> is false: the fill is a button's, a checkbox's box, a slider's filled part and a text field's field. A disabled dropdown keeps <code>surface</code> for its field and greys only its label and value.</td></tr>
 <tr><td><a href="ref:rmp::ui::Theme::focus"><code>focus</code></a></td><td>The ring around whatever the keyboard or gamepad is on. A controller build cannot be used without it, which is why it is the theme's and not each widget's.</td></tr>
 </tbody>
 </table>

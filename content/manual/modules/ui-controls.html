@@ -44,7 +44,8 @@ unless you give it an <code>id</code>. The rules are the ones for buttons, in
 
 <h2>What they have in common</h2>
 
-<p>Each control is a row: its label on the left, the control itself after it. The row fills the width
+<p>Each control is a row: a slider, a dropdown and a text field put their label on the left and the
+control after it; a checkbox puts its box first and the label after it. The row fills the width
 it is offered and is focusable as one thing, so the focus ring goes around the whole row and the
 keyboard and gamepad reach it like a button (see
 <a href="/manual/modules/ui.html#focus-keyboard-and-gamepad">focus, keyboard and gamepad</a>). The label
@@ -59,8 +60,11 @@ open dropdown are clicked the same way.</p>
 <p>All four options structs have the two fields buttons have:</p>
 
 <ul>
-<li><strong><code>enabled</code></strong> — <code>false</code> draws the control in the theme's
-disabled colours; it cannot be changed, and the focus skips it. A control that is unavailable right
+<li data-fw-grep="src/rmp/ui/controls.cpp::field\.backgroundColor = to_clay\(o\.enabled \? t\.surface : t\.disabled\);"><strong><code>enabled</code></strong> — <code>false</code> draws the control in the theme's
+disabled colours: its label in <code>disabled_text</code>, and a checkbox's box, a slider's filled
+part and a text field's field in <code>disabled</code>. A dropdown greys only its label and value;
+its field keeps the theme's <code>surface</code>. A disabled control cannot be changed, and the
+focus skips it. A control that is unavailable right
 now reads better disabled than missing: a menu whose items appear and disappear is a menu nobody can
 learn.</li>
 <li><strong><code>id</code></strong> — a name that is the same control whatever its label says, for
@@ -225,11 +229,6 @@ is true, and every <a href="/manual/modules/input.html">rmp::input</a> action re
 buttons and sticks as not pressed; only its mouse buttons still count. Typing "Wolf" into a name
 field does not walk the player across the level. A field that has the focus and not the keyboard
 leaves them alone, so once the player presses Enter the game hears its keys again.</p>
-
-<aside class="callout warning"><span class="callout-title">Escape on the desktop</span>
-<p>Escape is also the key raylib closes the window with, unless the game turns that off. A game that
-has not turned it off ends when the player presses Escape to leave a field; see
-<a href="/manual/core/app.html#the-escape-key">the Escape key</a>.</p></aside>
 
 <h2>A settings screen</h2>
 

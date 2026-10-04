@@ -7,9 +7,9 @@ order: 90
 
 <p class="lede"><a href="ref:rmp::ads"><code>rmp::ads</code></a> shows Google AdMob ads of two
 kinds: <em>interstitials</em>, the full-screen ads between levels, and <em>rewarded</em> ads, which
-the player chooses to watch in exchange for something. They are real on Android and do nothing on
-every other platform, so the same game code builds on all {{count:targets}} targets without a
-single <code>#ifdef</code>.</p>
+the player chooses to watch in exchange for something. They are real on Android once the game
+<a href="#configuring-admob">turns them on</a>, and do nothing on every other platform, so the same
+game code builds on all {{count:targets}} targets without a single <code>#ifdef</code>.</p>
 
 <h2>Every ad goes the same way</h2>
 
@@ -116,9 +116,9 @@ by side.</p>
 <code>reward_amount()</code> is 0. The code above runs unchanged on a laptop: the buttons say "not
 ready" and the rest of the game is there to work on. Ads on iOS are not implemented.</p>
 
-<p>A game in plain C, which has no namespace to call into, uses the C functions underneath
-directly. They are in <code>&lt;admob.h&gt;</code>, one for each of the calls above, with the same
-meaning and the same no-op off Android:</p>
+<p><code>rmp::ads</code> forwards each call to a C function in <code>&lt;admob.h&gt;</code>, one for
+each of the calls above, with the same meaning and the same no-op off Android. A C source file in
+the game, which has no namespace to call into, calls them directly:</p>
 
 <pre data-lang="c" data-harness="c99">
 #include &lt;admob.h&gt;
@@ -135,7 +135,11 @@ void every_frame(int *coins) {
 
 <h2>Configuring AdMob</h2>
 
-<p>The ids live in <code>[android.admob]</code>:</p>
+<p data-fw-grep="tools/configure.py::&quot;admob&quot;: \{&quot;enabled&quot;: False,">Ads are off until the game turns
+them on: <code>[android.admob] enabled</code> is <code>false</code> by default, and <code>rmp new</code>
+writes <code>false</code> into a new game's <code>.toml</code>. (The framework's own
+<code>.toml</code> has it on, so that its CI builds the ads path.) Turning them on is the switch and
+three ids, in <code>[android.admob]</code>:</p>
 
 <pre data-lang="toml">
 [android.admob]
@@ -153,19 +157,33 @@ rewarded_id     = "ca-app-pub-3940256099942544/5224354917"
 </dl>
 
 <aside class="callout warning"><span class="callout-title">These are Google's test ids</span>
-<p>The values above are the defaults, and they are the ids Google publishes for testing: they serve
+<p>The three ids above are the defaults, and they are the ones Google publishes for testing: they serve
 test ads. Replace them with your own before you publish — and not before. Clicking
 real ads from your own build is the fastest way to get an AdMob account suspended, so keep the
 test ids until the day the game goes out.</p></aside>
 
-<h3>Turning ads off</h3>
+<p data-fw-grep="tools/configure.py::self\.pattern = r&quot;ca-app-pub-\[0-9\]\{16\}&quot;">Each id is a string, in
+quotes, whether ads are on or not. While they are on, each one is also checked when the
+configuration is read: it cannot be empty, and it has to have AdMob's shape — <code>ca-app-pub-</code>
+and sixteen digits, then <code>~</code> and ten digits for the app id, or <code>/</code> and ten
+digits for an ad unit. The Google Mobile Ads library stops the app at startup over an app id it
+cannot read, so a wrong one is refused before a build starts, at its line, with the reason. An app
+id pasted where an ad unit goes is named for what it is:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[android.admob]
+enabled         = true
+interstitial_id = "ca-app-pub-3940256099942544~3347511713"
+</pre>
+
+<h3>With ads off</h3>
 
 <pre data-lang="toml">
 [android.admob]
 enabled = false
 </pre>
 
-<p>With <code>enabled = false</code>, AdMob is not in the Android build at all: no Google Mobile
+<p>With <code>enabled = false</code>, the default, AdMob is not in the Android build at all: no Google Mobile
 Ads library, no advertising-id permission, nothing started when the app opens, and nothing to
 declare about advertising ids in Google Play's Data safety form. The game's code does not change:
 the calls keep compiling and do nothing, exactly as they do on desktop. The same happens on its

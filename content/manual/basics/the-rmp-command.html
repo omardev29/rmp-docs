@@ -118,10 +118,15 @@ and only the game's own target is built, not anything else the build folder has 
 game exits, <code>rmp</code> exits with the game's code, so a crash is not reported as a
 success.</p>
 
-<p><code>rmp build</code> compiles without running and prints where the executable is.
-<code>rmp build release</code> is the build players get: optimised, with link-time optimisation, and
-reading its assets from <code>./resources/</code>, relative to the folder it is started from, rather
-than from the project.</p>
+<p data-fw-grep="CMakeLists.txt::if\(NOT CMAKE_SYSTEM_NAME STREQUAL &quot;NetBSD&quot;\)\s+# NetBSD's linker does not process the GCC LTO bytecode stored in static"><code>rmp build</code> compiles without running and prints where the executable is.
+<code>rmp build release</code> is the build players get: optimised, with link-time optimisation
+except on NetBSD, whose linker cannot read GCC's link-time objects in a static library, and reading
+its assets from the <code>resources/</code> shipped beside it rather than from the project.
+It puts the executable in <code>build/</code> and copies nothing next to it, so started from the
+project's root it falls back on the project's own <code>resources/</code>. Laid out the way a release
+ships it — the executable with <code>resources/</code> beside it — it finds its files from whatever
+folder it is started in, everywhere but NetBSD and OpenBSD; <a href="/manual/core/app.html#where-a-release-finds-its-files">The app</a>
+explains how.</p>
 
 <p>Debug and release share the <code>build/</code> folder. Switching between them deletes it first and
 says so, because the compiler <code>[dev] compiler</code> chose for debug is cached there and would
@@ -158,7 +163,7 @@ phone. <a href="/manual/platforms/android.html">Android</a> has the rest.</p>
 <thead><tr><th>Stage</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><code>config</code></td><td>Validates <code>raylib_multiplatform.toml</code> the way every build does, checks that the pinned versions agree with each other, and checks every licence of everything vendored.</td></tr>
-<tr><td><code>render</code></td><td>Builds the game a second time against raylib's software renderer, which draws into memory with no GPU and no window, runs it for ten frames, and requires that it booted, drew something, honoured <code>[window] vsync</code> and exited cleanly.</td></tr>
+<tr><td><code>render</code></td><td>Builds the game a second time against raylib's software renderer, which draws into memory with no GPU and no window, runs it for ten frames, and requires that it booted with no asset failing to load, drew something, honoured <code>[window] vsync</code> and reached the end of its frames.</td></tr>
 <tr><td><code>smoke</code></td><td>Builds the game in debug, runs it for ten frames for real, and requires that it booted with no asset failing to load and put pixels on the screen.</td></tr>
 </tbody>
 </table>
@@ -174,10 +179,11 @@ Windows installs is the one <code>rmp</code> looks for.</p>
 <h3>rmp fmt</h3>
 
 <p><code>rmp fmt</code> formats your C and C++ — everything under <code>src/</code> and
-<code>include/</code> except the framework's own folders and generated files — with clang-format, at
-the version the framework pins. <code>rmp fmt check</code> only reports what would change. A
-different clang-format version would reformat files that were already correct, so it is worth having
-the pinned one.</p>
+<code>include/</code> except the framework's own folders and generated files — with whichever
+clang-format is on your <code>PATH</code>. <code>rmp fmt check</code> only reports what would change.
+Neither compares that clang-format's version with the one pinned in
+<code>thirdparty/FROZEN_VERSIONS.md</code>, and a different version would reformat files that were
+already correct, so it is worth installing the pinned one.</p>
 
 <h3>rmp pack and rmp unpack</h3>
 
@@ -190,7 +196,9 @@ is what you want while you are adding art.</p>
 
 <p><code>rmp clean</code> deletes <code>build/</code> and every file generated from the
 <code>.toml</code>. The next build makes all of it again. It is the answer when a build goes strange.
-The app icons stay, because regenerating them needs Pillow.</p>
+The Android and iOS icons stay, because they are not in those folders and remaking the Android ones
+needs Pillow. The Windows icon is in <code>cmake/generated/</code> and goes with the rest, so after a
+clean a machine without Pillow builds an <code>.exe</code> with no icon.</p>
 
 <h3>rmp push and rmp deploy</h3>
 
@@ -227,6 +235,7 @@ tool to read; this site checks every <code>rmp</code> line it shows against it.<
 <tr><td>0</td><td>Done, or help printed.</td></tr>
 <tr><td>1</td><td>A check failed, or a precondition did not hold and the command refused.</td></tr>
 <tr><td>2</td><td>The command line was wrong: an unknown command, a wrong argument, a framework command in a game, or no project here.</td></tr>
+<tr><td>127</td><td data-fw-grep="rmp::needs Python 3\.11 or newer on PATH[\s\S]*?exit 127">No Python 3.11 or newer was found to run it: the launcher printed the message above and stopped.</td></tr>
 <tr><td>130</td><td>Interrupted.</td></tr>
 </tbody>
 </table>
@@ -249,4 +258,6 @@ cmake --build build
 <code>memory</code>, the software-rendered build the <code>render</code> stage uses. <code>debug</code> and <code>release</code>
 share <code>build/</code>, and configuring a release where a debug configure has pinned the
 <code>[dev]</code> compiler is refused, with the instruction to run <code>rmp clean</code> first — the
-same reason <code>rmp build release</code> deletes the folder for you.</p>
+same reason <code>rmp build release</code> deletes the folder for you. A fifth,
+<code>cmake --preset lint</code>, only configures, into <code>build/lint</code>: it writes the
+compile database that clang-tidy and an editor read.</p>

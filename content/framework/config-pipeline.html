@@ -76,7 +76,7 @@ and everything the build systems read is generated from the two.</p>
   <line class="wire" x1="8" y1="303" x2="13" y2="303"/>
   <rect class="box" x="14" y="330" width="206" height="38" rx="5"/>
   <text class="code" x="22" y="346">LICENSES.txt</text>
-  <text class="sub" x="22" y="360">desktop, Android, iOS</text>
+  <text class="sub" x="22" y="360">desktop, web, Android, iOS</text>
   <line class="wire" x1="220" y1="349" x2="234" y2="349" marker-end="url(#pipe-head)"/>
   <rect class="box" x="238" y="330" width="114" height="38" rx="5"/>
   <text class="name" x="246" y="346">packages</text>
@@ -148,6 +148,18 @@ generator as something it cannot format:</p>
 width = [800]
 </pre>
 
+<p data-fw-grep="tests/configure_test.py::class EveryOptionRefusesTheWrongTypeTest">Every key is held
+to that, not only the ones somebody remembered to check: a test walks every key the defaults
+have, gives it every type it is not, and expects a refusal that names its line. The empty value
+is refused the same way, except where empty is a value with a meaning — <code>[ui] font = ""</code>
+is raylib's built-in font, <code>[linux] glibc = ""</code> builds against the machine's own C
+library — and a test names each of those exceptions too.</p>
+
+<pre data-lang="toml" data-expect="reject">
+[window]
+title = ""
+</pre>
+
 <p>And so are two values that are each fine on their own and wrong together. A frame cap of 15
 frames per second makes every frame longer than the default
 <a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a>, so the game
@@ -182,8 +194,12 @@ changes. Every <code>rmp</code> command that builds goes through CMake, so
 <a href="/reference/commands.html#run"><code>rmp run</code></a> after an edit to the
 <code>.toml</code> picks the edit up.</p>
 
-<p>Gradle and XcodeGen never run CMake, so the CI jobs for Android and iOS run
-<code>python3 tools/configure.py</code> themselves before they start. The BSD jobs build inside
+<p data-fw-grep="raymob/settings.gradle::Gradle never invokes CMake early enough">Gradle and XcodeGen
+never run the top-level CMake that calls it. Gradle builds the native code through a
+<code>CMakeLists.txt</code> of its own, which reads what <code>configure.py</code> already wrote,
+and it reads its own settings from <code>raymob/generated.properties</code> before any of that
+starts. So the CI jobs for Android and iOS run <code>python3 tools/configure.py</code> themselves
+before they build. The BSD jobs build inside
 virtual machines that have no Python at all; there CI generates everything on the Linux runner
 first and the files travel into the machine with the rest of the checkout. A CMake configure that
 finds no Python 3.11 or newer falls back to what was generated last time, and says loudly that
@@ -202,11 +218,11 @@ rebuilds nothing.</p>
 <tr><td><code>cmake/generated/dev_toolchain.cmake</code> and <code>dev_linker.cmake</code></td><td>the compiler and linker from <code>[dev]</code></td><td>debug builds only: a release never reads them</td></tr>
 <tr><td><code>cmake/generated/rmp_web_name.js</code></td><td>the name of the game's save database in the browser</td><td>the web build</td></tr>
 <tr><td><code>include/rmp/generated/config.h</code></td><td>every value a game can read in C or C++, as <code>RMP_</code> macros</td><td>your code, through every public header — <a href="#config-h">below</a></td></tr>
-<tr><td><code>raymob/generated.properties</code></td><td>the Android application id, minimum SDK, version, permissions and AdMob ids</td><td>Gradle</td></tr>
+<tr><td><code>raymob/generated.properties</code></td><td>the Android application id, minimum SDK, version, the OpenGL ES version to compile for, permissions, and whether AdMob is on and its ids</td><td>Gradle</td></tr>
 <tr><td><code>raymob/app/generated/AndroidManifest.xml</code></td><td>the manifest, with each permission and feature element kept or dropped</td><td>Gradle</td></tr>
-<tr><td><code>ios/project.yml</code></td><td>the iOS app: bundle id, deployment target, orientations, header paths, the licence notice</td><td>XcodeGen, which makes the Xcode project</td></tr>
+<tr><td><code>ios/project.yml</code></td><td>the iOS app: bundle id, deployment target, orientations, header paths, the compiler flag that refuses out-of-order initialisers, the licence notice</td><td>XcodeGen, which makes the Xcode project</td></tr>
 <tr><td>the icons</td><td>Android's launcher icons, the iOS icon set and the Windows <code>.ico</code>, from <code>[icon] source</code></td><td>each platform's build</td></tr>
-<tr><td><code>LICENSES.txt</code> in <code>cmake/generated/</code>, and one each for Android and iOS</td><td>the third-party notices that ship with the game</td><td>the release packages — see <a href="/framework/licences.html">Licences</a></td></tr>
+<tr><td><code>LICENSES.txt</code> in <code>cmake/generated/</code> for the desktops, and one each for the web, Android and iOS</td><td>the third-party notices that ship with the game</td><td>the release packages — see <a href="/framework/licences.html">Licences</a></td></tr>
 </tbody>
 </table>
 
@@ -217,8 +233,15 @@ is exactly an element you either ask for or do not.</p>
 
 <p>The version is not in the <code>.toml</code>. A release takes it from its git tag —
 <code>v1.2.3</code> is version 1.2.3, and Android's version code is computed from it so it always
-goes up — and every other build is <code>0.0.0-dev</code>. A tag that is not
-<code>vMAJOR.MINOR.PATCH</code> is refused rather than published under a made-up number.</p>
+goes up — and every other build is <code>0.0.0-dev</code>.</p>
+
+<p data-fw-grep="tools/configure.py::is not vMAJOR\.MINOR\.PATCH \(optionally -rc1 / \+build\)">A
+tag that starts with <code>v</code> is the release path, so one that does not read as
+<code>vMAJOR.MINOR.PATCH</code> is refused rather than published under a made-up number. A
+pre-release or build suffix after it is accepted — <code>v1.2.3-rc1</code>,
+<code>v1.2.3+build</code> — and shares the version code of <code>v1.2.3</code>. Minor and patch
+each have to stay below 1000 for the code to keep going up. A tag that does not start with
+<code>v</code> is not a release: it builds as <code>0.0.0-dev</code>, with a warning.</p>
 
 <h2 id="config-h">The generated header</h2>
 
@@ -267,6 +290,10 @@ block on this site goes through it, and a block that shows a refusal prints the 
 
 <p>Every file in the table is ignored by git, and the framework's own CI fails if one is ever
 tracked. Generated files that are committed go stale the first time somebody edits the source and
-forgets to regenerate; files that are written on every configure cannot.
+forgets to regenerate; files that are written on every configure cannot.</p>
+
+<p data-fw-grep="tools/rmp.py::The icons stay: making them again needs Pillow\.">
 <a href="/reference/commands.html#clean"><code>rmp clean</code></a> deletes them with the build
-directory, and the next configure writes them again.</p>
+directory, and the next configure writes them again — all but the Android launcher icons and the
+iOS icon set, which it leaves in place, because making them again needs Pillow. The Windows
+<code>.ico</code> lives in <code>cmake/generated/</code> and goes with the rest.</p>

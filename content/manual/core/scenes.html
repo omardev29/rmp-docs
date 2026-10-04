@@ -155,8 +155,11 @@ class PauseScene : public rmp::Scene {
 
 <dl>
 <dt><a href="ref:rmp::Scene::camera"><code>camera</code></a></dt>
-<dd>What part of the world is on screen. A scene that never touches it draws in screen units,
-exactly as if it were not there. See <a href="ref:rmp::Camera"><code>rmp::Camera</code></a>.</dd>
+<dd data-fw-grep="src/rmp/camera.cpp::\.offset = Vector2\{ screen\.x / 2, screen\.y / 2 \}">What part of the world is on screen. It starts on the centre of the design resolution, so
+while the window is the design size an untouched camera is the identity, one world unit to a pixel;
+on any other window it keeps that centre in the middle of the real screen, and world
+<code>{ 0, 0 }</code> is no longer the top-left corner. See
+<a href="ref:rmp::Camera"><code>rmp::Camera</code></a>.</dd>
 <dt><a href="ref:rmp::Scene::map"><code>map</code></a></dt>
 <dd>The level, loaded from a file made in a level editor. The scene draws it under everything and
 collides against its solid tiles; a menu scene simply never sets it.</dd>

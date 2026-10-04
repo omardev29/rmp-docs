@@ -25,9 +25,10 @@ stops for one.</p>
 <code>.toml</code> with the library that version added. The launchers ask every Python they find for
 its version, rather than taking the first one, because the obvious one is often wrong: the
 <code>python3</code> macOS ships is older than 3.11, and on Windows <code>python3</code> can be the
-Microsoft Store's placeholder. When none will do, the launcher says it needs Python 3.11 or newer on
-the PATH, and a Python that is found and too old says
-<samp>rmp needs Python 3.11 or newer; this is …</samp> with its version and its path.</p>
+Microsoft Store's placeholder. A Python older than 3.11 is passed over like a missing one, and when
+none will do, the launcher says <samp>rmp: needs Python 3.11 or newer on PATH …</samp>. Only
+<code>tools/rmp.py</code> started directly with an older Python gets as far as saying
+<samp>rmp needs Python 3.11 or newer; this is …</samp>, with its version and its path.</p>
 
 <p data-fw-grep="cmake/configure_hook.cmake::no usable Python 3\.11\+ found and nothing has been generated yet">CMake
 needs it too: <code>cmake --preset debug</code> runs <code>tools/configure.py</code> before anything
@@ -37,7 +38,7 @@ not picked up until a Python is there again.</p>
 
 <h3>A tool is not on the PATH</h3>
 
-<p><code>rmp</code> says which one: <samp>FALLA: cmake is not installed, or not on PATH</samp>. A
+<p><code>rmp</code> says which one: <samp>FAIL: cmake is not installed, or not on PATH</samp>. A
 game needs CMake, Ninja and a C++ compiler; on Linux, the X11 development libraries as well.</p>
 
 <h3><code>rmp</code> does nothing outside a game</h3>
@@ -60,7 +61,14 @@ fps = 15
 
 <p>The message is the fix. <code>rmp test config</code>, or <code>python3 tools/configure.py
 --check</code>, checks the file without building anything. A key the framework does not know is
-refused as well, so a misspelt key cannot be silently ignored.</p>
+refused as well, so a misspelt key cannot be silently ignored, and so is a value of the wrong type —
+a list where a string goes, the commonest being a stray pair of brackets — or an empty one where the
+key needs something, each at its line:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[window]
+orientation = ["landscape"]
+</pre>
 
 <h3>A release is refused</h3>
 
@@ -89,11 +97,13 @@ deleting <code>build/</code> — and configuring again is the fix.</p>
 
 <h3>A link error about the entry point</h3>
 
-<p>A program has exactly one entry point: <code>RMP_GAME</code> or <code>RMP_ENTRY_POINT</code>,
-once, in one file. Two of them define the same symbols twice, and the linker names
-<code>rmp_entry_point_is_declared_exactly_once</code> as a duplicate — the symbol exists so that
-this error points at the cause. A game with neither has no <code>main()</code>, and the link fails
-saying so.</p>
+<p data-fw-grep="src/rmp/app.cpp::RequireEntryPoint\(\) noexcept \{ rmp_entry_point_is_declared_exactly_once\(\); \}">A
+program has exactly one entry point: <code>RMP_GAME</code> or <code>RMP_ENTRY_POINT</code>, once,
+in one file. The symbol <code>rmp_entry_point_is_declared_exactly_once</code> exists so that the
+link error points at the cause either way. Two entry points define it twice, and the linker names it
+as a duplicate. A program with neither has no <code>main()</code>, and the linker names it as
+undefined, next to <code>main</code>: the framework's own code asks for it, so the error says what
+was forgotten instead of only that there is no <code>main</code>.</p>
 
 <h3>A handle that will not convert</h3>
 
@@ -126,19 +136,28 @@ Linux desktop and fails there as an undefined symbol. See
 <h3>A release build finds nothing</h3>
 
 <p>A debug build reads <code>resources/</code> by its absolute path. A desktop release reads
-<code>./resources/</code>, relative to the working directory — so a release started from another
-folder logs <samp>ASSETS: No resource pack found, using loose files from ./resources/</samp> and
-every texture comes back empty. Start the game from its own folder, where the archive put
-<code>resources/</code>.</p>
+<code>./resources/</code>, and moves into the executable's folder first when that folder has a
+<code>resources/</code>, so it finds the one shipped next to it wherever it is started from. Finding
+no pack where it looks, it logs <samp>ASSETS: No resource pack found, using loose files from …</samp>,
+and with no loose files there either, every texture comes back empty. The line before that one says
+why it looked there:</p>
+
+<ul>
+<li><samp>ASSETS: no … next to the executable; reading the working directory's, …</samp> — there is
+no <code>resources/</code> beside the executable. Put it there, the way the archive does.</li>
+<li><samp>ASSETS: this system does not say where the executable is, so … is read from the working
+directory, …</samp> — OpenBSD and NetBSD, where raylib cannot say where the executable is. Start
+the game from its own folder there.</li>
+</ul>
 
 <h3>An asset failed to load</h3>
 
-<p>When the game is started with a frame budget — <code>rmp test smoke</code>, and every boot test
-in CI — it logs a line beginning <code>RAY_TEST_BOOT_OK</code> with <code>assets_failed=</code> and
-<code>assets_requested=</code>, and a run with a failed asset does not pass:
-<samp>FALLA: the game did not boot, or an asset failed to load</samp>. An asset failed when an
-<code>rmp::assets</code> load found its name neither in the pack nor in <code>resources/</code>.
-Look for:</p>
+<p>Every run logs a line beginning <code>RAY_TEST_BOOT_OK</code> with <code>assets_failed=</code>
+and <code>assets_requested=</code>, and a checked run — <code>rmp test smoke</code>, and every boot
+test in CI — does not pass with a failed asset:
+<samp>FAIL: the game did not boot, or an asset failed to load</samp>. An asset failed when an
+<code>rmp::assets</code> load found its name neither in the pack nor in <code>resources/</code>, or
+found a file there that does not decode. Look for:</p>
 
 <ul>
 <li><strong>A misspelt name.</strong> Names are file names: <code>"player.png"</code>, not a
@@ -146,21 +165,37 @@ path.</li>
 <li><strong>A file in a subfolder.</strong> The pack holds the files directly in
 <code>resources/</code> and does not reach into folders, and a release configure warns when it
 finds one. Move the file up.</li>
-<li><strong>A name in the pack the pack cannot open.</strong> The log says
-<samp>ASSETS: '…' not found in pack, falling back to loose file</samp> before trying the loose file;
-when a packed file will not decrypt, it says <samp>ASSETS: Failed to unpack</samp> — a pack made
-with a different <code>[resources] rres_password</code>. <code>rmp pack</code> makes it again, or
-<code>rmp unpack</code> goes back to loose files.</li>
+<li><strong>A file that is there and does not decode.</strong> A picture, a font or a sound cut
+short, or in a format raylib does not read, counts as failed the same as a missing one, and says
+once <samp>ASSETS: '…' is in … but could not be decoded</samp>; a font is not replaced by raylib's
+built-in one under its name, it comes back empty. A song <code>rmp::audio::music()</code> cannot
+stream counts too, and says <samp>AUDIO: "…" is in resources/ but could not be streamed</samp>.</li>
+<li><strong>A pack that does not match the game.</strong> A packed picture that will not unpack
+says <samp>ASSETS: Failed to unpack '…' (code …, wrong password?)</samp> and then
+<samp>ASSETS: '…' not usable from pack, falling back to loose file</samp>; a packed sound or font
+says only the second, after rres's own warning that the decryption failed. That is a pack made with
+a different <code>[resources] rres_password</code>. <code>rmp pack</code> makes it again, or
+<code>rmp unpack</code> goes back to loose files. A name the pack does not hold says the second line
+too for a sound or a font, and <samp>ASSETS: '…' not found in pack, falling back to loose
+file</samp> for a picture.</li>
 </ul>
 
-<p>Only loads through <code>rmp::assets</code> are counted. A <code>LoadTexture()</code> of your own
-that fails is not in the number — and leaves an empty texture all the same.</p>
+<p data-fw-grep="src/rmp/audio.cpp::if \(!next\.bytes\.empty\(\)\) rmp::assets::detail::loads\.failed\+\+;">Only
+loads through <code>rmp::assets</code> are counted. <code>rmp::audio</code> loads through it once
+it has found a file, so a sound or a song whose file is there and does not decode or stream counts
+too. A name that matches no file at all does not: <code>rmp::audio</code> says so once, below, and
+counts nothing — a missing sound does not fail the boot check. And on a machine with no sound
+device <code>rmp::audio</code> loads nothing, so none of its files are counted there. A <code>LoadTexture()</code> of
+your own that fails is not in the number, and leaves an empty texture all the same.</p>
 
 <h3>A sound does not play</h3>
 
-<p><code>rmp::audio</code> finds a sound by its name, trying the name as given and then each
-extension it can play, and says once when there is nothing:
-<samp>AUDIO: no sound called "…" in resources/ (tried the name as given, then .wav, .ogg, .mp3,
+<p><code>rmp::audio</code> finds a sound by its name. A name that ends in an audio extension —
+<code>"coin.ogg"</code> — is looked for as it is; a bare one — <code>"coin"</code> — as
+<code>coin.wav</code>, <code>coin.ogg</code>, <code>coin.mp3</code> and <code>coin.qoa</code>, in
+that order. When there is nothing it says once <samp>AUDIO: no sound called "…" in resources/
+(looked for …)</samp>, naming the files it tried, and a file that is there and does not decode says
+<samp>AUDIO: "…" is in resources/ but could not be decoded (raylib here reads .wav, .ogg, .mp3 and
 .qoa)</samp>. On a machine with no sound device it says
 <samp>AUDIO: no sound device on this machine; sound is off and every rmp::audio call is a silent
 no-op from here on</samp>, and the game runs on, silent. In a browser, sound waits for the player's
@@ -170,7 +205,7 @@ first click, touch or key — see <a href="/manual/platforms/web.html">Web</a>.<
 
 <h3>The game booted and drew nothing</h3>
 
-<p><code>rmp test smoke</code> says <samp>FALLA: the game booted and drew nothing</samp> when the
+<p><code>rmp test smoke</code> says <samp>FAIL: the game booted and drew nothing</samp> when the
 frame it reads back is blank. Things that come to that:</p>
 
 <ul>
@@ -197,6 +232,14 @@ enlarge memory arrays". Raise <code>[web] memory</code>.</li>
 defined can still be silent on purpose: a mouse action while the interface wants the pointer, a key
 action while the interface wants the keyboard, and every action in a scene whose input a scene above
 it has taken.</p>
+
+<h3>Escape does not close the window</h3>
+
+<p>On purpose. raylib makes Escape the key that closes the window, and the framework takes it back
+with <code>SetExitKey(KEY_NULL)</code> once the window is open, because in a game Escape is "back"
+and "pause": <code>rmp::ui</code> goes back on it. The window's close button still quits. To quit on
+Escape, call <a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> when the game reads it —
+see <a href="/manual/raylib/raylib.html#escape-is-the-games-key">Escape is the game's key</a>.</p>
 
 <h2>On one platform only</h2>
 
@@ -259,8 +302,8 @@ meant.</p>
 <h3>A BSD job failed, and nothing you changed explains it</h3>
 
 <p>The BSD jobs install their build tools from each system's package mirrors, which publish no dated
-snapshots — the one part of CI that is not pinned. Suspect the mirror first, and run the job
-again.</p>
+snapshots, so what they install is not pinned and changes without a commit of yours. Suspect the
+mirror first, and run the job again.</p>
 
 <h3>The Android bundle is called NOT-FOR-PLAY</h3>
 

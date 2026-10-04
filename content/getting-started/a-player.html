@@ -99,9 +99,9 @@ phone without an <code>#if</code>.</p>
 <li><a href="ref:rmp::input::pointer_down"><code>rmp::input::pointer_down()</code></a> is the
 mouse button, or a finger, held down.</li>
 <li><a href="ref:rmp::input::consumed_pointer"><code>rmp::input::consumed_pointer()</code></a>
-is true while the pointer belongs to someone else: a button of the interface under it, or a scene
-on top of this one. Without it, pressing a button on screen would also send the player running
-towards it.</li>
+is true while the pointer belongs to someone else: a button or a panel of the interface under it,
+or a scene on top of this one. Without it, pressing a button on screen would also send the player
+running towards it.</li>
 <li><a href="ref:rmp::input::pointer"><code>rmp::input::pointer()</code></a> is where it is, in
 the same units as <code>position</code>, whatever the camera is doing.</li>
 </ul>
@@ -135,8 +135,11 @@ keys and buttons bound to it. These come defined:</p>
 rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
 </pre>
 
-<p>The type of each binding says which device it belongs to, so a key and a gamepad button can
-share a list, and a value that is neither does not compile. Defining a name again replaces it,
+<p data-fw-grep="include/rmp/input.h::constexpr Binding to_binding\(::MouseButton button\)">The
+type of each binding says which device it belongs to, so keys, mouse buttons, gamepad buttons and
+half of a stick, made with <a href="ref:rmp::input::stick"><code>rmp::input::stick()</code></a>,
+can share one list, and a value of any other type, a plain number for one, does not compile.
+Defining a name again replaces it,
 which is why <a href="ref:rmp::input::action"><code>rmp::input::action()</code></a> can sit in a
 scene's <code>_ready()</code> and run every time the scene starts.</p>
 
@@ -146,9 +149,11 @@ the frame it goes down. Asked by name, an action is quiet whenever something els
 a text field being typed in, or a scene on top of this one. That is what stops the key that closes
 a menu from also doing something in the game underneath.</p>
 
-<p>Escape needs one more line. raylib closes the window when Escape is pressed, on the desktop,
-unless it is told otherwise; <code>SetExitKey(KEY_NULL)</code> tells it otherwise, and Escape is
-the game's from then on.</p>
+<p data-fw-grep="src/rmp/app.cpp::SetExitKey\(KEY_NULL\)">Escape is the game's to bind, with
+nothing more to write. raylib makes it the key that closes the window, and in a game it is the
+key for "back" and "pause", so the framework takes it back from raylib as the game starts. The
+window's close button still closes the game; a game that wants a key to quit calls
+<a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> when that key is pressed.</p>
 
 <h2>The game scene</h2>
 
@@ -187,8 +192,6 @@ void GameScene::_ready() {
 
     // P, Escape, or the gamepad's Start button.
     rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
-    // raylib closes the window when Escape is pressed; this game uses Escape.
-    SetExitKey(KEY_NULL);
 
     spawn&lt;Player&gt;({
         .position = { ARENA.width / 2, ARENA.height / 2 },

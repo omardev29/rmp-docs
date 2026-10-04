@@ -81,10 +81,18 @@ happen once — a coin collected, a hit taken — destroys the object, or rememb
 memory for damage.</p>
 
 <p>Each side is told as long as it was alive when its pair came up, even if the other side has
-already been destroyed — so a bullet that destroys itself on contact does not stop the enemy hearing
-that it was hit. The other object is always valid to read in a report; its
-<code>alive()</code> says whether it is still in the game. An object destroyed by an earlier pair of
-the same frame is told nothing more.</p>
+already been destroyed — so a bullet that destroys itself on contact does not stop the enemy's
+<code>_collision()</code> and <code>on_collision</code> hearing that it was hit. The other object is
+always valid to read in a report; its <code>alive()</code> says whether it is still in the game. An
+object destroyed by an earlier pair of the same frame is told nothing more.</p>
+
+<p data-fw-grep="src/rmp/behavior.cpp::a\.ops->collision\(a\.data\.get\(\), object, other\);\s+if \(!object\.alive\(\) \|\| !other\.alive\(\)\) break;">Behaviors are the exception. An object's behaviors are walked in the order they were added, and
+the walk stops after any behavior once either of the two is no longer alive. So if the bullet was
+destroyed before the enemy's turn — by its own <code>_collision()</code>, or by a
+<a href="ref:rmp::behavior::Projectile"><code>Projectile</code></a>, which destroys it on a hit by
+default — only the enemy's first behavior is reached. A
+<a href="ref:rmp::behavior::Health"><code>Health</code></a> that has to count that hit goes on before
+any other behavior.</p>
 
 <h2>Solid and immovable</h2>
 
@@ -308,8 +316,9 @@ hit:</p>
 </tbody>
 </table>
 
-<p>A ray that starts inside a rectangle hits it at distance 0, with the normal pointing back along
-the ray; one that starts inside a circle hits it where it leaves. Two hits at the same distance come
+<p data-fw-grep="src/rmp/collision.cpp::if \(hit &lt; 0\) hit = \(-b \+ root\) / \(2 \* a\); // the origin is inside\s+if \(hit &lt; 0 \|\| hit &gt; 1\) return false;">A ray that starts inside a rectangle hits it at distance 0, with the normal pointing back along
+the ray, wherever the ray ends. One that starts inside a circle hits it where it leaves, with the
+normal pointing outwards there — and misses it altogether when it ends inside the circle too. Two hits at the same distance come
 back in the order the objects were spawned, so the answer does not change from one run to the
 next.</p>
 

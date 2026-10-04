@@ -139,12 +139,17 @@ compiler reads one branch of every <code>#if</code>, so the web, iOS, Android an
 invisible to a lint run on Linux; it cannot see a use of a name, only its declaration; and it says
 nothing about a macro named like someone else's. The script reads the text of every branch and
 refuses a <code>g_</code> name, a <code>k</code> constant, an underscore touching a dot or an
-arrow, a macro that does not start with <code>RMP_</code>, a constant named like a known macro,
-and a retired name.</li>
+arrow, a macro that does not start with <code>RMP_</code>, a constant named like a known macro, a
+retired name, and a name that ends in an underscore.</li>
 </ul>
 
+<p data-fw-grep="tools/naming_check.sh::R8  no name ending in `_`, declared or used">That last rule
+is there because clang-tidy does not name a declaration a macro expands: a variable declared
+inside a macro's body is invisible to it, however it is spelled. The script reads the text, so it
+sees the name in the macro's definition.</p>
+
 <p data-fw-grep="tools/naming_check.sh::R7  no retired name: `#if APP_SAVE_PORTABLE` after the rename is not an">The
-last of those is the subtle one. A renamed macro left behind in an <code>#if</code> is not an
+retired-name rule is the subtle one. A renamed macro left behind in an <code>#if</code> is not an
 error: the preprocessor reads an undefined name as 0. An old spelling of the portable-saves switch
 in an <code>#if</code> would have switched portable saves off, on Windows only, with nothing
 saying so.</p>

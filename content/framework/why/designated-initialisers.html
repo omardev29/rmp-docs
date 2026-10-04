@@ -62,13 +62,17 @@ Clang is what <code>[dev] compiler</code> builds your debug builds with unless y
 while CI builds the Windows x64 release and the NetBSD one with GCC. A game that built clean on the
 laptop would fail on those builds twenty minutes into CI.</p>
 
-<p data-fw-grep="CMakeLists.txt::set\(RMP_STRICT_CXX_FLAGS -Werror=reorder-init-list\)\s+endif\(\)\s+target_compile_options\(rmp PUBLIC">So the framework makes Clang refuse it too. The
-<code>rmp</code> library carries <code>-Werror=reorder-init-list</code> for Clang and AppleClang as
-a public option, which every game, example and test that links it inherits, and Android's native
-build, which the NDK's Clang compiles, carries the same flag. Your own build gives the answer
-above, and so does every build in CI that could have disagreed with it. The iOS app, which Xcode
-builds from a project of its own, is compiled without the flag and would only warn; the same source
-goes through the other builds, which refuse it.</p>
+<p data-fw-grep="CMakeLists.txt::set\(RMP_STRICT_CXX_FLAGS -Werror=reorder-init-list\)[\s\S]*?if\(TARGET rmp\)\s+target_compile_options\(rmp PUBLIC">So
+the framework makes Clang refuse it too, in each of the three build systems. The <code>rmp</code>
+library carries <code>-Werror=reorder-init-list</code> for Clang and AppleClang as a public option,
+which every game, example and test that links it inherits, and Android's native build, which the
+NDK's Clang compiles, carries the same flag.</p>
+
+<p data-fw-grep="tools/configure.py::IOS_STRICT_CXX_FLAGS = &quot;-Werror=reorder-init-list&quot;">The
+iOS app is built by Xcode from a project of its own, and <code>configure.py</code> writes the same
+flag into that project's <code>OTHER_CPLUSPLUSFLAGS</code>, ahead of any of the game's own in
+<code>[ios.settings]</code>, which are kept after it. Your own build gives the answer above, and so does every build in CI that could have
+disagreed with it.</p>
 
 <p data-fw-grep="CMakeLists.txt::check_cxx_source_compiles\(&quot;\s+struct Box \{ bool grow_x = false; float width = 0; bool grow_y = false; \};\s+int main\(\) \{ Box b\{ \.grow_y = true, \.width = 8 \};">A configure that builds the tests checks that this
 holds: it reads the options back off the <code>rmp</code> target and compiles one initialiser out
@@ -77,9 +81,9 @@ the configure stops and says which.</p>
 
 <p data-fw-grep="include/rmp/ui.h::Sizing is interleaved by axis — x then y — rather than grouped by kind">Because
 the rule cannot be switched off, every options struct in the framework is declared in the order its fields are most likely
-to be written, rather than alphabetically or by importance. Sizing comes first, then appearance,
-then identity: in <code>rmp::ui</code>, an <code>id</code> is the last field of every struct
-that has one. And the sizing fields of a
+to be written, rather than alphabetically or by importance: an image's options start with its
+size, a button's with its style, a container's with its gap and padding. In <code>rmp::ui</code>,
+an <code>id</code> is the last field of every struct that has one. And the sizing fields of a
 container are interleaved by axis, <code>grow_x, width, grow_y, height</code>, rather than grouped
 by kind: grouped, the most ordinary layout there is — a fixed-width sidebar that fills the height,
 <code>{ .width = 240, .grow_y = true }</code> — would be illegal. This way round every combination

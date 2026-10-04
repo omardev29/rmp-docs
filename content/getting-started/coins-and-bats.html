@@ -131,8 +131,6 @@ void GameScene::_ready() {
 
     // P, Escape, or the gamepad's Start button.
     rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
-    // raylib closes the window when Escape is pressed; this game uses Escape.
-    SetExitKey(KEY_NULL);
 
     auto &amp;player = spawn&lt;Player&gt;({
         .position = { ARENA.width / 2, ARENA.height / 2 },
@@ -263,8 +261,10 @@ a death means is the game's business: here, it ends the game.</p>
 <li><code>.hp = 3</code> is three lives.</li>
 <li><a href="ref:rmp::behavior::Health::hurt_by"><code>.hurt_by = layer::BAT</code></a> says what
 costs one: touching anything on the bats' layer.</li>
-<li>After a bite the player cannot be bitten again for a moment, and blinks while it lasts, so a
-bat sitting on the rabbit costs one life and not sixty a second.</li>
+<li data-fw-grep="include/rmp/behavior.h::float invulnerable_for = 0\.6f;">After a bite the
+player cannot be bitten again for 0.6 seconds, <code>Health</code>'s default, and blinks while
+that lasts. Each bite that lands starts the wait again, so a bat sitting on the rabbit costs a
+life every 0.6 seconds and not sixty a second: three lives last a little over a second.</li>
 <li><a href="ref:rmp::behavior::Health::on_death"><code>.on_death</code></a> runs once, when the
 last life goes, and calls <code>caught()</code>. <code>.destroy_on_death = false</code> leaves
 the rabbit on screen for the game over to be drawn over.</li>
