@@ -1,0 +1,252 @@
+<!--
+title: The rmp command
+description: rmp builds, runs, tests and ships a game, and makes new ones: one Python file behind a launcher for every shell.
+order: 30
+-->
+<h1>The rmp command</h1>
+
+<p class="lede"><code>rmp</code> is the one command a game needs. It builds the game, runs it, checks
+it, packs its assets, tags a release and makes new games. It is a single Python file,
+<code>tools/rmp.py</code>, standard library only, behind three small launchers so that the same word
+works in every shell.</p>
+
+<p>Every command, with its examples, is in the <a href="/reference/commands.html">commands
+reference</a>, which is read from <code>rmp help</code> itself.</p>
+
+<h2>Getting it</h2>
+
+<p>Clone the <a href="https://github.com/omardev29/raylib_multiplatform">framework</a> once, into
+your home folder, and put that folder on your PATH:</p>
+
+<pre data-lang="shell">
+cd ~
+git clone https://github.com/omardev29/raylib_multiplatform
+</pre>
+
+<table>
+<thead><tr><th>Shell</th><th>Add to PATH, once</th></tr></thead>
+<tbody>
+<tr><td>bash on Linux</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.bashrc</code></td></tr>
+<tr><td>bash on macOS</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.bash_profile</code></td></tr>
+<tr><td>zsh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.zshrc</code></td></tr>
+<tr><td>ksh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.profile</code></td></tr>
+<tr><td>PowerShell and cmd</td><td><code>[Environment]::SetEnvironmentVariable("Path", "$HOME\raylib_multiplatform;" + [Environment]::GetEnvironmentVariable("Path", "User"), "User")</code></td></tr>
+</tbody>
+</table>
+
+<p>On Windows, PowerShell also has to be allowed to run a local script, once:</p>
+
+<pre data-lang="powershell">
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+</pre>
+
+<p>Then open a new terminal. Building a game also needs
+<a href="https://www.python.org/downloads/">Python</a> 3.11 or newer, <a href="https://cmake.org/">CMake</a>,
+Ninja and a C++ compiler on the PATH, and on Linux the X11 development libraries:</p>
+
+<pre data-lang="shell">
+sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
+</pre>
+
+<h2>The launchers</h2>
+
+<p>The framework's root, and every game's, holds three files that do one thing each: find a Python
+3.11 or newer and hand it <code>tools/rmp.py</code> with every argument you typed.</p>
+
+<table>
+<thead><tr><th>File</th><th>For</th></tr></thead>
+<tbody>
+<tr><td><code>rmp</code></td><td>POSIX sh, so it runs as <code>/bin/sh</code> on Linux, macOS and the BSDs and under bash, zsh and ksh. It follows a symbolic link to itself, so <code>ln -s ~/raylib_multiplatform/rmp ~/bin/rmp</code> works too.</td></tr>
+<tr><td><code>rmp.ps1</code></td><td>PowerShell, Windows PowerShell 5.1 included.</td></tr>
+<tr><td><code>rmp.cmd</code></td><td>cmd.exe.</td></tr>
+</tbody>
+</table>
+
+<p>Each one asks every Python it finds whether it is 3.11 or newer instead of trusting the name:
+macOS's own <code>python3</code> is older than that, and on Windows <code>python3</code> can be the
+Microsoft Store's placeholder, which exits without running anything. The sh launcher tries
+<code>python3</code>, then <code>python3.14</code> down to <code>python3.11</code>, then
+<code>python</code>, then the <code>py</code> launcher that python.org installs on Windows; the
+PowerShell and cmd launchers try <code>py -3</code>, <code>python3</code> and <code>python</code>.
+When none will do, the command says so and stops:</p>
+
+<p><samp>rmp: needs Python 3.11 or newer on PATH (python3, python or py).</samp></p>
+
+<h2>Where it works</h2>
+
+<p><code>rmp</code> works on the project it is standing in: the nearest folder, from the current one
+upwards, that holds a <code>raylib_multiplatform.toml</code>. So it works from any subfolder of a
+game. Outside a project, only <code>rmp new</code> and <code>rmp help</code> mean anything, and the
+others say so.</p>
+
+<p>The project is either a game or the framework itself — the framework is the one that also holds
+its own test suite. <code>rmp lint</code> and <code>rmp example</code> are the framework's maintenance
+commands and are refused in a game.</p>
+
+<h3>A game keeps its own rmp</h3>
+
+<p>Inside a project, the <code>rmp</code> on your PATH does not run its own code: it runs that
+project's copy of <code>tools/rmp.py</code>. A game therefore keeps the <code>rmp</code> it was made
+with — its build, its checks, its release steps — when the framework on your PATH moves on. Games
+made months apart each behave the way they did when they were made.</p>
+
+<p><code>rmp new</code> is the exception, and by design: it uses the framework that ships the
+<code>rmp</code> being run, because a new game is made from the framework you have installed, not
+from the game you happen to be standing in.</p>
+
+<p>One variable in the environment turns the hand-over off, so that the <code>rmp</code> on the PATH
+runs its own code on the project:</p>
+
+<pre data-lang="shell">
+RMP_NO_DELEGATE=1 rmp test
+</pre>
+
+<h2>Every day</h2>
+
+<pre data-lang="shell">
+rmp run               # build (debug) and play
+rmp test              # the .toml, the pins, the licences, a frame drawn, a boot
+rmp build release     # the release build
+rmp web               # or: rmp android
+rmp help              # every command; rmp help &lt;command&gt; explains one, with examples
+</pre>
+
+<h3>rmp run and rmp build</h3>
+
+<p><code>rmp run</code> builds the game in debug and starts it. Only what changed is compiled again,
+and only the game's own target is built, not anything else the build folder has configured. When the
+game exits, <code>rmp</code> exits with the game's code, so a crash is not reported as a
+success.</p>
+
+<p><code>rmp build</code> compiles without running and prints where the executable is.
+<code>rmp build release</code> is the build players get: optimised, with link-time optimisation, and
+reading its assets from <code>./resources/</code>, relative to the folder it is started from, rather
+than from the project.</p>
+
+<p>Debug and release share the <code>build/</code> folder. Switching between them deletes it first and
+says so, because the compiler <code>[dev] compiler</code> chose for debug is cached there and would
+otherwise carry over into the release build — and since switching build type rebuilds everything
+anyway, nothing is lost.</p>
+
+<h3>rmp web and rmp android</h3>
+
+<p><code>rmp web</code> builds the game for the browser with Emscripten, into
+<code>build/web/</code>. The emsdk has to be activated in the shell first, so that
+<code>EMSDK</code> is set; <code>rmp</code> refuses with that instruction when it is not. The page has
+to be served, not opened as a file:</p>
+
+<pre data-lang="shell">
+rmp web
+python3 -m http.server 8000 --directory build/web
+</pre>
+
+<p>and then <code>localhost:8000/my_game.html</code> in the browser, with the game's name in place of
+<code>my_game</code>. <a href="/manual/platforms/web.html">Web</a> has the rest of the browser
+target.</p>
+
+<p><code>rmp android</code> regenerates the Android configuration from the <code>.toml</code>, builds a
+debug APK with Gradle — which needs the Android SDK and NDK — and prints every APK it finds, marking
+the one it has just written. <code>adb install -r</code> with that path puts it on a connected
+phone. <a href="/manual/platforms/android.html">Android</a> has the rest.</p>
+
+<h3>rmp test</h3>
+
+<p><code>rmp test</code> checks the game, stage by stage, and stops at the first that fails.
+<code>rmp test smoke</code> runs a single stage. In a game there are three, in this order:</p>
+
+<table>
+<thead><tr><th>Stage</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>config</code></td><td>Validates <code>raylib_multiplatform.toml</code> the way every build does, checks that the pinned versions agree with each other, and checks every licence of everything vendored.</td></tr>
+<tr><td><code>render</code></td><td>Builds the game a second time against raylib's software renderer, which draws into memory with no GPU and no window, runs it for ten frames, and requires that it booted, drew something, honoured <code>[window] vsync</code> and exited cleanly.</td></tr>
+<tr><td><code>smoke</code></td><td>Builds the game in debug, runs it for ten frames for real, and requires that it booted with no asset failing to load and put pixels on the screen.</td></tr>
+</tbody>
+</table>
+
+<p>These are the same checks CI runs on the targets it can start, which is why a game that passes
+<code>rmp test</code> rarely surprises anyone in CI. A failed smoke stage prints the game's own output
+and one of two reasons: <samp>the game did not boot, or an asset failed to load</samp>, or
+<samp>the game booted and drew nothing</samp>.</p>
+
+<p>The <code>config</code> stage runs shell scripts, so on Windows it needs a bash; the one Git for
+Windows installs is the one <code>rmp</code> looks for.</p>
+
+<h3>rmp fmt</h3>
+
+<p><code>rmp fmt</code> formats your C and C++ — everything under <code>src/</code> and
+<code>include/</code> except the framework's own folders and generated files — with clang-format, at
+the version the framework pins. <code>rmp fmt check</code> only reports what would change. A
+different clang-format version would reformat files that were already correct, so it is worth having
+the pinned one.</p>
+
+<h3>rmp pack and rmp unpack</h3>
+
+<p><code>rmp pack</code> bundles <code>resources/</code> into one encrypted <code>resources.rres</code>
+inside it, the way a release ships, so you can see the game run from the pack. From then on the game
+reads the pack. <code>rmp unpack</code> deletes it, and the game reads the loose files again — which
+is what you want while you are adding art.</p>
+
+<h3>rmp clean</h3>
+
+<p><code>rmp clean</code> deletes <code>build/</code> and every file generated from the
+<code>.toml</code>. The next build makes all of it again. It is the answer when a build goes strange.
+The app icons stay, because regenerating them needs Pillow.</p>
+
+<h3>rmp push and rmp deploy</h3>
+
+<p><code>rmp push</code> is <code>git push</code>, refused while a CI run is still in flight: CI
+cancels the run in progress when a branch receives a new push, so pushing would throw away a run
+that was half done. It names the run instead, with the command to watch it. <code>rmp push force</code>
+pushes anyway. Without the <code>gh</code> command installed it cannot ask, says so, and pushes.</p>
+
+<p><code>rmp deploy 1.2.0</code> releases a version. It adds the <code>v</code>, and refuses — before
+tagging anything — when there are uncommitted changes, when the tag already exists here or on the
+remote, when the branch has not been pushed, or when the commit you are on is not the one on the
+remote, since CI builds the tag from the remote. It then checks the <code>.toml</code> the way the
+release will, which refuses placeholder store ids and a version that is not
+<code>MAJOR.MINOR.PATCH</code>, and only then makes an annotated tag and pushes it. CI builds every
+enabled target and attaches them to the release. <code>rmp deploy 1.2.0-rc1</code> is a
+pre-release.</p>
+
+<h3>rmp new and rmp help</h3>
+
+<p><code>rmp new my_game</code> makes a game; <code>rmp new --list</code> prints what a game gets
+without making one. <a href="/manual/basics/project-layout.html#making-a-game">Project layout</a>
+explains both.</p>
+
+<p><code>rmp help</code> lists the commands on one screen. <code>rmp help test</code> explains one,
+with examples — and for <code>test</code>, its stages. <code>-h</code> or <code>--help</code> after
+any command prints the same page. <code>rmp help --json</code> prints every command and stage for a
+tool to read; this site checks every <code>rmp</code> line it shows against it.</p>
+
+<h2>What it answers with</h2>
+
+<table>
+<thead><tr><th>Exit code</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>Done, or help printed.</td></tr>
+<tr><td>1</td><td>A check failed, or a precondition did not hold and the command refused.</td></tr>
+<tr><td>2</td><td>The command line was wrong: an unknown command, a wrong argument, a framework command in a game, or no project here.</td></tr>
+<tr><td>130</td><td>Interrupted.</td></tr>
+</tbody>
+</table>
+
+<p>A misspelt command gets the nearest real one suggested back. A command that ran something
+external, such as CMake, and saw it fail, names what failed and its exit code.</p>
+
+<h2>Without rmp</h2>
+
+<p>Nothing in a game requires <code>rmp</code>: underneath, it is plain CMake with presets, and the
+<code>.toml</code> is applied by the configure step itself.</p>
+
+<pre data-lang="shell">
+cmake --preset debug           # configures AND generates everything from the .toml
+cmake --build build
+./build/my_game
+</pre>
+
+<p>The presets a game builds with are <code>debug</code>, <code>release</code>, <code>web</code> and
+<code>memory</code>, the software-rendered build the <code>render</code> stage uses. <code>debug</code> and <code>release</code>
+share <code>build/</code>, and configuring a release where a debug configure has pinned the
+<code>[dev]</code> compiler is refused, with the instruction to run <code>rmp clean</code> first — the
+same reason <code>rmp build release</code> deletes the folder for you.</p>

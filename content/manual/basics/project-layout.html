@@ -1,0 +1,220 @@
+<!--
+title: Project layout
+description: What a game made with rmp new contains, which parts of it are yours and which are the framework's, and what the build generates and never commits.
+order: 10
+-->
+<h1>Project layout</h1>
+
+<p class="lede">A game is a folder that <code>rmp new</code> makes. It holds your code, your art and
+one config file, next to its own copy of the framework and everything needed to build it for
+{{count:targets}} targets. Most of the folder is never yours to open, and the framework's own code
+sits in two folders called <code>rmp/</code>, so the two are told apart at a glance.</p>
+
+<h2>Making a game</h2>
+
+<pre data-lang="shell">
+rmp new my_game       # makes my_game/, here
+cd my_game
+rmp run               # build it and play it
+</pre>
+
+<p>The name of the folder is the name of the game. <code>rmp new</code> writes it into
+<code>[project] name</code> and <code>[window] title</code>, and from there it becomes the executable,
+the CMake target, the Xcode scheme, the save folder and the name of every artifact CI uploads.
+Because it becomes a file name on every operating system the game ships to, it has to be letters,
+digits, <code>_</code> and <code>-</code>, starting with a letter. A name that is not, or that is
+already taken by a target of the build (<code>rmp</code>, <code>raylib</code>,
+<code>unit_test</code> and the like), or that Windows reserves for a device (<code>con</code>,
+<code>nul</code>, <code>com1</code>…) is refused before anything is written, with a name it would
+accept instead.</p>
+
+<p>The folder can be anywhere — <code>rmp new ~/games/space_rocks</code> makes
+<code>space_rocks</code> — except inside the framework itself. If it exists it has to be empty.</p>
+
+<p>Besides copying files, <code>rmp new</code> does five things to the new game:</p>
+
+<ul>
+<li>Sets the store identities to placeholders built from the name:
+<code>[android] application_id</code> becomes <code>com.example.my_game</code> and <code>[ios] bundle_id</code>
+becomes <code>com.example.my-game</code>. The two differ because Android ids take <code>_</code> and not
+<code>-</code>, and Apple bundle ids the other way round. A release build refuses any id under
+<code>com.example.</code>, because a Google Play application id can never be changed once it is
+published.</li>
+<li>Gives <code>[resources] rres_password</code> a random value of its own, so that games made from
+the framework do not share the key their asset packs are encrypted with.</li>
+<li>Writes a short <code>README.md</code> for the game.</li>
+<li>Makes it a git repository on a branch called <code>main</code>, with every file added and
+nothing committed yet. The raylib-iOS submodule is recorded at the commit the framework pins, with
+its folder left empty: <code>git submodule update --init</code> is only needed to build for iOS.</li>
+<li>Runs the new game's own <code>tools/configure.py --check</code> and
+<code>tools/license_db.py --check</code>. If either fails, the folder is removed again: there is no
+half-made game to clean up.</li>
+</ul>
+
+<p>A game has no licence of its own; choosing one is yours. The framework's MIT licence travels with
+it as <code>thirdparty/raylib_multiplatform/LICENSE</code>, next to every other component's, and
+reaches the <code>LICENSES.txt</code> each build ships. It is not a <code>LICENSE</code> at the root
+of the game, which would make GitHub call every game made with the framework MIT.</p>
+
+<h3>What a new game gets</h3>
+
+<p>The copy is an explicit list, not "everything except". <code>rmp new --list</code> prints it, one
+path per line, without making anything:</p>
+
+<pre data-lang="shell">
+rmp new --list
+</pre>
+
+<p>A list of what to take fails loudly when it is wrong: a file a game needs and does not get is a
+game that does not build. A list of what to leave out would fail silently and for good, because the
+next file added to the framework — a gate, a test fixture, a maintenance script — would ride along
+into every game and nothing would say so. The framework's own tests make every file it tracks be
+classified as one or the other, so a new file forces the question.</p>
+
+<h2>The folder</h2>
+
+<p>This is the top of a new game. The comments say whose each entry is.</p>
+
+<pre data-lang="text">
+my_game/
+├── raylib_multiplatform.toml   yours: the name, the ids, the platforms, everything else
+├── src/
+│   ├── main.cpp                yours: RMP_GAME(MainMenuScene); and nothing else
+│   ├── scenes/                 yours: main_menu.h and main_menu.cpp to start from
+│   └── rmp/                    the framework's implementation
+├── include/
+│   └── rmp/                    the framework's headers
+├── resources/                  yours: art, sounds, fonts, levels (rabbit.png to start)
+├── branding/icon.png           yours: the one picture every app icon is made from
+├── README.md                   yours: written by rmp new
+├── rmp  rmp.ps1  rmp.cmd       the command, for sh, PowerShell and cmd
+├── tools/                      configure.py, rmp.py, the licence check, the packer
+├── CMakeLists.txt              the build, driven by the .toml
+├── CMakePresets.json           the presets: debug, release, web, memory
+├── cmake/                      the build's helpers; cmake/generated/ appears here
+├── raymob/                     the Android app shell (Gradle)
+├── ios/                        the iOS scaffold; ios/project.yml appears here
+├── tests/smoke_test.h          the boot and render check CI runs on every target
+├── thirdparty/                 raylib and the other vendored libraries, pinned
+├── THIRD_PARTY_LICENSES.md     every vendored component and its licence
+├── .github/workflows/          CI for every enabled target, and the release
+└── package.json                what CI's web boot test runs on (Playwright)
+</pre>
+
+<h3>What is yours</h3>
+
+<table>
+<thead><tr><th>Path</th><th>What goes there</th></tr></thead>
+<tbody>
+<tr><td><code>raylib_multiplatform.toml</code></td><td>The game's name and identities, its window, the platforms it is built for, and every setting the framework reads. See <a href="/manual/basics/configuration.html">Configuration</a>.</td></tr>
+<tr><td><code>src/main.cpp</code></td><td>The entry point: one line, <code>RMP_GAME(MainMenuScene);</code>, naming the first scene. See <a href="/manual/core/app.html">The app</a>.</td></tr>
+<tr><td><code>src/scenes/</code></td><td>Your scenes, one per file. More folders beside it — a folder for your objects, one for your behaviors — are yours to add.</td></tr>
+<tr><td><code>include/</code></td><td>Headers you want on the include path from anywhere in <code>src/</code>. Headers that sit next to their <code>.cpp</code> in <code>src/</code> work too, included by their relative path.</td></tr>
+<tr><td><code>resources/</code></td><td>Everything the game loads at run time, loaded by name.</td></tr>
+<tr><td><code>branding/icon.png</code></td><td>The app icon, one square PNG.</td></tr>
+</tbody>
+</table>
+
+<h3>What is the framework's</h3>
+
+<p>Two paths are the framework's and carry the same name so that you can tell at a glance:
+<code>include/rmp/</code>, the headers you include, and <code>src/rmp/</code>, their implementation.
+Everything else under <code>src/</code> and <code>include/</code> is yours.</p>
+
+<p>The rest of the folder is the machinery that builds and ships the game: CMake for the desktops
+and the web, Gradle under <code>raymob/</code> for Android, an XcodeGen spec under <code>ios/</code>
+for iOS, the workflows under <code>.github/workflows/</code> for CI, and the vendored libraries under
+<code>thirdparty/</code>, each pinned and each licence on record. None of it is edited to rename the
+game, to add a source file or to pick platforms; all three are the <code>.toml</code>'s or
+<code>src/</code>'s job.</p>
+
+<p>The game's copy of <code>tools/rmp.py</code> is the one that runs inside it, even when the
+<code>rmp</code> on your PATH is a newer framework's. That is what keeps a game building the way it
+did when it was made; <a href="/manual/basics/the-rmp-command.html#a-game-keeps-its-own-rmp">The rmp
+command</a> has the detail.</p>
+
+<p>A game does not get the framework's <code>examples/</code>, its tests or its maintenance tools.
+The examples are on this site, under <a href="/examples/index.html">Examples</a>, each one a small
+game of its own that can be read and copied from.</p>
+
+<h2>Every file under src/ is compiled</h2>
+
+<p>There is no list of source files anywhere. Every <code>.cpp</code> and <code>.c</code> under
+<code>src/</code>, in any subfolder, is part of the game, in all four build systems: CMake globs the
+folder recursively, Android's CMake under <code>raymob/</code> does the same, and the iOS spec takes
+<code>src/</code> as a whole. Adding a <code>game.cpp</code> to <code>src/scenes/</code> touches no
+CMake, no Gradle and no Xcode project; the next build finds it.</p>
+
+<p>On the desktops and the web, <code>src/rmp/</code> is left out of the game's own sources and
+compiled once into a library called <code>rmp</code>, which the game links. That is why changing a
+scene recompiles the scene and not the framework.</p>
+
+<p>A game whose <code>src/</code> holds no C++ at all — <code>main.cpp</code>, the scenes and
+<code>src/rmp/</code> deleted, and a <code>main.c</code> in their place — is built as plain C: its own
+<code>main()</code>, raylib, and nothing of the framework's — <a href="/manual/raylib/plain-c.html">Plain C</a>
+explains it, and <code>examples/plain_c</code> is that shape.
+It keeps the builds, the generated identities and icons and the release pipeline, and gives up the
+asset pack, which raylib alone cannot read, and the web and iOS, whose frame loops belong to the
+browser and to UIKit and are written by the framework's entry point.</p>
+
+<h2>resources/</h2>
+
+<p>The game loads its files from <code>resources/</code> by name —
+<code>rmp::assets::load_texture("rabbit.png")</code> — without knowing whether they are loose files
+or packed into one encrypted <code>resources.rres</code>. While you work they are loose, so a new
+picture is in the game the next time it runs. <code>rmp pack</code> bundles the folder into a
+<code>resources.rres</code> inside it, the way a release does, and <code>rmp unpack</code> deletes the
+pack so the loose files are read again.</p>
+
+<p><a href="/manual/modules/assets.html">Assets</a> has the whole of loading, and
+<a href="/examples/assets/01_loading.html">the loading example</a> reads the same files both ways.</p>
+
+<p><strong>Keep the folder flat.</strong> Resource names are bare file names and the packer does not
+look into subfolders, so a picture in an <code>art/</code> folder inside <code>resources/</code> loads
+while the files are loose and is missing from the pack a release ships. A release build warns when <code>resources/</code> has a
+subfolder.</p>
+
+<p>Where the game looks for the folder depends on the build. On a desktop, a debug build reads the
+project's <code>resources/</code> by its absolute path, so the game finds its files whatever folder it
+is started from, and a release build reads <code>./resources/</code>, which is why a release ships the
+folder, or the pack in it, next to the executable. The web build preloads the files with the page,
+Android puts them in the APK's assets and iOS copies the folder into the app bundle.</p>
+
+<h2>branding/</h2>
+
+<p><code>branding/icon.png</code> is one square PNG, 1024×1024 recommended, and every icon of every
+platform is made from it: each Android density with its round and adaptive variants, the Play Store
+image, the iOS app icon and the <code>.ico</code> embedded in the Windows executable.</p>
+
+<p>It is not in <code>resources/</code> on purpose. Everything there is packed and shipped with the
+game, and a launcher icon is an input of the build, not an asset the game loads.</p>
+
+<p>The folder is yours, name included: <code>[icon] source</code> is the only thing that has to agree
+with it. When the file is missing the build warns and keeps whatever icons already exist instead of
+failing. Resizing it into the Android icons needs Pillow, the Python imaging library; a machine
+without it keeps the icons it has, because only the Android and iOS builds use them.</p>
+
+<h2>What the build generates</h2>
+
+<p>Every configure turns <code>raylib_multiplatform.toml</code> into the files each build system
+reads. None of them is committed — <code>.gitignore</code> lists them — so none can drift out of step
+with the <code>.toml</code>, and <code>git status</code> stays clean after a build.</p>
+
+<table>
+<thead><tr><th>Generated</th><th>For</th></tr></thead>
+<tbody>
+<tr><td><code>cmake/generated/</code></td><td>CMake: the project name, raylib's module switches, the linker and compiler for development builds, the Windows icon, the <code>LICENSES.txt</code> of each family of targets.</td></tr>
+<tr><td><code>include/rmp/generated/</code></td><td>C and C++: the <code>config.h</code> that holds the <code>RMP_</code> values. See <a href="/manual/basics/headers.html#rmp-config-h">Headers</a>.</td></tr>
+<tr><td><code>raymob/generated.properties</code>, <code>raymob/app/generated/</code></td><td>Gradle: the Android properties and the manifest.</td></tr>
+<tr><td><code>ios/project.yml</code></td><td>XcodeGen: the iOS project.</td></tr>
+<tr><td><code>build/</code></td><td>Everything compiled: <code>build/</code> for debug and release, <code>build/web/</code> for the browser.</td></tr>
+</tbody>
+</table>
+
+<p>The app icons are generated too, into the Android resource folders and an asset catalogue under
+<code>ios/</code>, and ignored the same way.</p>
+
+<p><code>rmp clean</code> deletes <code>build/</code> and every generated file except the icons, which
+stay because making them again needs Pillow. The next build makes the rest again. Gradle and XcodeGen
+never run CMake, so the Android and iOS builds run <code>tools/configure.py</code> themselves first;
+<code>rmp android</code> does.</p>

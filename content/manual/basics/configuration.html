@@ -1,0 +1,261 @@
+<!--
+title: Configuration
+description: raylib_multiplatform.toml is the one file that says what the game is called, how it opens and where it ships, and every build system is generated from it.
+order: 20
+-->
+<h1>Configuration</h1>
+
+<p class="lede">Everything about a game that is not code lives in one file at the root of the
+project, <code>raylib_multiplatform.toml</code>: its name, its store identities, its window, the
+platforms it is built for, and every setting the framework reads. CMake, Gradle, Xcode and CI all
+take their answers from it, so they cannot disagree with each other.</p>
+
+<p>This page explains how the file works. Every key, with its default and the values it takes, is
+listed in the <a href="/reference/configuration.html">configuration reference</a>.</p>
+
+<h2>One file for every build system</h2>
+
+<p>A game is built by four different systems — CMake for the desktops and the web, Gradle for
+Android, Xcode for iOS, GitHub Actions for all of them — and all four need to agree on the same
+facts: what the game is called, what its bundle id is, which platforms to build. Left to
+themselves they disagree, and the failure is always silent: a release that ships under the wrong
+identity, or an Android build that encrypts its assets with a different password from the desktop
+one and cannot read them.</p>
+
+<p>So there is one hand-written source and one generator. <code>tools/configure.py</code> reads the
+<code>.toml</code> and writes what each system needs:</p>
+
+<table>
+<thead><tr><th>It writes</th><th>Which is read by</th></tr></thead>
+<tbody>
+<tr><td><code>cmake/generated/</code></td><td>CMake: the project name, which raylib modules to build, the development compiler and linker, the web build's memory, the Windows icon.</td></tr>
+<tr><td><code>rmp/config.h</code>, generated</td><td>Your C and C++: the <code>RMP_</code> values, such as <code>RMP_WINDOW_WIDTH</code>.</td></tr>
+<tr><td><code>raymob/generated.properties</code> and the manifest</td><td>Gradle: the application id, the SDK levels, the permissions, the orientation, whether AdMob is in the build.</td></tr>
+<tr><td><code>ios/project.yml</code></td><td>XcodeGen, which makes the Xcode project: the bundle id, the deployment target, your <code>[ios.settings]</code>.</td></tr>
+<tr><td>the icons and the <code>LICENSES.txt</code> files</td><td>Every package the game ships in.</td></tr>
+</tbody>
+</table>
+
+<p>The build files stay dumb: they read what the generator wrote and never parse the
+<code>.toml</code> themselves, because three parsers would be three ways to drift. CI asks the same
+generator its questions — which targets are enabled, which jobs to start, where to publish — through
+its <code>--print-</code> options. None of the generated files is committed; see
+<a href="/manual/basics/project-layout.html#what-the-build-generates">what the build generates</a>.</p>
+
+<h3>When it runs</h3>
+
+<p>You never run it by hand to build. Every <code>cmake --preset</code> runs it first, before
+anything else is configured, because the project's own name comes out of it — so
+<code>rmp run</code>, <code>rmp build release</code> and <code>rmp web</code> all regenerate. CMake also
+watches the <code>.toml</code>, so editing it and building again picks the change up. The generator
+takes milliseconds and rewrites a file only when its content changed, so a configure that changed
+nothing rebuilds nothing.</p>
+
+<p>Gradle and XcodeGen never run CMake, so those two builds run
+<code>python3 tools/configure.py</code> as a step of their own; <code>rmp android</code> does it for
+you, and so do the CI jobs.</p>
+
+<p>The generator needs Python 3.11 or newer. A machine without one can still build from files that
+were generated earlier, with a warning that edits to the <code>.toml</code> will not be seen; with
+nothing generated yet, the build stops and says how to get Python.</p>
+
+<h2>How a key is read</h2>
+
+<p>The file is TOML. A key lives under a section, and the framework names it the same way
+everywhere — in its messages, in its comments and on this site — as <code>[section] key</code>:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[window]
+title  = "Space Rocks"     # this is [window] title
+width  = 1280              # and this is [window] width
+height = 720
+</pre>
+
+<p>The file is laid over the defaults. A key you leave out takes its default, a section you leave
+out is entirely default, and a game whose <code>.toml</code> is deleted still builds, with a warning
+saying it is running on defaults. So a <code>.toml</code> holds only what the game changes:</p>
+
+<pre data-lang="toml">
+[project]
+name = "space_rocks"
+
+[window]
+title  = "Space Rocks"
+width  = 1280
+height = 720
+
+[targets]
+enabled  = ["all"]
+disabled = ["ios"]
+
+[android]
+application_id = "com.yourname.spacerocks"
+
+[ios]
+bundle_id = "com.yourname.spacerocks"
+</pre>
+
+<p>The <code>.toml</code> that <code>rmp new</code> gives a game is the framework's own, with every key
+written out and a comment over each one saying what it does and why its default is what it is. It
+is worth reading once.</p>
+
+<h3>Reading a value in your code</h3>
+
+<p>The values a game needs at run time reach C and C++ as macros, generated into
+<code>rmp/config.h</code>, which every framework header includes for you:</p>
+
+<pre data-lang="cpp" data-harness="function">
+const float centre_x = RMP_WINDOW_WIDTH / 2.0f;   // [window] width
+TraceLog(LOG_INFO, "%s starting", RMP_PROJECT_NAME); // [project] name
+</pre>
+
+<p>They are macros rather than constants so that a game in plain C can use them too. Not every key
+has one: only the ones the game itself reads, such as the window, the UI's starting font and scale,
+the volumes and the save settings. <a href="/manual/basics/headers.html#rmp-config-h">Headers</a>
+explains the file, and the <a href="/reference/macros.html#from-the-toml">macros reference</a> lists
+every one with the key it comes from.</p>
+
+<h2>A wrong value stops the build at once</h2>
+
+<p>An invalid <code>.toml</code> fails in <code>configure.py</code>, in about a second, before
+anything is compiled — not at the compiler, and not on a CI runner twenty minutes in. The message
+names the exact line, says what is wrong with it, and says what to write instead. Every combination
+of keys that cannot work is a refusal with a reason, and each refusal has a test in the
+framework.</p>
+
+<p>A key the framework does not know is refused, because a misspelt key would otherwise be
+silently ignored and its default used instead:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[window]
+titel = "Space Rocks"
+</pre>
+
+<p>Every value is checked for its type before anything reads it. A list written without its
+brackets is the commonest slip, and TOML would hand the string over a character at a time:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[targets]
+enabled = "all"
+</pre>
+
+<p>And two keys that are each valid can still contradict each other. A frame cap of 15 frames a
+second makes every frame a fifteenth of a second long, but <code>[app] max_delta</code> hands the game
+at most a twentieth, so the game would run slow forever without anything saying why:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[window]
+fps = 15
+</pre>
+
+<p>The same check runs wherever the <code>.toml</code> is read: <code>cmake --preset debug</code>,
+<code>rmp run</code>, the <code>config</code> stage of <code>rmp test</code>, and the first job of every
+CI run. <code>python3 tools/configure.py --check</code> runs it on its own and writes nothing.</p>
+
+<p>One check is stricter on a release. A tag build refuses an <code>[android] application_id</code>
+or an <code>[ios] bundle_id</code> that is still a placeholder under <code>com.example.</code>, for a
+target that is enabled, because a Google Play application id can never be changed after the first
+upload. A debug build accepts them, so that a game builds the moment it is made.</p>
+
+<h2>What is not in it</h2>
+
+<p><strong>No version.</strong> A release takes its version from the git tag: <code>v1.2.3</code>
+becomes the version name on every platform, and Android's version code is worked out from it as
+<code>major × 1000000 + minor × 1000 + patch</code>, so it only ever goes up. A build that is not a
+tag is <code>0.0.0-dev</code>. There is nothing in the file to remember to bump.</p>
+
+<p><strong>No secrets.</strong> The <code>.toml</code> is committed, so nothing in it may be secret:
+no keystore, no token, no password. Signing keys and publishing credentials are GitHub secrets.
+<code>[resources] rres_password</code> is not an exception — it is compiled into the game, which can
+therefore read its own pack, and it makes unpacking the assets inconvenient rather than
+impossible. <code>[save] encrypt</code> is the same: the key is derived from
+<code>[project] name</code> and lives in the binary.</p>
+
+<h2>The sections</h2>
+
+<p>Every section, and what it is for. Most games touch the first four and leave the rest at their
+defaults.</p>
+
+<table>
+<thead><tr><th>Section</th><th>What it decides</th></tr></thead>
+<tbody>
+<tr><td><a href="/reference/configuration.html#section-project"><code>[project]</code></a></td><td>The game's name: the executable, the CMake target, the Xcode scheme, the save folder and every artifact's name.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-window"><code>[window]</code></a></td><td>The title, the size the window opens at — which is also the design resolution — the phone orientation, vsync and a frame cap.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-targets"><code>[targets]</code></a></td><td>Which platforms the game is built for, by group or by exact id.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-android"><code>[android]</code></a>, <a href="/reference/configuration.html#section-ios"><code>[ios]</code></a></td><td>The store identities, the oldest OS versions supported, the GL version Android asks for, the Play Store category. <code>[ios.settings]</code> passes raw Xcode build settings through, such as a signing team.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-android-display"><code>[android.display]</code></a>, <a href="/reference/configuration.html#section-android-permissions"><code>[android.permissions]</code></a>, <a href="/reference/configuration.html#section-android-features"><code>[android.features]</code></a></td><td>Screen behaviour on Android (keep the screen on, hide the system bars, draw behind the notch), the permissions the app asks for, and the hardware the Play Store requires.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-android-admob"><code>[android.admob]</code></a></td><td>Whether AdMob is in the Android build at all, and the ad unit ids. See <a href="ref:rmp::ads"><code>rmp::ads</code></a>.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-icon"><code>[icon]</code></a></td><td>The picture every app icon is made from, and the colour behind Android's adaptive icon.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-app"><code>[app]</code></a></td><td>The longest step the game logic is ever handed, so a stalled frame is a moment of slow motion and not a teleport through a wall.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-ui"><code>[ui]</code></a></td><td>The theme, font, font size and scale <a href="ref:rmp::ui"><code>rmp::ui</code></a> starts with, and the ceiling on its layout tree.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-input"><code>[input]</code></a></td><td>The analogue stick's dead zone. See <a href="ref:rmp::input"><code>rmp::input</code></a>.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-audio"><code>[audio]</code></a></td><td>The volumes the three buses of <a href="ref:rmp::audio"><code>rmp::audio</code></a> start at.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-save"><code>[save]</code></a></td><td>Where <a href="ref:rmp::save"><code>rmp::save</code></a> puts the saves, whether they are sealed by default, and the version of your save format.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-resources"><code>[resources]</code></a></td><td>The password the asset pack is encrypted with.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-raylib"><code>[raylib]</code></a></td><td>raylib modules a game does not use, left out to shrink the binary.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-web"><code>[web]</code></a></td><td>The browser build's memory, whether it may grow, and which layer raylib talks to.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-linux"><code>[linux]</code></a>, <a href="/reference/configuration.html#section-windows"><code>[windows]</code></a></td><td>The windowing backend on each, native Wayland, and the oldest glibc a Linux binary may need.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-upx"><code>[upx]</code></a></td><td>Which shipped binaries are compressed with UPX.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-dev"><code>[dev]</code></a></td><td>Your machine only: the compiler and linker of debug builds, and whether a framework warning aborts a debug build. CI never reads it.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-deploy"><code>[deploy]</code></a>, <a href="/reference/configuration.html#section-deploy-itch"><code>[deploy.itch]</code></a>, <a href="/reference/configuration.html#section-deploy-firebase"><code>[deploy.firebase]</code></a></td><td>Whether a <code>LICENSES.txt</code> ships with the game, where a release is published on itch.io, and the Firebase project that runs the Android build on real phones.</td></tr>
+</tbody>
+</table>
+
+<h3>[project] and [window]</h3>
+
+<p><code>[project] name</code> is the one value that names files. It has to be letters, digits,
+<code>_</code> and <code>-</code>, starting with a letter, because it becomes the executable on every
+operating system. Changing it after release changes where the saves are kept, and makes sealed saves
+from the old name unreadable, since their key is derived from it.</p>
+
+<p><code>[window] width</code> and <code>height</code> are two things at once. On a desktop they are
+the size the window opens at. Everywhere, they are the <em>design resolution</em>: the size
+<a href="ref:rmp::ui"><code>rmp::ui</code></a> lays a menu out at before scaling it to the real
+window, and the area the <a href="/manual/core/camera.html">camera</a> starts centred on. The window
+can be resized, and a phone's screen is whatever it is; the design resolution is the fixed size the
+game is written against.</p>
+
+<p><code>[window] title</code> is the title bar on a desktop and the name under the icon on Android
+and iOS. <code>orientation</code> — <code>"landscape"</code>, <code>"portrait"</code> or
+<code>"unspecified"</code> — is applied to Android and iOS at once; on a desktop the window's shape
+is its width and height.</p>
+
+<p><code>vsync</code>, on by default, waits for the screen's refresh before showing each frame: no
+tearing, and no frames drawn that nobody sees. <code>fps</code> caps the frame rate, and 0, the
+default, is no cap. The web and iOS ignore <code>fps</code>, because the browser and the display
+pace the frame there.</p>
+
+<h3>[targets]</h3>
+
+<p><code>enabled</code> lists groups and exact target ids; they are expanded and duplicates
+dropped. <code>disabled</code> is then subtracted from the result. There is no precedence to reason
+about, because the two never conflict: <code>enabled = ["all"]</code> with
+<code>disabled = ["ios"]</code> is every target except iOS, whatever order they are written in.</p>
+
+<pre data-lang="toml">
+[targets]
+enabled  = ["desktop", "web"]
+disabled = []
+</pre>
+
+<p>A target turned off is out of the build, out of CI and out of the release. Every target, with
+the groups it belongs to:</p>
+
+<div data-generated="targets-table"></div>
+
+<h3>[android] and [ios]: identities you cannot change</h3>
+
+<p><code>[android] application_id</code> and <code>[ios] bundle_id</code> are the game's identity on
+the stores. A Google Play application id is permanent: once an app is published under one, it can
+never be renamed or moved, and getting it wrong means a new listing that starts again from zero
+installs and reviews. That is why a release refuses the <code>com.example.</code> placeholders that
+<code>rmp new</code> writes. Set both before the first release.</p>
+
+<h3>[dev]: your machine, not the build that ships</h3>
+
+<p><code>[dev]</code> applies to debug builds on your machine and nowhere else. CI builds the release
+and web presets, which never read it, so nothing in it can change what ships. <code>compiler</code>
+picks the compiler of a debug build, <code>linker</code> a faster linker when one works, and
+<code>strict = true</code> turns the first warning the framework prints about a mistake in the game —
+an action nobody defined, a <code>pop()</code> with nothing underneath — into an abort, in the
+debugger, at the line that caused it. Release builds compile that check out.</p>

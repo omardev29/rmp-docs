@@ -1,0 +1,20 @@
+<!--
+title: Basics
+description: What a game made with the framework is before any of its code runs: the folder, the config file, the command that builds it, and the headers it includes.
+order: 5
+-->
+<h1>Basics</h1>
+
+<p class="lede">Before a game draws anything it is a folder, a config file, a command and a handful
+of headers. This group is about those four things: what each one is, which parts of it are yours,
+and why it is laid out the way it is.</p>
+
+<ul>
+<li><a href="/manual/basics/project-layout.html">Project layout</a> — what <code>rmp new</code> puts in a game's folder, which parts you edit and which belong to the framework, and what the build generates.</li>
+<li><a href="/manual/basics/configuration.html">Configuration</a> — <code>raylib_multiplatform.toml</code>: the one file that drives CMake, Gradle and Xcode, and what happens when a value in it is wrong.</li>
+<li><a href="/manual/basics/the-rmp-command.html">The rmp command</a> — building, running, testing and shipping a game from one command, on every shell.</li>
+<li><a href="/manual/basics/headers.html">Headers</a> — one header per module, no umbrella, and the <code>RMP_</code> values every header carries from the config.</li>
+</ul>
+
+<p>When the folder builds and runs, the <a href="/manual/core/index.html">core</a> is next: the
+app, the scenes it moves between and the objects in them.</p>

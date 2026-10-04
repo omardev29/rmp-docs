@@ -1,0 +1,281 @@
+<!--
+title: The app
+description: The entry point that opens the window, runs the frame and closes everything on every platform, how a game asks to quit, and the state that outlives a scene.
+order: 10
+-->
+<h1>The app</h1>
+
+<p class="lede">The app is what runs a game: it opens the window, runs one frame after another, and
+closes everything in the right order on the way out — on a desktop, in a browser, on a phone. A game
+written with scenes meets it once, in the last line of <code>src/main.cpp</code>, and after that
+only when it wants to quit or keep something across scenes.</p>
+
+<h2>The entry point</h2>
+
+<p>This is the whole of <code>src/main.cpp</code> in a new game:</p>
+
+<pre data-lang="cpp" data-include="src/main.cpp"></pre>
+
+<p><a href="ref:RMP_GAME"><code>RMP_GAME</code></a> takes the type of the first scene. It opens the
+window from <code>[window]</code> in <code>raylib_multiplatform.toml</code>, puts that scene on the
+stack, runs the stack every frame, and shuts everything down when the game ends. There is no
+<code>InitWindow()</code>, no frame loop and no unloading in the game, because those were the same
+lines in every game and none of them was ever yours to get right.</p>
+
+<p>It also writes the entry point the platform expects, and the platforms do not agree on what that
+is. The difference between them is who owns the frame loop:</p>
+
+<table>
+<thead><tr><th>Platform</th><th>What <code>RMP_GAME</code> writes</th></tr></thead>
+<tbody>
+<tr><td>Windows, Linux, macOS, the BSDs, Android</td><td>A <code>main()</code> with the frame loop in it: the game owns the loop. On Android, raylib's own entry point calls that <code>main()</code>.</td></tr>
+<tr><td>The web</td><td>A <code>main()</code> that hands each frame to the browser: the browser owns the loop.</td></tr>
+<tr><td>iOS</td><td>The three callbacks UIKit calls instead of a <code>main()</code>: UIKit owns the loop, and there is nothing to return to.</td></tr>
+</tbody>
+</table>
+
+<p>The web is a loop the browser runs and not a <code>while</code> loop for a reason that costs real
+bytes. A loop that never returns would freeze the page, and the only way to run one there is
+Emscripten's <code>ASYNCIFY</code>, which instruments every function that might be on the stack —
+most of them — and makes the whole program larger and slower whether or not it ever waits. Handing
+each frame to the browser is what lets the web build go without it.</p>
+
+<h3>Why the first scene is named in code</h3>
+
+<p>Naming the first scene in the <code>.toml</code> would mean looking it up by a string, and a
+string-to-type lookup in C++ is built from objects that register themselves when the program starts.
+In a static library, and in the prebuilt framework iOS links, the linker throws away any object file
+nothing refers to — and a self-registering object is exactly that. It would not fail to compile; it
+would work on your desktop and find no scenes on the phone. So the scene is named where a C++
+program starts, in <code>main.cpp</code>, where the linker can see it.</p>
+
+<p>A program with no entry point, or with two, is a link error that names the symbol
+<code>rmp_entry_point_is_declared_exactly_once</code>: missing, or defined twice. That is clearer than
+the linker's own complaint about <code>main</code>, which does not say what to write or which file
+to look at.</p>
+
+<h2>Before the first scene</h2>
+
+<p>Before your first scene exists, the app:</p>
+
+<ol>
+<li>tells the asset layer where <code>resources/</code> is;</li>
+<li>seeds <a href="ref:rmp::random"><code>rmp::random</code></a> from the clock, so a shipped game plays a
+different sequence every launch;</li>
+<li>switches on <code>[dev] strict</code> when the build is a debug build and the <code>.toml</code>
+asks for it;</li>
+<li>on iOS, moves into the app bundle, where the resources are;</li>
+<li>opens the asset pack if there is one, so that a scene can load files from its first line;</li>
+<li>opens the window: always resizable, with vsync when <code>[window] vsync</code> is on, capped at
+<code>[window] fps</code> when that is not 0 (except on the web and iOS, which pace the frame
+themselves), at <code>[window] width</code> by <code>height</code>, titled <code>[window] title</code>;</li>
+<li>puts your first scene on the stack, which runs its <code>_ready()</code>.</li>
+</ol>
+
+<p>So a scene's <code>_ready()</code> always runs with the window open and the assets available, which
+is why it is where a scene loads what it draws.</p>
+
+<h2>The frame</h2>
+
+<p>Every frame runs the same steps in the same order, and the order is the contract — it is what
+every property of the <a href="/manual/core/scenes.html">scene stack</a> is built on:</p>
+
+<ol>
+<li><strong>Input.</strong> The keyboard, mouse, touch and gamepads are read once, and the UI starts
+its frame. Reading once is what stops two scenes in the same frame disagreeing about what is held
+down.</li>
+<li><strong>Update</strong>, from the bottom of the stack upwards, for every scene that is running.
+For each one: the pointer is offered to its objects (<a href="ref:rmp::Object::on_click"><code>on_click</code></a>,
+<a href="ref:rmp::Object::on_drag"><code>on_drag</code></a>), then the scene's
+<a href="ref:rmp::Scene::_update"><code>_update()</code></a> runs, then its
+<a href="/manual/core/objects.html#the-frame-of-an-object">objects</a> update and move, then the
+<a href="/manual/core/collision.html">collision pass</a> resolves where they ended up, and last the
+<a href="/manual/core/camera.html">camera</a> follows.</li>
+<li><strong>Draw</strong>, from the bottom upwards, for every scene that is visible. The screen is
+cleared with the background of the lowest of them; then for each scene its map and its objects are
+drawn through its camera, and its own <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a> runs
+after, in screen space.</li>
+<li><strong>Present.</strong> The frame goes to the screen and the UI ends its frame.</li>
+<li><strong>Deferred work.</strong> Objects destroyed during the frame are freed, and the scene changes
+asked for during the frame are applied, in the order they were asked for.</li>
+</ol>
+
+<p>After each frame the music that is playing is fed, whatever else is going on — under a pause
+menu too, since a streamed track that is not fed stutters.</p>
+
+<h3>delta</h3>
+
+<p>Every <code>_update(float delta)</code> receives the seconds the last frame took. Real time has no
+ceiling: drag the window, stop at a breakpoint, let a disk stall, and a frame comes back half a
+second long. A bullet moving 900 units a second then moves 450 units in one step, straight through a
+wall it never overlapped.</p>
+
+<p>So <code>delta</code> is clamped to <code>[app] max_delta</code>, a twentieth of a second by
+default. A frame that really took longer arrives as that, and the game runs a moment of slow motion
+instead of teleporting through the level: nobody minds a hitch, and everybody minds falling out of
+the world. Setting <code>max_delta = 0</code> switches the clamp off. A negative reading, which a
+clock can produce across a suspend, arrives as 0.</p>
+
+<p>The first frame's <code>delta</code> is 0, because raylib has no previous frame to measure from.</p>
+
+<h3>The frame rate</h3>
+
+<p>With <code>[window] vsync</code> on, the default, each frame waits for the screen's refresh, which
+paces the game at the display's rate. <code>[window] fps</code> caps it, for a desktop without
+vsync. The browser and iOS pace the frame themselves and ignore <code>fps</code>; never call
+<code>SetTargetFPS()</code> in a game that builds for the web, where a wait inside the browser's frame
+would only stall it.</p>
+
+<h2>Quitting</h2>
+
+<pre data-lang="cpp" data-harness="function">
+if (rmp::ui::button("Quit")) rmp::app::quit();
+</pre>
+
+<p><a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> can be called from anywhere — a
+menu, a callback, ten calls deep in your own code — and it <em>returns</em>. It raises a flag that
+the app checks before the next frame, so the frame you are in finishes normally, and then the game
+shuts down exactly as it does when the window's close button is pressed. A second call does
+nothing.</p>
+
+<p>That is the reason not to call <code>std::exit()</code> instead: it ends the process on the spot,
+so nothing is shut down, the window is not closed properly, and on Android the app's activity is left
+behind while its process disappears. It is not an exception either. Exceptions are switched off in
+plenty of game builds, unwinding through raylib's C code is undefined, and throwing in the middle of
+a frame would leave a frame and a UI pass half open. A flag costs one check a frame and cannot leave
+anything half done.</p>
+
+<p><a href="ref:rmp::app::quit_requested"><code>rmp::app::quit_requested()</code></a> says whether it
+has been called, for code that wants to skip work on the way out.</p>
+
+<h3>Per platform</h3>
+
+<table>
+<thead><tr><th>Platform</th><th>What <code>quit()</code> does</th></tr></thead>
+<tbody>
+<tr><td>Desktops and the web</td><td>The frame loop ends after this frame, and the game shuts down.</td></tr>
+<tr><td>Android</td><td>The same, and the app's activity is finished, so that it goes away instead of leaving an empty task in the recent apps.</td></tr>
+<tr><td>iOS</td><td>Nothing. It logs a warning, once, and returns.</td></tr>
+</tbody>
+</table>
+
+<p>iOS is not an oversight. Apple's guidance is that an app which ends itself "will appear to the
+user to have crashed", App Review rejects apps that crash or appear to, and a quit control fails
+Apple's interface guidelines by itself. So the same code ships everywhere, and on an iPhone the call
+is inert and says so: <samp>APP: quit() does nothing on iOS … Apple rejects apps that terminate
+themselves (QA1561). Ignoring.</samp> If a dead button bothers you, leave it out of the iOS build —
+which is what the menu of a new game does:</p>
+
+<pre data-lang="cpp" data-harness="function">
+#if !defined(PLATFORM_IOS)
+if (rmp::ui::button("Quit")) rmp::app::quit();
+#endif
+</pre>
+
+<p><a href="/manual/platforms/ios.html">iOS</a> has the rest of what is different there.</p>
+
+<h3>The Escape key</h3>
+
+<p>On a desktop, the window closes when its close button is pressed, and also when raylib's exit
+key is pressed — Escape, unless the game says otherwise. The framework leaves raylib's default as it
+is. A game that wants Escape for something else, such as a pause menu, turns the exit key off once,
+in its first scene:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+SetExitKey(KEY_NULL);
+</pre>
+
+<h2>The way out</h2>
+
+<p>However the game ends — <code>quit()</code>, the close button, the exit key — the shutdown is the
+same, and its order matters, because a texture released after the window is closed is a write into a
+graphics context that no longer exists:</p>
+
+<ol>
+<li>Every scene leaves the stack, top down, getting its <a href="ref:rmp::Scene::_end"><code>_end()</code></a>,
+and its objects are destroyed after it, each getting theirs.</li>
+<li>Every <a href="#rmp-global">global</a> is destroyed, in the reverse of the order they were first
+used.</li>
+<li>The UI's font, the sounds that are playing, and every texture, font and sound still held are
+released.</li>
+<li>The window closes.</li>
+<li>The sound device and the asset pack, which own nothing on the graphics card, close last.</li>
+</ol>
+
+<p>Everything that owns something on the graphics card goes while the window is still open, so a
+scene or a global that holds an <a href="ref:rmp::Texture"><code>rmp::Texture</code></a> as a member
+releases it safely without anyone writing an unload.</p>
+
+<h2 id="rmp-global">State that outlives a scene</h2>
+
+<p>A scene owns its state and loses it when it leaves the stack. That is exactly right for the
+enemies of a level and exactly wrong for the player's best score. The second kind has one home,
+<a href="ref:rmp::global"><code>rmp::global&lt;T&gt;()</code></a>:</p>
+
+<pre data-lang="cpp" data-include="examples/scenes/01_stack/include/progress.h"></pre>
+
+<pre data-lang="cpp" data-harness="function" data-given="struct Progress { int best_score = 0; int runs = 0; };
+static int score = 0;">
+rmp::global&lt;Progress&gt;().runs++;
+
+Progress &amp;progress = rmp::global&lt;Progress&gt;();
+if (score &gt; progress.best_score) progress.best_score = score;
+</pre>
+
+<p><a href="/examples/scenes/01_stack.html">The scene-stack example</a> keeps its best score this
+way, across a menu, a game and a pause overlay.</p>
+
+<p>There is one instance per type, built the first time it is asked for and destroyed by the
+framework on the way out, before the window closes. The type is the key: there is no registration,
+no name and no lookup, and the type knows nothing about it — no <code>instance()</code> method, no
+private constructor, no macro. Any type with a default constructor works, including a plain struct
+written a minute ago.</p>
+
+<p>It is called <code>global</code> because that is what it is, and a softer name would get used for
+things that should have been passed as arguments — to a scene's constructor, for instance, which is
+how a <a href="/manual/core/scenes.html#passing-data-to-the-next-scene">level number</a> crosses a
+transition. Reaching for it should be a decision, not a habit.</p>
+
+<p>A global lives in memory for as long as the app runs; it is not saved anywhere. Keeping the best
+score between launches is the job of <a href="ref:rmp::save"><code>rmp::save</code></a>; see
+<a href="/manual/modules/saving.html">Saving</a>.</p>
+
+<p>A global first asked for while the globals are being destroyed — by a destructor that reaches for
+one late in the shutdown — is still a working object, but it is never destroyed by the framework, and
+the log says so once: <samp>GLOBAL: a global was created while the globals were being destroyed; it
+will not be destroyed by the framework.</samp></p>
+
+<h2>Without scenes</h2>
+
+<p><code>RMP_GAME</code> is built on a lower-level entry point, <a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a>,
+which takes three functions of yours instead of a scene and runs them on the same platform runners:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+static void on_ready() {
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE); // before InitWindow, or it is ignored
+    InitWindow(RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT, RMP_WINDOW_TITLE);
+}
+
+static void on_frame(float delta) {
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+    DrawText(TextFormat("%.1f ms", delta * 1000), 20, 20, 20, DARKGRAY);
+    EndDrawing();
+}
+
+static void on_exit() { CloseWindow(); }
+
+RMP_ENTRY_POINT(on_ready, on_frame, on_exit);
+</pre>
+
+<p>There is no scene stack and no objects, and the window and the drawing are yours: the hooks are
+<code>on_</code> and not <code>_</code> because they are functions you hand over. What the platform
+runners do around them is the same as for <code>RMP_GAME</code> — the asset pack opened before
+<code>on_ready</code> and closed after <code>on_exit</code>, the same clamped <code>delta</code>, the
+same <code>quit()</code>, the music fed every frame. What <code>RMP_GAME</code> adds is the part that
+reads <code>[window]</code>: with <code>RMP_ENTRY_POINT</code>, vsync and the frame cap are yours to
+set, like the window.</p>
+
+<p>The UI examples are written this way, because a menu needs no scene. Plain C is one step further
+down: <a href="/manual/raylib/plain-c.html">Plain C</a> is a game with its own <code>main()</code>,
+raylib, and none of the framework at all.</p>

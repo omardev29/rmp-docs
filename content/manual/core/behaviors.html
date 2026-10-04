@@ -1,0 +1,461 @@
+<!--
+title: Behaviors
+description: A behavior is a plain struct that makes an object move or act a certain way: adding, reading and removing them, the catalogue in rmp::behavior, and writing your own.
+order: 50
+-->
+<h1>Behaviors</h1>
+
+<p class="lede">A behavior is a piece of how an object acts — moving like a platformer character,
+bouncing like a Pong ball, disappearing after two seconds — that you add to an object instead of
+writing it again. Add one and the object moves like that game; change its fields and it moves
+differently, while the game runs.</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;player = spawn({ .position = { 200, 225 }, .size = { 26, 26 } });
+player.add&lt;rmp::behavior::TopDown&gt;({ .speed = 240 });
+</pre>
+
+<h2>What a behavior is</h2>
+
+<p>A behavior is any struct with a function <code>void _update(rmp::Object &amp;self, float delta)</code>.
+It inherits from nothing, has no virtual functions and is registered nowhere:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+struct Spin {
+    float degrees_per_second = 90;
+
+    void _update(rmp::Object &amp;self, float delta) {
+        self.rotation += degrees_per_second * delta;
+    }
+};
+</pre>
+
+<p>and it is added to an object with its fields written in braces:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="struct Spin { float degrees_per_second = 90; void _update(rmp::Object &amp;self, float delta) { self.rotation += degrees_per_second * delta; } };">
+auto &amp;coin = spawn({ .position = { 300, 200 }, .shape = rmp::circle(8) });
+coin.add&lt;Spin&gt;({ .degrees_per_second = 180 });
+</pre>
+
+<p>That is the whole model, and leaving out a base class is not a matter of taste. A struct with
+virtual functions is not an aggregate in C++20, and then <code>{ .speed = 320 }</code> no longer
+compiles against it. The usual way round — a nested options struct and a constructor that takes it —
+turns every later read into <code>get&lt;TopDown&gt;()-&gt;options.speed</code>. Without one, the
+fields <em>are</em> the configuration.</p>
+
+<p>And the behaviors in <a href="ref:rmp::behavior"><code>rmp::behavior</code></a> are structs exactly
+like that one. There is no extension API to learn, because there is nothing to extend: one of yours
+and one of the framework's are the same kind of thing, added, read and removed the same way.</p>
+
+<h2>Adding, reading, removing</h2>
+
+<table>
+<thead><tr><th>Call</th><th>Does</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Object::add"><code>add&lt;B&gt;({ ... })</code></a></td><td>Attaches a <code>B</code> made from the braces, runs its <code>_ready</code> if it has one, and returns a reference to it.</td></tr>
+<tr><td><a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a></td><td>A pointer to the object's <code>B</code>, or null when it has none.</td></tr>
+<tr><td><a href="ref:rmp::Object::has"><code>has&lt;B&gt;()</code></a></td><td>Whether it has one.</td></tr>
+<tr><td><a href="ref:rmp::Object::remove"><code>remove&lt;B&gt;()</code></a></td><td>Takes it off, running its <code>_end</code> if it has one.</td></tr>
+</tbody>
+</table>
+
+<p>The fields stay live after the behavior is added. A power-up is one line:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;player = spawn({ .size = { 26, 26 } });
+player.add&lt;rmp::behavior::TopDown&gt;({ .speed = 240 });
+
+if (auto *walk = player.get&lt;rmp::behavior::TopDown&gt;()) walk-&gt;speed = 400;
+</pre>
+
+<p>The reference <code>add()</code> returns and the pointer <code>get()</code> returns stay valid for
+as long as the behavior is attached: a behavior lives in memory of its own and never moves.</p>
+
+<p>An object carries at most one behavior of each type. Adding a type it already has replaces the old
+one — its <code>_end</code> runs, then the new one's <code>_ready</code> — because two of the same is
+never what anybody means, and <code>get()</code> could only ever return one of them.</p>
+
+<p>Behaviors run in the order they were added. One added from inside an <code>_update</code> gets its
+<code>_ready</code> at once and its first <code>_update</code> on the next frame. One removed from
+inside an <code>_update</code> — its own included, which is what a one-shot effect does — is taken off
+without costing any other behavior its turn in that frame.</p>
+
+<p>When the object is destroyed, its own <code>_end()</code> runs first and then each behavior's
+<code>_end</code>, while everything the object owns is still there.</p>
+
+<h2>The hooks a behavior can have</h2>
+
+<p>The framework finds a behavior's hooks when it is compiled, from their names and arguments, so a
+hook a behavior does not declare costs nothing at all.</p>
+
+<table>
+<thead><tr><th>Hook</th><th>Runs</th></tr></thead>
+<tbody>
+<tr><td><code>_update(Object &amp;self, float delta)</code></td><td>Every frame, before the object's own <code>_update()</code> and before it moves, so it can set the velocity the move will use.</td></tr>
+<tr><td><code>_late_update(Object &amp;self, float delta)</code></td><td>Every frame, after the object has moved, been held to its edges and had its animation advanced.</td></tr>
+<tr><td><code>_ready(Object &amp;self)</code></td><td>Once, when it is added.</td></tr>
+<tr><td><code>_draw(Object &amp;self)</code></td><td>Every frame the object is drawn, after its sprite or shape and before its own <code>_draw()</code>, in world units.</td></tr>
+<tr><td><code>_collision(Object &amp;self, Object &amp;other)</code></td><td>Once per frame for each object the object touches, right after the object's own <code>_collision()</code>.</td></tr>
+<tr><td><code>_end(Object &amp;self)</code></td><td>When it is removed, replaced, or the object is destroyed.</td></tr>
+</tbody>
+</table>
+
+<p>A behavior needs <code>_update</code> or <code>_late_update</code>; every other hook is optional.
+<code>_late_update</code> exists because behaviors run before the move, which is what lets them write
+the velocity — so a behavior whose job is to correct where the object <em>ended up</em> needs a place
+after it. <a href="ref:rmp::behavior::GridSnap"><code>GridSnap</code></a> is that: rounding the
+position the object had before it moved would round the wrong number.</p>
+
+<p>A struct with neither, or one with virtual functions, is refused with a sentence that says
+why:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="struct Score { int points = 0; };" data-expect="error" data-error="a behavior needs">
+auto &amp;coin = spawn({ .size = { 8, 8 } });
+coin.add&lt;Score&gt;({ .points = 10 });
+</pre>
+
+<h2 id="ours">What a behavior keeps: ours</h2>
+
+<p>A behavior that has to remember something between frames — the time since a jump was pressed,
+whether it is standing on the ground — keeps it in one public member called <code>ours</code>:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+struct Blink {
+    float every = 0.5f;   // seconds between switches
+
+    void _update(rmp::Object &amp;self, float delta) {
+        ours.elapsed += delta;
+        if (ours.elapsed &gt;= every) {
+            ours.elapsed -= every;
+            self.visible = !self.visible;
+        }
+    }
+
+    void _end(rmp::Object &amp;self) { self.visible = true; }
+
+    struct {
+        float elapsed = 0;
+    } ours;
+};
+</pre>
+
+<p>It is public and not private because a struct with a private member is not an aggregate, and then
+<code>{ .every = 0.2f }</code> stops compiling — which is the whole design. The name is the fence: you
+can read what is in <code>ours</code>, and it is not yours to write. The catalogue follows the same
+rule, and where a value in it is worth reading it has a function that says so —
+<code>Platformer::on_ground()</code> reads <code>ours</code> for you. <a href="ref:rmp::Sprite"><code>rmp::Sprite</code></a>
+keeps its animation state the same way.</p>
+
+<h2>None of them chooses for you</h2>
+
+<p>A behavior contributes how something moves, not what the game intends. Which way the Pong ball is
+served is a rule of the game, so a <code>Ball</code> starts still; a <code>Projectile</code> travels
+the way you pushed it; a <code>Follow</code> chases the handle you give it; and the character
+behaviors read the input actions you name, or the standard ones when you name none —
+<a href="/examples/input/01_actions.html">the actions example</a> shows how one is defined.</p>
+
+<p>Some things are deliberately not in the catalogue, because they are already in it: a patrol is a
+<code>Tween</code> of a position with <code>ping_pong</code> on, a magnet is a <code>Follow</code>,
+and dragging is an object's <a href="ref:rmp::Object::on_drag"><code>on_drag</code></a>.</p>
+
+<h2>The catalogue</h2>
+
+<p>Each one has a page in the reference with every field and its default. All of them come with
+<code>rmp/behavior.h</code>.</p>
+
+<h3>TopDown</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;hero = spawn({ .size = { 16, 16 } });
+hero.add&lt;rmp::behavior::TopDown&gt;({ .speed = 180, .eight_way = false });
+</pre>
+
+<p><a href="ref:rmp::behavior::TopDown"><code>TopDown</code></a> walks in eight directions, seen from
+above, at <code>speed</code> units per second, reading the standard <code>move_left</code>,
+<code>move_right</code>, <code>move_up</code> and <code>move_down</code> actions unless you name others.
+Going diagonally is not faster, because the <a href="/manual/modules/input.html">input</a> it reads is
+normalised. With
+<code>eight_way = false</code> it walks in four, and the direction pushed harder wins.
+<code>acceleration</code>, 0 by default, is instant; a value is how fast it reaches its speed, in units
+per second squared. <code>direction()</code> is the last way it moved, for aiming a weapon where the
+character looks.</p>
+
+<p>It also picks the animation. With a sheet on the object's sprite, moving plays
+<code>walk_&lt;direction&gt;</code> when the sheet has such a tag and <code>walk</code> mirrored with
+<code>flip_x</code> when it does not, and standing still plays <code>idle</code>. So a sheet drawn in
+two, four or eight directions works with nothing configured. The names are yours — they are the tags
+in your file — and <code>idle</code>, <code>walk</code> and the direction suffixes are fields you can
+change. Without a sheet it only sets <code>flip_x</code>.</p>
+
+<h3>Platformer</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;hero = spawn({ .size = { 14, 22 } });
+hero.add&lt;rmp::behavior::Platformer&gt;({ .speed = 200, .jump = 650, .air_jumps = 1 });
+</pre>
+
+<p><a href="ref:rmp::behavior::Platformer"><code>Platformer</code></a> runs left and right, falls, and
+jumps, reading <code>move_left</code>, <code>move_right</code> and <code>ui_accept</code> unless you name
+others. <code>jump</code> is the upward speed a jump starts with, <code>gravity</code> its own pull while
+in the air, and <code>air_jumps = 1</code> is a double jump. It makes the object solid when it is added,
+and applies its own gravity instead of the scene's, which keeps the height of a jump exact.</p>
+
+<p>Two fields separate a platformer that feels right from one that does not, and players never name
+either — they only notice when they are missing. <code>coyote_time</code> keeps a jump available for a
+moment after walking off a ledge, and <code>jump_buffer</code> remembers a jump pressed just before
+landing and fires it on landing. <code>on_ground()</code> says whether it was standing on something at
+its last update: a solid object, or a solid cell of the map, just under its feet.</p>
+
+<h3>Runner</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;runner = spawn({ .size = { 20, 36 } });
+runner.add&lt;rmp::behavior::Runner&gt;({ .speed = 300, .accelerate = 8, .duck_action = "duck" });
+</pre>
+
+<p><a href="ref:rmp::behavior::Runner"><code>Runner</code></a> runs forward on its own, faster and
+faster: <code>speed</code> grows by <code>accelerate</code> every second up to <code>max_speed</code>,
+and it jumps on <code>ui_accept</code> unless you name another action. <code>distance()</code> is how far
+it has run — in an endless runner that is both the score and the clock the difficulty hangs off.
+<code>ducking()</code> says whether <code>duck_action</code> is held, and that is all ducking does here:
+a smaller collider or another animation is the game's to set.
+<a href="/examples/games/05_endless_runner.html">The endless runner</a> is one, with a
+<code>Spawner</code> measuring by its distance.</p>
+
+<h3>Ball</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;ball = spawn({ .position = { 400, 225 }, .shape = rmp::circle(7) });
+ball.add&lt;rmp::behavior::Ball&gt;({ .speed = 340 });
+ball.apply_impulse({ 1, 0.35f });   // the serve, and it is the game's
+</pre>
+
+<p><a href="ref:rmp::behavior::Ball"><code>Ball</code></a> bounces off the edges of its bounds and off
+whatever it collides with, and keeps its pace: every frame its velocity is set back to
+<code>speed</code> in whatever direction it is going. That one rule is what makes the serve a single
+push — only its direction survives — and what makes <code>velocity = {}</code> a stable stop between
+points. Where it hits a paddle tilts the bounce, up to <code>max_bounce_deg</code> at the very end,
+which is half of why Pong feels like Pong. <code>speed_up</code> multiplies the speed on every bounce
+off something solid. It sets the object to bounce at its edges and to be not solid itself, so it
+never pushes a paddle out of the way. <a href="/examples/games/01_pong.html">Pong</a> and
+<a href="/examples/games/02_breakout.html">Breakout</a> are both a <code>Ball</code>.</p>
+
+<h3>Projectile</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static Vector2 muzzle{}, aim{};">
+auto &amp;shot = spawn({ .position = muzzle, .size = { 4, 4 } });
+shot.velocity = aim;
+shot.add&lt;rmp::behavior::Projectile&gt;({ .speed = 600 });
+</pre>
+
+<p><a href="ref:rmp::behavior::Projectile"><code>Projectile</code></a> travels the way it was pushed,
+at <code>speed</code> — or at whatever velocity it was given, when <code>speed</code> is 0 — and is
+destroyed when it leaves its bounds and, with <code>destroy_on_hit</code>, when it touches anything it
+collides with. Which things those are is its layers' business.</p>
+
+<h3>Follow</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static rmp::Handle&lt;rmp::Object&gt; player_handle;">
+auto &amp;bat = spawn({ .size = { 12, 8 } });
+bat.add&lt;rmp::behavior::Follow&gt;({ .target = player_handle, .speed = 90, .stop_distance = 20 });
+</pre>
+
+<p><a href="ref:rmp::behavior::Follow"><code>Follow</code></a> chases a <code>target</code> at
+<code>speed</code>, and stops within <code>stop_distance</code> of it. The target is a handle and not a
+pointer because the thing being chased is exactly the thing most likely to die while being chased:
+when it is gone, the follower keeps its velocity, the way a homing missile whose target explodes keeps
+flying.</p>
+
+<h3>Tween</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;lift = spawn({ .position = { 200, 300 }, .size = { 64, 12 } });
+lift.add&lt;rmp::behavior::Tween&gt;({
+    .property = rmp::behavior::Property::POSITION_X,
+    .from = 200,
+    .to = 500,
+    .seconds = 3,
+    .ping_pong = true,
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Tween"><code>Tween</code></a> moves one property of its object from
+<code>from</code> to <code>to</code> over <code>seconds</code>, along an
+<a href="ref:rmp::behavior::Ease"><code>Ease</code></a>: <code>LINEAR</code>, or <code>IN</code>,
+<code>OUT</code> and <code>IN_OUT</code>, the default, which start slow, end slow, or both. The
+<a href="ref:rmp::behavior::Property"><code>Property</code></a> is the x or y of the position, the x or
+y of the scale, the rotation in degrees, or the alpha of the shape's colour and the sprite's tint, from
+0 to 255. <code>loop</code> starts again from <code>from</code>, <code>ping_pong</code> turns back at each
+end forever, and with neither it stops exactly on <code>to</code> — not a hair short of it, which on a
+platform is a gap — and <code>finished()</code> turns true. <code>restart()</code> runs it again.</p>
+
+<p>A Tween writes its property every frame it runs, and an object carries one behavior of each type,
+so one object animates one property with it.</p>
+
+<h3>GridSnap</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;piece = spawn({ .size = { 24, 24 } });
+piece.add&lt;rmp::behavior::GridSnap&gt;({ .cell = { 24, 24 } });
+</pre>
+
+<p><a href="ref:rmp::behavior::GridSnap"><code>GridSnap</code></a> rounds the object's position to the
+nearest point of a grid of <code>cell</code> spacing, starting at <code>offset</code>, after everything
+else has moved it — so a puzzle piece never rests on half a pixel. A cell of 0 on one axis leaves that
+axis alone.</p>
+
+<h3>Parallax</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;sky = spawn({ .layer = -10 });
+sky.add&lt;rmp::behavior::Parallax&gt;({ .texture = "sky.png", .factor = 0.2f });
+</pre>
+
+<p><a href="ref:rmp::behavior::Parallax"><code>Parallax</code></a> draws a background strip that
+repeats sideways with no seam and scrolls at its own rate as the camera moves. It loads the
+<code>texture</code> by name from <code>resources/</code>. <code>factor</code> 0 is pinned to the
+screen, like a far sky; 1 stands still in the world, like the ground; in between, the smaller the
+farther away it looks. <code>speed</code> adds a drift of its own, for clouds; <code>y</code> is where
+the top of the strip sits; <code>tint</code> colours it. The object it is on needs no shape of its
+own, and its <code>layer</code> puts the strip behind or in front of the rest.</p>
+
+<h3>Spawner</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;source = spawn({ .position = { 900, 380 } });
+source.add&lt;rmp::behavior::Spawner&gt;({
+    .every_seconds = 1.5f,
+    .jitter = 0.4f,
+    .max_alive = 5,
+    .on_spawn = [](rmp::Scene &amp;scene, Vector2 at) {
+        auto &amp;rock = scene.spawn({ .position = at, .size = { 30, 30 }, .velocity = { -200, 0 } });
+        rock.add&lt;rmp::behavior::Lifespan&gt;({ .seconds = 6 });
+    },
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Spawner"><code>Spawner</code></a> calls <code>on_spawn</code> every
+<code>every_seconds</code>, or every <code>every_distance</code> units travelled, handing it the scene
+and the position the distance is measured at. Distance is not the same as time, and the difference is why this is not a
+timer: in an endless runner the speed climbs, so "every two seconds" spaces the obstacles further and
+further apart and the game gets easier the faster it goes. The distance is measured on the object
+<code>track</code> names, or on the spawner itself.</p>
+
+<p><code>jitter</code> moves each interval after the first by a random amount up to that much either
+way, drawn from <a href="ref:rmp::random"><code>rmp::random</code></a>. Intervals are counted from when
+the last one was due, not from the frame it fired on, so they do not drift.
+<code>max_alive</code> caps how many of the objects it made are alive <em>at once</em> — everything
+<code>on_spawn</code> spawns counts — and <code>alive()</code> says how many that is now. It is a cap
+and not a quota: when one dies, another can be made. One spawner keeps track of at most
+<a href="ref:rmp::behavior::MAX_SPAWNED"><code>rmp::behavior::MAX_SPAWNED</code></a> objects, and a
+larger <code>max_alive</code> is reported once and held to that.</p>
+
+<h3>Timer</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;cannon = spawn({ .position = { 100, 100 }, .size = { 20, 20 } });
+cannon.add&lt;rmp::behavior::Timer&gt;({
+    .seconds = 0.8f,
+    .on_timeout = [](rmp::Object &amp;self) { self.rotation += 45; },
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Timer"><code>Timer</code></a> calls <code>on_timeout</code> every
+<code>seconds</code>, with the object it is on; with <code>repeat = false</code> it calls once and is
+spent. A frame longer than the interval calls it once for each interval the frame covered, so a
+countdown keeps time on a slow machine.</p>
+
+<h3>Lifespan</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;spark = spawn({ .size = { 3, 3 } });
+spark.add&lt;rmp::behavior::Lifespan&gt;({ .seconds = 0.5f });
+</pre>
+
+<p><a href="ref:rmp::behavior::Lifespan"><code>Lifespan</code></a> destroys its object after
+<code>seconds</code>: particles, bullets, a message that fades.</p>
+
+<h3>Health</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="namespace layer { constexpr unsigned ENEMY = 1u &lt;&lt; 1; }">
+auto &amp;hero = spawn({ .size = { 26, 26 } });
+hero.add&lt;rmp::behavior::Health&gt;({
+    .hp = 5,
+    .invulnerable_for = 0.8f,
+    .destroy_on_death = false,
+    .on_death = [](rmp::Object &amp;) { TraceLog(LOG_INFO, "game over"); },
+    .hurt_by = layer::ENEMY,
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Health"><code>Health</code></a> is hit points, a window of
+invulnerability after each hit, and death. <code>damage()</code> takes points off and returns whether
+it landed — during the window it does not, which is what stops one spike costing three hearts in three
+frames — and the object blinks <code>blink_hz</code> times a second while the window is open.
+<code>on_damage</code> is told how much landed; <code>on_death</code> is called once when the points run
+out, even if two lethal hits land in the same frame, and then the object is destroyed unless
+<code>destroy_on_death</code> is off. <code>heal()</code> adds points up to <code>max_hp</code>, which is
+the starting <code>hp</code> unless set, and does nothing after death.</p>
+
+<p>Nothing hurts by default: <code>hurt_by</code> names the
+<a href="/manual/core/collision.html#layers-and-masks">collision layers</a> whose touch costs
+<code>damage_on_hit</code> points, so contact damage is one field instead of an <code>if</code> at the
+top of every <code>_collision()</code>. A <code>Health</code> with nothing in <code>hurt_by</code> is a
+counter that only <code>damage()</code> reduces. <a href="/examples/games/04_top_down.html">The top-down
+game</a> gives its player a <code>TopDown</code> and a <code>Health</code> hurt by the enemies.</p>
+
+<h2>Writing your own</h2>
+
+<p>A behavior of your own is the same struct as the ones above. Write its configuration as fields
+with defaults, in the order they will be written in the braces; give it <code>_update</code>, or
+<code>_late_update</code> when it corrects where the object ended up; add only the hooks it needs; and
+keep what it remembers in <code>ours</code>. A callback field is an
+<a href="ref:rmp::Callback"><code>rmp::Callback</code></a>, so a lambda can go straight into the
+braces:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;cmath&gt;
+
+// Bobs in place until something on one of the `by` layers touches it, then
+// tells on_pick who took it and goes away.
+struct Pickup {
+    unsigned by = 1;                                     // the collision layers that collect it
+    rmp::Callback&lt;rmp::Object &amp;, rmp::Object &amp;&gt; on_pick;  // the pickup, and who took it
+
+    void _ready(rmp::Object &amp;self) { ours.rest_y = self.position.y; }
+
+    void _update(rmp::Object &amp;self, float delta) {
+        ours.clock += delta;
+        self.position.y = ours.rest_y + std::sin(ours.clock * 3) * 2;
+    }
+
+    void _collision(rmp::Object &amp;self, rmp::Object &amp;other) {
+        if ((other.collision_layer &amp; by) == 0) return;
+        on_pick(self, other);
+        self.destroy();
+    }
+
+    struct {
+        float clock = 0;
+        float rest_y = 0;
+    } ours;
+};
+
+namespace layer { constexpr unsigned PLAYER = 1u &lt;&lt; 0; }
+
+class Level : public rmp::Scene {
+    int _coins = 0;
+
+    void _ready() override {
+        auto &amp;coin = spawn({ .position = { 300, 200 }, .shape = rmp::circle(6) });
+        coin.add&lt;Pickup&gt;({
+            .by = layer::PLAYER,
+            .on_pick = [this](rmp::Object &amp;, rmp::Object &amp;) { _coins++; },
+        });
+    }
+};
+</pre>
+
+<p>A behavior is the right shape when the same few lines would otherwise be written into several
+kinds of object. When something belongs to one kind of object only, its own <code>_update()</code> is
+simpler.</p>

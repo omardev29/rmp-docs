@@ -1,0 +1,470 @@
+<!--
+title: Objects
+description: rmp::Object is everything that lives in a scene: how one is spawned, the fields that place and draw it, its hooks, how it is destroyed, and how to keep hold of one across frames.
+order: 30
+-->
+<h1>Objects</h1>
+
+<p class="lede">An object is anything that lives in a scene: the player, an enemy, a bullet, a coin,
+a platform. They are all the same kind of thing. There is no tree, no hierarchy and no parent: what
+makes one object a paddle and another a ball is the data you put in it.</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;ball = spawn({ .position = { 400, 225 }, .shape = rmp::circle(6) });
+ball.velocity = { 320, 120 };
+ball.edges = rmp::Edge::BOUNCE;
+</pre>
+
+<p>That is a ball that bounces around the screen. Nothing else is needed: the scene moves it by its
+velocity every frame, bounces it off the edges, draws it, and frees it when the scene ends.</p>
+
+<h2>Spawning</h2>
+
+<p><a href="ref:rmp::Scene::spawn"><code>spawn()</code></a> is a method of the
+<a href="/manual/core/scenes.html">scene</a>, which owns its objects. It makes the object, applies the
+options you pass, puts it in the scene, calls its <code>_ready()</code>, and returns a reference to
+it:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static Vector2 muzzle{}, aim{};">
+auto &amp;bullet = spawn({ .position = muzzle, .size = { 4, 10 } });
+bullet.velocity = aim * 900;
+</pre>
+
+<p>The options are an <a href="ref:rmp::ObjectOptions"><code>rmp::ObjectOptions</code></a>, and each
+of its fields sets the object's field of the same name — except <code>size</code>, which is a shorter
+way to write a rectangular <code>shape</code>. When both are given, <code>shape</code> wins:
+<code>{ .size = { 12, 12 }, .shape = rmp::circle(6) }</code> is a circle.</p>
+
+<table>
+<thead><tr><th>Option</th><th>Default</th><th>Sets</th></tr></thead>
+<tbody>
+<tr><td><code>position</code></td><td><code>{ 0, 0 }</code></td><td>Where its centre is, in world units.</td></tr>
+<tr><td><code>size</code></td><td><code>{ 0, 0 }</code></td><td>A rectangle of this size, when <code>shape</code> is not given.</td></tr>
+<tr><td><code>shape</code></td><td>none</td><td>What it draws and collides as.</td></tr>
+<tr><td><code>velocity</code></td><td><code>{ 0, 0 }</code></td><td>World units per second.</td></tr>
+<tr><td><code>scale</code></td><td><code>{ 1, 1 }</code></td><td>Multiplies the shape, the collider and the sprite.</td></tr>
+<tr><td><code>rotation</code></td><td><code>0</code></td><td>Degrees, as raylib counts them.</td></tr>
+<tr><td><code>layer</code></td><td><code>0</code></td><td>Draw order: higher draws on top.</td></tr>
+<tr><td><code>visible</code></td><td><code>true</code></td><td><code>false</code> is not drawn and cannot be clicked, but is still updated and collided.</td></tr>
+<tr><td><code>edges</code></td><td><code>Edge::NONE</code></td><td>What happens at the edge of <code>bounds</code>.</td></tr>
+<tr><td><code>bounds</code></td><td>empty</td><td>The area <code>edges</code> applies to; empty means the map's, or the camera's view.</td></tr>
+</tbody>
+</table>
+
+<p>They are written as designated initialisers, and C++20 requires those in the order the fields are
+declared, which is the order of this table: GCC refuses any other order and Clang warns. The order
+is the one they are naturally written in — where, how big, what it looks like, how it moves.</p>
+
+<h3>The reference is good for the frame</h3>
+
+<p>The reference <code>spawn()</code> returns stays valid for the whole frame it was returned in,
+whatever else happens in that frame, because objects are only ever freed at the end of a frame.
+Kept across frames, it can dangle. What to keep instead is a <a href="#keeping-an-object-handles">handle</a>.</p>
+
+<h3>Order: options, _ready, then your lines</h3>
+
+<p>The options are applied before <code>_ready()</code> runs, and <code>_ready()</code> runs before
+<code>spawn()</code> returns. So inside <code>_ready()</code> the object already has its position and
+everything else the options set, and anything you write on the returned reference — like the
+bullet's velocity above — comes after <code>_ready()</code>.</p>
+
+<p>An object spawned while the scene's objects are being updated, from another object's
+<code>_update()</code> or a behavior, gets its <code>_ready()</code> at once and its first
+<code>_update()</code> on the next frame. One spawned from the scene's own <code>_update()</code> is
+updated in the same frame, because the scene runs before its objects.</p>
+
+<h3>Spawning from somewhere else</h3>
+
+<p>Inside an object, <a href="ref:rmp::Object::scene"><code>scene()</code></a> is the scene it lives
+in, and spawning into it is <code>scene()-&gt;spawn(...)</code>. A behavior's callback and a map's
+object factory are handed the scene.</p>
+
+<pre data-lang="cpp" data-harness="object">
+if (rmp::Scene *here = scene()) {
+    auto &amp;spark = here-&gt;spawn({ .position = position, .size = { 3, 3 } });
+    spark.velocity = { 0, -60 };
+}
+</pre>
+
+<h2>Your own kind of object</h2>
+
+<p>When an object needs code of its own, derive from <a href="ref:rmp::Object"><code>rmp::Object</code></a>
+and spawn your type with <code>spawn&lt;T&gt;()</code>:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Coin : public rmp::Object {
+public:
+    int value = 1;
+
+    void _ready() override {
+        shape = rmp::circle(8);
+        shape.color = GOLD;
+    }
+
+    void _collision(rmp::Object &amp;other) override {
+        if (other.solid) destroy();
+    }
+};
+
+class Level : public rmp::Scene {
+    void _ready() override {
+        auto &amp;coin = spawn&lt;Coin&gt;({ .position = { 300, 200 } });
+        coin.value = 5;
+    }
+};
+</pre>
+
+<p>The type only needs a default constructor. There is no constructor to forward and no
+<code>using Object::Object;</code> to write, which is the usual toll of this pattern; what your type
+needs goes in its fields, set on the reference <code>spawn()</code> returns, or in its
+<code>_ready()</code>. A type that is not an object, or that cannot be default-constructed, is refused
+with a sentence instead of a page of template errors:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="struct Goblin : rmp::Object { explicit Goblin(int hp) : hp(hp) {} int hp; };" data-expect="error" data-error="give it a default constructor">
+spawn&lt;Goblin&gt;();
+</pre>
+
+<p>An object cannot be copied: a copy would be a second object that believes it is in the scene.</p>
+
+<h2>The fields</h2>
+
+<p>The fields are public, and reading and writing them directly is the point:
+<code>player.flip_x = player.velocity.x &lt; 0;</code> is the API. A getter and a setter in front of
+every field would be ceremony between you and the object you touch most often in a day.</p>
+
+<h3>Where it is</h3>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Object::position"><code>position</code></a></td><td><code>{ 0, 0 }</code></td><td>The centre of the object, in world units.</td></tr>
+<tr><td><a href="ref:rmp::Object::velocity"><code>velocity</code></a></td><td><code>{ 0, 0 }</code></td><td>World units per second. The scene moves the object by it every frame.</td></tr>
+<tr><td><a href="ref:rmp::Object::scale"><code>scale</code></a></td><td><code>{ 1, 1 }</code></td><td>Multiplies the shape, the collider and the sprite.</td></tr>
+<tr><td><a href="ref:rmp::Object::rotation"><code>rotation</code></a></td><td><code>0</code></td><td>Degrees, as raylib counts them. It turns what is drawn; collision ignores it.</td></tr>
+<tr><td><a href="ref:rmp::Object::mass"><code>mass</code></a></td><td><code>1</code></td><td>Read only by <code>apply_force</code> and <code>apply_impulse</code>.</td></tr>
+</tbody>
+</table>
+
+<p><strong><code>position</code> is the centre</strong>, and that is the one place the framework
+deliberately disagrees with raylib, which draws from the top-left corner. Rotating about the centre
+is what nearly every 2D sprite wants, a shape stays symmetric around its position, and
+<code>Vector2Distance(a.position, b.position)</code> means what it looks like. The corner would turn
+every rotation and every distance check into a correction by half the size, by hand.</p>
+
+<h3>What it looks like</h3>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Object::sprite"><code>sprite</code></a></td><td>empty</td><td>A picture. When it has one, the sprite is what is drawn.</td></tr>
+<tr><td><a href="ref:rmp::Object::shape"><code>shape</code></a></td><td>none</td><td>A rectangle or a circle, drawn when there is no sprite.</td></tr>
+<tr><td><a href="ref:rmp::Object::flip_x"><code>flip_x</code></a>, <a href="ref:rmp::Object::flip_y"><code>flip_y</code></a></td><td><code>false</code></td><td>Mirror the sprite left to right, or top to bottom.</td></tr>
+<tr><td><a href="ref:rmp::Object::visible"><code>visible</code></a></td><td><code>true</code></td><td><code>false</code> is not drawn and cannot be clicked, and is still updated and collided.</td></tr>
+<tr><td><a href="ref:rmp::Object::layer"><code>layer</code></a></td><td><code>0</code></td><td>Draw order. A higher layer draws on top, and objects on the same layer draw in the order they were spawned.</td></tr>
+</tbody>
+</table>
+
+<p><code>layer</code> is only about drawing. Which objects collide is <code>collision_layer</code> and
+<code>collision_mask</code>, a different pair of fields explained in
+<a href="/manual/core/collision.html#layers-and-masks">Collision</a>.</p>
+
+<h3>How it behaves in the world</h3>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Object::gravity_scale"><code>gravity_scale</code></a></td><td><code>0</code></td><td>How much of the scene's gravity applies to it. Nothing falls until it asks to.</td></tr>
+<tr><td><a href="ref:rmp::Object::edges"><code>edges</code></a></td><td><code>Edge::NONE</code></td><td>What it does at the edge of its bounds: clamp, bounce, wrap, be destroyed, or leave.</td></tr>
+<tr><td><a href="ref:rmp::Object::bounds"><code>bounds</code></a></td><td>empty</td><td>The area <code>edges</code> applies to; empty is the map's bounds, or the camera's view without a map.</td></tr>
+<tr><td><a href="ref:rmp::Object::collider"><code>collider</code></a></td><td>none</td><td>What it collides as, when that is not its shape or its picture.</td></tr>
+<tr><td><a href="ref:rmp::Object::solid"><code>solid</code></a>, <a href="ref:rmp::Object::immovable"><code>immovable</code></a></td><td><code>false</code></td><td>Whether a contact pushes it apart from what it touches, and whether it is the one that gets pushed.</td></tr>
+<tr><td><a href="ref:rmp::Object::collision_layer"><code>collision_layer</code></a>, <a href="ref:rmp::Object::collision_mask"><code>collision_mask</code></a></td><td><code>1</code></td><td>Which layers it is on, and which it collides with.</td></tr>
+</tbody>
+</table>
+
+<p>Gravity belongs to the scene, <a href="ref:rmp::Scene::gravity"><code>gravity</code></a>,
+<code>{ 0, 980 }</code> by default, because its direction and strength are a property of the world.
+Each object then says how much of it applies to it, and the default of 0 is not negotiable: a
+top-down game cannot have things falling over. A gravity nobody uses until they ask is what lets one
+kind of object serve a platformer and a game seen from above.</p>
+
+<p>The last four rows are the subject of <a href="/manual/core/collision.html">Collision</a>, and
+<code>edges</code> and <code>bounds</code> are explained there too.</p>
+
+<h2>Shapes</h2>
+
+<p>A <a href="ref:rmp::Shape"><code>rmp::Shape</code></a> is a rectangle or a circle around the
+object's centre, and there are two kinds and not five. Rectangle against rectangle, circle against
+circle and circle against rectangle are the three cases collision can resolve honestly; a capsule
+that was drawn as a capsule and collided as a box would be a lie in the API. To draw anything else,
+override <code>_draw()</code> and use raylib.</p>
+
+<pre data-lang="cpp" data-harness="object">
+shape = rmp::rect({ 14, 90 });           // a paddle
+shape.color = RED;
+
+shape = rmp::circle(7);                  // a ball
+shape.filled = false;                    // the outline only
+shape.offset = { 0, -4 };                // moved from the object's centre
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><code>kind</code></td><td><code>ShapeKind::NONE</code></td><td><code>RECTANGLE</code>, <code>CIRCLE</code>, or nothing. <a href="ref:rmp::rect"><code>rmp::rect()</code></a> and <a href="ref:rmp::circle"><code>rmp::circle()</code></a> set it.</td></tr>
+<tr><td><code>size</code></td><td><code>{ 0, 0 }</code></td><td>A rectangle's width and height.</td></tr>
+<tr><td><code>radius</code></td><td><code>0</code></td><td>A circle's radius.</td></tr>
+<tr><td><code>offset</code></td><td><code>{ 0, 0 }</code></td><td>Where it sits relative to the object's centre.</td></tr>
+<tr><td><code>color</code></td><td><code>WHITE</code></td><td>The fill, or the outline when not filled.</td></tr>
+<tr><td><code>filled</code></td><td><code>true</code></td><td><code>false</code> draws the outline only.</td></tr>
+<tr><td><code>thickness</code></td><td><code>1</code></td><td>A rectangle's outline width when not filled; a circle ignores it.</td></tr>
+</tbody>
+</table>
+
+<p>A circle stays a circle when its object is scaled unevenly: the larger of the two scales applies
+to its radius, in the drawing, in the box it occupies and in collision alike, because this layer has
+no ellipses and the three must agree.</p>
+
+<h2>Sprites</h2>
+
+<p>An object with a <a href="ref:rmp::Sprite"><code>sprite</code></a> draws the picture in place of
+its shape. A sprite is either a loose texture or an Aseprite sheet, which brings its frames, its tags
+and the time of each frame:</p>
+
+<pre data-lang="cpp" data-harness="object">
+sprite.texture = rmp::assets::load_texture("ship.png");
+
+sprite.sheet = rmp::assets::load_sheet("player.aseprite");   // a sheet wins over a texture
+sprite.play("walk");                                        // "walk" is a tag in your file
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><code>texture</code></td><td>none</td><td>A picture with no animation.</td></tr>
+<tr><td><code>sheet</code></td><td>none</td><td>An <code>.aseprite</code> file; used instead of <code>texture</code> when both are set.</td></tr>
+<tr><td><code>source</code></td><td>empty</td><td>The part of the texture to draw; empty is all of it, or the sheet's current frame.</td></tr>
+<tr><td><code>origin</code></td><td><code>{ 0.5, 0.5 }</code></td><td>Which point of the picture sits on the position, as a fraction of its size: the centre by default, <code>{ 0.5, 1 }</code> for the feet.</td></tr>
+<tr><td><code>size</code></td><td><code>{ 0, 0 }</code></td><td>The size to draw it at; zero is the picture's own size.</td></tr>
+<tr><td><code>tint</code></td><td><code>WHITE</code></td><td>Multiplies the picture's colours; white leaves them as they are.</td></tr>
+<tr><td><code>speed</code></td><td><code>1</code></td><td>Animation speed: 2 is twice as fast, 0 is frozen, -1 runs backwards.</td></tr>
+</tbody>
+</table>
+
+<p><a href="ref:rmp::Sprite::play"><code>play(tag)</code></a> starts a tag of the sheet, looping
+unless you pass <code>false</code>. Calling it again with the tag already playing does not restart it,
+so playing <code>"walk"</code> every frame while the player walks is correct. A tag that is not in the
+sheet is reported once and changes nothing, rather than showing a blank frame or filling the log
+sixty times a second. <code>stop()</code>, <code>finished()</code> and <code>playing()</code> do what
+they say, and <code>set_frame()</code> with <code>frame_index()</code> is the way to drive the frames
+yourself.</p>
+
+<p>The animation advances while the object is updated, after it moves, and not while it is drawn —
+so an object in a scene that runs under a pause menu without being drawn still keeps time.
+<a href="/manual/modules/sprites.html">Sprites</a> has the whole of it.</p>
+
+<h2>The hooks</h2>
+
+<p>An object of your own type overrides the hooks it needs; each has an empty default. As with
+scenes, a method whose name starts with <code>_</code> is one the framework calls on your type: you
+override it and never call it.</p>
+
+<table>
+<thead><tr><th>Hook</th><th>Runs</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Object::_ready"><code>_ready()</code></a></td><td>Once, when <code>spawn()</code> has put the object in its scene and applied the options. The place to load what it draws and to add its behaviors.</td></tr>
+<tr><td><a href="ref:rmp::Object::_update"><code>_update(float delta)</code></a></td><td>Every frame it is alive, after its behaviors' <code>_update</code> and before it is moved by its velocity.</td></tr>
+<tr><td><a href="ref:rmp::Object::_draw"><code>_draw()</code></a></td><td>Every frame it is visible, after its sprite or shape and its behaviors have drawn, in world units: it is already inside the scene's camera.</td></tr>
+<tr><td><a href="ref:rmp::Object::_collision"><code>_collision(Object &amp;other)</code></a></td><td>Once per frame for each object it touches, on both of them, whether or not either is solid.</td></tr>
+<tr><td><a href="ref:rmp::Object::_end"><code>_end()</code></a></td><td>When it is destroyed: drop the loot, tell somebody.</td></tr>
+</tbody>
+</table>
+
+<h2>The frame of an object</h2>
+
+<p>Every frame, in the scene's update, each living object goes through the same steps, in the order
+they were spawned:</p>
+
+<ol>
+<li>its behaviors' <code>_update</code>, in the order they were added;</li>
+<li>its own <code>_update()</code>, so your code has the last word on what the frame leaves behind;</li>
+<li>it moves: the forces applied to it and its share of gravity change its velocity, and the velocity
+moves it — and a solid object that is not immovable is stopped by the map's solid cells on the way;</li>
+<li>its <code>edges</code> rule is applied;</li>
+<li>its sprite's animation advances;</li>
+<li>its behaviors' <code>_late_update</code>, for those that correct where it ended up.</li>
+</ol>
+
+<p>When every object of the scene has moved, the collision pass resolves and reports the contacts,
+and then the camera follows. In the draw that comes later, objects are drawn in
+<code>layer</code> order: each one's sprite or shape, then its behaviors' <code>_draw</code>, then its
+own <code>_draw()</code>.</p>
+
+<p>Writing <code>position</code> in <code>_update()</code> is a teleport, not a move: the collision
+pass sweeps the path an object travelled by its velocity, and does not treat a jump you made by hand
+as a path across everything in between.</p>
+
+<p>A frame with no time in it moves nothing by velocity. The first frame of a game has a <code>delta</code> of 0,
+and a push applied in <code>_ready()</code> is kept for the first frame that can use it rather than
+spent on that one.</p>
+
+<h2>Destroying an object</h2>
+
+<pre data-lang="cpp" data-harness="object">
+destroy();
+</pre>
+
+<p><a href="ref:rmp::Object::destroy"><code>destroy()</code></a> takes effect at once and frees the
+memory later. From the moment it is called the object is no longer updated, drawn, collided or
+clicked; <a href="ref:rmp::Object::alive"><code>alive()</code></a> is false, every handle to it is
+empty, and its <code>_end()</code> runs, followed by its behaviors'. Its memory is released at the end
+of the frame. Calling it twice is harmless.</p>
+
+<p>The memory waits because most objects are destroyed from inside their own code: a coin in its
+<code>_collision()</code>, a bullet when it leaves the screen, an enemy when its health runs out.
+Freeing the object there would pull the floor out from under the code that is still running in it,
+and under the other object of a collision, which is about to be told about the same contact. So the
+other side of a contact always receives a valid object, whose <code>alive()</code> says whether it is
+still in the game.</p>
+
+<p><a href="ref:rmp::Scene::destroy"><code>scene.destroy(object)</code></a> is the same call, from
+the scene's side. When a scene leaves the stack, its objects are destroyed after the scene's own
+<code>_end()</code>, so a scene that tidies up can still walk what it spawned.
+<a href="ref:rmp::Scene::object_count"><code>object_count()</code></a> counts the live ones, and an
+object destroyed earlier in the frame is already not counted.</p>
+
+<h2>Keeping an object: handles</h2>
+
+<p>Within a frame, a reference. Between frames, a handle. An
+<a href="ref:rmp::Handle"><code>rmp::Handle</code></a> remembers an object and knows when it is gone:</p>
+
+<pre data-lang="cpp" data-harness="members">
+rmp::Handle&lt;rmp::Object&gt; _player;
+
+void _ready() override {
+    auto &amp;player = spawn({ .position = { 100, 300 }, .size = { 20, 40 } });
+    _player = player.handle();
+}
+
+void _update(float) override {
+    if (_player) _player-&gt;velocity.x = 200;   // only while the player exists
+}
+</pre>
+
+<p><a href="ref:rmp::Object::handle"><code>handle()</code></a> makes one. It converts to
+<code>true</code> while the object is alive, <code>-&gt;</code> and <code>*</code> reach it, and
+<a href="ref:rmp::Handle::get"><code>get()</code></a> returns a pointer to it, or null. It becomes
+empty the moment <code>destroy()</code> is called, not when the memory goes. A default-constructed
+handle is empty, and two handles compare equal when they point at the same object.</p>
+
+<p>A handle is a slot number and a generation, so checking one costs an integer comparison — and it
+cannot come back to life. When the slot is reused for a new object the generation no longer matches,
+and the old handle stays empty instead of pointing at a stranger, which is the classic bug with
+stored indices.</p>
+
+<p><code>handle&lt;Goblin&gt;()</code> makes a typed one, whose <code>-&gt;</code> reaches the
+goblin's own fields without a cast. The framework is built without run-time type information, so
+that conversion is not checked: take a typed handle only from an object that is that type.</p>
+
+<h2>Callbacks</h2>
+
+<p>When a subclass is more than you want, an object takes functions instead:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static int score = 0;">
+auto &amp;coin = spawn({ .position = { 300, 200 }, .shape = rmp::circle(8) });
+coin.on_collision([](rmp::Object &amp;self, rmp::Object &amp;other) {
+    if (other.solid) {
+        score += 10;
+        self.destroy();
+    }
+});
+coin.on_click([](rmp::Object &amp;self) { self.scale = { 1.5f, 1.5f }; });
+</pre>
+
+<table>
+<thead><tr><th>Callback</th><th>Is called</th><th>With</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Object::on_collision"><code>on_collision</code></a></td><td>Every frame it touches another object, after the hooks.</td><td>Itself and the other object.</td></tr>
+<tr><td><a href="ref:rmp::Object::on_click"><code>on_click</code></a></td><td>When the pointer is pressed on it and released on it.</td><td>Itself.</td></tr>
+<tr><td><a href="ref:rmp::Object::on_drag"><code>on_drag</code></a></td><td>Every frame the pointer moves while held, after being pressed on it.</td><td>Itself and how far the pointer moved since the last frame, in screen pixels.</td></tr>
+</tbody>
+</table>
+
+<p>This is the other half of the underscore rule: <code>_name</code> is yours and the framework calls
+it, <code>on_name</code> is the framework's and you hand it a function. The two never collide, so an
+object can override <code>_collision()</code> and carry an <code>on_collision</code> as well, and both
+run. Setting a callback again replaces it; there is no list of them.</p>
+
+<h3>The pointer</h3>
+
+<p>A click is a press and a release on the same object, which is what a click means on every
+platform, and lets a player change their mind by dragging off before letting go. The mouse and a
+finger are the same pointer. Only visible objects that have an <code>on_click</code> or an
+<code>on_drag</code> are tested, against what they collide as, in world units through the scene's
+camera — so a click lands on what is under it even while the camera shakes. When objects overlap, the
+one drawn on top is the one pressed.</p>
+
+<p>The <a href="ref:rmp::ui"><code>rmp::ui</code></a> gets first refusal: a press on a button drawn
+over the world goes to the button, never to the object under it.</p>
+
+<p><code>on_drag</code> hands over the movement in screen pixels. Under a camera that is not zoomed
+that is world units too; with a zoom, divide by it:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;card = spawn({ .position = { 200, 200 }, .size = { 60, 90 } });
+card.on_drag([](rmp::Object &amp;self, Vector2 moved) {
+    const float zoom = self.scene()-&gt;camera.zoom;
+    self.position.x += moved.x / zoom;
+    self.position.y += moved.y / zoom;
+});
+</pre>
+
+<h3>rmp::Callback</h3>
+
+<p>What a callback is stored in is an <a href="ref:rmp::Callback"><code>rmp::Callback</code></a>, and
+it is not <code>std::function</code> on purpose. It moves and never copies, so it accepts a lambda
+that captures something only movable — a <code>std::unique_ptr</code>, for instance — which
+<code>std::function</code> refuses. A function with the wrong arguments is a compile error that says
+which signature was expected:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-expect="error" data-error="the callback does not take the arguments this one is called with">
+auto &amp;button = spawn({ .size = { 80, 30 } });
+button.on_click([](int times) { (void)times; });
+</pre>
+
+<p>The behaviors' <code>on_</code> fields — a timer's <code>on_timeout</code>, a spawner's
+<code>on_spawn</code> — are the same type, which is why a lambda can be written straight into the
+braces that configure one.</p>
+
+<h2>Forces and impulses</h2>
+
+<p>Most movement is written straight into <code>velocity</code>, which is what the behaviors do. When
+a push is the right way to think about it, there are two kinds, and the difference between them is
+the whole physics API: <strong>call it every frame and it is a force; call it once and it is an
+impulse.</strong></p>
+
+<pre data-lang="cpp" data-harness="object">
+if (rmp::input::pressed("thrust")) apply_force({ 0, -600 });   // every frame it is held
+
+apply_impulse({ 0, -450 });                                    // once: the jump starts
+</pre>
+
+<table>
+<thead><tr><th>Call</th><th>Does</th><th>For</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Object::apply_force"><code>apply_force(f)</code></a></td><td>Adds up with the other forces of the frame and is spent when the object moves: <code>velocity += f / mass × delta</code>.</td><td>Thrust, wind, a magnet — anything sustained.</td></tr>
+<tr><td><a href="ref:rmp::Object::apply_impulse"><code>apply_impulse(i)</code></a></td><td>Changes the velocity at once: <code>velocity += i / mass</code>.</td><td>A jump, a hit, an explosion, a serve.</td></tr>
+</tbody>
+</table>
+
+<p><a href="/examples/games/01_pong.html">Pong</a> serves its ball with an impulse, because only the
+direction of the push matters to a ball that keeps its own speed.</p>
+
+<p>Both exist because using the wrong one gives exactly the bug you would expect. A force applied
+once barely moves anything, since it is multiplied by one frame's <code>delta</code>; an impulse
+applied every frame goes twice as fast at 120 frames a second as at 60. A <code>mass</code> of 0 or
+less counts as 1.</p>
+
+<p>Gravity goes through the same path as a force — <code>scene.gravity × gravity_scale</code> is added
+to the object's acceleration, without dividing by mass, the way gravity works — so an object with
+<code>gravity_scale = 1</code> that you push upwards does what it would do in the world.</p>

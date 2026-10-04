@@ -1,0 +1,364 @@
+<!--
+title: Collision
+description: What an object collides as, how solid objects are pushed apart, who collides with whom through layers and masks, the edges of the world, the map's solid cells, and raycasts.
+order: 40
+-->
+<h1>Collision</h1>
+
+<p class="lede">Every frame, after a scene's objects have moved, the scene finds the ones that touch,
+pushes apart the ones that are solid, and tells both sides of every contact. There is no physics
+world to set up: an object collides as soon as it has a shape, and everything else is a field.</p>
+
+<p>It is arcade collision on purpose. Rectangles and circles, solid or not, layers and masks, a test
+that catches fast objects, and raycasts — and deliberately not rotation, polygons, friction, bounce
+coefficients or joints, which are the beginning of a physics engine. A physics engine such as Box2D
+is a model of the world: adopting it would make an object's <code>position</code> a mirror of a body
+somewhere else, and would make the simple case harder — a Pong ball would go from one line to a body,
+a shape, a density, a restitution, a friction and a gravity switched off. A game that genuinely needs
+rigid bodies can still link one, step it in <code>_update()</code> and write <code>position</code>
+from it; the fields are public, and nothing stands in the way.</p>
+
+<h2>What an object collides as</h2>
+
+<p>An object collides as the first of these it has:</p>
+
+<ol>
+<li>its <a href="ref:rmp::Object::collider"><code>collider</code></a>, when one is set;</li>
+<li>its <a href="ref:rmp::Object::shape"><code>shape</code></a>;</li>
+<li>the box of its sprite's current picture.</li>
+</ol>
+
+<p>An object with none of the three is a point, and a point collides with nothing — otherwise every
+invisible logic object would be a trigger. The collider is there for the most common step up of all:
+a character's picture includes hair, a cape and air, and nobody wants to collide with the air.</p>
+
+<pre data-lang="cpp" data-harness="object">
+sprite.sheet = rmp::assets::load_sheet("player.aseprite");   // drawn as the picture
+collider = rmp::rect({ 20, 44 });                           // collided as a box
+collider.offset = { 0, 4 };                                 // a little lower than the centre
+</pre>
+
+<p>A collider is a <a href="ref:rmp::Shape"><code>rmp::Shape</code></a>, a rectangle or a circle,
+placed around the object's centre and scaled with it. Rotation does not turn it: collision is
+axis-aligned, and a rotated rectangle collides as the same rectangle unrotated. A circle collides as
+a circle, against circles and against rectangles, which is what sends a ball off the corner of a
+paddle at the right angle.</p>
+
+<p><a href="ref:rmp::Object::world_collider"><code>world_collider()</code></a> is the box the collider
+occupies right now, in world units — for drawing it while you debug, or for a query of your own.
+<a href="ref:rmp::Object::world_bounds"><code>world_bounds()</code></a> is the box of what is drawn,
+the sprite or the shape. Inside an object's <code>_draw()</code>, which is already in world units:</p>
+
+<pre data-lang="cpp" data-harness="object">
+DrawRectangleLinesEx(world_collider(), 1, LIME);
+</pre>
+
+<h2>Being told</h2>
+
+<p>When two objects touch, both are told, through the hook and the callback:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Spikes : public rmp::Object {
+    void _collision(rmp::Object &amp;other) override {
+        other.velocity.y = -500;   // whatever touched them jumps
+    }
+};
+</pre>
+
+<p>A touching pair is reported once per frame, on both objects, for as long as they touch. For each
+pair, in this order: the first object's <a href="ref:rmp::Object::_collision"><code>_collision()</code></a>
+and its behaviors', then the second's, then the first's
+<a href="ref:rmp::Object::on_collision"><code>on_collision</code></a> callback, then the second's. It
+happens whether or not either one is solid: <code>solid</code> decides whether they are pushed apart,
+not whether you hear about it.</p>
+
+<p>The reports come after the pushing, so the positions your code reads are the resolved ones and
+not an overlap that is about to be undone.</p>
+
+<p>Because a contact is reported every frame and not only when it starts, something that should
+happen once — a coin collected, a hit taken — destroys the object, or remembers that it happened. The
+<a href="ref:rmp::behavior::Health"><code>Health</code></a> behavior's invulnerable window is that
+memory for damage.</p>
+
+<p>Each side is told as long as it was alive when its pair came up, even if the other side has
+already been destroyed — so a bullet that destroys itself on contact does not stop the enemy hearing
+that it was hit. The other object is always valid to read in a report; its
+<code>alive()</code> says whether it is still in the game. An object destroyed by an earlier pair of
+the same frame is told nothing more.</p>
+
+<h2>Solid and immovable</h2>
+
+<p>Three fields, three different questions, and keeping them apart is what makes the common case
+free:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Asks</th><th>Default</th></tr></thead>
+<tbody>
+<tr><td><code>collider</code></td><td>What shape?</td><td>The shape, or the picture.</td></tr>
+<tr><td><a href="ref:rmp::Object::solid"><code>solid</code></a></td><td>Pushed apart, or only told?</td><td><code>false</code>: only told.</td></tr>
+<tr><td><a href="ref:rmp::Object::immovable"><code>immovable</code></a></td><td>Who gets pushed?</td><td><code>false</code>: this one can be.</td></tr>
+</tbody>
+</table>
+
+<p>Most objects in a 2D game are not walls — bullets, coins, particles, pickups, triggers — so
+<code>solid</code> is off by default, and the two that are solid — the ground, and whatever stands on
+it — are the two you configure:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;ground = spawn({ .position = { 400, 430 }, .size = { 800, 40 } });
+ground.solid = true;
+ground.immovable = true;
+
+auto &amp;player = spawn({ .position = { 400, 100 }, .size = { 24, 40 } });
+player.solid = true;
+player.gravity_scale = 1;
+</pre>
+
+<p>When two solid objects overlap, they are pushed apart by the shortest move that separates them.
+Between two rectangles that is along the axis they overlap least on, which is what makes a character
+land on top of a platform instead of being shoved off its side. If neither is immovable each moves
+half the way; if one is, the other moves all of it; two immovable objects overlapping are a mistake in
+the level, and neither is moved.</p>
+
+<p>Pushing apart moves positions and leaves velocities alone. An object resting on a solid object
+under gravity keeps gaining downward speed, and is pushed back out each frame, until something sets
+its <code>velocity.y</code> to zero — which is what the
+<a href="ref:rmp::behavior::Platformer"><code>Platformer</code></a> behavior does when it stands on
+ground, and what a game does in <code>_collision()</code> for anything else that lands. The map's
+solid cells are different, and do stop the velocity.</p>
+
+<h2>Layers and masks</h2>
+
+<p>By default everything collides with everything, so the simple case never mentions a layer. Then,
+in about the fourth game anybody writes, come the three things that cannot be said without them: the
+player's bullet must not hit the player, the enemies pass through each other but not through the
+walls, and a trigger sees the player and nothing else. The alternative is an <code>if</code> at the
+top of every <code>_collision()</code>.</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Object::collision_layer"><code>collision_layer</code></a></td><td><code>1</code></td><td>The layers this object is on, one bit each.</td></tr>
+<tr><td><a href="ref:rmp::Object::collision_mask"><code>collision_mask</code></a></td><td><code>1</code></td><td>The layers it collides with.</td></tr>
+</tbody>
+</table>
+
+<p>Two objects interact when <strong>either</strong> one's mask includes the other's layer. Name the
+bits once, in a header of their own:</p>
+
+<pre data-lang="cpp" data-include="examples/games/04_top_down/include/layers.h"></pre>
+
+<p>That file is from <a href="/examples/games/04_top_down.html">the top-down game</a>, where each of
+the three cases above is a pair of fields. Then say what each kind of object is and what it
+meets:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="namespace layer { constexpr unsigned PLAYER = 1u &lt;&lt; 0, ENEMY = 1u &lt;&lt; 1, BULLET = 1u &lt;&lt; 2, WORLD = 1u &lt;&lt; 3; }">
+auto &amp;bullet = spawn({ .size = { 4, 4 } });
+bullet.collision_layer = layer::BULLET;
+bullet.collision_mask = layer::ENEMY | layer::WORLD;   // not the player who fired it
+
+auto &amp;enemy = spawn({ .size = { 24, 24 } });
+enemy.collision_layer = layer::ENEMY;
+enemy.collision_mask = layer::WORLD;                   // not the other enemies
+
+auto &amp;floor = spawn({ .size = { 720, 370 }, .layer = -10 });
+floor.collision_layer = 0;                             // scenery: in nothing's way
+floor.collision_mask = 0;
+</pre>
+
+<p>The bullet still hits the enemy although the enemy's mask leaves bullets out, because the
+bullet's mask includes enemies: one side is enough, and then both are told. An object on no layer
+with an empty mask is out of collision entirely.</p>
+
+<p>These collision layers have nothing to do with the plain <code>layer</code> field, which is draw
+order.
+<a href="ref:rmp::behavior::Health::hurt_by"><code>Health::hurt_by</code></a> speaks the same bits,
+naming the layers whose touch costs a hit point.</p>
+
+<h2>The edges of the world</h2>
+
+<p>What an object does when it reaches the edge of its world is one field,
+<a href="ref:rmp::Object::edges"><code>edges</code></a>, because it is five answers to one question:</p>
+
+<table>
+<thead><tr><th><a href="ref:rmp::Edge"><code>rmp::Edge</code></a></th><th>At the edge</th><th>For</th></tr></thead>
+<tbody>
+<tr><td><code>NONE</code></td><td>Nothing: objects may leave, and do. The default.</td><td>Almost everything.</td></tr>
+<tr><td><code>CLAMP</code></td><td>Stops at it.</td><td>A paddle, a player, a cursor.</td></tr>
+<tr><td><code>BOUNCE</code></td><td>Is put back inside and its velocity turned around.</td><td>A Pong or Breakout ball.</td></tr>
+<tr><td><code>WRAP</code></td><td>Comes back on the other side.</td><td>Asteroids.</td></tr>
+<tr><td><code>DESTROY</code></td><td>Is destroyed once it has left.</td><td>Bullets and particles.</td></tr>
+</tbody>
+</table>
+
+<p>The edge is that of the object's <a href="ref:rmp::Object::bounds"><code>bounds</code></a>. Left
+empty, it is the scene's map when the scene has one, and otherwise the camera's view — the view and
+not the window, because once the camera has moved away from the start, the window's rectangle is
+somewhere nothing on screen is. That is the difference between a paddle in a one-screen game, which
+wants the screen, and a player in a level, which wants the level, and neither has to say so. Any
+rectangle can be given instead; <a href="/examples/games/01_pong.html">Pong</a> gives its ball bounds
+wider than the court, so that the ball
+bounces off the top and bottom and leaves by the sides to score.</p>
+
+<p>The rules work on the box of what is drawn, <code>world_bounds()</code>, and they run each frame
+after the object has moved:</p>
+
+<ul>
+<li><code>CLAMP</code> and <code>BOUNCE</code> act as soon as the box crosses an edge.
+<code>BOUNCE</code> turns the velocity around only when it points out of the world, so an object that
+starts overlapping an edge leaves instead of shaking against it.</li>
+<li><code>WRAP</code> waits until the box is entirely outside, so an asteroid slides off instead of
+popping, and it comes back just outside the far edge, so it slides back in the way it went out.</li>
+<li><code>DESTROY</code> waits until the box is entirely outside — so a bullet fired from a muzzle on
+the edge of the screen is not destroyed at birth — and only destroys an object that has been inside
+at some point, so obstacles spawned ahead of the camera, outside the view, are not destroyed on their
+first frame.</li>
+</ul>
+
+<h2>The map's solid cells</h2>
+
+<p>A scene with a <a href="ref:rmp::Tilemap"><code>map</code></a> collides against it;
+<a href="/manual/modules/tilemaps.html">Tilemaps</a> is about loading and drawing one. Which cells are
+solid is decided in the level editor: in LDtk, the cells of an IntGrid painted with the value whose
+identifier is <code>solid</code>, or tiles tagged <code>solid</code> through the tileset's enum; in
+Tiled, every tile of a layer whose class is <code>solid</code>, or a tile its tileset marks
+solid.</p>
+
+<p>An object that is <code>solid</code> and not <code>immovable</code> is stopped by those cells as it
+moves — not pushed out of them afterwards. The difference is the classic one: pushing a box out of
+each overlapping tile the shortest way makes a player running along a floor catch on the seam
+between two tiles, where the shortest way out of the next one is sideways. So the move is made one
+axis at a time, across and then down, and running only ever meets walls and falling only ever meets
+floors.</p>
+
+<ul>
+<li>A fast object moves in steps no longer than half the smallest cell, or half its own size, so a
+fall faster than a tile per frame still lands on the floor.</li>
+<li>The step that would end inside a solid cell is narrowed down to the point of contact, and the
+velocity along that axis becomes zero: the landing, or the head on the ceiling.</li>
+<li>An object that starts inside a solid cell — placed in a wall, or pushed into one — is moved out the
+shortest way, up winning a tie, which is the right answer for something pushed into the floor. One
+buried too deep to get out within a cell plus its own size stays where it is and stops, visibly stuck
+rather than falling out of the world.</li>
+<li>Pushing two solid objects apart never moves one into a solid cell: a push that would is undone, so
+a moving platform cannot shove the player through a wall.</li>
+</ul>
+
+<p>Objects that are not solid, and immovable ones, pass through the map; they are moved by your code,
+not by the world. The cells are not objects, so they never appear in <code>_collision()</code>: ask
+the map instead, with <a href="ref:rmp::Tilemap::solid_at"><code>map.solid_at(point)</code></a> or
+<a href="ref:rmp::Tilemap::solid_in"><code>map.solid_in(rectangle)</code></a>. A rectangle only touching
+a solid cell is not in it: a box standing on the floor is not in the floor.</p>
+
+<h2>Fast objects</h2>
+
+<p>A bullet moving 900 units a second moves 15 units in a frame at 60 frames a second. Against a wall
+10 units thick there is no frame on which the two overlap, and a test of where things are would let
+it through. So an object that moved more than half its own smaller side in one step is tested against
+the path it travelled, not only where it ended.</p>
+
+<p>When both objects of such a contact are solid, the fast one is put back at the point of contact
+before they are pushed apart. When either is not, nothing is moved, and both are still told: a
+trigger learns that something went through it, and it goes through.</p>
+
+<p>Only travel counts as a path. A <code>position</code> written by your code is a teleport, and is
+not swept across everything between where the object was and where you put it. Two objects that
+already overlapped when the step began are left to the ordinary test, which separates them on the
+frame they really overlap. The other half of the answer to tunnelling is
+<a href="/manual/core/app.html#delta"><code>[app] max_delta</code></a>, which stops a stalled frame
+from turning into one enormous step.</p>
+
+<h2>Raycasts</h2>
+
+<p>A ray asks what is along a line: what a shot hits, whether there is ground under the feet,
+whether an enemy can see the player.</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static Vector2 muzzle{}, aim{};">
+if (rmp::RayHit hit = raycast(muzzle, muzzle + aim * 400)) {
+    auto &amp;spark = spawn({ .position = hit.point, .size = { 3, 3 } });
+    spark.velocity = hit.normal * 120;
+}
+</pre>
+
+<p><a href="ref:rmp::Scene::raycast"><code>raycast()</code></a> tests the segment from one point to the
+other against the scene's objects and returns the nearest hit, an
+<a href="ref:rmp::RayHit"><code>rmp::RayHit</code></a>, which is <code>true</code> when something was
+hit:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><code>object</code></td><td>What was hit, as a handle, so it is safe to keep.</td></tr>
+<tr><td><code>point</code></td><td>Where, in world units.</td></tr>
+<tr><td><code>normal</code></td><td>The surface's direction there, pointing back at the ray: what orients a spark, a bullet hole or a bounce.</td></tr>
+<tr><td><code>distance</code></td><td>From the start of the ray.</td></tr>
+</tbody>
+</table>
+
+<p>A ray that starts inside a rectangle hits it at distance 0, with the normal pointing back along
+the ray; one that starts inside a circle hits it where it leaves. Two hits at the same distance come
+back in the order the objects were spawned, so the answer does not change from one run to the
+next.</p>
+
+<h3>The query</h3>
+
+<p>The longer form takes an <a href="ref:rmp::RayQuery"><code>rmp::RayQuery</code></a>, and the field
+that matters most is <code>ignore</code>, because without it the first thing every shot hits is the
+thing that fired it:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static Vector2 muzzle{}, target{};
+static rmp::Object *shooter = nullptr;
+namespace layer { constexpr unsigned ENEMY = 1u &lt;&lt; 1; }">
+rmp::RayHit hit = raycast({ .from = muzzle, .to = target,
+                            .mask = layer::ENEMY, .ignore = shooter });
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><code>from</code>, <code>to</code></td><td><code>{ 0, 0 }</code></td><td>The segment, in world units; nothing beyond <code>to</code> is hit.</td></tr>
+<tr><td><code>mask</code></td><td>every layer</td><td>Only objects on one of these layers are hit.</td></tr>
+<tr><td><code>ignore</code></td><td>none</td><td>One object to pass through: normally whoever is shooting.</td></tr>
+<tr><td><code>solid_only</code></td><td><code>false</code></td><td>Only solid objects are hit.</td></tr>
+</tbody>
+</table>
+
+<p><code>solid_only</code> exists for the ground check. A character asking what is under its feet
+wants the floor and not the coin lying on it, and a mask cannot say that: layers are about who
+collides with whom, and solid is about whether the contact holds. Filtering the nearest hit afterwards
+would not do either, because the coin would hide the floor behind it; with <code>solid_only</code> the
+coin is skipped and the floor is found.</p>
+
+<p>The ray's <code>mask</code> is tested against the objects' layers only — a ray has no layer of its
+own for an object's mask to match.</p>
+
+<p><a href="ref:rmp::Scene::raycast_all"><code>raycast_all()</code></a> returns every hit along the
+ray, nearest first, up to as many as you make room for — for a shot that pierces, or a line of sight
+that has to know everything in the way:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static Vector2 muzzle{}, target{};">
+rmp::RayHit hits[8];
+const int count = raycast_all({ .from = muzzle, .to = target }, hits, 8);
+for (int i = 0; i &lt; count; i++) {
+    if (rmp::Object *object = hits[i].object.get()) object-&gt;destroy();
+}
+</pre>
+
+<p>Rays hit objects and not the map's cells; for those, ask the map with
+<code>solid_at()</code>. From inside an object, the scene is <code>scene()</code>:
+<code>scene()-&gt;raycast(from, to)</code>.</p>
+
+<h3>What a ray sees</h3>
+
+<p>Rays are nearly free, because they reuse the grid the collision pass already builds: only the
+objects in the cells the line crosses are tested, so a ray across a thousand objects touches a
+handful. The price of sharing is when that grid is rebuilt — whenever the framework moves the world:
+a spawn, a destroy, the start of each scene's update and of its collision pass. A ray cast right
+after your code wrote another object's <code>position</code> by hand sees that object where it was at
+the start of the pass, the way a physics engine with a stepped world does. The ray's own start is
+whatever you pass, so a character asking about the ground under itself is never the stale half.</p>
+
+<h2>One scene at a time</h2>
+
+<p>Objects collide with the other objects of their own scene, and with its map. A pause menu pushed
+on top has objects of its own, which never meet the frozen world underneath.</p>

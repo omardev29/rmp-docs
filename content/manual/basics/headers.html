@@ -1,0 +1,187 @@
+<!--
+title: Headers
+description: One header per module and no umbrella: what each of the framework's headers gives a game, and the RMP_ values every one of them carries from the config.
+order: 40
+-->
+<h1>Headers</h1>
+
+<p class="lede">The framework is {{count:headers}} headers under <code>include/rmp/</code>, one per
+module, and there is no header that includes them all. A file includes the modules it uses, and
+what it does not include it does not pay for.</p>
+
+<h2>Include what you use</h2>
+
+<p>A file that draws the HUD includes <code>rmp/ui.h</code> and nothing else of the framework's:</p>
+
+<pre data-lang="cpp" data-harness="file">
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;string&gt;
+
+void draw_hud(int score) {
+    rmp::ui::begin({ .placement = rmp::ui::Align::TOP_CENTER });
+    rmp::ui::text("Score " + std::to_string(score));
+    rmp::ui::end();
+}
+</pre>
+
+<p>That file gets the interface layer and only it: no entry point, no asset layer, no scene, and
+none of the C library's maths behind them. When the HUD changes it recompiles, and when the asset
+pipeline changes it does not. <code>examples/platform/03_minimal_includes</code> is this file as a
+check the framework's CI compiles on its own, so the claim cannot quietly stop being true.</p>
+
+<p>The split is also what makes the framework something you take a piece at a time. A game can use
+<a href="ref:rmp::ui"><code>rmp::ui</code></a> and draw everything else with raylib, or use scenes
+and objects and never touch the UI. Each header is a module you can name and decide about — which
+is the rule for adding one: a new header has to be a part of the framework with a name, because
+every header is one more thing a reader has to know exists.</p>
+
+<p>A missing include is a compile error that says exactly what is missing. Using
+<code>rmp::input::just_pressed</code> in a file that never included <code>rmp/input.h</code> is an error
+that <code>rmp::input</code> was never declared — the compiler telling you which header to add.</p>
+
+<h2>The headers</h2>
+
+<table>
+<thead><tr><th>Header</th><th>What it gives</th><th>Manual</th></tr></thead>
+<tbody>
+<tr><td><code>rmp/app.h</code></td><td>The entry point — <a href="ref:RMP_GAME"><code>RMP_GAME</code></a> and <a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a> — closing the app with <a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a>, and <a href="ref:rmp::global"><code>rmp::global&lt;T&gt;()</code></a>. Reference: <a href="ref:rmp::app"><code>rmp::app</code></a>.</td><td><a href="/manual/core/app.html">The app</a></td></tr>
+<tr><td><code>rmp/scene.h</code></td><td><a href="ref:rmp::Scene"><code>rmp::Scene</code></a>, the stack of scenes, spawning and raycasting, and <a href="ref:rmp::Camera"><code>rmp::Camera</code></a>.</td><td><a href="/manual/core/scenes.html">Scenes</a>, <a href="/manual/core/camera.html">Camera</a></td></tr>
+<tr><td><code>rmp/object.h</code></td><td><a href="ref:rmp::Object"><code>rmp::Object</code></a>, <a href="ref:rmp::Handle"><code>rmp::Handle</code></a>, <a href="ref:rmp::Callback"><code>rmp::Callback</code></a>, <a href="ref:rmp::Sprite"><code>rmp::Sprite</code></a>, the shapes, the edges and the ray queries.</td><td><a href="/manual/core/objects.html">Objects</a>, <a href="/manual/core/collision.html">Collision</a></td></tr>
+<tr><td><code>rmp/behavior.h</code></td><td>The catalogue of <a href="ref:rmp::behavior"><code>rmp::behavior</code></a>: movement, tweens, timers, spawners, health.</td><td><a href="/manual/core/behaviors.html">Behaviors</a></td></tr>
+<tr><td><code>rmp/input.h</code></td><td><a href="ref:rmp::input"><code>rmp::input</code></a>: named actions with any number of bindings, axes and directions, and the pointer.</td><td><a href="/manual/modules/input.html">Input</a></td></tr>
+<tr><td><code>rmp/ui.h</code></td><td><a href="ref:rmp::ui"><code>rmp::ui</code></a>: menus, buttons, text, layout, the controls of a settings screen, and themes.</td><td><a href="/manual/modules/ui.html">Interface</a></td></tr>
+<tr><td><code>rmp/assets.h</code></td><td><a href="ref:rmp::assets"><code>rmp::assets</code></a>: loading from <code>resources/</code> by name, and the counted handles that release what they own — <a href="ref:rmp::detail::Resource"><code>rmp::Texture</code>, <code>rmp::Font</code>, <code>rmp::Sound</code></a> and the rest — with <a href="ref:rmp::SheetData"><code>rmp::SheetData</code></a> behind an Aseprite sheet.</td><td><a href="/manual/modules/assets.html">Assets</a>, <a href="/manual/modules/sprites.html">Sprites</a></td></tr>
+<tr><td><code>rmp/tilemap.h</code></td><td><a href="ref:rmp::Tilemap"><code>rmp::Tilemap</code></a> and <a href="ref:rmp::MapObject"><code>rmp::MapObject</code></a>: levels from LDtk, and from Tiled.</td><td><a href="/manual/modules/tilemaps.html">Tilemaps</a></td></tr>
+<tr><td><code>rmp/audio.h</code></td><td><a href="ref:rmp::audio"><code>rmp::audio</code></a>: sound effects and music by name, and three volume buses.</td><td><a href="/manual/modules/audio.html">Audio</a></td></tr>
+<tr><td><code>rmp/save.h</code></td><td><a href="ref:rmp::save"><code>rmp::save</code></a> and <a href="ref:rmp::Value"><code>rmp::Value</code></a>: saving the game, in the right folder on every platform.</td><td><a href="/manual/modules/saving.html">Saving</a></td></tr>
+<tr><td><code>rmp/random.h</code></td><td><a href="ref:rmp::random"><code>rmp::random</code></a>: one seeded generator, so a run can be reproduced.</td><td><a href="/manual/modules/random.html">Random</a></td></tr>
+<tr><td><code>rmp/ads.h</code></td><td><a href="ref:rmp::ads"><code>rmp::ads</code></a>: interstitial and rewarded ads, real on Android and silently nothing elsewhere.</td><td><a href="/manual/modules/ads.html">Ads</a></td></tr>
+<tr><td><code>rmp/math.h</code></td><td>raymath's operators on raylib's own <code>Vector2</code>, <code>Rectangle</code> and the rest, raylib-cpp's methods on top of them, and a couple of <a href="ref:rmp">colours</a>.</td><td><a href="/manual/raylib/raylib.html">raylib in your game</a></td></tr>
+<tr><td><code>rmp/config.h</code></td><td>The <code>RMP_</code> values from <code>raylib_multiplatform.toml</code>. Every header above includes it, so you never write it.</td><td><a href="#rmp-config-h">Below</a></td></tr>
+</tbody>
+</table>
+
+<p>Everything the framework adds is under <code>rmp::</code>, and everything else is raylib's, so in
+a file that mixes the two you can always tell which is which. All of raylib is there:
+<code>DrawTexture</code>, <code>IsKeyPressed</code>, <code>LoadModel</code>. The framework's types
+take and convert to raylib's own, so a <code>Vector2</code> is the same <code>Vector2</code> on both
+sides.</p>
+
+<h3>rmp/math.h</h3>
+
+<p>This header exists for one line:</p>
+
+<pre data-lang="cpp" data-harness="object" data-given="#include &lt;rmp/math.h&gt;
+static float delta = 0;">
+position = position + velocity * delta;
+</pre>
+
+<p>The operators come from raylib's own <code>raymath.h</code>, which defines them for C++, so they
+work on the plain <code>Vector2</code> every raylib function takes; there is no second vector type to
+convert to and from. raylib-cpp's maths classes — <code>raylib::Vector2</code> and its siblings —
+derive from raylib's structs and add methods such as <code>Normalize</code>, for whoever prefers
+them. The rest of raylib-cpp is not vendored: its loaders throw on a failure, and this framework
+does not throw.</p>
+
+<p>It is a header of its own because the C library's <code>&lt;math.h&gt;</code> behind it is the
+expensive part, and a file that only draws menus should not pay for it. <code>rmp/ui.h</code>
+deliberately does not include it.</p>
+
+<h2>Which header brings which</h2>
+
+<p>The framework's headers do not include each other. Where one needs a type from another it
+declares the name and nothing more — <code>rmp/app.h</code> names <code>rmp::Scene</code> without
+including <code>rmp/scene.h</code> — so that a header can grow without dragging the rest of the
+framework into every file that touches it.</p>
+
+<p>The exceptions are where a type is held <em>by value</em>, which a declaration cannot provide, and
+each one says so at the top of the header:</p>
+
+<table>
+<thead><tr><th>This header</th><th>Includes</th><th>Because</th></tr></thead>
+<tbody>
+<tr><td><code>rmp/scene.h</code></td><td><code>rmp/object.h</code>, <code>rmp/tilemap.h</code></td><td>Every scene holds its <code>map</code> and its <code>camera</code>, and the camera holds a handle to the object it follows.</td></tr>
+<tr><td><code>rmp/object.h</code></td><td><code>rmp/assets.h</code></td><td>An object's sprite holds an <code>rmp::Texture</code> or an <code>rmp::SpriteSheet</code>.</td></tr>
+<tr><td><code>rmp/tilemap.h</code></td><td><code>rmp/object.h</code></td><td>A map stores the factories registered with <code>on_object()</code> as <code>rmp::Callback</code>s.</td></tr>
+<tr><td><code>rmp/behavior.h</code></td><td><code>rmp/object.h</code>, <code>rmp/scene.h</code></td><td>The behaviors hold handles and callbacks, and a spawner's callback is handed the scene.</td></tr>
+</tbody>
+</table>
+
+<p>So <code>rmp/scene.h</code> alone is enough to write a scene with objects in it. Including the
+headers you use by name anyway costs nothing and keeps the file honest about what it depends on.</p>
+
+<p>The rule is about the framework's own headers only. The standard library and raylib are used
+wherever the job needs them: <code>rmp/app.h</code> includes <code>&lt;memory&gt;</code>, because
+the first scene is handed over as a <code>std::unique_ptr</code>. What each header costs to include
+is measured, and the framework's checks fail when one grows or shrinks by more than a fifth of what
+it was measured at.</p>
+
+<h2 id="rmp-config-h">rmp/config.h</h2>
+
+<p>The values a game reads from <code>raylib_multiplatform.toml</code> arrive as macros:</p>
+
+<pre data-lang="cpp" data-harness="function">
+InitWindow(RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT, RMP_WINDOW_TITLE);
+</pre>
+
+<p><code>rmp/config.h</code> is the one framework header that every other one includes, and the
+only exception to the rule above. It earns that by costing nothing: it is nothing but
+<code>#define</code>s and includes nothing of its own. In return the values are simply there, in
+every scene and every object, with nothing to remember. The framework's checks compile every public
+header on its own and fail the one that forgets it, so a new header cannot hand you an undefined
+macro.</p>
+
+<p>It includes <code>rmp/generated/config.h</code>, which <code>tools/configure.py</code> rewrites on
+every configure and which is never committed. The file you can see in your editor exists so that the
+word "generated" never appears in anyone's code, and so that an editor that has not configured yet
+still resolves the include.</p>
+
+<p>They are macros, not <code>constexpr</code> constants, so that a game in plain C can use the same
+values: a C file has no namespace to reach into. <a href="/manual/raylib/plain-c.html">Plain C</a> is
+also the one place you include it yourself, because a C file includes none of the framework's C++
+headers.</p>
+
+<table>
+<thead><tr><th>Macro</th><th>From</th></tr></thead>
+<tbody>
+<tr><td><code>RMP_PROJECT_NAME</code></td><td><code>[project] name</code></td></tr>
+<tr><td><code>RMP_WINDOW_TITLE</code>, <code>RMP_WINDOW_WIDTH</code>, <code>RMP_WINDOW_HEIGHT</code></td><td><code>[window] title</code>, <code>width</code>, <code>height</code> — the design resolution</td></tr>
+<tr><td><code>RMP_WINDOW_VSYNC</code>, <code>RMP_WINDOW_FPS</code></td><td><code>[window] vsync</code> and <code>fps</code>, as 0 or 1 and a number</td></tr>
+<tr><td><code>RMP_MAX_DELTA</code></td><td><code>[app] max_delta</code></td></tr>
+<tr><td><code>RMP_UI_THEME</code>, <code>RMP_UI_FONT</code>, <code>RMP_UI_FONT_SIZE</code>, <code>RMP_UI_SCALE</code>, <code>RMP_UI_MAX_ELEMENTS</code></td><td><code>[ui]</code>: what the interface starts with</td></tr>
+<tr><td><code>RMP_INPUT_DEADZONE</code></td><td><code>[input] deadzone</code></td></tr>
+<tr><td><code>RMP_AUDIO_MASTER</code>, <code>RMP_AUDIO_MUSIC</code>, <code>RMP_AUDIO_SFX</code></td><td><code>[audio]</code>: the volumes the buses start at</td></tr>
+<tr><td><code>RMP_SAVE_PORTABLE</code>, <code>RMP_SAVE_ENCRYPT</code>, <code>RMP_SAVE_VERSION</code></td><td><code>[save]</code></td></tr>
+<tr><td><code>RMP_RRES_PASSWORD</code></td><td><code>[resources] rres_password</code></td></tr>
+<tr><td><code>RMP_DEV_STRICT</code></td><td><code>[dev] strict</code></td></tr>
+</tbody>
+</table>
+
+<p>The <a href="/reference/macros.html#from-the-toml">macros reference</a> has the same list with the
+framework's own values.</p>
+
+<p><code>RMP_RRES_PASSWORD</code> is in the header, and not only in the CMake build, because Android
+and iOS take nothing from CMake: a value defined there alone would differ on those two, and they
+could not open the pack they shipped with.</p>
+
+<h3>Set by the build, not the .toml</h3>
+
+<p>Two more values come from the build system rather than from the <code>.toml</code>, and every
+build system defines both — CMake from its preset, Gradle from the build variant, Xcode per
+configuration:</p>
+
+<pre data-lang="cpp" data-harness="function">
+#if RMP_PRODUCTION_BUILD
+    // compiled into a release build only
+#endif
+TraceLog(LOG_INFO, "assets are read from %s", RMP_RESOURCES_PATH);
+</pre>
+
+<p>The first is 1 in a release build and 0 in a debug one. It is defined everywhere on purpose: an
+undefined macro in <code>#if</code> is not an error but 0, which would quietly compile a game's
+debug-only code into its release on whichever platform forgot it. A build that forgets it fails to
+compile instead. The second is
+where the loose files of <code>resources/</code> are read from. On a desktop that is the project's
+folder by its absolute path in a debug build, and <code>./resources/</code> in a release; the web,
+Android and iOS read the copy packaged with the game.</p>

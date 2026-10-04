@@ -1,0 +1,214 @@
+<!--
+title: Camera
+description: rmp::Camera decides which part of a scene's world is on screen: following an object, smoothing that is the same at any frame rate, limits, zoom, shake, and converting between world and screen.
+order: 60
+-->
+<h1>Camera</h1>
+
+<p class="lede">Every scene has a <a href="ref:rmp::Scene::camera"><code>camera</code></a>, an
+<a href="ref:rmp::Camera"><code>rmp::Camera</code></a>, which decides what part of the scene's world
+is on screen. A scene that never touches it draws exactly as if it were not there, so a one-screen
+game never notices it; a level bigger than the screen is three lines.</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;player = spawn({ .position = { 400, 300 }, .size = { 16, 24 } });
+camera.follow = player.handle();
+camera.smoothing = 10;
+camera.limits = map.bounds();      // never show the void outside the level
+</pre>
+
+<h2>Where it starts</h2>
+
+<p>The camera starts centred on the design resolution — half of <code>[window] width</code> and
+<code>height</code> — with no zoom and no rotation. At the design size that is the identity: a world
+unit is a pixel, and an object at <code>{ 100, 50 }</code> is drawn 100 pixels from the left and 50
+from the top, as raylib would draw it.</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Camera::position"><code>position</code></a></td><td>the centre of the design resolution</td><td>The world point at the centre of the view.</td></tr>
+<tr><td><a href="ref:rmp::Camera::zoom"><code>zoom</code></a></td><td><code>1</code></td><td>2 shows everything twice as big. Zero or less counts as 1.</td></tr>
+<tr><td><a href="ref:rmp::Camera::rotation"><code>rotation</code></a></td><td><code>0</code></td><td>Degrees, clockwise, as raylib's <code>Camera2D</code> counts them.</td></tr>
+<tr><td><a href="ref:rmp::Camera::follow"><code>follow</code></a></td><td>empty</td><td>A handle to the object to keep centred.</td></tr>
+<tr><td><a href="ref:rmp::Camera::smoothing"><code>smoothing</code></a></td><td><code>0</code></td><td>How fast it catches up with that object, per second; 0 snaps.</td></tr>
+<tr><td><a href="ref:rmp::Camera::limits"><code>limits</code></a></td><td>empty</td><td>A rectangle of the world the view never leaves.</td></tr>
+</tbody>
+</table>
+
+<h2>What it frames</h2>
+
+<p>Each frame, the scene draws its map and its objects through its camera, and then runs its own
+<code>_draw()</code> outside it, in screen pixels. So everything in the world moves with the view, and
+a HUD or a pause menu drawn in a scene's <code>_draw()</code> stays where it is while the player moves —
+which is why <a href="/manual/modules/ui.html">the interface</a> in a scene's <code>_draw()</code> never
+drifts with the camera. An object's own <code>_draw()</code>, and its behaviors', run inside the camera, in
+world units like the object.</p>
+
+<h3>The window is not the design size</h3>
+
+<p>The window can be resized, and a phone's screen is whatever it is. The camera always fills the real
+window: what it shows, <a href="ref:rmp::Camera::view"><code>view()</code></a>, is the window's size
+divided by the zoom, centred on <code>position</code>. So at a zoom of 1 a bigger window shows more of
+the world, not a bigger picture of the same part.</p>
+
+<p>A game that wants the same slice of the world on every screen sets the zoom from the window, every
+frame, so a resize is followed at once:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="constexpr float VIEW_HEIGHT = 180;">
+if (GetScreenHeight() &gt; 0) camera.zoom = static_cast&lt;float&gt;(GetScreenHeight()) / VIEW_HEIGHT;
+</pre>
+
+<p>That keeps 180 world units of height on screen whatever the window, and lets the width follow the
+shape of the screen. <code>rmp::ui</code> scales menus from the design resolution on its own; the world
+is scaled by the zoom you choose, because only the game knows whether a wider screen should show more
+of the level.</p>
+
+<h2>Following</h2>
+
+<p>With <a href="ref:rmp::Camera::follow"><code>follow</code></a> set to an object's handle, the camera
+centres on that object every frame — after the objects have moved and the collision pass has had its
+say, so it frames where things ended up and not where they were heading. It is a handle, so a target
+that is destroyed simply stops being followed, and the camera stays where it was. An empty handle
+leaves the camera wherever you put it.</p>
+
+<p>Changing <code>follow</code> to a different object snaps to it instead of gliding across the level:
+a scene that opens with the camera drifting in from the middle of the screen is the other half of the
+classic smoothing bug.</p>
+
+<h3>Smoothing is a rate</h3>
+
+<p><code>smoothing</code> is how fast the camera catches up, as a rate per second: 0, the default, is a
+snap, which is what a one-screen game wants; 5 is a gentle drift; 20 is nearly a snap.</p>
+
+<p>It is a rate and not the fraction-per-frame that tutorials write —
+<code>position += (target - position) * 0.1f</code> every frame — because that version depends on the
+frame rate: at 120 frames a second it takes twice as many steps a second, and follows twice as fast as
+at 60. Here the fraction of the distance covered in a frame is
+<code>1 - exp(-smoothing × delta)</code>, with the frame's time in the exponent, so two frames of half
+the time land exactly where one frame of the whole time does, and the camera feels the same at 30
+frames a second and at 144.</p>
+
+<h2>Limits</h2>
+
+<p><a href="ref:rmp::Camera::limits"><code>limits</code></a> is a rectangle of the world the view never
+leaves. Near the edge of the level the camera stops and the player keeps going, instead of the screen
+showing a black strip past the end of the map. Limits win over following, and over smoothing too: they
+are applied after both, so a smoothed camera still never shows the void.</p>
+
+<pre data-lang="cpp" data-harness="scene">
+camera.limits = map.bounds();                          // the level, whatever its size
+camera.limits = { 0, 0, 0, RMP_WINDOW_HEIGHT };        // a runner: free across, pinned top to bottom
+</pre>
+
+<p>Each axis is limited on its own, and a zero width or a zero height means that axis is not limited
+at all — which is exactly what <a href="/examples/games/05_endless_runner.html">an endless
+runner</a> wants. A level narrower than the view, on an axis,
+centres the view on it rather than showing the void on one side. The limits apply to a
+<code>position</code> you write by hand as well, so a camera you move yourself — a title screen
+panning across the level — needs no arithmetic about the window to stay inside it.</p>
+
+<h2>Zoom and rotation</h2>
+
+<p><code>zoom</code> scales the view about its centre: 2 shows half as much of the world, twice as big.
+Limits are worked out on the zoomed view, so a camera zoomed in can travel closer to the edge.</p>
+
+<p><code>rotation</code> turns the picture, in degrees clockwise. <code>view()</code> and
+<code>limits</code> ignore it: they describe the unrotated rectangle, and a rotated view can show a
+little past the limits at its corners.</p>
+
+<h2>Shake</h2>
+
+<pre data-lang="cpp" data-harness="scene">
+camera.shake(8, 0.35f);   // up to 8 world units, fading out over 0.35 seconds
+</pre>
+
+<p>That is <a href="/examples/games/02_breakout.html">Breakout</a>'s, when a ball is lost.</p>
+
+<p><a href="ref:rmp::Camera::shake"><code>shake(strength, seconds)</code></a> shakes the view by up to
+<code>strength</code> world units, fading to nothing over <code>seconds</code>, 0.3 if you leave it out:
+a hit, an explosion, a landing. The fade goes with the square of the time left, so it reads as a jolt
+that settles rather than a buzz that stops, and the motion is a fixed pattern of waves rather than
+random numbers, which would change direction every frame and look like a broken monitor.</p>
+
+<p>The shake never touches <code>position</code> or <code>view()</code>. It is an offset applied only
+to what is drawn, and to the two conversions below — so an object clamped to the view does not jitter,
+there is nothing to restore when it ends, and a click during a shake still lands on what is under the
+pointer, because the pointer is converted through the same shaken camera that drew the frame. The drawn
+view is kept inside <code>limits</code> too, so a shake near the edge of the level shakes inwards.</p>
+
+<p>Shaking again while a shake is running keeps the stronger of the two, measured against what the
+running one is doing now rather than what it started at, instead of adding them up: a burst of hits in
+one frame cannot build a shake that throws the screen across the room. A short strong hit on top of a
+long shake lasts at least as long as the long one had left. A strength or a duration that is not a
+positive number is ignored. <a href="ref:rmp::Camera::shake_offset"><code>shake_offset()</code></a> is
+how far the shake is moving the view right now.</p>
+
+<p>The camera is moved, smoothed and shaken in its scene's update, so the camera of a scene frozen
+under a pause menu stands still, shake included, until the scene runs again.</p>
+
+<h2>World and screen</h2>
+
+<table>
+<thead><tr><th>Call</th><th>Gives</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Camera::to_world"><code>to_world(screen)</code></a></td><td>The world point under a point of the screen, in pixels from its top-left corner.</td></tr>
+<tr><td><a href="ref:rmp::Camera::to_screen"><code>to_screen(world)</code></a></td><td>Where a world point is on the screen.</td></tr>
+<tr><td><a href="ref:rmp::Camera::view"><code>view()</code></a></td><td>The rectangle of the world that is visible, ignoring rotation.</td></tr>
+<tr><td><a href="ref:rmp::Camera::raylib"><code>raylib()</code></a></td><td>The raylib <code>Camera2D</code> this camera is, shake included, for <code>BeginMode2D()</code>.</td></tr>
+</tbody>
+</table>
+
+<p>The pointer is the commonest thing to convert, and it is already done:
+<a href="ref:rmp::input"><code>rmp::input::pointer()</code></a> is the pointer in world units, through
+the current scene's camera, ready to compare with an object's position. An object's
+<code>on_click</code> is tested the same way. The other direction places something drawn in screen
+space over something in the world — a marker over the player's head, in the scene's
+<code>_draw()</code>:</p>
+
+<pre data-lang="cpp" data-harness="members">
+rmp::Handle&lt;rmp::Object&gt; _player;
+
+void _draw() override {
+    if (!_player) return;
+    const Vector2 above = camera.to_screen({ _player-&gt;position.x, _player-&gt;position.y - 30 });
+    DrawText("!", static_cast&lt;int&gt;(above.x), static_cast&lt;int&gt;(above.y), 20, YELLOW);
+}
+</pre>
+
+<h3>Drawing in world units yourself</h3>
+
+<p>A scene's <code>_draw()</code> is in screen pixels. To draw part of it in the world instead — a net
+across a court, a line from the player to its target — open the camera for the lines that need it:</p>
+
+<pre data-lang="cpp" data-harness="members">
+void _draw() override {
+    BeginMode2D(camera.raylib());
+    DrawLineV({ 400, 0 }, { 400, 450 }, GRAY);    // in the world, moving with the view
+    EndMode2D();
+
+    DrawText("SCORE", 10, 10, 20, WHITE);         // on the screen, staying put
+}
+</pre>
+
+<p>Drawing world things without it is right only while the window is the design size and the camera
+has not moved, which is exactly when the difference does not show — and on the first other window,
+the net ends up somewhere the court is not. <a href="/examples/games/01_pong.html">Pong</a> draws its
+net this way for that reason.</p>
+
+<h2>What reads the camera</h2>
+
+<p>Besides drawing, four things in the framework take the camera into account, so they follow it
+without anything written:</p>
+
+<ul>
+<li>an object's <code>edges</code>, when its <code>bounds</code> are empty and the scene has no map, use
+the camera's view as the edge of the world;</li>
+<li><code>on_click</code> and <code>on_drag</code> find the object under the pointer through it;</li>
+<li><code>rmp::input::pointer()</code> answers in world units through it;</li>
+<li>the <a href="ref:rmp::behavior::Parallax"><code>Parallax</code></a> behavior scrolls each layer by
+how far the view has moved.</li>
+</ul>
+
+<p>Each scene has a camera of its own. A pause menu pushed over a level draws through its own camera,
+which nobody has moved, while the level underneath keeps its framing.</p>
