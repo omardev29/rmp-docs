@@ -1,0 +1,164 @@
+<!--
+title: Licences
+description: The framework is MIT and built on a modified raylib; every library it carries is on record with its licence, checked on every build, and credited in a LICENSES.txt that ships with the game. What that means for a game made with it.
+order: 70
+-->
+<h1>Licences</h1>
+
+<p class="lede">The framework is free software under the MIT licence, and it is built on raylib,
+whose zlib licence it keeps. Everything else it carries — the layout engine, the JSON reader, the
+packer, the libraries raylib itself bundles — is on record with its licence, checked on every
+build, and credited in a <code>LICENSES.txt</code> that ships with every package of your game.
+The short version of what a game owes: keep that file with it, which the release builds do for
+you.</p>
+
+<h2 id="framework">The framework: MIT</h2>
+
+<p>The framework's own code — what is under <code>src/rmp/</code> and <code>include/rmp/</code>,
+the tools and the build files — is under the MIT licence in its <code>LICENSE</code> file. A game
+may use it, change it, sell what it makes with it and keep its own code closed. MIT asks one thing
+in return: that its copyright notice and licence text travel with copies of the software, which is
+what the generated notice below does.</p>
+
+<p data-fw-grep="tools/rmp.py::RENAME = \{&quot;LICENSE&quot;: &quot;thirdparty/raylib_multiplatform/LICENSE&quot;\}">In a
+game made with <a href="/reference/commands.html#new"><code>rmp new</code></a>, the framework's
+licence is not at the root of the repository. It sits in
+<code>thirdparty/raylib_multiplatform/LICENSE</code>, as a component of the game like every other
+one, because a <code>LICENSE</code> at the root would say the whole game is MIT. The game's own
+code is its author's, under whatever licence they choose, or none.</p>
+
+<h2 id="raylib">raylib, modified</h2>
+
+<p>raylib is by Ramon Santamaria and is under the zlib/libpng licence. The framework is built on it,
+is not affiliated with or endorsed by the raylib project, and ships a modified copy. The zlib
+licence asks three things, and the second is the one that matters here: an altered version must
+be plainly marked as altered, and not presented as the original.</p>
+
+<p data-fw-grep="thirdparty/raylib/PATCHES.md::# This is a MODIFIED copy of raylib 6\.0\.0">So it is
+marked. <a href="fw:thirdparty/raylib/PATCHES.md"><code>thirdparty/raylib/PATCHES.md</code></a>
+says in its first line that the copy is modified, and lists every change by file, line and
+reason: build-system and
+platform-selection changes, so the windowing backend can be chosen from the <code>.toml</code>,
+and memory fixes in <code>raudio.c</code> taken from upstream. Each change is also commented at its
+site, nothing under <code>thirdparty/raylib/src/external/</code> is touched, and no
+document of the framework may describe its raylib as unchanged.</p>
+
+<h2 id="components">Everything it carries</h2>
+
+<p data-fw-grep="THIRD_PARTY_LICENSES.md::```components">Every vendored component has a row in the
+<code>components</code> block of <code>THIRD_PARTY_LICENSES.md</code>: its licence, which
+alternative the project takes when the upstream offers a choice, whether the copy is modified,
+which platforms it reaches, and where its licence text is. The main ones:</p>
+
+<table>
+<thead><tr><th>Component</th><th>Licence</th><th>Copy</th><th>Reaches</th></tr></thead>
+<tbody>
+<tr><td>raylib</td><td>zlib</td><td>modified</td><td>every platform</td></tr>
+<tr><td>Clay, under <code>rmp::ui</code></td><td>zlib</td><td>modified: one line, a C++ version check</td><td>every platform</td></tr>
+<tr><td>cute_tiled, for Tiled maps</td><td>zlib or Unlicense — the Unlicense is taken</td><td>modified</td><td>every platform</td></tr>
+<tr><td>cute_aseprite, for sprite sheets</td><td>zlib or Unlicense — the Unlicense is taken</td><td>unmodified</td><td>every platform</td></tr>
+<tr><td>raylib-cpp, behind <code>rmp/math.h</code></td><td>zlib</td><td>the math headers only</td><td>every platform</td></tr>
+<tr><td>rres, the resource pack</td><td>MIT</td><td>unmodified</td><td>every platform</td></tr>
+<tr><td>cJSON, under saves and LDtk maps</td><td>MIT</td><td>unmodified</td><td>every platform</td></tr>
+<tr><td>Monocypher, which seals a save</td><td>BSD-2 or CC0 — CC0 is taken</td><td>unmodified</td><td>every platform</td></tr>
+<tr><td>tiny-AES-c, for an encrypted pack</td><td>Unlicense</td><td>unmodified</td><td>every platform</td></tr>
+<tr><td>raymob, the Android glue</td><td>MIT</td><td>modified</td><td>Android only</td></tr>
+<tr><td>raylib-iOS and ANGLE</td><td>zlib; BSD-3</td><td>unmodified</td><td>iOS only</td></tr>
+<tr><td>what raylib bundles: GLFW, miniaudio, the stb libraries, the decoders and loaders</td><td>zlib, MIT, public domain and similar</td><td>unmodified</td><td>where raylib uses them</td></tr>
+<tr><td>doctest</td><td>MIT</td><td>unmodified</td><td>nowhere: the framework's tests only</td></tr>
+</tbody>
+</table>
+
+<p>Where an upstream offers a choice, the project takes the alternative that owes the least, and
+says so in the file, so the choice is a decision on record rather than something inferred from a
+build. Where it has altered a component, that component's directory has its own
+<code>PATCHES.md</code>, as raylib does — even under MIT, which does not ask for one, because a
+reader should not need to know which licence imposes what.</p>
+
+<h2 id="the-gate">A new dependency is a licence decision</h2>
+
+<p data-fw-grep="tools/license_db.py::And then the rules\. Copyleft \(AGPL, SSPL, GPL, LGPL, MPL, EUPL\) fails; LGPL">That
+block is not documentation that can fall behind. <code>tools/license_db.py --check</code> runs in
+the <code>config</code> stage of <code>rmp test</code>, in the framework and in every game, and
+compares three things:</p>
+
+<ul>
+<li><strong>The tree and the record, both ways.</strong> A component in <code>thirdparty/</code>
+with no row fails, and so does a row whose component is gone.</li>
+<li><strong>The record and the text.</strong> Each row's licence text is found on disk and
+recognised, and it has to say what the row says: a row cannot claim MIT for a file that says
+GPL.</li>
+<li><strong>The rules.</strong> A copyleft licence fails — GPL, AGPL, MPL and the rest, and LGPL
+too, because LGPL's way out is dynamic linking, which a static build and iOS do not have. A
+non-commercial licence fails. A licence the tool cannot recognise fails. And a zlib or Apache
+component, whose licence asks for changes to be marked, is either pinned unmodified by its sha256
+in <code>thirdparty/FROZEN_VERSIONS.md</code> or marked modified with a <code>PATCHES.md</code>
+beside it.</li>
+</ul>
+
+<p>So adding a library to a game is adding a row to <code>THIRD_PARTY_LICENSES.md</code>, and
+forgetting to is a red test, not a missing credit discovered after release.</p>
+
+<h2 id="licenses-txt">LICENSES.txt, generated</h2>
+
+<p data-fw-grep="tools/configure.py::This game is built on the software below\. Each notice is reproduced in">The
+same block is what <code>configure.py</code> generates the shipped notice from. There is one
+<code>LICENSES.txt</code> per family of packages — the desktop and web packages, the Android app,
+the iOS app — and each holds exactly the components that reach that family: the Android notice
+credits raymob and no other does; GLFW is in the desktop notice and not the Android one; doctest
+and anything not compiled into a game are in none. Each component's licence is reproduced in full,
+under a line saying whether this build's copy is unmodified, modified (naming its
+<code>PATCHES.md</code>) or partial. The framework's own MIT notice is in all of them, and the file
+opens by saying the game is built on raylib, is not affiliated with it, and uses a modified
+copy.</p>
+
+<p>Where it goes:</p>
+
+<ul>
+<li><strong>Desktop, the BSDs and the web:</strong> next to the executable in every package the
+release builds.</li>
+<li><strong>Android:</strong> inside the APK and the App Bundle, among the app's assets.</li>
+<li><strong>iOS:</strong> at the root of the app bundle.</li>
+</ul>
+
+<p>A component whose licence text cannot be found stops the configure step: a missing notice is a
+licence problem, and the moment to act on it is before anything is built. The iOS build refuses
+to configure without the raylib-iOS checkout for the same reason, rather than ship a notice with
+the fork missing from it.</p>
+
+<h2 id="what-a-game-owes">What a game owes</h2>
+
+<p>The licences the framework carries are all permissive: none of them asks a game to publish its
+source. What most of them ask is credit — their notice, kept with copies of the software — and the
+default does that.</p>
+
+<ul>
+<li><strong>Ship <code>LICENSES.txt</code> with the game.</strong> The release builds put it where
+it belongs; leave <a href="/reference/configuration.html#deploy-licenses"><code>[deploy]
+licenses</code></a> at its default and there is nothing else to do.</li>
+<li><strong>Or give the credits inside the game.</strong> A credits screen that reproduces the same
+notices satisfies the same licences, and then a loose text file next to the executable is only
+noise. Turning the file off says where the credits are instead, and <code>configure.py</code>
+will not take one without the other:</li>
+</ul>
+
+<pre data-lang="toml" data-expect="reject">
+[deploy]
+licenses = false
+</pre>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[deploy]
+licenses = false
+credits_note = "the Credits scene, from the main menu"
+</pre>
+
+<ul>
+<li><strong>Record what you add.</strong> A library added under <code>thirdparty/</code> needs its
+row in <code>THIRD_PARTY_LICENSES.md</code>; <code>rmp test</code> says so if it is missing, and
+the generated notice credits it from then on.</li>
+<li><strong>Your art and sound are yours to license.</strong> The notice covers code. The picture
+a new game starts with, <code>resources/rabbit.png</code>, is from Kenney's Animal Pack under CC0,
+and <code>resources/License.txt</code> beside it says so; whatever you put in
+<code>resources/</code> after that, its terms are between you and its author.</li>
+</ul>

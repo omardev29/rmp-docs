@@ -1,0 +1,128 @@
+<!--
+title: One header per module
+description: Why there is no rmp.h that includes everything, why the framework's headers avoid including each other, and how the cost of every include is measured instead of argued about.
+order: 40
+-->
+<h1>One header per module</h1>
+
+<p class="lede">There is no header that includes the whole framework. There are
+{{count:headers}} headers under <code>include/rmp/</code>, one for each part of the framework you
+can name — the UI, the input, the assets, the audio — and a file includes the ones it uses. That
+is what makes each module optional: you take the whole ecosystem, or you take one piece of it.</p>
+
+<p>A file that draws the HUD looks like this:</p>
+
+<pre data-lang="cpp" data-harness="file">
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;string&gt;
+
+void draw_hud(int score, float health) {
+    rmp::ui::begin({ .placement = rmp::ui::Align::TOP_CENTER });
+    rmp::ui::row({ .gap = 24 }, [&amp;] {
+        rmp::ui::text(std::to_string(score));
+        rmp::ui::progress(health);
+    });
+    rmp::ui::end();
+}
+</pre>
+
+<p>It knows about the interface and nothing else, so it recompiles when the UI changes and not when
+the asset pipeline does. And when it reaches for something it did not include, the compiler says
+so, by name:</p>
+
+<pre data-lang="cpp" data-harness="file" data-expect="error" data-error="input">
+#include &lt;rmp/ui.h&gt;
+
+void draw_pause_hint() {
+    rmp::ui::begin();
+    if (rmp::input::just_pressed("pause")) rmp::ui::text("Paused");
+    rmp::ui::end();
+}
+</pre>
+
+<p>That error is the truth: the file is missing <code>rmp/input.h</code>. An umbrella header would
+have hidden it, and every file would have paid to compile all of the framework to use one part of
+it. <a href="/examples/platform/03_minimal_includes.html">An example</a> holds the framework to this:
+it includes only <code>rmp/ui.h</code>, and the examples build fails if that stops being
+enough.</p>
+
+<h2 id="a-module-you-can-name">A header is a module you can name</h2>
+
+<p>Splitting is not free for the person using the framework: every header is one more thing they
+have to know exists. So a new header has to be a part of the framework you can name and decide to
+use or not — <code>rmp::ui</code>, <code>rmp::audio</code>, <code>rmp::save</code>. Anything else
+goes into a header that already exists. Splitting for tidiness only taxes the reader, and the
+number of includes a game needs is a number that should go down over time, never up.</p>
+
+<h2 id="each-other">Our headers do not include each other</h2>
+
+<p>A header under <code>include/rmp/</code> declares what it needs from another one instead of
+including it, wherever the language allows. Where it does not — a type held by value has to be
+complete — the header includes the other one and says at its top why it could not avoid it. Those
+are the exceptions, and they are few:</p>
+
+<table>
+<thead><tr><th>Header</th><th>Includes</th><th>Because</th></tr></thead>
+<tbody>
+<tr><td><code>rmp/scene.h</code></td><td><code>rmp/object.h</code>, <code>rmp/tilemap.h</code></td><td>a scene spawns objects, and holds its map by value</td></tr>
+<tr><td><code>rmp/object.h</code></td><td><code>rmp/assets.h</code></td><td>a sprite holds its texture by value</td></tr>
+<tr><td><code>rmp/tilemap.h</code></td><td><code>rmp/object.h</code></td><td>a map's object factories are callbacks</td></tr>
+<tr><td><code>rmp/behavior.h</code></td><td><code>rmp/object.h</code>, <code>rmp/scene.h</code></td><td>the catalogue holds handles and callbacks by value, and a spawner hands you the scene</td></tr>
+</tbody>
+</table>
+
+<p>If a pair of headers ever needed each other, one of them should not exist: they would be one module
+pretending to be two.</p>
+
+<p data-fw-grep="include/rmp/app.h::void begin_run\(\); // smoke test on, chdir into the bundle on iOS, assets open">The
+technique that makes most of this possible is moving the call into a <code>.cpp</code>. The
+entry-point macros in <code>rmp/app.h</code> have to start the asset layer and close the UI, but
+naming <code>rmp::assets</code> or <code>rmp::ui</code> there would make every file with an entry
+point compile both. So the macros call a handful of functions declared in <code>rmp/app.h</code>
+and defined in <code>src/rmp/app.cpp</code>, which is the one file that includes the rest.</p>
+
+<h2 id="config">The one header every header includes</h2>
+
+<p data-fw-grep="include/rmp/config.h::nothing but #defines, no includes of its own, 27 ms to parse against an">Every
+public header includes <code>rmp/config.h</code>, the values from the <code>.toml</code>, so
+<code>RMP_WINDOW_WIDTH</code> and the rest are simply there wherever you are writing and you
+never type that include. It is the exception to the rule above, and it earns it by measurement:
+it is nothing but <code>#define</code>s with no includes of its own, and parsing it costs no more
+than parsing an empty file. <code>tools/header_check.sh</code> compiles every public header on its
+own and uses <code>RMP_WINDOW_WIDTH</code> after it, so a header that forgets it — or that only
+compiles when something else was included first — fails the framework's tests rather than a
+game's build.</p>
+
+<h2 id="cost">The standard library is allowed; its cost is measured</h2>
+
+<p>The rule is about the framework's own headers. It was never a rule against the standard library
+or raylib: <code>&lt;memory&gt;</code>, <code>&lt;vector&gt;</code>,
+<code>&lt;string_view&gt;</code> and <code>raylib.h</code> are used where the job needs them. What
+the framework does instead is measure what each include costs, and keep the number from creeping
+up unnoticed.</p>
+
+<p><code>tools/header_cost.py</code> preprocesses a file that includes one public header and
+nothing else, and counts the lines of code that come out. That count is the same on every run with
+the same compiler, so it is what the gate compares, against <code>tools/header_budget.txt</code>,
+inside the pinned build image the budget was measured in: a header that grows by more than a fifth
+fails, and so does one that shrinks by as much, because a budget left too high would let the next
+growth through. A header with no line in the budget fails everywhere. Milliseconds are reported too, because they
+are what a person feels, but they are never gated: they depend on the machine.</p>
+
+<p>The measurements are written down where the decisions are made, and some of them decided the
+API:</p>
+
+<ul>
+<li data-fw-grep="include/rmp/object.h::This is std::function's job and &lt;functional&gt; is 131 ms over the baseline"><a href="ref:rmp::Callback"><code>rmp::Callback</code></a>
+exists because <code>&lt;functional&gt;</code> measured 131 ms in every file that includes
+<code>rmp/object.h</code>, which is every file with an object in it, and the part of
+<code>std::function</code> the framework needs is small. It turned out to have a second reason,
+in <a href="/framework/why/ownership.html#callbacks">Ownership</a>.</li>
+<li data-fw-grep="include/rmp/object.h::`const char \*` and not std::string_view, for the same reason"><a href="ref:rmp::Sprite::play"><code>Sprite::play()</code></a>
+takes a <code>const char *</code> and not a <code>std::string_view</code>, which measured 77 ms in
+the same files, because animation tags are string literals in practice.</li>
+<li data-fw-grep="include/rmp/math.h::The expensive part is the C library's &lt;math.h&gt;, not raymath's own"><code>rmp/math.h</code>
+is a header of its own because the C library's <code>&lt;math.h&gt;</code> under raymath is most of
+its cost, and <code>rmp/ui.h</code> must not make a file that only draws menus pay for it.</li>
+</ul>

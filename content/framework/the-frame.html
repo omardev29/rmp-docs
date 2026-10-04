@@ -1,0 +1,463 @@
+<!--
+title: One frame
+description: Everything the framework does between one picture and the next, in the order src/rmp/app.cpp and src/rmp/scene.cpp do it, and why the order is what it is.
+order: 20
+-->
+<h1>One frame</h1>
+
+<p class="lede">Sixty times a second, or as often as the screen asks, the framework samples the
+input, moves the world, draws it and tidies up. The order those happen in is the contract every
+hook you write relies on: when <code>_update</code> runs, what <code>_collision</code> sees, why a
+scene you leave is still there until the frame ends. This page follows one frame from the top,
+and every step is pinned to the line of the framework that does it.</p>
+
+<figure class="diagram">
+<svg class="rmp-frame" viewBox="0 0 360 730" role="group" aria-labelledby="frame-title">
+  <title id="frame-title">One frame, in the order the framework runs it</title>
+  <style>
+.rmp-frame a { text-decoration: none; }
+.rmp-frame text { font-family: var(--font-ui); fill: var(--text); }
+.rmp-frame .step { fill: var(--bg-raised); stroke: var(--border-strong); }
+.rmp-frame .loop { fill: var(--bg-sunken); stroke: var(--border-strong); stroke-dasharray: 4 3; }
+.rmp-frame .runner { fill: none; stroke: var(--accent); stroke-dasharray: 2 3; }
+.rmp-frame .spine { stroke: var(--border-strong); stroke-width: 2; }
+.rmp-frame .dot { fill: var(--accent); }
+.rmp-frame .num { fill: var(--accent-text); font-size: 11px; font-weight: 750; }
+.rmp-frame .title { font-size: 13px; font-weight: 750; }
+.rmp-frame .line { font-size: 11.5px; fill: var(--text-muted); }
+.rmp-frame .loop-label { font-size: 11px; font-weight: 700; fill: var(--text-muted); }
+.rmp-frame .runner-label { font-size: 11px; font-weight: 700; fill: var(--accent); }
+.rmp-frame a .title { fill: var(--accent); }
+.rmp-frame a:hover .step, .rmp-frame a:focus .step { stroke: var(--accent); stroke-width: 2; }
+.diagram .rmp-frame { max-width: 28rem; margin: 0 auto; }
+  </style>
+  <line class="spine" x1="22" y1="25" x2="22" y2="689"/>
+  <circle class="dot" cx="22" cy="25" r="5"/>
+  <circle class="dot" cx="22" cy="81" r="5"/>
+  <circle class="dot" cx="22" cy="137" r="9"/>
+  <text class="num" x="22" y="141" text-anchor="middle">1</text>
+  <circle class="dot" cx="22" cy="193" r="9"/>
+  <text class="num" x="22" y="197" text-anchor="middle">2</text>
+  <circle class="dot" cx="22" cy="365" r="9"/>
+  <text class="num" x="22" y="369" text-anchor="middle">3</text>
+  <circle class="dot" cx="22" cy="505" r="9"/>
+  <text class="num" x="22" y="509" text-anchor="middle">4</text>
+  <circle class="dot" cx="22" cy="561" r="9"/>
+  <text class="num" x="22" y="565" text-anchor="middle">5</text>
+  <circle class="dot" cx="22" cy="617" r="9"/>
+  <text class="num" x="22" y="621" text-anchor="middle">6</text>
+  <circle class="dot" cx="22" cy="689" r="5"/>
+ <a href="#the-loop">
+  <rect class="step" x="44" y="10" width="310" height="46" rx="6"/>
+  <text class="title" x="56" y="29">Still running?</text>
+  <text class="line" x="56" y="45">the window&#x27;s X, quit(), the CI frame budget</text>
+ </a>
+ <a href="#delta">
+  <rect class="step" x="44" y="66" width="310" height="46" rx="6"/>
+  <text class="title" x="56" y="85">delta = the frame time</text>
+  <text class="line" x="56" y="101">clamped to [app] max_delta</text>
+ </a>
+ <a href="#input">
+  <rect class="step" x="44" y="122" width="310" height="46" rx="6"/>
+  <text class="title" x="56" y="141">Input</text>
+  <text class="line" x="56" y="157">devices sampled once; the UI frame opens</text>
+ </a>
+ <a href="#update">
+  <rect class="step" x="44" y="178" width="310" height="162" rx="6"/>
+  <text class="title" x="56" y="197">Update</text>
+  <rect class="loop" x="54" y="207" width="290" height="128" rx="5"/>
+  <text class="loop-label" x="64" y="224">each scene that runs, bottom up</text>
+  <text class="line" x="64" y="240">pointer: on_click, on_drag</text>
+  <text class="line" x="64" y="256">the scene&#x27;s _update(delta)</text>
+  <text class="line" x="64" y="272">each object: behaviors, _update, move,</text>
+  <text class="line" x="76" y="288">edges, animation, _late_update</text>
+  <text class="line" x="64" y="304">collision: separate, then notify</text>
+  <text class="line" x="64" y="320">the camera settles</text>
+ </a>
+ <a href="#draw">
+  <rect class="step" x="44" y="350" width="310" height="130" rx="6"/>
+  <text class="title" x="56" y="369">Draw</text>
+  <text class="line" x="56" y="385">BeginDrawing, clear to the background</text>
+  <rect class="loop" x="54" y="395" width="290" height="80" rx="5"/>
+  <text class="loop-label" x="64" y="412">each scene that shows, bottom up</text>
+  <text class="line" x="64" y="428">camera on: the map, then the objects</text>
+  <text class="line" x="64" y="444">camera off: the scene&#x27;s _draw()</text>
+  <text class="line" x="76" y="460">(rmp::ui draws here)</text>
+ </a>
+ <a href="#capture">
+  <rect class="step" x="44" y="490" width="310" height="46" rx="6"/>
+  <text class="title" x="56" y="509">The CI capture</text>
+  <text class="line" x="56" y="525">reads the frame back, under a budget only</text>
+ </a>
+ <a href="#present">
+  <rect class="step" x="44" y="546" width="310" height="46" rx="6"/>
+  <text class="title" x="56" y="565">Present</text>
+  <text class="line" x="56" y="581">EndDrawing; the UI frame closes</text>
+ </a>
+ <a href="#deferred">
+  <rect class="step" x="44" y="602" width="310" height="62" rx="6"/>
+  <text class="title" x="56" y="621">Apply what was deferred</text>
+  <text class="line" x="56" y="637">destroyed objects freed, then</text>
+  <text class="line" x="56" y="653">scene changes, in the order asked</text>
+ </a>
+ <a href="#after">
+  <rect class="step" x="44" y="674" width="310" height="46" rx="6"/>
+  <text class="title" x="56" y="693">After the frame</text>
+  <text class="line" x="56" y="709">the frame budget ticks; music is fed</text>
+ </a>
+</svg>
+<figcaption>One frame. Each step links to its section below.</figcaption>
+</figure>
+
+<p>Almost every rule on this page has the same reason behind it. A hook is your code, and your
+code is entitled to do anything — spawn, destroy, change scene, quit — from anywhere. The order is
+built so that none of those can pull the floor out from under something still running.</p>
+
+<h2 id="the-loop">Who calls the frame</h2>
+
+<p><a href="ref:RMP_GAME"><code>RMP_GAME</code></a> is
+<a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a> with its three hooks written for
+you, and the entry point is the code that calls the frame. Where the loop lives depends on the
+platform, and only there:</p>
+
+<ul>
+<li><strong>Windows, Linux, macOS, the BSDs and Android</strong>: a <code>main()</code> with a
+<code>while</code> loop, the ordinary raylib shape. On Android raylib's own native glue calls that
+<code>main()</code>.</li>
+<li><strong>The web</strong>: the browser owns the loop. <code>main()</code> hands one frame
+function to <code>emscripten_set_main_loop()</code> and the browser calls it every animation
+frame. A <code>while</code> loop there would need Emscripten's ASYNCIFY, which rewrites and slows
+the whole program; this shape does not.</li>
+<li><strong>iOS</strong>: UIKit owns the loop and calls three functions the macro defines.</li>
+</ul>
+
+<p data-fw-grep="include/rmp/app.h::while \(rmp::app::detail::keep_running\(\)\) \{[\s\\]+FRAME\(rmp::app::detail::step_delta\(\)\);[\s\\]+rmp::app::detail::end_frame\(\);">All
+three do the same three things each time around: ask whether the game is still running, hand the
+frame a <code>delta</code>, and finish the frame. On the desktop that is the whole loop:</p>
+
+<pre data-lang="text">
+while (keep_running()) {
+    FRAME(step_delta());
+    end_frame();
+}
+</pre>
+
+<p data-fw-grep="src/rmp/app.cpp::return !closed &amp;&amp; !SmokeTest_Done\(\) &amp;&amp; !quit_requested\(\);">A
+game stops running for one of three reasons, checked in one place so the platforms cannot drift
+apart: the window was closed, <a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> was
+called, or the CI frame budget is spent. <code>quit()</code> only raises a flag, so the frame that
+asked to quit finishes normally and the game shuts down exactly as it does when the window is
+closed. On the web and iOS there is no window to close and <code>WindowShouldClose()</code> is
+never called.</p>
+
+<h3 id="delta">The delta</h3>
+
+<p data-fw-grep="src/rmp/app.cpp::if \(raw &lt; 0\) return 0;\s+if \(RMP_MAX_DELTA &lt;= 0\) return raw;\s+return raw &gt; RMP_MAX_DELTA \? RMP_MAX_DELTA : raw;">The
+<code>delta</code> every hook receives is raylib's <code>GetFrameTime()</code> with two corrections:
+a negative reading becomes 0, and a reading longer than
+<a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a> — a
+twentieth of a second unless you change it — is cut down to it. A frame that stalled for half a
+second, because the window was dragged or the debugger stopped, becomes a moment of slow motion
+instead of a jump that carries a bullet through a wall. That is the one place the game's clock is
+read; <a href="/framework/why/delta-and-time.html">Time is a parameter</a> says why.</p>
+
+<h2 id="input">1. Input, once</h2>
+
+<p data-fw-grep="src/rmp/app.cpp::void frame\(float delta\) \{[\s\S]*?input::detail::begin_frame\(\)[\s\S]*?ui::detail::begin_frame\(\)[\s\S]*?scenes::detail::update\(delta\)[\s\S]*?BeginDrawing\(\)[\s\S]*?ClearBackground\(rmp::scenes::detail::clear_color\(\)\)[\s\S]*?scenes::detail::draw\(\)[\s\S]*?SmokeTest_CaptureFrame\(\)[\s\S]*?EndDrawing\(\)[\s\S]*?ui::detail::end_frame\(\)[\s\S]*?scenes::detail::apply_pending\(\)">The
+frame proper is <code>frame(float delta)</code> in <code>src/rmp/app.cpp</code>, and it starts by
+sampling every input device once. The keyboard, the mouse — which a touch screen drives too — and
+the first gamepad are read into one snapshot, and every <a href="ref:rmp::input::pressed"><code>pressed</code></a> and
+<a href="ref:rmp::input::just_pressed"><code>just_pressed</code></a> of the frame answers from it.
+Two scenes asking about the same key in the same frame cannot disagree, and a key is "just
+pressed" for exactly one frame however many times it is asked about.</p>
+
+<p data-fw-grep="src/rmp/input.cpp::THE FIRST FRAME HAS NO EDGES">The first frame has nothing to
+compare against, so it compares against itself: a key already held when the game starts is held,
+not just pressed, and does not fire whatever it is bound to.</p>
+
+<p>The UI's frame opens next, which advances its clock and its scroll once, however many scenes
+draw a menu.</p>
+
+<h2 id="update">2. Update</h2>
+
+<p data-fw-grep="src/rmp/scene.cpp::lowest_participant\(\[\]\(const Scene &amp;s\) \{ return s\.updates_below; \}\)">Then
+the scenes run. Not all of them: the stack is walked down from the top for as long as each scene
+lets the one under it run (<a href="ref:rmp::Scene::updates_below"><code>updates_below</code></a>),
+and from the lowest one that runs, back up to the top. Bottom up, because the world moves first
+and whatever is layered over it reacts to where the world ended up.</p>
+
+<p data-fw-grep="src/rmp/scene.cpp::set_layer_input\(reachable_by_input\(i\)\);[\s\S]*?objects::detail::pointer\(scene\);[\s\S]*?scene\._update\(delta\);[\s\S]*?objects::detail::update\(scene, delta\);[\s\S]*?objects::detail::collide\(scene\);[\s\S]*?scene\.camera\.detail_settle\(delta\);">For
+each of those scenes, in this order:</p>
+
+<ol>
+<li><strong>Whether input reaches it.</strong> A scene hears the input only if every scene above
+it lets it through (<a href="ref:rmp::Scene::input_below"><code>input_below</code></a>). One that
+does not reads every action as not pressed, so a game running under a HUD that took the input
+simply does not shoot.</li>
+<li><strong>The pointer.</strong> A press and a release on the same object call its
+<a href="ref:rmp::Object::on_click"><code>on_click</code></a>; holding and moving calls its
+<a href="ref:rmp::Object::on_drag"><code>on_drag</code></a>. The topmost object under the pointer
+wins, and the UI gets first refusal: a button drawn over the world takes the click, and the object
+under it never hears it. This comes before everything else so a click is acted on in the frame it
+happened.</li>
+<li><strong>The scene's <a href="ref:rmp::Scene::_update"><code>_update(delta)</code></a>.</strong>
+The scene sets up the frame, and its objects then move inside it.</li>
+<li><strong>Its objects</strong>, one at a time, in the order they were spawned — <a href="#objects">below</a>.</li>
+<li><strong>Collision</strong>, once every object has moved — <a href="#collision">below</a>.</li>
+<li><strong>The camera</strong>, last — <a href="#camera">below</a>.</li>
+</ol>
+
+<h3 id="objects">Each object</h3>
+
+<p data-fw-grep="src/rmp/object.cpp::update_behaviors\(\*object, delta\);[\s\S]*?object-&gt;_update\(delta\);[\s\S]*?Storage::remember_position\(\*object\);[\s\S]*?if \(delta &gt; 0\) \{[\s\S]*?apply_edges\(\*object\)[\s\S]*?animation::detail::advance\(object-&gt;sprite, delta\);[\s\S]*?late_update_behaviors\(\*object, delta\);">An
+object that is alive goes through these steps, and an object destroyed by any of them stops
+there:</p>
+
+<ol>
+<li><strong>Its behaviors' <code>_update</code></strong>, in the order they were added. A behavior
+runs before the object's own code so that yours has the last word on what the frame leaves
+behind.</li>
+<li><strong>Its <a href="ref:rmp::Object::_update"><code>_update(delta)</code></a>.</strong></li>
+<li><strong>Where it is, remembered</strong> — after your code, so that writing
+<code>position</code> yourself is a teleport, not a journey the collision pass would sweep along.</li>
+<li><strong>The move.</strong> The forces from
+<a href="ref:rmp::Object::apply_force"><code>apply_force</code></a> and the scene's
+<a href="ref:rmp::Scene::gravity"><code>gravity</code></a> times the object's
+<a href="ref:rmp::Object::gravity_scale"><code>gravity_scale</code></a> change the velocity, and
+the velocity moves the object. A <a href="ref:rmp::Object::solid"><code>solid</code></a> object
+that is not <a href="ref:rmp::Object::immovable"><code>immovable</code></a>, in a scene with a
+map, moves through the map one axis at a time and stops at its solid cells. A frame whose delta is
+0 does not move anything at all, which keeps a push made in <code>_ready</code> for the first
+frame that can use it.</li>
+<li><strong>The edges</strong>: what <a href="ref:rmp::Object::edges"><code>edges</code></a> says
+to do at the edge of the object's bounds — clamp, bounce, wrap or be destroyed.</li>
+<li><strong>The animation clock</strong> of its sprite, here and not in the draw, so a scene that
+runs without being drawn still has time passing in it.</li>
+<li><strong>Its behaviors' <code>_late_update</code></strong>, for the behavior whose job is to
+correct where the object ended up — snapping it to a grid, say — which has to see the position
+after the move, not before.</li>
+</ol>
+
+<p>An object spawned during this pass gets its <code>_ready()</code> at once, inside the
+<code>spawn()</code> call, and its first <code>_update</code> on the next frame. A behavior added
+during the pass is the same.</p>
+
+<h3 id="collision">Collision</h3>
+
+<p>Once every object of the scene has moved, the scene's pairs are found and dealt with, in three
+passes, and the order of the passes is the point:</p>
+
+<ol>
+<li><strong>Rewind</strong> an object the swept test caught: one that crossed something between
+two frames without ever overlapping it is put back where it met it. Only when both are solid — a
+bullet passing through a coin is told, and keeps going.</li>
+<li><strong>Separate</strong> the pairs that are both solid: each moves half the overlap, or the
+movable one moves all of it when the other is immovable. A push that would end inside a solid cell
+of the map is undone, so a moving platform cannot shove the player through a wall.</li>
+<li><strong>Notify</strong>, last, so your code reads the positions as they were resolved.</li>
+</ol>
+
+<p data-fw-grep="src/rmp/collision.cpp::if \(a_was\) a\._collision\(b\);\s+if \(a_was\) collide_behaviors\(a, b\);\s+if \(b_was\) b\._collision\(a\);\s+if \(b_was\) collide_behaviors\(b, a\);\s+if \(a_was\) Storage::notify_collision\(a, b\);\s+if \(b_was\) Storage::notify_collision\(b, a\);">For
+each touching pair, once per frame and whether or not either is solid, the notification goes to
+both sides in this order: the first object's
+<a href="ref:rmp::Object::_collision"><code>_collision</code></a>, then its behaviors', then the
+second object's <code>_collision</code> and its behaviors', then the first object's
+<a href="ref:rmp::Object::on_collision"><code>on_collision</code></a> and the second's. Each side
+is told if it was alive when its pair came up, even when the other side has just died: the shot
+that kills an alien still counts as a hit.</p>
+
+<h3 id="camera">The camera</h3>
+
+<p data-fw-grep="src/rmp/camera.cpp::const float t = 1\.0f - std::exp\(-smoothing \* dt\);">Last of
+all, the scene's <a href="ref:rmp::Camera"><code>camera</code></a> settles on where things ended
+up, after collision has had its say: it moves toward what it
+<a href="ref:rmp::Camera::follow"><code>follow</code></a>s, at a rate that is the same at any frame
+rate, is clamped to its <a href="ref:rmp::Camera::limits"><code>limits</code></a>, and advances its
+shake. Anything that reads the camera next — the draw, the pointer next frame — sees the settled
+view.</p>
+
+<h2 id="draw">3. Draw</h2>
+
+<p data-fw-grep="src/rmp/scene.cpp::const bool unset = c\.r == 0 &amp;&amp; c\.g == 0 &amp;&amp; c\.b == 0 &amp;&amp; c\.a == 0;">The
+frame is opened with <code>BeginDrawing()</code> and cleared. The colour is the
+<a href="ref:rmp::Scene::background"><code>background</code></a> of the lowest scene that is
+drawn, because everything above it is drawn over it; when that is <code>BLANK</code>, the
+default, the clear colour is the UI theme's background.</p>
+
+<p data-fw-grep="src/rmp/scene.cpp::if \(window\) BeginMode2D\(scene\.camera\.raylib\(\)\);\s+scene\.map\.draw\(\);\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);\s+scene\._draw\(\);">Then
+the scenes draw, bottom up, from the lowest one the stack shows
+(<a href="ref:rmp::Scene::draws_below"><code>draws_below</code></a>). Each one, in this order:</p>
+
+<ol>
+<li><strong>The camera opens</strong>: <code>BeginMode2D()</code> with the scene's camera, so what
+follows is drawn in world units.</li>
+<li><strong>The map</strong>, under everything, because it is the level the objects stand
+on.</li>
+<li><strong>The objects</strong> that are alive and visible, sorted by
+<a href="ref:rmp::Object::layer"><code>layer</code></a> and, within a layer, in the order they
+were spawned. Each one draws its sprite, or its shape when it has no sprite, then its behaviors'
+<code>_draw</code>, then its own <a href="ref:rmp::Object::_draw"><code>_draw()</code></a>.</li>
+<li><strong>The camera closes</strong>: <code>EndMode2D()</code>.</li>
+<li><strong>The scene's <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a></strong>, in
+screen space. This is where a scene's <code>rmp::ui::begin()</code> and
+<code>rmp::ui::end()</code> go, and <code>end()</code> is what draws the UI — over the world,
+and standing still while the camera moves.</li>
+</ol>
+
+<p data-fw-grep="src/rmp/object.cpp::draw_one\(\*object\);\s+draw_behaviors\(\*object\);\s+object-&gt;_draw\(\);">Objects
+first and the scene's own drawing after is what puts a HUD over the game rather than under it,
+without either one saying so. The same layer-then-spawn order, walked backwards, is the order the
+pointer finds objects in: the last thing drawn is the first thing clicked.</p>
+
+<p>A scene the input cannot reach is drawn exactly the same, UI included, but no widget in it can
+be hovered or pressed: the HUD under an open pause menu is visible and inert, and neither scene
+wrote a line about it.</p>
+
+<h2 id="capture">4. The CI capture</h2>
+
+<p>Between the last draw and <code>EndDrawing()</code>, the framework calls
+<code>SmokeTest_CaptureFrame</code> from <code>tests/smoke_test.h</code>. In a normal run it returns
+at once. Under the frame budget CI sets (<code>RAY_TEST_MAX_FRAMES</code>), on one chosen frame it
+flushes raylib's batch, reads the frame back and checks it has something on it — and that is the
+only place it can: before the flush the frame holds nothing but the clear, and after
+<code>EndDrawing()</code> it may already be gone. Because the framework makes the call, a game
+cannot put it in the wrong place. <a href="/framework/testing.html#render">Testing</a> has what CI
+does with the result.</p>
+
+<h2 id="present">5. Present</h2>
+
+<p><code>EndDrawing()</code> puts the frame on screen, and where the frame rate is capped —
+<a href="/reference/configuration.html#window-fps"><code>[window] fps</code></a>, or vertical sync
+with <a href="/reference/configuration.html#window-vsync"><code>[window] vsync</code></a> — it is
+also where the frame waits. Then the UI's frame closes: a UI that drew nothing this frame lets go
+of the pointer and the keyboard, so a pause menu that just closed under the cursor does not keep
+the game's mouse.</p>
+
+<h2 id="deferred">6. Apply what was deferred</h2>
+
+<p data-fw-grep="src/rmp/scene.cpp::void apply_pending\(\) \{[\s\S]*?rmp::objects::detail::collect\(\);[\s\S]*?if \(scene_stack\.pending\.empty\(\)\) return;">Only
+now, with nothing mid-frame, does anything go away.</p>
+
+<p><strong>Destroyed objects are freed.</strong> An object stops updating and drawing the moment
+<a href="ref:rmp::Object::destroy"><code>destroy()</code></a> is called on it, but its memory stays
+until here. That is why the reference <a href="ref:rmp::Scene::spawn"><code>spawn()</code></a>
+returns is good for the whole frame, and why <code>other</code> in a <code>_collision</code> is
+always a real object even when it is dying. Freeing a slot bumps its generation, so every
+<a href="ref:rmp::Handle"><code>rmp::Handle</code></a> to it now answers <code>nullptr</code>.</p>
+
+<p data-fw-grep="src/rmp/scene.cpp::std::vector&lt;Pending&gt; batch;\s+batch\.swap\(scene_stack\.pending\);"><strong>Scene
+changes are applied</strong>, in the order they were asked for, so <code>push</code> then
+<code>pop</code> in one frame leaves the stack as it was. A
+<a href="ref:rmp::Scene::change"><code>change</code></a> ends every scene top down; a
+<a href="ref:rmp::Scene::push"><code>push</code></a> suspends the top and enters the new one; a
+<a href="ref:rmp::Scene::replace"><code>replace</code></a> ends only the top; a
+<a href="ref:rmp::Scene::pop"><code>pop</code></a> ends the top and resumes the one under it. A
+scene that ends gets <code>_end()</code> first and its objects go after it, so a scene tidying up
+can still walk what it spawned. A transition asked for from inside a <code>_ready()</code> or an
+<code>_end()</code> that runs here belongs to the next frame.</p>
+
+<p>This is why <code>if (rmp::ui::button("Play")) change&lt;GameScene&gt;();</code> is safe inside
+the menu's own <code>_draw()</code>: the menu is not destroyed until its <code>_draw()</code>, and
+everything else in the frame, has finished.</p>
+
+<h2 id="after">After the frame</h2>
+
+<p data-fw-grep="src/rmp/app.cpp::SmokeTest_CaptureFrameIfMissed\(\);\s+SmokeTest_Tick\(\);[\s\S]*?rmp::audio::detail::update\(\);">Back
+in the loop, outside <code>frame()</code>, two last things happen on every platform. The CI frame
+budget advances, and the music stream is fed. Feeding the music here, and not in the scene
+stack, keeps it playing under a pause menu that freezes the game, and in a game that does not use
+scenes at all.</p>
+
+<h2 id="start-and-stop">Before the first frame, and after the last</h2>
+
+<p data-fw-grep="src/rmp/app.cpp::set_resources_root\(RMP_RESOURCES_PATH\);[\s\S]*?rmp::random::seed\([\s\S]*?set_strict\(true\);[\s\S]*?SmokeTest_Begin\(\);[\s\S]*?ChangeDirectory\(GetApplicationDirectory\(\)\);[\s\S]*?rmp::assets::init\(\);">Before
+the first frame the entry point prepares the run: it tells the asset layer where this
+executable's <code>resources/</code> are, seeds <a href="ref:rmp::random"><code>rmp::random</code></a>
+from the wall clock, turns on <a href="/reference/configuration.html#dev-strict"><code>[dev]
+strict</code></a> in a debug build that asks for it, reads the CI frame budget, on iOS moves into
+the app bundle, and opens the resource pack if there is one.</p>
+
+<p data-fw-grep="src/rmp/app.cpp::if \(RMP_WINDOW_FPS &gt; 0\) SetTargetFPS\(RMP_WINDOW_FPS\);[\s\S]*?InitWindow\(RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT, RMP_WINDOW_TITLE\);\s+rmp::scenes::detail::start\(std::move\(first\)\);">Then
+the ready hook. <code>RMP_GAME</code>'s opens the window from <code>[window]</code> — vsync and a
+resizable window first, the frame cap before <code>InitWindow()</code> because raylib's DRM backend
+chooses the display mode from it, and never on the web or iOS, where the browser and the display
+pace the frame — and enters your first scene, whose <code>_ready()</code> runs with the window
+already open. Under CI a save is written to the platform's real folder and read back, and the boot
+is reported.</p>
+
+<p data-fw-grep="src/rmp/app.cpp::rmp::scenes::detail::shutdown\(\);\s+rmp::input::detail::reset\(\);\s+shutdown_globals\(\);\s+rmp::ui::shutdown\(\);[\s\S]*?rmp::audio::detail::shutdown\(\);\s+rmp::detail::release_all\(\);">After
+the last frame, the order matters more than anywhere else, because the window owns the GPU
+context and everything holding a texture has to let go of it while the window still exists:</p>
+
+<ol>
+<li><strong>The scenes</strong>, top down, each with its <code>_end()</code> and its objects.
+Transitions still queued are dropped: a scene nobody will see does not get a <code>_ready()</code>
+to load assets in.</li>
+<li><strong>The globals</strong> from <a href="ref:rmp::global"><code>rmp::global</code></a>, in
+reverse order of first use — after the scenes, because a scene's <code>_end()</code> may write to
+one.</li>
+<li><strong>The UI</strong> and its font, <strong>the sounds and music</strong>, and then
+<strong>every texture, font and sound still loaded</strong>.</li>
+<li><strong>The stop hook</strong>: <code>RMP_GAME</code>'s closes the window.</li>
+<li data-fw-grep="src/rmp/app.cpp::rmp::audio::detail::close_device\(\);\s+rmp::assets::shutdown\(\);"><strong>The
+sound device and the resource pack</strong>, which hold no GPU objects and can go after the
+window.</li>
+</ol>
+
+<p>On Android, <code>rmp::app::quit()</code> also finishes the Activity, so the app does not
+linger in the recent-apps list. On iOS it does nothing at all and says so once: an app that closes
+itself looks to the user as if it crashed, and App Review rejects it.</p>
+
+<h2 id="own-frame">A game that owns its frame</h2>
+
+<p>A game that wants none of the scene stack writes its own three hooks and hands them to
+<a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a>:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+static void on_ready() {
+    InitWindow(RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT, RMP_WINDOW_TITLE);
+}
+
+static void on_frame(float delta) {
+    (void)delta;
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+    DrawText("My own frame", 20, 20, 20, DARKGRAY);
+    EndDrawing();
+}
+
+static void on_exit() { CloseWindow(); }
+
+RMP_ENTRY_POINT(on_ready, on_frame, on_exit);
+</pre>
+
+<p>Then none of steps 1 to 6 runs: <code>on_frame</code> is called where <code>frame()</code>
+would have been, and what happens inside it is yours. What stays the framework's is the loop
+around it — the three ways a run ends, the clamped <code>delta</code>, the CI frame budget, the
+music stream — and the start and the stop: the resource pack, the seed, and the ordered release of
+everything loaded. The examples under <a href="/examples/ui/index.html">UI</a> are written this
+way, because a menu on its own needs nothing more.</p>
+
+<aside class="callout warning"><span class="callout-title">Careful</span><p
+data-fw-grep="src/rmp/app.cpp::void frame\(float delta\) \{[\s\S]*?rmp::input::detail::begin_frame\(\);">The
+input snapshot is taken in step 1, and only there. A game that owns its frame never gets one, so
+<a href="ref:rmp::input"><code>rmp::input</code></a> has nothing to answer from; read raylib's
+input functions directly instead. <code>rmp::ui</code> needs nothing: without an
+app, the first <code>rmp::ui::begin()</code> of a frame opens the UI's frame and
+<code>rmp::ui::end()</code> closes it.</p></aside>
+
+<aside class="callout"><span class="callout-title">Note</span><p>With your own frame, the CI capture
+happens after <code>EndDrawing()</code> instead of before it. That works under the software
+renderer CI boots the examples with, where the frame is still in memory after it is presented,
+and nowhere else.</p></aside>
+
+<h2 id="checked">How the order is kept</h2>
+
+<p>Every interesting property of a scene stack is an ordering property, so the tests check
+transcripts rather than return values: <code>tests/scene_test.cpp</code> records which hooks ran,
+in what order, across pushes, pops, changes made mid-frame and shutdown; and
+<code>tests/object_test.cpp</code> and <code>tests/behavior_test.cpp</code> check that behaviors
+run before the object's <code>_update</code>, that <code>_late_update</code> runs after the move,
+that the edges come after the integration and that the draw order is layer first. The claims on
+this page are pinned to the source lines they describe, and the site's build fails if one stops
+matching.</p>

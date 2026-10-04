@@ -1,0 +1,109 @@
+<!--
+title: The three-function menu
+description: The rule that outranks every other in the framework — the API is as simple as possible for the person making the game — and the three questions a feature has to answer to get in.
+order: 10
+-->
+<h1>The three-function menu</h1>
+
+<p class="lede">The API has to be as simple as possible for the person using it. Complexity is
+allowed to exist for the advanced case; it is not allowed to stand in the way of the simple one.
+And there is a measure for it, which is not a slogan: a main menu is three calls.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void play();">
+rmp::ui::begin();
+if (rmp::ui::button("Play")) play();
+if (rmp::ui::button("Quit")) rmp::app::quit();
+rmp::ui::end();
+</pre>
+
+<p>Anything that makes those lines longer is wrong, whatever else it buys. That is the rule above
+every other rule in the framework, and the rest of these pages answer to it.</p>
+
+<h2>What the three lines do not say</h2>
+
+<p>The menu is short because everything it does not mention has an answer already. It is centred
+in the window. It has no coordinates, sizes, fonts or hit boxes, and it keeps its proportions at
+any window size, because every measurement is in design units scaled from
+<code>[window] width</code> and <code>height</code>. It has a theme. The first button is focused,
+so the keyboard or a gamepad can press it with nothing else written, and the arrows move between
+the two. And a click on <em>Play</em> does not also reach the game drawn underneath, because the
+UI takes the pointer before the world sees it.</p>
+
+<p>None of that is hidden from the game that wants to change it. <a href="ref:rmp::ui::begin"><code>begin()</code></a>
+takes options for where the menu goes, <a href="ref:rmp::ui::button"><code>button()</code></a>
+takes options for how it looks, a theme can be swapped at run time, and
+<a href="/examples/ui/03_clay_direct.html">the Clay layout engine underneath can be used
+directly</a>. The options are there for the case that needs them; the simple case does not have to
+know they exist.</p>
+
+<h2 id="admission">The three questions</h2>
+
+<p>A feature gets into the framework by answering three questions, in this order.</p>
+
+<ol>
+<li><strong>Is there a real game that needs it?</strong> "Someone might want it" is a no. The
+games under <a href="/examples/games/index.html">examples/games</a> are where needs come from,
+and each of them has to be playable from the title screen to winning, losing and playing again
+before it counts.</li>
+<li><strong>Can it be made from what already exists?</strong> Then it is a pattern, and the place
+for a pattern is an example, not a new function.</li>
+<li><strong>Does it make the three-function menu longer?</strong> Then it is redesigned until it
+does not.</li>
+</ol>
+
+<p>The second question is the one that keeps the API small. A pause menu is not a feature of the
+framework: it is a scene pushed on top of the game, and the defaults of a scene already make the
+world underneath freeze, stay visible and stop hearing the keyboard
+(<a href="/manual/core/scenes.html#what-a-scene-lets-through">Scenes</a>). A rigid-body physics
+world is not a feature either. An object's <code>position</code>, <code>rotation</code> and
+<code>velocity</code> are public fields, so a game that needs a tower that collapses can link a
+physics library, step it in <code>_update</code> and write the position from it. If a real game
+asks for that, it arrives as an example.</p>
+
+<h2 id="in-practice">What the rule decided</h2>
+
+<p>The rule is easiest to see in the defaults, because a default is where the simple case lives.</p>
+
+<dl>
+<dt>Fields, not accessors</dt>
+<dd><p data-fw-grep="include/rmp/object.h::THE FIELDS ARE PUBLIC ON PURPOSE">An object's
+<code>position</code>, <code>velocity</code>, <code>flip_x</code> and the rest are public fields,
+read and written directly: <code>player.flip_x = player.velocity.x &lt; 0;</code> is the point. A
+getter and a setter in front of each one would be ceremony between the game and its data, so the
+clang-tidy check that asks for private members is switched off, and says why.</p></dd>
+
+<dt>Nothing falls until it asks to</dt>
+<dd><p>A scene carries a downward gravity, and every object's
+<a href="ref:rmp::Object::gravity_scale"><code>gravity_scale</code></a> is 0. A top-down game never
+mentions gravity, and a platformer sets one field on the player.</p></dd>
+
+<dt>Collide with everything, resolve nothing</dt>
+<dd><p>Every object is on collision layer 1 and collides with layer 1, so the simple game never
+mentions a layer. Objects are not <a href="ref:rmp::Object::solid"><code>solid</code></a> by
+default, because most things in a 2D game — bullets, coins, particles, triggers — are not walls,
+and the two that are, the floor and the player, are the two you configure.</p></dd>
+
+<dt>The pause menu writes no policy</dt>
+<dd><p>The three fields that say what a scene lets through to the one below default to exactly what
+a pause menu wants, so a pause scene is a scene with a <code>_draw()</code> and nothing else.</p></dd>
+
+<dt>A Pong ball is one line</dt>
+<dd><p data-fw-grep="src/rmp/collision.cpp::And the simple case gets harder, which is the rule that outranks the others">The
+collision is the framework's own, not a physics engine's, and this rule is the reason given in
+its source: with a rigid-body library a Pong ball stops being a shape with a velocity and becomes a
+body with a density, a restitution, a friction, a damping and gravity switched off.</p></dd>
+
+<dt>A behavior is a struct</dt>
+<dd><p>A behavior inherits from nothing and registers nowhere, so that it can be written
+<code>add&lt;rmp::behavior::TopDown&gt;({ .speed = 220 })</code>. The price of a base class would
+have been that line. <a href="/framework/why/designated-initialisers.html">Designated initialisers</a>
+explains why.</p></dd>
+
+<dt>Leaving is one call that returns</dt>
+<dd><p><a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> can be called from anywhere,
+returns, and the game shuts down cleanly when the frame ends. There is no value to carry back up
+the call stack and nothing to catch.</p></dd>
+</dl>
+
+<p>Every one of these could have been more general. Each would then have been something the
+simple game had to know about.</p>

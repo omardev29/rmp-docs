@@ -1,0 +1,224 @@
+<!--
+title: Testing
+description: How the framework is tested — unit tests with no window, the UI laid out headless, a frame rendered in software and compared, every target booted, every example played — and what rmp test runs in a game.
+order: 60
+-->
+<h1>Testing</h1>
+
+<p class="lede">A framework that promises a game will run on {{count:targets}} targets has to
+check it, and the rule it holds itself to is strict: anything that can be tested is tested, and a
+test asserts what actually happened, not that a command exited 0. A green check that ran nothing
+is worse than a red one, so every gate is also shown failing on the thing it was written to
+catch.</p>
+
+<p>Everything below runs with <a href="/reference/commands.html#test"><code>rmp test</code></a> in
+the framework's repository, stage by stage, and in its CI on every push. The last section is what
+the same command runs in a game.</p>
+
+<h2 id="unit">Unit tests, with no window</h2>
+
+<p>The unit tests use doctest and run without a window, a GPU or a display. They cover the scene stack and its order of events, objects, handles,
+behaviors and the catalogue, collision against objects and against maps, the camera, input, the
+asset table, sprite animation, the LDtk and Tiled readers, saves and <code>rmp::Value</code>, the
+diagnostics, and the random generator. Every file called <code>tests/*_test.cpp</code> is picked up
+by the build, so a new test needs no change to CMake.</p>
+
+<p data-fw-grep="tools/rmp.py::&quot;--order-by=rand&quot;, &quot;--rand-seed=1337&quot;">They run
+twice. Once in the order they are written, and once shuffled with a fixed seed, so a test that only
+passes because an earlier one left something behind is found, and found again the next time.</p>
+
+<p>Two kinds of test need something real underneath, and get it:</p>
+
+<ul>
+<li data-fw-grep="tools/test_locales.sh::a comma, and U\+066B, two bytes in UTF-8"><strong>Locales.</strong>
+A save has to read back the same on a machine whose decimal point is not a dot. The test run builds
+two locales from source for it — one with a comma, one with the Arabic decimal separator, which is
+two bytes long — and points the tests at them, and CI fails if they cannot be built rather than
+skipping the tests that need them.</li>
+<li data-fw-grep="tests/audio_device_test.cpp::AttachAudioMixedProcessor"><strong>The sound
+device.</strong> One suite opens the real audio device at a master volume of 0 and reads back what
+the mixer produced, to check that a sound plays where it should between the speakers. On a CI
+runner with no sound card it runs against the audio library's null backend. It runs once, not in
+the shuffled pass.</li>
+</ul>
+
+<p>What makes all of this possible without a window is the seam: time, input and randomness enter
+the framework at one place each, and a test replaces that place.
+<a href="/framework/why/delta-and-time.html">Time is a parameter</a> explains it, and
+<code>tools/seam_check.sh</code> fails if any other file starts reading them on its own.</p>
+
+<h2 id="layout">The UI, laid out headless</h2>
+
+<p data-fw-grep="tests/ui_layout_test.cpp::the UI layout, checked without a window">The UI's layout
+engine is pure computation, so with the text measurement and the pointer replaced by stubs and a
+viewport injected, a whole menu can be laid out with no window at all.
+<code>tests/ui_layout_test.cpp</code> checks what a person would check by hand once and never again:
+that the menu is centred, that it stays centred when the window changes, that buttons do not
+overlap, that the scale behaves at the extremes, and that a focused button can be pressed from the
+keyboard.</p>
+
+<h2 id="render">A frame, in software</h2>
+
+<p>Booting proves the window opened and the assets loaded, and nothing more. A broken shader or a
+draw call that silently does nothing still boots and still exits cleanly. So the render stage
+builds the game a second time against raylib's software renderer, which draws into plain memory —
+no GPU, no window, no display server — and runs it for ten frames. It asserts three things from
+the log: the game booted with every asset loaded, a frame was read back and had something on it,
+and the run reached the end of its frames instead of dying on the way out. It also checks that the
+window was asked for the vertical sync the <code>.toml</code> says.</p>
+
+<p data-fw-grep="tools/render_check.sh::GOLDEN=tests/fixtures/render_hash\.txt">In the framework,
+the frame is also hashed and compared with <code>tests/fixtures/render_hash.txt</code>. Software
+rendering involves no driver, so the same frame comes out byte for byte on Linux x86-64 and on
+macOS on Apple Silicon, and one golden hash covers both. A change to the frame that was meant is
+recorded with <code>rmp test render-update</code>.</p>
+
+<p>The frame is read back by the framework itself, between the last draw and
+<code>EndDrawing()</code> — the only place it can be: before the batch is flushed the frame holds
+nothing but the clear colour, and after it the frame may already be gone.
+<a href="/framework/the-frame.html#capture">One frame</a> has the detail.</p>
+
+<h2 id="smoke">Booting the game</h2>
+
+<p data-fw-grep="tools/rmp.py::if &quot;RAY_TEST_BOOT_OK assets_failed=0 &quot; not in out:">The smoke
+stage builds the game the ordinary way and runs it with a budget of ten frames
+(<code>RAY_TEST_MAX_FRAMES=10</code>), after which it exits by itself. It passes only if the game
+printed <samp>RAY_TEST_BOOT_OK assets_failed=0</samp> and
+<samp>RAY_TEST_RENDER_OK</samp>. Otherwise it prints the log and says which:
+<samp>the game did not boot, or an asset failed to load</samp>, or <samp>the game booted and drew
+nothing</samp>.</p>
+
+<p data-fw-grep="tests/smoke_test.h::if \(!IsWindowReady\(\)\) \{">The boot marker is a gate and not
+a message, which is a distinction worth stating: it is printed only when a window really exists.
+A boot marker that is always printed passes a game whose platform failed to start, and every job
+that reads the log would agree.</p>
+
+<p>Under the same frame budget the game also writes a small save to the platform's real save
+folder, reads it back, compares and deletes it before it reports the boot. Where saves go is
+different on every platform, and this is how each one's folder is exercised at all.</p>
+
+<p>In CI the same markers are read on every target a runner can start, each in the most honest
+place available. The Linux desktop builds boot under a virtual X display. The musl build boots
+inside a bare Alpine container with nothing installed, because needing something Alpine does not
+ship is exactly the bug that build can have. The DRM build boots on a virtual kernel display.
+Windows boots on its runner with its save folder under a path that is not ASCII, the kind a player
+called José has. macOS and the BSDs run the render stage under the software renderer. The web build
+is loaded in a headless browser that checks the canvas really has pixels on it. Android runs on a
+real device in Firebase Test Lab when a project is configured for it, and iOS is built for the
+simulator, where booting it is a step a repository switches on.</p>
+
+<h2 id="examples">Every example, booted</h2>
+
+<p data-fw-grep="tools/examples_build.sh::1\. tools/examples_check\.sh: every example has the SHAPE of an entry point">The
+{{count:examples}} examples are tests too. <code>rmp test examples</code> — kept out of the plain
+<code>rmp test</code>, because it compiles all of them — runs one script, the same one CI runs:</p>
+
+<ol>
+<li>Every example has the shape of an entry point that works on every platform: a
+<code>main()</code> with its own <code>while</code> loop compiles everywhere and does not run on the
+web or iOS, so it is refused.</li>
+<li>Every example directory became a build target, and the number of targets is the number of
+directories — a pattern that stops matching would otherwise look exactly like a folder where
+everything passes.</li>
+<li>Every example with an entry point is built against the software renderer, booted for a budget
+of frames, and required to boot with no asset missing, draw, exit cleanly and leave a screenshot.
+The plain C example is built and not booted, because it is the one that opts out of the frame
+budget.</li>
+</ol>
+
+<p>The screenshots are kept, because looking at a picture of every example is how most visual
+mistakes are found.</p>
+
+<h2 id="platformer">The platformer, played</h2>
+
+<p data-fw-grep="tests/platformer_play.cpp::A whole game at 60 Hz: Play from the keyboard, the Meadow, the Desert's">Thirty
+frames of a title screen prove that the title screen draws. A game in
+<a href="/examples/games/index.html">examples/games</a> has to be playable from start to finish —
+win, lose, play again — so one of them is played. <code>tests/platformer_play.cpp</code> drives
+<a href="/examples/games/07_platformer.html">the platformer</a> through its real loop with a bot
+that presses keys through the same seams a player's keyboard goes through and reads only what a
+player can see: where things are. It plays a whole game at 60 frames a second, from the title
+through every level to the flag, keeps the best run on disk, plays again and dies three times to
+reach the game over screen; it jumps from the moving platform at 60 and at 240 frames a second;
+and it plays to the flag again at 240. A game that can be won at one frame rate and not another is
+not finished.</p>
+
+<h2 id="sanitize">Sanitizers</h2>
+
+<p>A test asserts what it can see, and undefined behaviour is what a test cannot see: a signed
+overflow that wraps to a harmless number, a read one past the end that finds a zero.
+<code>rmp test sanitize</code> builds the unit tests again, in a build directory of their own,
+under AddressSanitizer and UndefinedBehaviorSanitizer, and makes every report fatal. The few
+reports it does not raise are listed in <code>tools/sanitize_ignore.txt</code>, each with its
+reason, and the list may only name vendored code, never the framework's.</p>
+
+<h2 id="gates">The gates</h2>
+
+<p>The rest of <code>rmp test</code> is checks on the repository itself — each one written after
+a mistake that could be described precisely enough for a machine to reject it:</p>
+
+<table>
+<thead><tr><th>Stage</th><th>Fails when</th></tr></thead>
+<tbody>
+<tr><td><code>fmt</code></td><td>a file is not formatted the way <code>.clang-format</code> says</td></tr>
+<tr><td><code>config</code></td><td>the <code>.toml</code> is invalid, a pinned version disagrees with the file that controls it, or a vendored component's licence is not on record</td></tr>
+<tr><td><code>repo</code></td><td>something a build produced is tracked by git</td></tr>
+<tr><td><code>seam</code></td><td>a file of the framework reads the clock, the input devices, the screen size or raylib's random state on its own</td></tr>
+<tr><td><code>workflows</code></td><td>a reusable CI workflow asks for a permission its caller does not grant</td></tr>
+<tr><td><code>portable</code></td><td>a script uses something macOS's old bash or the BSDs do not have, or the BSD jobs' inline script is not plain ASCII</td></tr>
+<tr><td><code>shell</code></td><td>a script writes <code>A &amp;&amp; B || C</code>, which runs <code>C</code> when <code>B</code> fails</td></tr>
+<tr><td><code>naming</code></td><td>a name breaks the <a href="/framework/why/naming.html">naming rules</a> in any branch of any <code>#if</code></td></tr>
+<tr><td><code>ownership</code></td><td>the framework allocates or frees memory by hand</td></tr>
+<tr><td><code>headers</code></td><td>a public header does not compile on its own, or lacks the <code>.toml</code> values</td></tr>
+<tr><td><code>cost</code></td><td>a public header's preprocessed size moved away from its budget</td></tr>
+<tr><td><code>configure</code></td><td><code>tools/configure.py</code> accepts something it should refuse, or the other way round</td></tr>
+<tr><td><code>rmp</code></td><td>the <code>rmp</code> command itself misbehaves — including when a file the framework tracks has not been classified as part of a new game or not</td></tr>
+</tbody>
+</table>
+
+<p><a href="/reference/commands.html#test">Commands</a> has the full list of stages with the
+summary <code>rmp help test</code> prints for each.</p>
+
+<h2 id="ci">In CI</h2>
+
+<p data-fw-grep=".github/workflows/ci.yml::#   push / pull_request  -&gt;  fast lane: Linux x64, Web, Android, Windows x64">A
+push to the framework runs every stage of <code>rmp test</code> in its <code>lint</code> job — a
+test of the command checks that the two lists agree — boots every example, makes a new game with
+<code>rmp new</code> and runs that game's own checks, checks this documentation site against the
+commit, and builds the fast lane: Linux x64, the web, Android and Windows x64. A release tag
+builds every target, and so can a run started by hand. The Linux jobs run inside a build image
+pinned by digest, with every compiler and tool already in it, so a build does not depend on a
+download succeeding.</p>
+
+<p>The BSD builds run inside virtual machines, and a script that stops early can still exit 0 in
+one. So the script writes a file as its very last act, and the step after it fails if the file is
+not there: nothing inside a script can catch its own early exit.</p>
+
+<h2 id="in-a-game">In your game</h2>
+
+<p data-fw-grep="tools/rmp.py::Stage\(&quot;smoke&quot;, &quot;build the game, boot it, see it draw&quot;,\s+\[\(&quot;configure&quot;, \[\]\), \(&quot;build&quot;, None\), \(&quot;smoke&quot;,\)\], scope=&quot;both&quot;\)">A
+game made with <code>rmp new</code> has the same command, and runs the stages that make sense for
+a game:</p>
+
+<pre data-lang="shell">
+rmp test
+rmp test smoke
+</pre>
+
+<dl>
+<dt><code>config</code></dt>
+<dd>The game's <code>.toml</code> through <code>configure.py --check</code>, the pinned versions,
+and the licence record: a library added to <code>thirdparty/</code> without its row in
+<code>THIRD_PARTY_LICENSES.md</code> fails here. See <a href="/framework/licences.html">Licences</a>.</dd>
+<dt><code>render</code></dt>
+<dd>The game built against the software renderer, booted for ten frames, and checked for a clean
+boot, pixels on the screen and a clean exit. A game has no golden hash: its title screen is its
+author's to change.</dd>
+<dt><code>smoke</code></dt>
+<dd>The game built the ordinary way and booted with a frame budget, which must report every asset
+loaded and a frame drawn.</dd>
+</dl>
+
+<p>A game's CI runs the same stages in its own <code>lint</code> job, and builds its targets the
+way the framework's does. The framework's own tests stay with the framework: they test the
+framework, and a game is built on one that has passed them.</p>

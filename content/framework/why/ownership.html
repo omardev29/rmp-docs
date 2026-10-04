@@ -1,0 +1,160 @@
+<!--
+title: Ownership
+description: Why everything in the framework is owned by something that releases it — textures, objects, scenes, callbacks, behaviors — what you keep across frames instead of a pointer, and why Callback exists instead of std::function.
+order: 60
+-->
+<h1>Ownership</h1>
+
+<p class="lede">Everything the framework hands you is owned by something that releases it at the
+right moment, and you never free anything yourself. A texture lets go of the GPU when the last copy
+of it goes; an object is freed by its scene; a scene by the stack; a callback by the object that
+holds it. There is no <code>Unload</code> to remember, no <code>delete</code> to write, and no
+order to get right on the way out.</p>
+
+<p data-fw-grep="tools/ownership_check.sh::# Files allowed to keep their calls, and why\. THE LIST ONLY SHRINKS\.">The
+framework holds itself to it. No owning raw pointer appears in its headers or its sources, and no
+bare <code>new</code>, <code>delete</code>, <code>malloc</code> or <code>free</code>:
+<code>tools/ownership_check.sh</code> rejects them, and its list of exceptions only ever gets
+shorter. The two left are where raylib's C interface hands a buffer across and frees it itself.</p>
+
+<h2 id="preference">What owns what</h2>
+
+<p>Inside the framework, the choice of how to hold something follows one order of preference, from
+first choice to last:</p>
+
+<table>
+<thead><tr><th>Form</th><th>When</th></tr></thead>
+<tbody>
+<tr><td>a value</td><td>whatever fits: a <code>Vector2</code>, a <a href="ref:rmp::Shape"><code>Shape</code></a>, a behavior, an options struct</td></tr>
+<tr><td><code>T &amp;</code></td><td>something that certainly exists and keeps its identity for the length of the call</td></tr>
+<tr><td><a href="ref:rmp::Handle"><code>rmp::Handle&lt;T&gt;</code></a></td><td>an object that can die, kept across frames</td></tr>
+<tr><td><code>std::unique_ptr&lt;T&gt;</code></td><td>sole ownership of something polymorphic or large</td></tr>
+<tr><td><code>T *</code></td><td>only when it can be null and cannot outlive what it points at; it never owns</td></tr>
+</tbody>
+</table>
+
+<p>The last row is a promise about the API: a raw pointer in a signature of the framework never
+owns what it points at, and its comment says so. <a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a>
+returns a behavior or <code>nullptr</code>; <a href="ref:rmp::Object::scene"><code>scene()</code></a>
+returns the scene the object is in; <a href="ref:rmp::RayQuery::ignore"><code>RayQuery::ignore</code></a>
+names an object a ray should pass through. None of them is yours to free. Where the framework does
+take ownership of something, it takes a <code>std::unique_ptr</code>, so the hand-over is written
+in the signature.</p>
+
+<h2 id="assets">Assets</h2>
+
+<p data-fw-grep="include/rmp/assets.h::THEY SHARE\. Loading the same name twice gives you the same GPU texture with">An
+<a href="ref:rmp::Texture"><code>rmp::Texture</code></a> — like a <code>Font</code>,
+<code>Sound</code>, <code>Music</code>, <code>Shader</code> or <code>RenderTexture</code> — is a
+counted reference to one loaded resource. Copying it is one more reference; the last one to go
+unloads it. Loading the same name twice gives the same texture back with the count at two, which
+is what lets a hundred enemies share one sprite without anyone deciding who owns it.</p>
+
+<pre data-lang="cpp" data-harness="members">
+rmp::Texture _rabbit;
+
+void _ready() override { _rabbit = rmp::assets::load_texture("rabbit.png"); }
+void _draw() override { DrawTexture(_rabbit, 100, 100, WHITE); }
+</pre>
+
+<p>It converts to the raylib type it wraps, so every raylib function takes it. But only a variable
+converts. A temporary does not, because the texture would be unloaded at the end of the line and
+the raylib struct you kept would point at nothing:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="deleted function">
+Texture2D player = rmp::assets::load_texture("player.png");
+DrawTexture(player, 0, 0, WHITE);
+</pre>
+
+<p data-fw-grep="src/rmp/app.cpp::rmp::scenes::detail::shutdown\(\);[\s\S]*?shutdown_globals\(\);[\s\S]*?rmp::detail::release_all\(\);">Ownership
+is also what makes the way out safe. A texture belongs to the GPU context, and the context belongs
+to the window: unloading a texture after <code>CloseWindow()</code> is a write to something that no
+longer exists. Because every texture is held by something with a lifetime — a scene, an object, a
+global — the framework can release them in an order that works: the scenes and their objects
+first, then the globals, then whatever is still loaded, and only then the window.</p>
+
+<h2 id="objects">Objects, and the handle that outlives them</h2>
+
+<p>A scene owns its objects. <a href="ref:rmp::Scene::spawn"><code>spawn()</code></a> makes one,
+the scene keeps it, and what you get back is a reference that is good for the rest of the frame,
+because an object that is destroyed is only freed when the frame ends.</p>
+
+<p>Kept until the next frame, that reference can dangle. What you keep instead is a handle:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Turret : public rmp::Object {
+public:
+    rmp::Handle&lt;rmp::Object&gt; target;
+
+    void _update(float delta) override {
+        (void)delta;
+        rmp::Object *aim = target.get();
+        if (aim == nullptr) return; // it died, or there never was one
+        rotation = Vector2Angle({ 1, 0 }, Vector2Subtract(aim-&gt;position, position)) * RAD2DEG;
+    }
+};
+</pre>
+
+<p data-fw-grep="src/rmp/object.cpp::The generation goes up HERE and not on reuse">A handle is the
+object's slot and that slot's generation. When the object dies the generation goes up, so the
+handle answers <code>nullptr</code> from then on — and it stays dead even after the slot holds a
+new object, which is the classic bug of keeping an index. Checking a handle is an integer
+comparison. A handle can be typed, <code>handle&lt;Goblin&gt;()</code>, so the field you read
+after the check needs no cast.</p>
+
+<h2 id="scenes">Scenes and globals</h2>
+
+<p>The scene stack owns its scenes. <code>RMP_GAME</code> makes the first one, and
+<a href="ref:rmp::Scene::change"><code>change()</code></a>, <code>push()</code> and
+<code>replace()</code> make the next ones with <code>std::make_unique</code> and move them in on
+the same line, so no code of yours ever holds a scene by pointer.</p>
+
+<p><a href="ref:rmp::global"><code>rmp::global&lt;T&gt;()</code></a> is the state that outlives a
+scene change: one instance per type, made the first time it is asked for, owned by the framework
+and destroyed on the way out — in reverse order of first use, after the scenes and before the
+window, so a global can hold a texture.</p>
+
+<h2 id="callbacks">Callbacks: why not std::function</h2>
+
+<p>A function you hand to the framework — an <code>on_collision</code>, an <code>on_click</code>,
+the <code>on_</code> fields of the behaviors — is kept in an
+<a href="ref:rmp::Callback"><code>rmp::Callback</code></a>, not a <code>std::function</code>, and
+there are two reasons.</p>
+
+<p>The first is ownership. <code>std::function</code> has to be able to copy what it holds, so a
+lambda that owns something only it should own cannot go into one:</p>
+
+<pre data-lang="cpp" data-harness="file" data-expect="error" data-error="copy-constructible">
+#include &lt;functional&gt;
+#include &lt;memory&gt;
+
+std::function&lt;void()&gt; on_win = [save = std::make_unique&lt;int&gt;(3)] { (void)save; };
+</pre>
+
+<p>A <code>Callback</code> moves and never copies, so the same lambda is fine:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static int score = 0;">
+auto &amp;coin = spawn({ .position = { 400, 225 }, .size = { 16, 16 } });
+auto bonus = std::make_unique&lt;int&gt;(10);
+coin.on_collision([bonus = std::move(bonus)](rmp::Object &amp;self, rmp::Object &amp;) {
+    score += *bonus;
+    self.destroy();
+});
+</pre>
+
+<p data-fw-grep="include/rmp/object.h::_state = std::make_shared&lt;Fn&gt;\(static_cast&lt;F &amp;&amp;&gt;\(fn\)\);">The
+second is cost: <code>&lt;functional&gt;</code> is expensive to include, and every file with an
+object in it would pay for it. A <code>Callback</code> is what the framework actually needs — the
+captured state behind a shared pointer that carries its own destructor, and one function pointer to
+call it — and nothing else. Setting it again replaces what it held, and destroys what that
+captured.</p>
+
+<h2 id="behaviors">Behaviors</h2>
+
+<p>A behavior added to an object belongs to the object.
+<a href="ref:rmp::Object::add"><code>add&lt;B&gt;()</code></a> moves it into storage that never
+moves it again, and the reference it returns, like the pointer <code>get&lt;B&gt;()</code>
+returns, stays good for as long as the behavior is attached. Removing the behavior, or destroying
+the object, runs its <code>_end</code> and frees it. A behavior's type is never erased into a
+<code>void *</code> you would have to delete: the storage holds it in a shared pointer that knows
+its destructor.</p>

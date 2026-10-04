@@ -1,0 +1,131 @@
+<!--
+title: No exceptions
+description: Why nothing in the framework throws to report a failure, what it does instead — empty resources, defaults, results, warnings said once — and what that leaves to your game.
+order: 70
+-->
+<h1>No exceptions</h1>
+
+<p class="lede">No function of the framework throws to tell you something went wrong. A texture
+that fails to load is an empty texture; a key missing from a save reads as the default you gave
+it; a mistake in how the game uses the framework is a warning, said once. You never need a
+<code>try</code> around a call to <code>rmp::</code>.</p>
+
+<h2 id="why">Why</h2>
+
+<p data-fw-grep="include/rmp/app.h::It is not an exception either, and deliberately: exceptions are switched off">Three
+reasons, and each would be enough on its own.</p>
+
+<ul>
+<li><strong>Many game builds switch exceptions off.</strong> A library that reports failure by
+throwing cannot be used by a game compiled without them.</li>
+<li><strong>raylib is C.</strong> An exception thrown inside a callback that raylib's C code is
+running — and on the web and on iOS the whole frame is such a callback — would have to unwind
+through C frames, which C++ does not define.</li>
+<li><strong>A frame is a sequence that has to finish.</strong> Throwing out of the middle of one
+leaves <code>BeginDrawing()</code> without its <code>EndDrawing()</code>, a UI frame open and a
+scene change half applied. Something has to put all of that right, and a framework that never
+throws never has to.</li>
+</ul>
+
+<h2 id="instead">What it does instead</h2>
+
+<p>Every failure is turned into a value at the place it happens, and the value is chosen so that
+the obvious code is also the correct code.</p>
+
+<h3>An asset that fails to load is empty</h3>
+
+<p data-fw-grep="include/rmp/assets.h::AND THEY DO NOT THROW">It has no texture in it,
+<code>valid()</code> is false, and drawing it draws nothing — the same as raylib does with a zeroed
+struct. A missing picture is a hole in the frame, not a dead process. The failure is still counted:
+the boot line CI reads reports how many assets failed to load, and a boot with any failure is
+red.</p>
+
+<pre data-lang="cpp" data-harness="members">
+rmp::Texture _logo;
+
+void _ready() override {
+    _logo = rmp::assets::load_texture("logo.png");
+    if (!_logo) TraceLog(LOG_WARNING, "no logo; the title is drawn as text");
+}
+</pre>
+
+<h3>A read has a default</h3>
+
+<p>Reading a save never throws and never crashes on what it finds. <code>read()</code> returns a
+<a href="ref:rmp::save::Result"><code>Result</code></a> that is true in an <code>if</code> only
+when the save was read and checked, and whose
+<a href="ref:rmp::save::Status"><code>status</code></a> says why when it was not: missing, cut
+short, edited, or not a save at all. And every value read out of an
+<a href="ref:rmp::Value"><code>rmp::Value</code></a> takes the default to use when the key is not
+there or holds the wrong type, which is what lets an update to a game read the saves of the version
+before it.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Value save;
+const rmp::save::Result got = rmp::save::read("slot1", &amp;save);
+if (got.status == rmp::save::Status::MODIFIED) {
+    TraceLog(LOG_WARNING, "the save was edited or damaged; starting over");
+}
+const int level = save["level"].as_int(1);
+const float volume = save["settings"]["volume"].as_float(0.8f);
+</pre>
+
+<h3>A lookup can come back empty</h3>
+
+<p>Where the caller may want to know, the answer is a null pointer or a <code>false</code>:
+<a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a> returns <code>nullptr</code> when
+the object has no such behavior, a <a href="ref:rmp::Handle"><code>Handle</code></a> answers
+<code>nullptr</code> once its object is gone, and
+<a href="ref:rmp::save::write"><code>rmp::save::write()</code></a> returns whether the save
+reached the disk.</p>
+
+<h3>A mistake in the game is said once</h3>
+
+<p data-fw-grep="src/rmp/internal.h::#define RMP_REPORT_ONCE\(\.\.\.\)">Asking for an input action
+nobody defined, playing an animation tag that is not in the sheet, popping the last scene: these
+are mistakes in the game, and the framework says so in the log — once per place in the code, not
+sixty times a second — and carries on doing the harmless thing. The macro behind it, RMP_REPORT_ONCE
+in <code>src/rmp/internal.h</code>, is described in <a href="/framework/why/macros.html#report-once">Macros</a>.</p>
+
+<p>A warning in a log is easy to miss, so a debug build can make it impossible to miss.
+<a href="/reference/configuration.html#dev-strict"><code>[dev] strict = true</code></a> turns the
+first one into an abort with the message, in debug builds only:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[dev]
+strict = true
+</pre>
+
+<h3>A condition of the machine is not a mistake</h3>
+
+<p data-fw-grep="include/rmp/audio.h::A MACHINE WITH NO SOUND IS NOT AN ERROR">No sound device, a
+disk that refused a write, a portable build in a folder it cannot write to: none of those is a
+mistake in the game, and strict mode never aborts on them. The framework logs them once, plainly,
+and the calls that depend on them do nothing, or return <code>false</code>, instead of failing — a
+game on a machine with no sound card runs, silently, under strict mode too.</p>
+
+<h3>Leaving is a flag</h3>
+
+<p><a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> is the case where an exception
+is most tempting — unwind everything and leave — and it is a flag instead. The frame that asked
+finishes, and the game shuts down in order.</p>
+
+<h2 id="the-standard-library">Exceptions from underneath</h2>
+
+<p data-fw-grep="src/rmp/save.cpp::\} catch \(\.\.\.\) \{">The C++ standard library does throw, in
+a few places the framework relies on — asking the operating system for random bytes, converting a
+Windows path to UTF-8 — and those are caught where they happen, inside <code>rmp::save</code>, and
+turned into a value: another source for the random bytes, an empty path that the caller already
+treats as "cannot be used". None of them escapes into your game.</p>
+
+<p data-fw-grep="include/rmp/math.h::Its resource wrappers\s+// throw RaylibException on a failed load, and this framework does not throw">It
+is also why the framework vendors only the math headers of raylib-cpp: its resource classes throw
+on a failed load, and the math ones have no failure to report.</p>
+
+<h2 id="your-game">What it leaves to your game</h2>
+
+<p>The framework is not compiled with exceptions switched off, and nothing stops your own code
+using them. What it promises is the other direction: nothing it calls will throw at you to report
+a failure. The UI goes one step further. A container's contents are a lambda of yours, and if that
+lambda throws, the container is still closed on the way out, so the next frame's layout is not
+corrupted.</p>

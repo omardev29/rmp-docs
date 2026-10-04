@@ -1,0 +1,150 @@
+<!--
+title: Naming
+description: One spelling for each kind of name in the framework, the reasons each spelling was chosen, and the tools that check them instead of a reviewer's memory.
+order: 20
+-->
+<h1>Naming</h1>
+
+<p class="lede">Every name in the framework is spelled according to what it is, one spelling per
+kind, with no prefixes. The point is that you can tell what a name is at the place it is used,
+without going to look at where it was declared: <code>Align::TOP_LEFT</code> is a constant of a
+type, <code>current_theme()</code> is a function, <code>_slot</code> is somebody's private field.
+The examples follow the same rules, and a game that follows them reads like the framework it is
+built on.</p>
+
+<h2 id="the-table">The table</h2>
+
+<table>
+<thead><tr><th>What</th><th>Spelling</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td>Types: class, struct, enum, alias, template parameter</td><td><code>PascalCase</code></td><td><a href="ref:rmp::ui::ButtonOptions"><code>rmp::ui::ButtonOptions</code></a></td></tr>
+<tr><td>Enum members</td><td><code>CONSTANT_CASE</code></td><td><code>rmp::ui::Align::TOP_LEFT</code></td></tr>
+<tr><td>Constants: every <code>constexpr</code>, and a <code>const</code> at namespace, class or <code>static</code> scope</td><td><code>CONSTANT_CASE</code></td><td><a href="ref:rmp::MAX_TAG_NAME"><code>rmp::MAX_TAG_NAME</code></a></td></tr>
+<tr><td>Functions, methods, variables, parameters, public fields, namespaces</td><td><code>snake_case</code></td><td><a href="ref:rmp::ui::current_theme"><code>rmp::ui::current_theme()</code></a>, <a href="ref:rmp::Object::gravity_scale"><code>gravity_scale</code></a></td></tr>
+<tr><td>Private and protected data members</td><td><code>_snake_case</code></td><td><code>_slot</code>, <code>_generation</code></td></tr>
+<tr><td>The hooks the framework calls on your type — these eight and no other method</td><td><code>_snake_case</code></td><td><code>_ready</code> <code>_update</code> <code>_late_update</code> <code>_draw</code> <code>_collision</code> <code>_end</code> <code>_suspend</code> <code>_resume</code></td></tr>
+<tr><td>Functions you hand to the framework</td><td><code>on_snake_case</code></td><td><a href="ref:rmp::Object::on_click"><code>on_click</code></a>, <code>on_ready</code></td></tr>
+<tr><td>File-scope state in the framework's sources and tests</td><td>a struct per concern, read as <code>concern.field</code></td><td><code>loop.quit_requested</code>, <code>pool.slots</code></td></tr>
+<tr><td>File-scope state in an example</td><td><code>snake_case</code></td><td><code>health</code>, <code>portrait</code></td></tr>
+<tr><td>The framework's macros, and every value the <code>.toml</code> generates</td><td><code>RMP_</code> and <code>CONSTANT_CASE</code></td><td><a href="ref:RMP_GAME"><code>RMP_GAME</code></a>, <a href="/reference/macros.html#toml-RMP_WINDOW_WIDTH"><code>RMP_WINDOW_WIDTH</code></a></td></tr>
+</tbody>
+</table>
+
+<p>In code, all of it at once:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+namespace layer {
+constexpr unsigned PLAYER = 1U &lt;&lt; 0;
+constexpr unsigned ENEMY = 1U &lt;&lt; 1;
+} // namespace layer
+
+enum class Weapon { SWORD, BOW };
+
+class Goblin : public rmp::Object {
+public:
+    int hp = 20;
+
+    void _ready() override {
+        collision_layer = layer::ENEMY;
+        collision_mask = layer::PLAYER;
+    }
+
+    void hit(int damage) {
+        hp -= damage;
+        _hits_taken++;
+    }
+
+private:
+    int _hits_taken = 0;
+    Weapon _weapon = Weapon::SWORD;
+};
+</pre>
+
+<h2 id="why">The reasons</h2>
+
+<h3>One spelling per kind, and no prefixes</h3>
+
+<p>No <code>k</code> in front of a constant, no <code>g_</code> in front of a global, no trailing
+underscore. The spelling of the name itself says what it is, so a prefix would be saying it twice.
+A type and a value never look alike where they are used. raylib's own types are PascalCase too,
+so <a href="ref:rmp::Texture"><code>rmp::Texture</code></a> sits next to <code>Texture2D</code>
+without looking foreign; the namespace is what says whose is whose.</p>
+
+<p><code>CONSTANT_CASE</code> means "known when the program is compiled". <code>const float half =
+width / 2;</code> inside a function is a variable that happens not to change, and stays
+<code>snake_case</code>.</p>
+
+<h3>An underscore never touches a dot</h3>
+
+<p><code>foo_.x</code> and <code>other._x</code> are both wrong, in the framework as in a game. A
+private field belongs to its object, so another object reaches it through a method that says what
+is taken. In the framework's own code that reads <code>other.slot()</code> or
+<code>object.take_force()</code>. The one place <code>x._name</code> appears is a call to a hook:
+the collision pass calling <code>a._collision(b)</code>.</p>
+
+<h3>A leading underscore on a method means the framework calls it</h3>
+
+<p data-fw-grep=".clang-tidy::value: '\^_\(ready\|update\|late_update\|draw\|collision\|end\|suspend\|resume\)\$'">Only
+the eight hooks wear it, and clang-tidy is told those eight names and refuses any other method
+that starts with an underscore. So a private field never takes a hook's name, and a helper never
+looks like a hook. <a href="/framework/why/the-access-rule.html">The access rule</a> is the other
+half of this.</p>
+
+<h3>File state is grouped, and the dot is the mark</h3>
+
+<p>The <code>g_</code> prefix existed to make a global visible at every use. Without it, plain
+names collide: a variable <code>started</code> next to a function <code>started()</code>, a
+variable called <code>index</code>, <code>log</code> or <code>free</code> next to a C library that
+declares those on some platforms and not on others, a parameter <code>scale</code> silently hiding
+the file's <code>scale</code>. A struct per concern keeps the mark — <code>context.started</code>
+cannot be anything but file state — and cannot collide with a function. <code>-Wshadow</code>
+catches the local that hides a group. In the examples, where one variable is often the whole
+story, a plain name reads better and the same <code>-Wshadow</code> applies.</p>
+
+<h3>A constant's name must not be somebody else's macro</h3>
+
+<p>The preprocessor runs before the compiler and knows nothing of namespaces. <code>PI</code> and
+<code>DEG2RAD</code> are raylib's macros, <code>EPSILON</code> is raymath's, <code>MIN</code> and
+<code>MAX</code> are defined by the BSDs' system headers, <code>CHECK</code> by the test library,
+<code>DEBUG</code> by raymob's debug build. A constant with one of those names is replaced on
+exactly the platforms that define it: the build is green on Linux and red on NetBSD. So a constant
+is named after what the number is for — <code>NEAR_ZERO</code>, <code>TOLERANCE</code> — and pi is
+<code>std::numbers::pi_v&lt;float&gt;</code>.</p>
+
+<h3>Macros start with <code>RMP_</code></h3>
+
+<p>Never with <code>__</code> or an underscore and a capital, which belong to the compiler and the
+C library. A value from the <code>.toml</code> is named after its table and key: <code>[window]
+width</code> is <code>RMP_WINDOW_WIDTH</code>, <code>[project] name</code> is
+<code>RMP_PROJECT_NAME</code>. A vendored library's own switches keep their names, in the one file
+that configures it. <a href="/framework/why/macros.html">Macros</a> has the rest.</p>
+
+<h3>A name in a comment is spelled like the code</h3>
+
+<p>So a search for a name finds its explanations too, and a rename renames the comments with
+it.</p>
+
+<h2 id="checked">How it is checked</h2>
+
+<p>Not by review. Three tools run over the framework's sources, tests and examples:</p>
+
+<ul>
+<li><strong><code>readability-identifier-naming</code> in <code>.clang-tidy</code></strong> checks
+every declaration the compiler sees against the table — types, enum members, constants,
+functions, variables, members and their prefixes, the eight hook names.</li>
+<li><strong><code>-Wshadow</code></strong> catches a local or a parameter that hides a file-state
+group.</li>
+<li><strong><code>tools/naming_check.sh</code></strong> checks what a compiler cannot see. The
+compiler reads one branch of every <code>#if</code>, so the web, iOS, Android and Windows code is
+invisible to a lint run on Linux; it cannot see a use of a name, only its declaration; and it says
+nothing about a macro named like someone else's. The script reads the text of every branch and
+refuses a <code>g_</code> name, a <code>k</code> constant, an underscore touching a dot or an
+arrow, a macro that does not start with <code>RMP_</code>, a constant named like a known macro,
+and a retired name.</li>
+</ul>
+
+<p data-fw-grep="tools/naming_check.sh::R7  no retired name: `#if APP_SAVE_PORTABLE` after the rename is not an">The
+last of those is the subtle one. A renamed macro left behind in an <code>#if</code> is not an
+error: the preprocessor reads an undefined name as 0. An old spelling of the portable-saves switch
+in an <code>#if</code> would have switched portable saves off, on Windows only, with nothing
+saying so.</p>

@@ -1,0 +1,272 @@
+<!--
+title: The config pipeline
+description: How raylib_multiplatform.toml becomes what CMake, Gradle, Xcode and the CI read, why a mistake in it stops in configure.py with the line, and what each generated file is for.
+order: 30
+-->
+<h1>The config pipeline</h1>
+
+<p class="lede">A game built for {{count:targets}} targets goes through four build systems: CMake,
+Gradle, Xcode and GitHub Actions. Each of them needs the same handful of facts — what the game is
+called, its identifiers on the stores, its window, which targets to build — and left to themselves
+they would each keep their own copy and drift. So there is one file you write,
+<code>raylib_multiplatform.toml</code>, one program that reads it, <code>tools/configure.py</code>,
+and everything the build systems read is generated from the two.</p>
+
+<figure class="diagram">
+<svg class="rmp-pipe" viewBox="0 0 360 422" role="group" aria-labelledby="pipe-title">
+  <title id="pipe-title">raylib_multiplatform.toml, through configure.py, to every build system</title>
+  <style>
+.rmp-pipe a { text-decoration: none; }
+.rmp-pipe text { font-family: var(--font-ui); fill: var(--text); }
+.rmp-pipe .box { fill: var(--bg-raised); stroke: var(--border-strong); }
+.rmp-pipe .src { fill: var(--bg-raised); stroke: var(--accent); stroke-width: 2; }
+.rmp-pipe .tool { fill: var(--bg-sunken); stroke: var(--border-strong); }
+.rmp-pipe .name { font-size: 12px; font-weight: 750; }
+.rmp-pipe .code { font-family: var(--font-code); font-size: 10.5px; font-weight: 700; font-variant-ligatures: none; }
+.rmp-pipe .sub { font-size: 10.5px; fill: var(--text-muted); }
+.rmp-pipe .wire { stroke: var(--text-muted); stroke-width: 1.5; fill: none; }
+.rmp-pipe .head { fill: var(--text-muted); }
+.rmp-pipe a .name { fill: var(--accent); }
+.rmp-pipe a:hover .box, .rmp-pipe a:focus .box { stroke: var(--accent); stroke-width: 2; }
+.diagram .rmp-pipe { max-width: 28rem; margin: 0 auto; }
+  </style>
+  <defs><marker id="pipe-head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="head" d="M0 0 L8 4 L0 8 z"/></marker></defs>
+  <path class="wire" d="M40 98 H8 V395"/>
+ <a href="/reference/configuration.html">
+  <rect class="src" x="70" y="8" width="220" height="40" rx="6"/>
+  <text class="code" x="180" y="26" text-anchor="middle">raylib_multiplatform.toml</text>
+  <text class="sub" x="180" y="40" text-anchor="middle">the one file you edit</text>
+ </a>
+  <line class="wire" x1="180" y1="48" x2="180" y2="66" marker-end="url(#pipe-head)"/>
+  <rect class="tool" x="40" y="70" width="280" height="58" rx="6"/>
+  <text class="code" x="180" y="88" text-anchor="middle">tools/configure.py</text>
+  <text class="sub" x="180" y="104" text-anchor="middle">1. validate: refuse with the line, or</text>
+  <text class="sub" x="180" y="118" text-anchor="middle">2. generate, rewriting only what changed</text>
+  <rect class="box" x="14" y="146" width="206" height="38" rx="5"/>
+  <text class="code" x="22" y="162">cmake/generated/</text>
+  <text class="sub" x="22" y="176">project, raylib flags, dev tools</text>
+  <line class="wire" x1="220" y1="165" x2="234" y2="165" marker-end="url(#pipe-head)"/>
+  <rect class="box" x="238" y="146" width="114" height="38" rx="5"/>
+  <text class="name" x="246" y="162">CMake</text>
+  <text class="sub" x="246" y="176">desktop, BSD, web</text>
+  <line class="wire" x1="8" y1="165" x2="13" y2="165"/>
+  <rect class="box" x="14" y="192" width="206" height="38" rx="5"/>
+  <text class="code" x="22" y="208">rmp/generated/config.h</text>
+  <text class="sub" x="22" y="222">the RMP_ values</text>
+  <line class="wire" x1="220" y1="211" x2="234" y2="211" marker-end="url(#pipe-head)"/>
+  <rect class="box" x="238" y="192" width="114" height="38" rx="5"/>
+  <text class="name" x="246" y="208">your C++</text>
+  <text class="sub" x="246" y="222">via every header</text>
+  <line class="wire" x1="8" y1="211" x2="13" y2="211"/>
+  <rect class="box" x="14" y="238" width="206" height="38" rx="5"/>
+  <text class="code" x="22" y="254">raymob/generated.properties</text>
+  <text class="sub" x="22" y="268">and the Android manifest</text>
+  <line class="wire" x1="220" y1="257" x2="234" y2="257" marker-end="url(#pipe-head)"/>
+  <rect class="box" x="238" y="238" width="114" height="38" rx="5"/>
+  <text class="name" x="246" y="254">Gradle</text>
+  <text class="sub" x="246" y="268">Android</text>
+  <line class="wire" x1="8" y1="257" x2="13" y2="257"/>
+  <rect class="box" x="14" y="284" width="206" height="38" rx="5"/>
+  <text class="code" x="22" y="300">ios/project.yml</text>
+  <text class="sub" x="22" y="314">and the icon set</text>
+  <line class="wire" x1="220" y1="303" x2="234" y2="303" marker-end="url(#pipe-head)"/>
+  <rect class="box" x="238" y="284" width="114" height="38" rx="5"/>
+  <text class="name" x="246" y="300">XcodeGen</text>
+  <text class="sub" x="246" y="314">the iOS app</text>
+  <line class="wire" x1="8" y1="303" x2="13" y2="303"/>
+  <rect class="box" x="14" y="330" width="206" height="38" rx="5"/>
+  <text class="code" x="22" y="346">LICENSES.txt</text>
+  <text class="sub" x="22" y="360">desktop, Android, iOS</text>
+  <line class="wire" x1="220" y1="349" x2="234" y2="349" marker-end="url(#pipe-head)"/>
+  <rect class="box" x="238" y="330" width="114" height="38" rx="5"/>
+  <text class="name" x="246" y="346">packages</text>
+  <text class="sub" x="246" y="360">next to the binary</text>
+  <line class="wire" x1="8" y1="349" x2="13" y2="349"/>
+  <rect class="box" x="14" y="376" width="206" height="38" rx="5"/>
+  <text class="code" x="22" y="392">--print-matrix and friends</text>
+  <text class="sub" x="22" y="406">answers, not files</text>
+  <line class="wire" x1="220" y1="395" x2="234" y2="395" marker-end="url(#pipe-head)"/>
+  <rect class="box" x="238" y="376" width="114" height="38" rx="5"/>
+  <text class="name" x="246" y="392">CI</text>
+  <text class="sub" x="246" y="406">which jobs run</text>
+  <line class="wire" x1="8" y1="395" x2="13" y2="395"/>
+</svg>
+<figcaption>One file in; every build system's input out. Every file in the left column is
+generated, and none of them is committed: they are written again on every configure.</figcaption>
+</figure>
+
+<h2 id="the-file">One file</h2>
+
+<p>The <code>.toml</code> is grouped by what each section is about:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[project]
+name = "space_rocks"
+
+[window]
+title = "Space Rocks"
+width = 960
+height = 540
+
+[app]
+max_delta = 0.05
+
+[targets]
+enabled = ["desktop", "web", "android"]
+</pre>
+
+<p>A key you leave out takes its default, so a game's file holds only what it changes.
+<a href="/reference/configuration.html">Configuration</a> lists every key with its default and
+what it is for — and that page is itself generated from <code>configure.py --print-schema</code>
+and the comments of the framework's own <code>.toml</code>, so it cannot describe a key that does
+not exist.</p>
+
+<aside class="callout danger"><span class="callout-title">Never</span><p>Put a secret in it. The
+<code>.toml</code> is committed, and some of its values end up in the shipped binary. Signing
+keys, store tokens and passwords live in the CI's secrets, which the workflows read and the
+<code>.toml</code> never mentions. Even <a href="/reference/configuration.html#resources-rres_password"><code>[resources]
+rres_password</code></a> is obfuscation and says so: it is inside the binary that uses it.</p></aside>
+
+<h2 id="validation">Refused before anything compiles</h2>
+
+<p data-fw-grep="tools/configure.py::validate\(cfg, strict_release=args\.strict_release\)\s+targets = expand_targets">Before
+<code>configure.py</code> writes a single file it checks every value: its type, its range, the
+values it may take, and the combinations that cannot work together. A mistake stops there, in
+well under a second, with the line of the file it is on, what is wrong, and what to write
+instead. The build never sees it.</p>
+
+<pre data-lang="toml" data-expect="reject">
+[project]
+name = "my game"
+</pre>
+
+<p>The wrong type is caught the same way. An array where a number goes would otherwise reach a
+generator as something it cannot format:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[window]
+width = [800]
+</pre>
+
+<p>And so are two values that are each fine on their own and wrong together. A frame cap of 15
+frames per second makes every frame longer than the default
+<a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a>, so the game
+would be handed less time than really passed, every frame, forever:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[window]
+fps = 15
+</pre>
+
+<p>The rule behind it is strict on purpose: a configuration mistake that reaches the compiler is a
+bug in <code>configure.py</code>, not in the configuration. A mistake found twenty minutes into a
+CI run on somebody else's machine costs twenty minutes and an explanation; the same mistake found
+here costs a second and points at the line. And a refusal is only kept honest by a test that feeds
+it the value it refuses: those live in <code>tests/configure_test.py</code>.</p>
+
+<p data-fw-grep="tools/configure.py::refusing to build a release with placeholder identifiers">One
+more check is kept for releases. When a game is released — by
+<a href="/reference/commands.html#deploy"><code>rmp deploy</code></a>, or by a version tag pushed
+to its repository — <code>configure.py</code> also refuses an Android application id or an iOS
+bundle id that is still a placeholder under <code>com.example.</code>, the kind
+<code>rmp new</code> writes, for a platform the game is built for. A Google Play application id
+can never be changed once it is published, so this is the one mistake worth stopping a release
+for, and the one not worth stopping a debug build for.</p>
+
+<h2 id="who-runs-it">Who runs it</h2>
+
+<p data-fw-grep="cmake/configure_hook.cmake::set_property\(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS">You
+never have to. CMake runs it at the start of every configure, before <code>project()</code> —
+the project's name comes out of it — and configures again by itself when the <code>.toml</code>
+changes. Every <code>rmp</code> command that builds goes through CMake, so
+<a href="/reference/commands.html#run"><code>rmp run</code></a> after an edit to the
+<code>.toml</code> picks the edit up.</p>
+
+<p>Gradle and XcodeGen never run CMake, so the CI jobs for Android and iOS run
+<code>python3 tools/configure.py</code> themselves before they start. The BSD jobs build inside
+virtual machines that have no Python at all; there CI generates everything on the Linux runner
+first and the files travel into the machine with the rest of the checkout. A CMake configure that
+finds no Python 3.11 or newer falls back to what was generated last time, and says loudly that
+edits to the <code>.toml</code> will not be seen.</p>
+
+<p>A run writes a file only when its content changed, so configuring again after touching nothing
+rebuilds nothing.</p>
+
+<h2 id="what-it-writes">What it writes</h2>
+
+<table>
+<thead><tr><th>File</th><th>Holds</th><th>Read by</th></tr></thead>
+<tbody>
+<tr><td><code>cmake/generated/project.cmake</code></td><td>the project name, the pack password, the web memory settings, the windowing backend per platform</td><td>the top of <code>CMakeLists.txt</code>, before <code>project()</code></td></tr>
+<tr><td><code>cmake/generated/raylib_flags.cmake</code></td><td>raylib's complete set of feature flags, with the modules <code>[raylib] disabled_modules</code> removed</td><td>CMake, and the Android build's own CMake</td></tr>
+<tr><td><code>cmake/generated/dev_toolchain.cmake</code> and <code>dev_linker.cmake</code></td><td>the compiler and linker from <code>[dev]</code></td><td>debug builds only: a release never reads them</td></tr>
+<tr><td><code>cmake/generated/rmp_web_name.js</code></td><td>the name of the game's save database in the browser</td><td>the web build</td></tr>
+<tr><td><code>include/rmp/generated/config.h</code></td><td>every value a game can read in C or C++, as <code>RMP_</code> macros</td><td>your code, through every public header — <a href="#config-h">below</a></td></tr>
+<tr><td><code>raymob/generated.properties</code></td><td>the Android application id, minimum SDK, version, permissions and AdMob ids</td><td>Gradle</td></tr>
+<tr><td><code>raymob/app/generated/AndroidManifest.xml</code></td><td>the manifest, with each permission and feature element kept or dropped</td><td>Gradle</td></tr>
+<tr><td><code>ios/project.yml</code></td><td>the iOS app: bundle id, deployment target, orientations, header paths, the licence notice</td><td>XcodeGen, which makes the Xcode project</td></tr>
+<tr><td>the icons</td><td>Android's launcher icons, the iOS icon set and the Windows <code>.ico</code>, from <code>[icon] source</code></td><td>each platform's build</td></tr>
+<tr><td><code>LICENSES.txt</code> in <code>cmake/generated/</code>, and one each for Android and iOS</td><td>the third-party notices that ship with the game</td><td>the release packages — see <a href="/framework/licences.html">Licences</a></td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="tools/configure.py::AGP's manifestPlaceholders substitute \*values\* inside attributes; they\s+cannot remove an element">The
+manifest is generated rather than templated through Gradle for a reason worth knowing: Gradle's
+placeholders can change the value of an attribute but cannot remove an element, and a permission
+is exactly an element you either ask for or do not.</p>
+
+<p>The version is not in the <code>.toml</code>. A release takes it from its git tag —
+<code>v1.2.3</code> is version 1.2.3, and Android's version code is computed from it so it always
+goes up — and every other build is <code>0.0.0-dev</code>. A tag that is not
+<code>vMAJOR.MINOR.PATCH</code> is refused rather than published under a made-up number.</p>
+
+<h2 id="config-h">The generated header</h2>
+
+<p>The values a game can use at run time — the window's size and title, the input dead zone, the
+volumes the audio buses start at, the save settings, <code>[app] max_delta</code> — are written to
+<code>include/rmp/generated/config.h</code> as macros. Every public header of the framework
+includes it through <code>rmp/config.h</code>, so whichever header you were including anyway, they
+are there:</p>
+
+<pre data-lang="cpp" data-harness="function">
+const float centre_x = RMP_WINDOW_WIDTH / 2.0f;
+const float centre_y = RMP_WINDOW_HEIGHT / 2.0f;
+TraceLog(LOG_INFO, "%s starts at %.0f, %.0f", RMP_WINDOW_TITLE, centre_x, centre_y);
+</pre>
+
+<p data-fw-grep="include/rmp/config.h::They are macros rather than constants on purpose: a game in plain C">They
+are macros and not C++ constants because a game in plain C uses them too, and C has no namespaces
+to put a constant in. Each one is named after its key: <code>[window] width</code> is
+<a href="/reference/macros.html#toml-RMP_WINDOW_WIDTH"><code>RMP_WINDOW_WIDTH</code></a>.
+<a href="/reference/macros.html#from-the-toml">Macros</a> lists all of them, read from
+<code>configure.py --print-defines</code>.</p>
+
+<p>The values that only a build system needs — the store identifiers, the targets, the backend —
+never reach the header. A game cannot read what it has no use for, and a value read in two places
+is a value that can disagree with itself.</p>
+
+<h2 id="questions">Questions it answers</h2>
+
+<p>The same program answers the questions the CI and the tools ask, so none of them parses the
+<code>.toml</code> on its own:</p>
+
+<ul>
+<li><code>--check</code> validates and writes nothing.</li>
+<li><code>--print-targets</code>, <code>--print-families</code> and <code>--print-matrix</code> tell
+the CI which targets are enabled and which jobs to run for them; a family with no enabled target
+is skipped whole.</li>
+<li><code>--print-schema</code> and <code>--print-defines</code> describe every key and every
+generated macro, which is where this site's <a href="/reference/configuration.html">Configuration</a>
+and <a href="/reference/macros.html">Macros</a> pages come from.</li>
+<li><code>--config</code> checks another file instead of the project's: every <code>.toml</code>
+block on this site goes through it, and a block that shows a refusal prints the message
+<code>configure.py</code> really gives, as on this page.</li>
+</ul>
+
+<h2 id="clean">Nothing generated is committed</h2>
+
+<p>Every file in the table is ignored by git, and the framework's own CI fails if one is ever
+tracked. Generated files that are committed go stale the first time somebody edits the source and
+forgets to regenerate; files that are written on every configure cannot.
+<a href="/reference/commands.html#clean"><code>rmp clean</code></a> deletes them with the build
+directory, and the next configure writes them again.</p>

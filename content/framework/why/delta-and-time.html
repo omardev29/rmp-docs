@@ -1,0 +1,145 @@
+<!--
+title: Time is a parameter
+description: Why every hook is handed delta instead of reading the clock, where the framework reads it, what [app] max_delta protects a game from, and why the same game plays the same at 60 and 240 frames a second.
+order: 90
+-->
+<h1>Time is a parameter</h1>
+
+<p class="lede">Every update hook is handed the time the frame took, in seconds, as a
+parameter called <code>delta</code>. Nothing that moves the game reads the clock for itself: one
+function reads it, and hands that number out. It is a small decision with two large
+consequences: the framework can be tested without a window, and a game written with it plays the
+same at any frame rate.</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Bullet : public rmp::Object {
+public:
+    float seconds_left = 2.0f;
+
+    void _update(float delta) override {
+        seconds_left -= delta;
+        if (seconds_left &lt;= 0) destroy();
+    }
+};
+</pre>
+
+<p>A scene's <a href="ref:rmp::Scene::_update"><code>_update(delta)</code></a>, an object's
+<a href="ref:rmp::Object::_update"><code>_update(delta)</code></a>, a behavior's
+<code>_update(self, delta)</code> and the <code>on_frame(delta)</code> of a game with its own entry
+point all get the same number, and it is always called <code>delta</code> — not <code>dt</code>,
+not <code>deltaTime</code> — so the most common parameter in a game has one name everywhere you
+read it.</p>
+
+<h2 id="where">Where the clock is read</h2>
+
+<p data-fw-grep="src/rmp/app.cpp::float step_delta\(\) \{\s+const float raw = GetFrameTime\(\);">Once
+a frame, in one function of <code>src/rmp/app.cpp</code>, which asks raylib for the frame time,
+corrects it, and hands it to the frame. Every entry point — the desktop loop, the browser's
+callback, iOS's — goes through that function, so the correction applies to all of them, and to a
+game that writes its own frame as much as to one that uses scenes.</p>
+
+<p>Nothing downstream asks raylib what time it is. The scene stack passes <code>delta</code> to
+the scenes, the scenes to their objects, the objects to their behaviors; the integrator moves an
+object by its velocity times <code>delta</code>; the camera's smoothing, an animation's frame
+timing, a <a href="ref:rmp::behavior::Timer"><code>Timer</code></a>, a
+<a href="ref:rmp::behavior::Tween"><code>Tween</code></a> are all driven by the number they were
+handed.</p>
+
+<h3>So it can be tested</h3>
+
+<p>A test of the framework creates a scene, spawns objects into it and runs a frame of exactly
+1/30 of a second, with no window and no GPU, and checks where everything ended up. It can do that
+because time arrives as an argument: a function that read the clock itself would give a different
+answer every run, and a test that fails one time in twenty teaches everyone to ignore red.</p>
+
+<p data-fw-grep="tools/seam_check.sh::PATTERN='GetFrameTime\|GetTime">The rule is checked.
+<code>tools/seam_check.sh</code> fails the framework's tests if any file under
+<code>src/rmp/</code> or <code>include/rmp/</code> calls <code>GetFrameTime()</code>,
+<code>GetTime()</code>, reads the keyboard, the mouse or the gamepad, asks for the screen size, or
+uses raylib's random numbers — except a short list of files that are the seams themselves, each
+with the reason it is allowed. The same goes for the other things that change between two runs.
+Input is sampled in one place, into a snapshot a test can replace. Randomness comes from
+<a href="ref:rmp::random"><code>rmp::random</code></a>, one generator with a seed: a test keeps
+the fixed default and gets the same sequence every time, while a shipped game is seeded from the
+wall clock when it starts, and <a href="ref:rmp::random::current_seed"><code>current_seed()</code></a>
+tells you which run you are in.</p>
+
+<p data-fw-grep="src/rmp/ui/context.cpp::float frame_time\(\) \{ return test_mode\(\) \? 0\.0f : GetFrameTime\(\); \}">The
+UI is the one part that keeps a clock of its own, for the timing of its transitions and of a held
+arrow key. It reads raylib's frame time for those, and the layout tests run it in a mode where that
+time is 0, so a layout comes out the same on every run.</p>
+
+<h3>So it plays the same at any frame rate</h3>
+
+<p>A speed times <code>delta</code> is a distance, whatever the frame rate. That is the whole
+trick, and the framework is built so you get it without thinking about it:</p>
+
+<ul>
+<li><strong>Velocity is integrated for you.</strong> Set <a href="ref:rmp::Object::velocity"><code>velocity</code></a>
+in units per second and the object moves the same distance in a second at 30 or 240 frames.</li>
+<li><strong>Forces and impulses are two calls.</strong>
+<a href="ref:rmp::Object::apply_force"><code>apply_force</code></a> is meant to be called every
+frame, and is scaled by <code>delta</code>; <a href="ref:rmp::Object::apply_impulse"><code>apply_impulse</code></a>
+is meant to be called once, and is not. An impulse applied every frame would go twice as fast at
+120 frames a second as at 60 — which is exactly the bug the two names exist to prevent.</li>
+<li data-fw-grep="include/rmp/scene.h::1 - exp\(-smoothing \* delta\)"><strong>The camera's
+smoothing is a rate.</strong> The usual <code>position += (target - position) * 0.1f</code>, run
+once a frame, follows twice as fast at 120 frames a second as at 60. The camera instead covers
+<code>1 - exp(-smoothing * delta)</code> of the distance each frame, which comes to the same
+fraction in a second at any frame rate.</li>
+</ul>
+
+<p>The framework checks this on a real game: the bot that plays the platformer example plays it
+to the flag at 60 frames a second and again at 240, and jumps from its moving platform at both.</p>
+
+<h2 id="max-delta">[app] max_delta</h2>
+
+<p>Real elapsed time has no ceiling. Drag the window, stop at a breakpoint, let the disk stall,
+and the next frame time comes back as half a second. A bullet at 900 units a second then moves 450
+units in one step — through the wall and out the other side, without ever overlapping it.</p>
+
+<p data-fw-grep="src/rmp/app.cpp::return raw &gt; RMP_MAX_DELTA \? RMP_MAX_DELTA : raw;">So the
+<code>delta</code> the game is handed is clamped to
+<a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a>, a
+twentieth of a second unless you change it. A frame that really took longer arrives as a twentieth
+of a second, and the game runs a moment of slow motion instead of teleporting. Nobody minds a
+hitch; everybody minds falling out of the world.</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[app]
+max_delta = 0.05
+</pre>
+
+<p>0 switches the clamp off and hands the real time through, which makes a stalled frame the game's
+problem. Sensible values are between a sixtieth and a tenth of a second, and
+<code>configure.py</code> refuses the ones that cannot be meant — longer than a second, which
+clamps nothing, or shorter than a frame at 240 Hz, which would clamp every frame:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[app]
+max_delta = 0.001
+</pre>
+
+<p>It also refuses a frame cap that cannot coexist with the clamp: with
+<a href="/reference/configuration.html#window-fps"><code>[window] fps</code></a> at 15, every frame
+is longer than a twentieth of a second, and the game would run at three quarters speed forever —
+<a href="/framework/config-pipeline.html#validation">the config pipeline</a> shows that refusal.</p>
+
+<p data-fw-grep="src/rmp/collision.cpp::\[app\] max_delta stops a stalled frame teleporting everything">The
+clamp is half of the answer to tunnelling. The other half is the swept test in the collision pass,
+which catches a fast object crossing a thin one between two frames even at a perfectly normal
+frame rate, where no clamp applies.</p>
+
+<h2 id="frame-zero">The frame with no time in it</h2>
+
+<p data-fw-grep="src/rmp/object.cpp::if \(delta &gt; 0\) \{">The first frame of a game reports a
+frame time of 0, and a delta of 0 or less is never integrated at all. That matters more than it
+sounds: a push given in <code>_ready()</code> with <code>apply_force</code> waits in the object for
+the first frame that has time in it, instead of being spent on a frame that could not move
+anything. A negative frame time, which a clock that went backwards across a suspend could produce,
+is handed to the game as 0.</p>
+
+<aside class="callout"><span class="callout-title">Note</span><p>raylib's
+<code>GetFrameTime()</code> is still there, and your own code can call it. It is the raw number:
+unclamped, and different from the <code>delta</code> the rest of the frame was given. Use
+<code>delta</code>.</p></aside>

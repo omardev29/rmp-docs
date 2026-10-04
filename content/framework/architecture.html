@@ -1,0 +1,620 @@
+<!--
+title: Architecture
+description: The five layers of a game made with raylib_multiplatform — your code, the modules, the core, raylib, and the targets — and what each one is responsible for.
+order: 10
+-->
+<h1>Architecture</h1>
+
+<p class="lede">A game made with this framework is five layers deep. At the top is the code you
+write; under it, the modules you choose to use; under those, a small core that runs the frame;
+under that, raylib; and at the bottom, the {{count:targets}} targets the same source is built
+for. Each layer only reaches down, never up.</p>
+
+<figure class="diagram">
+<svg class="rmp-arch rmp-arch-wide" viewBox="0 0 720 424" role="group" aria-labelledby="arch-wide-title">
+  <title id="arch-wide-title">The layers of a game made with the framework, top to bottom</title>
+  <style>
+.rmp-arch a { text-decoration: none; }
+.rmp-arch text { font-family: var(--font-ui); fill: var(--text); }
+.rmp-arch .band { fill: var(--bg-sunken); stroke: var(--border); }
+.rmp-arch .band-game { stroke: var(--accent); }
+.rmp-arch .box { fill: var(--bg-raised); stroke: var(--border-strong); }
+.rmp-arch .name { font-size: 12.5px; font-weight: 700; }
+.rmp-arch .sub { font-size: 10.5px; fill: var(--text-muted); }
+.rmp-arch .layer { font-size: 14px; font-weight: 750; }
+.rmp-arch .layer-sub { font-size: 11px; fill: var(--text-muted); }
+.rmp-arch a .name, .rmp-arch a .layer { fill: var(--accent); }
+.rmp-arch a:hover .box, .rmp-arch a:focus .box { stroke: var(--accent); stroke-width: 2; }
+.rmp-arch a:hover .layer, .rmp-arch a:focus .layer { text-decoration: underline; }
+.rmp-arch-narrow .name { font-size: 13px; }
+.rmp-arch-narrow .sub { font-size: 11px; }
+.diagram .rmp-arch-narrow { display: none; max-width: 26rem; margin: 0 auto; }
+@media (max-width: 640px) {
+  .diagram .rmp-arch-wide { display: none; }
+  .diagram .rmp-arch-narrow { display: block; }
+}
+  </style>
+  <g>
+    <rect class="band band-game" x="8" y="8" width="704" height="64" rx="8"/>
+    <text class="layer" x="22" y="38" text-anchor="start">Your game</text>
+    <text class="layer-sub" x="22" y="54" text-anchor="start">what you write</text>
+    <a href="ref:RMP_GAME">
+      <rect class="box" x="140" y="20" width="106" height="40" rx="5"/>
+      <text class="name" x="193" y="37" text-anchor="middle">RMP_GAME</text>
+      <text class="sub" x="193" y="51" text-anchor="middle">src/main.cpp</text>
+    </a>
+    <a href="/manual/core/scenes.html">
+      <rect class="box" x="254" y="20" width="106" height="40" rx="5"/>
+      <text class="name" x="307" y="37" text-anchor="middle">Scenes</text>
+      <text class="sub" x="307" y="51" text-anchor="middle">one per screen</text>
+    </a>
+    <a href="ref:rmp::Object">
+      <rect class="box" x="368" y="20" width="106" height="40" rx="5"/>
+      <text class="name" x="421" y="37" text-anchor="middle">Objects</text>
+      <text class="sub" x="421" y="51" text-anchor="middle">your classes</text>
+    </a>
+    <a href="ref:rmp::assets">
+      <rect class="box" x="482" y="20" width="106" height="40" rx="5"/>
+      <text class="name" x="535" y="37" text-anchor="middle">resources/</text>
+      <text class="sub" x="535" y="51" text-anchor="middle">art, sound, levels</text>
+    </a>
+    <a href="/framework/config-pipeline.html">
+      <rect class="box" x="596" y="20" width="106" height="40" rx="5"/>
+      <text class="name" x="649" y="37" text-anchor="middle">The .toml</text>
+      <text class="sub" x="649" y="51" text-anchor="middle">one config file</text>
+    </a>
+  </g>
+  <g>
+    <rect class="band" x="8" y="82" width="704" height="112" rx="8"/>
+    <text class="layer" x="22" y="136" text-anchor="start">Modules</text>
+    <text class="layer-sub" x="22" y="152" text-anchor="start">include what you use</text>
+    <a href="ref:rmp::ui">
+      <rect class="box" x="140" y="94" width="87" height="40" rx="5"/>
+      <text class="name" x="183.5" y="111" text-anchor="middle">rmp::ui</text>
+      <text class="sub" x="183.5" y="125" text-anchor="middle">on Clay</text>
+    </a>
+    <a href="ref:rmp::input">
+      <rect class="box" x="235" y="94" width="87" height="40" rx="5"/>
+      <text class="name" x="278.5" y="111" text-anchor="middle">rmp::input</text>
+      <text class="sub" x="278.5" y="125" text-anchor="middle">named actions</text>
+    </a>
+    <a href="ref:rmp::assets">
+      <rect class="box" x="330" y="94" width="87" height="40" rx="5"/>
+      <text class="name" x="373.5" y="111" text-anchor="middle">rmp::assets</text>
+      <text class="sub" x="373.5" y="125" text-anchor="middle">files or a pack</text>
+    </a>
+    <a href="ref:rmp::Tilemap">
+      <rect class="box" x="425" y="94" width="87" height="40" rx="5"/>
+      <text class="name" x="468.5" y="111" text-anchor="middle">rmp::Tilemap</text>
+      <text class="sub" x="468.5" y="125" text-anchor="middle">LDtk and Tiled</text>
+    </a>
+    <a href="ref:rmp::audio">
+      <rect class="box" x="520" y="94" width="87" height="40" rx="5"/>
+      <text class="name" x="563.5" y="111" text-anchor="middle">rmp::audio</text>
+      <text class="sub" x="563.5" y="125" text-anchor="middle">sounds by name</text>
+    </a>
+    <a href="ref:rmp::save">
+      <rect class="box" x="615" y="94" width="87" height="40" rx="5"/>
+      <text class="name" x="658.5" y="111" text-anchor="middle">rmp::save</text>
+      <text class="sub" x="658.5" y="125" text-anchor="middle">on cJSON</text>
+    </a>
+    <a href="ref:rmp::random">
+      <rect class="box" x="140" y="142" width="87" height="40" rx="5"/>
+      <text class="name" x="183.5" y="159" text-anchor="middle">rmp::random</text>
+      <text class="sub" x="183.5" y="173" text-anchor="middle">seeded</text>
+    </a>
+    <a href="ref:rmp::ads">
+      <rect class="box" x="235" y="142" width="87" height="40" rx="5"/>
+      <text class="name" x="278.5" y="159" text-anchor="middle">rmp::ads</text>
+      <text class="sub" x="278.5" y="173" text-anchor="middle">raymob, Android</text>
+    </a>
+    <a href="/reference/namespaces/rmp.html#header-math-h">
+      <rect class="box" x="330" y="142" width="87" height="40" rx="5"/>
+      <text class="name" x="373.5" y="159" text-anchor="middle">rmp/math.h</text>
+      <text class="sub" x="373.5" y="173" text-anchor="middle">vector operators</text>
+    </a>
+    <a href="ref:rmp::Camera">
+      <rect class="box" x="425" y="142" width="87" height="40" rx="5"/>
+      <text class="name" x="468.5" y="159" text-anchor="middle">rmp::Camera</text>
+      <text class="sub" x="468.5" y="173" text-anchor="middle">in every scene</text>
+    </a>
+    <a href="ref:rmp::behavior">
+      <rect class="box" x="520" y="142" width="87" height="40" rx="5"/>
+      <text class="name" x="563.5" y="159" text-anchor="middle">rmp::behavior</text>
+      <text class="sub" x="563.5" y="173" text-anchor="middle">the catalogue</text>
+    </a>
+  </g>
+  <g>
+    <rect class="band" x="8" y="204" width="704" height="64" rx="8"/>
+    <a href="/framework/the-frame.html">
+      <text class="layer" x="22" y="234" text-anchor="start">The core</text>
+    </a>
+    <text class="layer-sub" x="22" y="250" text-anchor="start">compiled once: rmp</text>
+    <a href="/framework/the-frame.html">
+      <rect class="box" x="140" y="216" width="106" height="40" rx="5"/>
+      <text class="name" x="193" y="233" text-anchor="middle">App and loop</text>
+      <text class="sub" x="193" y="247" text-anchor="middle">the frame</text>
+    </a>
+    <a href="ref:rmp::Scene">
+      <rect class="box" x="254" y="216" width="106" height="40" rx="5"/>
+      <text class="name" x="307" y="233" text-anchor="middle">Scene stack</text>
+      <text class="sub" x="307" y="247" text-anchor="middle">deferred changes</text>
+    </a>
+    <a href="ref:rmp::Handle">
+      <rect class="box" x="368" y="216" width="106" height="40" rx="5"/>
+      <text class="name" x="421" y="233" text-anchor="middle">Object storage</text>
+      <text class="sub" x="421" y="247" text-anchor="middle">slots and handles</text>
+    </a>
+    <a href="/framework/the-frame.html#collision">
+      <rect class="box" x="482" y="216" width="106" height="40" rx="5"/>
+      <text class="name" x="535" y="233" text-anchor="middle">Collision</text>
+      <text class="sub" x="535" y="247" text-anchor="middle">objects and map</text>
+    </a>
+    <a href="ref:rmp::Object::add">
+      <rect class="box" x="596" y="216" width="106" height="40" rx="5"/>
+      <text class="name" x="649" y="233" text-anchor="middle">Behavior engine</text>
+      <text class="sub" x="649" y="247" text-anchor="middle">any struct</text>
+    </a>
+  </g>
+  <g>
+    <rect class="band" x="8" y="278" width="704" height="64" rx="8"/>
+    <a href="fw:thirdparty/raylib/PATCHES.md">
+      <text class="layer" x="22" y="308" text-anchor="start">raylib 6.0</text>
+    </a>
+    <text class="layer-sub" x="22" y="324" text-anchor="start">modified, marked</text>
+      <rect class="box" x="140" y="290" width="73.4" height="40" rx="5"/>
+      <text class="name" x="176.7" y="307" text-anchor="middle">rcore</text>
+      <text class="sub" x="176.7" y="321" text-anchor="middle">window, input</text>
+      <rect class="box" x="221.4" y="290" width="73.4" height="40" rx="5"/>
+      <text class="name" x="258.1" y="307" text-anchor="middle">rlgl</text>
+      <text class="sub" x="258.1" y="321" text-anchor="middle">OpenGL</text>
+      <rect class="box" x="302.9" y="290" width="73.4" height="40" rx="5"/>
+      <text class="name" x="339.6" y="307" text-anchor="middle">rshapes</text>
+      <text class="sub" x="339.6" y="321" text-anchor="middle">shapes</text>
+      <rect class="box" x="384.3" y="290" width="73.4" height="40" rx="5"/>
+      <text class="name" x="421" y="307" text-anchor="middle">rtextures</text>
+      <text class="sub" x="421" y="321" text-anchor="middle">images</text>
+      <rect class="box" x="465.7" y="290" width="73.4" height="40" rx="5"/>
+      <text class="name" x="502.4" y="307" text-anchor="middle">rtext</text>
+      <text class="sub" x="502.4" y="321" text-anchor="middle">fonts</text>
+      <rect class="box" x="547.1" y="290" width="73.4" height="40" rx="5"/>
+      <text class="name" x="583.8" y="307" text-anchor="middle">raudio</text>
+      <text class="sub" x="583.8" y="321" text-anchor="middle">sound</text>
+      <rect class="box" x="628.6" y="290" width="73.4" height="40" rx="5"/>
+      <text class="name" x="665.3" y="307" text-anchor="middle">rmodels</text>
+      <text class="sub" x="665.3" y="321" text-anchor="middle">3D</text>
+  </g>
+  <g>
+    <rect class="band" x="8" y="352" width="704" height="64" rx="8"/>
+    <a href="/reference/configuration.html#section-targets">
+      <text class="layer" x="22" y="382" text-anchor="start">{{count:targets}} targets</text>
+    </a>
+    <text class="layer-sub" x="22" y="398" text-anchor="start">in {{count:families}} families</text>
+      <rect class="box" x="140" y="364" width="87" height="40" rx="5"/>
+      <text class="name" x="183.5" y="381" text-anchor="middle">linux</text>
+      <text class="sub" x="183.5" y="395" text-anchor="middle">glibc, musl, DRM</text>
+      <rect class="box" x="235" y="364" width="87" height="40" rx="5"/>
+      <text class="name" x="278.5" y="381" text-anchor="middle">windows</text>
+      <text class="sub" x="278.5" y="395" text-anchor="middle">x64, arm64</text>
+      <rect class="box" x="330" y="364" width="87" height="40" rx="5"/>
+      <text class="name" x="373.5" y="381" text-anchor="middle">apple</text>
+      <text class="sub" x="373.5" y="395" text-anchor="middle">macOS, iOS</text>
+      <rect class="box" x="425" y="364" width="87" height="40" rx="5"/>
+      <text class="name" x="468.5" y="381" text-anchor="middle">web</text>
+      <text class="sub" x="468.5" y="395" text-anchor="middle">WebAssembly</text>
+      <rect class="box" x="520" y="364" width="87" height="40" rx="5"/>
+      <text class="name" x="563.5" y="381" text-anchor="middle">android</text>
+      <text class="sub" x="563.5" y="395" text-anchor="middle">APK and AAB</text>
+      <rect class="box" x="615" y="364" width="87" height="40" rx="5"/>
+      <text class="name" x="658.5" y="381" text-anchor="middle">bsd</text>
+      <text class="sub" x="658.5" y="395" text-anchor="middle">Free, Open, Net</text>
+  </g>
+</svg>
+<svg class="rmp-arch rmp-arch-narrow" viewBox="0 0 360 1100" role="group" aria-labelledby="arch-narrow-title">
+  <title id="arch-narrow-title">The layers of a game made with the framework, top to bottom</title>
+  <g>
+    <rect class="band band-game" x="6" y="6" width="348" height="192" rx="8"/>
+    <text class="layer" x="18" y="26" text-anchor="start">Your game</text>
+    <text class="layer-sub" x="18" y="42" text-anchor="start">what you write</text>
+    <a href="ref:RMP_GAME">
+      <rect class="box" x="16" y="50" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="67" text-anchor="middle">RMP_GAME</text>
+      <text class="sub" x="96" y="81" text-anchor="middle">src/main.cpp</text>
+    </a>
+    <a href="/manual/core/scenes.html">
+      <rect class="box" x="184" y="50" width="160" height="40" rx="5"/>
+      <text class="name" x="264" y="67" text-anchor="middle">Scenes</text>
+      <text class="sub" x="264" y="81" text-anchor="middle">one per screen</text>
+    </a>
+    <a href="ref:rmp::Object">
+      <rect class="box" x="16" y="98" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="115" text-anchor="middle">Objects</text>
+      <text class="sub" x="96" y="129" text-anchor="middle">your classes</text>
+    </a>
+    <a href="ref:rmp::assets">
+      <rect class="box" x="184" y="98" width="160" height="40" rx="5"/>
+      <text class="name" x="264" y="115" text-anchor="middle">resources/</text>
+      <text class="sub" x="264" y="129" text-anchor="middle">art, sound, levels</text>
+    </a>
+    <a href="/framework/config-pipeline.html">
+      <rect class="box" x="16" y="146" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="163" text-anchor="middle">The .toml</text>
+      <text class="sub" x="96" y="177" text-anchor="middle">one config file</text>
+    </a>
+  </g>
+  <g>
+    <rect class="band" x="6" y="206" width="348" height="336" rx="8"/>
+    <text class="layer" x="18" y="226" text-anchor="start">Modules</text>
+    <text class="layer-sub" x="18" y="242" text-anchor="start">include what you use</text>
+    <a href="ref:rmp::ui">
+      <rect class="box" x="16" y="250" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="267" text-anchor="middle">rmp::ui</text>
+      <text class="sub" x="96" y="281" text-anchor="middle">on Clay</text>
+    </a>
+    <a href="ref:rmp::input">
+      <rect class="box" x="184" y="250" width="160" height="40" rx="5"/>
+      <text class="name" x="264" y="267" text-anchor="middle">rmp::input</text>
+      <text class="sub" x="264" y="281" text-anchor="middle">named actions</text>
+    </a>
+    <a href="ref:rmp::assets">
+      <rect class="box" x="16" y="298" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="315" text-anchor="middle">rmp::assets</text>
+      <text class="sub" x="96" y="329" text-anchor="middle">files or a pack</text>
+    </a>
+    <a href="ref:rmp::Tilemap">
+      <rect class="box" x="184" y="298" width="160" height="40" rx="5"/>
+      <text class="name" x="264" y="315" text-anchor="middle">rmp::Tilemap</text>
+      <text class="sub" x="264" y="329" text-anchor="middle">LDtk and Tiled</text>
+    </a>
+    <a href="ref:rmp::audio">
+      <rect class="box" x="16" y="346" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="363" text-anchor="middle">rmp::audio</text>
+      <text class="sub" x="96" y="377" text-anchor="middle">sounds by name</text>
+    </a>
+    <a href="ref:rmp::save">
+      <rect class="box" x="184" y="346" width="160" height="40" rx="5"/>
+      <text class="name" x="264" y="363" text-anchor="middle">rmp::save</text>
+      <text class="sub" x="264" y="377" text-anchor="middle">on cJSON</text>
+    </a>
+    <a href="ref:rmp::random">
+      <rect class="box" x="16" y="394" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="411" text-anchor="middle">rmp::random</text>
+      <text class="sub" x="96" y="425" text-anchor="middle">seeded</text>
+    </a>
+    <a href="ref:rmp::ads">
+      <rect class="box" x="184" y="394" width="160" height="40" rx="5"/>
+      <text class="name" x="264" y="411" text-anchor="middle">rmp::ads</text>
+      <text class="sub" x="264" y="425" text-anchor="middle">raymob, Android</text>
+    </a>
+    <a href="/reference/namespaces/rmp.html#header-math-h">
+      <rect class="box" x="16" y="442" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="459" text-anchor="middle">rmp/math.h</text>
+      <text class="sub" x="96" y="473" text-anchor="middle">vector operators</text>
+    </a>
+    <a href="ref:rmp::Camera">
+      <rect class="box" x="184" y="442" width="160" height="40" rx="5"/>
+      <text class="name" x="264" y="459" text-anchor="middle">rmp::Camera</text>
+      <text class="sub" x="264" y="473" text-anchor="middle">in every scene</text>
+    </a>
+    <a href="ref:rmp::behavior">
+      <rect class="box" x="16" y="490" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="507" text-anchor="middle">rmp::behavior</text>
+      <text class="sub" x="96" y="521" text-anchor="middle">the catalogue</text>
+    </a>
+  </g>
+  <g>
+    <rect class="band" x="6" y="550" width="348" height="192" rx="8"/>
+    <a href="/framework/the-frame.html">
+      <text class="layer" x="18" y="570" text-anchor="start">The core</text>
+    </a>
+    <text class="layer-sub" x="18" y="586" text-anchor="start">compiled once: rmp</text>
+    <a href="/framework/the-frame.html">
+      <rect class="box" x="16" y="594" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="611" text-anchor="middle">App and loop</text>
+      <text class="sub" x="96" y="625" text-anchor="middle">the frame</text>
+    </a>
+    <a href="ref:rmp::Scene">
+      <rect class="box" x="184" y="594" width="160" height="40" rx="5"/>
+      <text class="name" x="264" y="611" text-anchor="middle">Scene stack</text>
+      <text class="sub" x="264" y="625" text-anchor="middle">deferred changes</text>
+    </a>
+    <a href="ref:rmp::Handle">
+      <rect class="box" x="16" y="642" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="659" text-anchor="middle">Object storage</text>
+      <text class="sub" x="96" y="673" text-anchor="middle">slots and handles</text>
+    </a>
+    <a href="/framework/the-frame.html#collision">
+      <rect class="box" x="184" y="642" width="160" height="40" rx="5"/>
+      <text class="name" x="264" y="659" text-anchor="middle">Collision</text>
+      <text class="sub" x="264" y="673" text-anchor="middle">objects and map</text>
+    </a>
+    <a href="ref:rmp::Object::add">
+      <rect class="box" x="16" y="690" width="160" height="40" rx="5"/>
+      <text class="name" x="96" y="707" text-anchor="middle">Behavior engine</text>
+      <text class="sub" x="96" y="721" text-anchor="middle">any struct</text>
+    </a>
+  </g>
+  <g>
+    <rect class="band" x="6" y="750" width="348" height="192" rx="8"/>
+    <a href="fw:thirdparty/raylib/PATCHES.md">
+      <text class="layer" x="18" y="770" text-anchor="start">raylib 6.0</text>
+    </a>
+    <text class="layer-sub" x="18" y="786" text-anchor="start">modified, marked</text>
+      <rect class="box" x="16" y="794" width="104" height="40" rx="5"/>
+      <text class="name" x="68" y="811" text-anchor="middle">rcore</text>
+      <text class="sub" x="68" y="825" text-anchor="middle">window, input</text>
+      <rect class="box" x="128" y="794" width="104" height="40" rx="5"/>
+      <text class="name" x="180" y="811" text-anchor="middle">rlgl</text>
+      <text class="sub" x="180" y="825" text-anchor="middle">OpenGL</text>
+      <rect class="box" x="240" y="794" width="104" height="40" rx="5"/>
+      <text class="name" x="292" y="811" text-anchor="middle">rshapes</text>
+      <text class="sub" x="292" y="825" text-anchor="middle">shapes</text>
+      <rect class="box" x="16" y="842" width="104" height="40" rx="5"/>
+      <text class="name" x="68" y="859" text-anchor="middle">rtextures</text>
+      <text class="sub" x="68" y="873" text-anchor="middle">images</text>
+      <rect class="box" x="128" y="842" width="104" height="40" rx="5"/>
+      <text class="name" x="180" y="859" text-anchor="middle">rtext</text>
+      <text class="sub" x="180" y="873" text-anchor="middle">fonts</text>
+      <rect class="box" x="240" y="842" width="104" height="40" rx="5"/>
+      <text class="name" x="292" y="859" text-anchor="middle">raudio</text>
+      <text class="sub" x="292" y="873" text-anchor="middle">sound</text>
+      <rect class="box" x="16" y="890" width="104" height="40" rx="5"/>
+      <text class="name" x="68" y="907" text-anchor="middle">rmodels</text>
+      <text class="sub" x="68" y="921" text-anchor="middle">3D</text>
+  </g>
+  <g>
+    <rect class="band" x="6" y="950" width="348" height="144" rx="8"/>
+    <a href="/reference/configuration.html#section-targets">
+      <text class="layer" x="18" y="970" text-anchor="start">{{count:targets}} targets</text>
+    </a>
+    <text class="layer-sub" x="18" y="986" text-anchor="start">in {{count:families}} families</text>
+      <rect class="box" x="16" y="994" width="104" height="40" rx="5"/>
+      <text class="name" x="68" y="1011" text-anchor="middle">linux</text>
+      <text class="sub" x="68" y="1025" text-anchor="middle">glibc, musl, DRM</text>
+      <rect class="box" x="128" y="994" width="104" height="40" rx="5"/>
+      <text class="name" x="180" y="1011" text-anchor="middle">windows</text>
+      <text class="sub" x="180" y="1025" text-anchor="middle">x64, arm64</text>
+      <rect class="box" x="240" y="994" width="104" height="40" rx="5"/>
+      <text class="name" x="292" y="1011" text-anchor="middle">apple</text>
+      <text class="sub" x="292" y="1025" text-anchor="middle">macOS, iOS</text>
+      <rect class="box" x="16" y="1042" width="104" height="40" rx="5"/>
+      <text class="name" x="68" y="1059" text-anchor="middle">web</text>
+      <text class="sub" x="68" y="1073" text-anchor="middle">WebAssembly</text>
+      <rect class="box" x="128" y="1042" width="104" height="40" rx="5"/>
+      <text class="name" x="180" y="1059" text-anchor="middle">android</text>
+      <text class="sub" x="180" y="1073" text-anchor="middle">APK and AAB</text>
+      <rect class="box" x="240" y="1042" width="104" height="40" rx="5"/>
+      <text class="name" x="292" y="1059" text-anchor="middle">bsd</text>
+      <text class="sub" x="292" y="1073" text-anchor="middle">Free, Open, Net</text>
+  </g>
+</svg>
+<figcaption>Each layer is built on the one under it. A box with a link goes to its page.</figcaption>
+</figure>
+
+<p>The rest of this page takes the layers one at a time, from the top.</p>
+
+<h2 id="your-game">Your game</h2>
+
+<p>What a game is made of is deliberately small. The entry point is one line, the screens are
+scenes, the things in them are objects, the art is in a folder, and every setting is in one file.</p>
+
+<h3>The entry point</h3>
+
+<p>The whole of <code>src/main.cpp</code>, as the framework ships it and as
+<a href="/reference/commands.html#new"><code>rmp new</code></a> copies it into a new game:</p>
+
+<pre data-include="src/main.cpp"></pre>
+
+<p><a href="ref:RMP_GAME"><code>RMP_GAME</code></a> opens the window from <code>[window]</code> in
+<code>raylib_multiplatform.toml</code>, enters the scene you name, runs the scene stack every
+frame and closes everything on the way out. There is no <code>InitWindow()</code> to write and no
+loop: those lines were the same in every game, and on the web and on iOS the loop is not even
+yours to write — the browser and UIKit own it.</p>
+
+<p data-fw-grep="include/rmp/app.h::self-registering object is exactly">The first scene is named in
+code and not in the <code>.toml</code> on purpose. Choosing a scene by name means a table from
+names to types, and in C++ that table is built by objects that register themselves when the
+program starts. A linker building a static library or an iOS framework throws away any object
+file nothing refers to, and a self-registering object is exactly that: the game would build, run
+on a desktop and find no scenes on a phone. So the type is named where the compiler can see
+it.</p>
+
+<h3>Scenes, objects and resources</h3>
+
+<p>A scene is one screen — a menu, a level, a pause overlay — and an object is anything inside
+one: the player, a bullet, a coin. Both are classes you derive from
+<a href="ref:rmp::Scene"><code>rmp::Scene</code></a> and
+<a href="ref:rmp::Object"><code>rmp::Object</code></a>, one per file, under <code>src/</code>.
+A game made by <code>rmp new</code> starts with one, <code>src/scenes/main_menu.cpp</code>.</p>
+
+<p data-fw-grep="CMakeLists.txt::GLOB_RECURSE _game_sources CONFIGURE_DEPENDS">Every build system
+collects <code>src/</code> recursively, so a new file or a new folder needs no change to CMake,
+Gradle or Xcode.</p>
+
+<p>The art, the sounds and the levels go in <code>resources/</code> and are loaded by name:
+<code>rmp::assets::load_texture("player.png")</code>. While you develop they are read from that
+folder; a release packs them into one <code>resources.rres</code> file, optionally encrypted, and
+the same call reads them from there (<a href="/reference/commands.html#pack"><code>rmp pack</code></a>
+does the packing by hand).</p>
+
+<h3>One configuration file</h3>
+
+<p>Everything a build system needs to know about the game — its name, its window, its
+identifiers on the stores, the targets it is built for — is in
+<code>raylib_multiplatform.toml</code>. It is the only file of that kind you edit:
+<code>tools/configure.py</code> turns it into what CMake, Gradle and Xcode read, so the three
+cannot disagree with it. <a href="/framework/config-pipeline.html">The config pipeline</a> follows
+it all the way through, and <a href="/reference/configuration.html">Configuration</a> lists every
+key.</p>
+
+<h2 id="modules">The modules</h2>
+
+<p>Everything the framework adds to raylib is under <code>rmp::</code>, one header per module.
+There is no header that includes them all: a file that draws the HUD includes
+<code>rmp/ui.h</code> and knows nothing of saving or sound. <a href="/framework/why/one-header-per-module.html">Why it is split this way</a>
+has the reasons and the measurements.</p>
+
+<table>
+<thead><tr><th>Header</th><th>What it gives you</th><th>Built on</th></tr></thead>
+<tbody>
+<tr><td><code>rmp/ui.h</code></td><td><a href="ref:rmp::ui"><code>rmp::ui</code></a>: menus, buttons, layout, themes, in screen space</td><td>Clay, the layout engine</td></tr>
+<tr><td><code>rmp/input.h</code></td><td><a href="ref:rmp::input"><code>rmp::input</code></a>: named actions bound to keys, buttons and sticks, and the pointer</td><td>raylib's input, sampled once a frame</td></tr>
+<tr><td><code>rmp/assets.h</code></td><td><a href="ref:rmp::assets"><code>rmp::assets</code></a> and <a href="ref:rmp::Texture"><code>rmp::Texture</code></a> and its siblings: loading by name, released by themselves</td><td>rres for the pack, cute_aseprite for sprite sheets</td></tr>
+<tr><td><code>rmp/tilemap.h</code></td><td><a href="ref:rmp::Tilemap"><code>rmp::Tilemap</code></a>: a level made in LDtk or Tiled</td><td>cJSON for LDtk, cute_tiled for Tiled</td></tr>
+<tr><td><code>rmp/audio.h</code></td><td><a href="ref:rmp::audio"><code>rmp::audio</code></a>: sounds and music by name, three volume buses</td><td>raylib's raudio</td></tr>
+<tr><td><code>rmp/save.h</code></td><td><a href="ref:rmp::save"><code>rmp::save</code></a> and <a href="ref:rmp::Value"><code>rmp::Value</code></a>: save slots in the platform's own folder</td><td>cJSON, and Monocypher to seal a file</td></tr>
+<tr><td><code>rmp/random.h</code></td><td><a href="ref:rmp::random"><code>rmp::random</code></a>: one seeded generator you can replay</td><td>xoshiro128++, written out</td></tr>
+<tr><td><code>rmp/ads.h</code></td><td><a href="ref:rmp::ads"><code>rmp::ads</code></a>: interstitial and rewarded ads</td><td>raymob's AdMob bridge on Android; nothing anywhere else</td></tr>
+<tr><td><code>rmp/math.h</code></td><td><a href="/reference/namespaces/rmp.html#header-math-h">arithmetic</a>: <code>+</code>, <code>-</code> and <code>*</code> on raylib's own vectors, and raylib-cpp's math classes for those who want methods</td><td>raylib's raymath, and the math headers of raylib-cpp</td></tr>
+<tr><td><code>rmp/behavior.h</code></td><td><a href="ref:rmp::behavior"><code>rmp::behavior</code></a>: the catalogue — movement, health, timers, spawners</td><td>the core's behavior engine</td></tr>
+<tr><td><code>rmp/scene.h</code></td><td><a href="ref:rmp::Scene"><code>rmp::Scene</code></a> and <a href="ref:rmp::Camera"><code>rmp::Camera</code></a></td><td>the core</td></tr>
+<tr><td><code>rmp/object.h</code></td><td><a href="ref:rmp::Object"><code>rmp::Object</code></a>, <a href="ref:rmp::Handle"><code>rmp::Handle</code></a>, <a href="ref:rmp::Callback"><code>rmp::Callback</code></a></td><td>the core</td></tr>
+<tr><td><code>rmp/app.h</code></td><td><a href="ref:RMP_GAME"><code>RMP_GAME</code></a>, <a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> and <a href="ref:rmp::global"><code>rmp::global</code></a></td><td>the core</td></tr>
+</tbody>
+</table>
+
+<p>Opt-in means two things here, and it is worth being exact about both.</p>
+
+<p><strong>You include what you use.</strong> Each header is a module you can take or leave, and
+none of them is an umbrella for the others. A few do bring another one with them, and say why at
+the top: <code>rmp/scene.h</code> includes <code>rmp/object.h</code> and
+<code>rmp/tilemap.h</code>, because a scene holds its map by value and spawns objects;
+<code>rmp/object.h</code> includes <code>rmp/assets.h</code>, because a sprite holds a texture by
+value. Every public header also includes <code>rmp/config.h</code>, the values from the
+<code>.toml</code>, so you never type that one.</p>
+
+<p><strong>You pay for what you use.</strong> A camera and a map are fields of every scene: a map
+nobody loads draws nothing and stops nothing, and a camera nobody touches shows the world at the
+design resolution as it is. The UI starts Clay on the
+first <code>rmp::ui::begin()</code> of the game, and the sound device opens on the first call
+that needs it, so a game with no menus has no UI arena and a game with no sound never opens the
+device.</p>
+
+<p data-fw-grep="include/rmp/assets.h::THEY CONVERT">None of it walls raylib off. An
+<code>rmp::Texture</code> converts to the <code>Texture2D</code> it wraps, so every raylib
+function that takes one takes it; a scene can open the camera and draw with raylib directly; and
+<a href="/examples/plain_c.html">a game in plain C</a> can skip the framework altogether and still
+be built for every target.</p>
+
+<h2 id="core">The core</h2>
+
+<p>Under the modules is the part every game uses, whether it includes a module or not: the code
+that runs a frame. It is five pieces, and their order within one frame is the subject of
+<a href="/framework/the-frame.html">One frame</a>.</p>
+
+<dl>
+<dt>The app and the frame loop</dt>
+<dd><p data-fw-grep="include/rmp/app.h::#define RMP_ENTRY_POINT\(READY, FRAME, STOP\) RMP_DESKTOP_FUNCS">
+<a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a> writes the program's entry point
+for the platform it is compiled for, because there are three shapes of one. On Windows, Linux,
+macOS, the BSDs and Android it is a <code>main()</code> with a loop. On the web the browser owns
+the loop and calls a function back once a frame, through
+<code>emscripten_set_main_loop()</code>. On iOS UIKit owns it, and the program is three callbacks.
+All three do the same things in the same order around your code, and
+<a href="ref:RMP_GAME"><code>RMP_GAME</code></a> is that macro with the three hooks written for
+you.</p></dd>
+
+<dt>The scene stack</dt>
+<dd><p data-fw-grep="src/rmp/scene.cpp::std::vector&lt;std::unique_ptr&lt;Scene&gt;&gt; items;">A
+vector of owning pointers, and a queue of the transitions asked for during the frame.
+<a href="ref:rmp::Scene::change"><code>change</code></a>,
+<a href="ref:rmp::Scene::push"><code>push</code></a>,
+<a href="ref:rmp::Scene::replace"><code>replace</code></a> and
+<a href="ref:rmp::Scene::pop"><code>pop</code></a> only record; the stack changes when the frame is
+over, because the call usually comes from inside the scene that is about to go.</p></dd>
+
+<dt>The object storage</dt>
+<dd><p data-fw-grep="src/rmp/object.cpp::std::unique_ptr&lt;Object&gt; object;">Every object of every
+scene lives in one pool of slots. A slot owns its object through a
+<code>std::unique_ptr</code> and carries a generation number. A
+<a href="ref:rmp::Handle"><code>rmp::Handle</code></a> is the slot's index and that generation, so
+a handle to an object that died stays dead even when the slot holds something new. Destruction is
+deferred to the end of the frame, which is what makes the reference
+<a href="ref:rmp::Scene::spawn"><code>spawn()</code></a> returns good for the rest of it.</p></dd>
+
+<dt>Collision and the map</dt>
+<dd><p data-fw-grep="src/rmp/collision.cpp::WHY THIS IS OURS AND NOT BOX2D">Arcade collision, written
+for the framework: rectangles and circles, a uniform grid so only near pairs are tested, a swept
+test so a fast object cannot pass through a thin one between two frames, and separation for the
+pairs that are both <a href="ref:rmp::Object::solid"><code>solid</code></a>. A solid object that
+is not <a href="ref:rmp::Object::immovable"><code>immovable</code></a> is stopped by the map's solid cells one axis at a time, so it runs along a floor of tiles
+without catching on the seams. It is not a physics engine, by decision: a rigid-body library
+would make <code>position</code> a mirror of somebody else's body, and a Pong ball would need a
+density and a friction to bounce.</p></dd>
+
+<dt>The behavior engine</dt>
+<dd><p data-fw-grep="include/rmp/object.h::template &lt;class B&gt; const BehaviorOps &amp;ops_for\(\)">A
+behavior is any struct with an <code>_update(rmp::Object &amp;, float)</code>. The engine finds
+its optional hooks at compile time with <code>requires</code>, keeps one table of function
+pointers per type, and owns the struct through a <code>std::shared_ptr&lt;void&gt;</code> that
+carries its destructor. A behavior of yours and one of the catalogue's are the same kind of
+thing; there is no base class and nothing to register.</p></dd>
+</dl>
+
+<p data-fw-grep="CMakeLists.txt::list\(REMOVE_ITEM RMP_SOURCES .*/src/rmp/app.cpp">In
+a CMake build — the desktops, the BSDs and the web — the framework is compiled once into a static
+library called <code>rmp</code>, and the game and every example written in C++ link it. The one file kept out of
+the library is <code>src/rmp/app.cpp</code>: each executable compiles its own copy, because it
+refers to the symbol the entry-point macro defines, and that reference is what turns a program
+with no <code>RMP_GAME</code> into a link error that names what is missing. The Android build
+and the iOS project compile <code>src/</code> as a whole into the app, framework and game
+together.</p>
+
+<h2 id="raylib">raylib 6.0, modified</h2>
+
+<p>Under the core is <a href="https://www.raylib.com/">raylib</a> 6.0, vendored in
+<code>thirdparty/raylib</code>. The copy is modified, and says so: the zlib licence requires an
+altered copy to be plainly marked, and <a href="fw:thirdparty/raylib/PATCHES.md">its
+<code>PATCHES.md</code></a> lists every change — build-system and platform-selection patches, so
+the windowing backend can be chosen from the <code>.toml</code>, and fixes to
+<code>raudio.c</code> backported from upstream. Nothing raylib bundles under
+<code>thirdparty/raylib/src/external/</code> is touched. <a href="/framework/licences.html">Licences</a> has the
+rest.</p>
+
+<p>raylib is built in modules, and the framework leans on most of them:</p>
+
+<table>
+<thead><tr><th>Module</th><th>What it does</th><th>Can a game leave it out?</th></tr></thead>
+<tbody>
+<tr><td><code>rcore</code></td><td>the window, input, timing</td><td>No: raylib requires it</td></tr>
+<tr><td><code>rlgl</code></td><td>the OpenGL layer under every draw call</td><td>No: raylib requires it</td></tr>
+<tr><td><code>rshapes</code></td><td>rectangles, circles, lines</td><td>No: <code>rmp::ui</code> draws every panel and button with it</td></tr>
+<tr><td><code>rtextures</code></td><td>images and textures</td><td>No: the asset layer and the CI render check are built on it</td></tr>
+<tr><td><code>rtext</code></td><td>fonts and text</td><td>No: the rres loader calls into it</td></tr>
+<tr><td><code>raudio</code></td><td>sound and music</td><td>Yes</td></tr>
+<tr><td><code>rmodels</code></td><td>3D models and meshes</td><td>Yes</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="tools/configure.py::OPTIONAL_MODULES = \{&quot;rmodels&quot;, &quot;raudio&quot;\}">Leaving one
+out is <a href="/reference/configuration.html#raylib-disabled_modules"><code>[raylib]
+disabled_modules</code></a>, and <code>configure.py</code> refuses the modules in the third column
+that say no, with the reason, before anything compiles. The iOS build links a prebuilt raylib and
+ignores the setting.</p>
+
+<pre data-lang="toml" data-expect="reject">
+[raylib]
+disabled_modules = ["rshapes"]
+</pre>
+
+<h2 id="targets">The targets</h2>
+
+<p>At the bottom are the platforms the same source is built for: {{count:targets}} targets in
+{{count:families}} families. A family is the set of targets one CI workflow builds.</p>
+
+<div data-generated="targets-table"></div>
+
+<p>A target's name is <code>&lt;os&gt;-&lt;arch&gt;-&lt;libc&gt;-&lt;env&gt;</code>, and each part is
+there only when it can differ. <code>linux-x64-glibc</code> and <code>linux-x64-musl</code> name
+their C library because a binary built for one does not start on a system with the other: musl and
+glibc are two libraries, not two versions of one. The last part is the windowing system —
+<code>drm</code> draws straight to the screen with no X11 and no Wayland — and is absent when the
+binary carries every backend and picks one when it starts. <code>windows-x64</code> and
+<code>macos</code> stop early because Windows has one C library and the macOS build is
+universal.</p>
+
+<p>Each family has its own build system underneath, all of them fed from the same
+<code>.toml</code>: CMake for the desktops, the BSDs and the web, Gradle for Android, and an
+Xcode project generated by XcodeGen for iOS. A push to the framework builds Linux x64, the web,
+Android and Windows x64; a release tag builds every target, boots the ones a runner can boot, and
+checks that each one drew — <a href="/framework/testing.html">Testing</a> says how.</p>

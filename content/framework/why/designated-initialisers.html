@@ -1,0 +1,139 @@
+<!--
+title: Designated initialisers
+description: Why options are written as { .field = value }, why the fields of every options struct are declared in the order you would write them, and why a behavior has no base class.
+order: 50
+-->
+<h1>Designated initialisers</h1>
+
+<p class="lede">Almost everything in the framework that takes options takes a plain struct, and
+the struct is written with C++20's designated initialisers: <code>{ .speed = 320 }</code>. It is
+the closest C++ has to named arguments, and it is why the API reads the way it does. It comes with
+one rule the language imposes, and the framework is arranged around that rule so you rarely
+meet it.</p>
+
+<h2 id="what-it-buys">What it buys</h2>
+
+<p>A call says what each value is, leaves out everything it does not change, and keeps working when
+a new option is added:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;wall = spawn({ .position = { 400, 225 }, .size = { 20, 200 } });
+wall.solid = true;
+wall.immovable = true;
+
+auto &amp;player = spawn({ .position = { 100, 300 }, .size = { 24, 40 }, .layer = 1 });
+player.add&lt;rmp::behavior::TopDown&gt;({ .speed = 220 });
+</pre>
+
+<p>The same shape runs through the whole framework: what
+<a href="ref:rmp::Scene::spawn"><code>spawn()</code></a> takes
+(<a href="ref:rmp::ObjectOptions"><code>rmp::ObjectOptions</code></a>), every container and widget
+of <code>rmp::ui</code>, the volume and pitch of a sound, the options of a save, a raycast's query,
+and every behavior in the catalogue. Each field has its default written next to it in the header,
+so the defaults are visible in the one place you would look.</p>
+
+<h2 id="order">Declaration order</h2>
+
+<p>The rule: C++20 requires designated initialisers to be written in the order the fields are
+declared. Here the struct declares <code>grow_x</code>, <code>width</code>, <code>grow_y</code>,
+<code>height</code>:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::begin();
+rmp::ui::column({ .width = 240, .grow_y = true }, [] {
+    rmp::ui::text("Inventory");
+});
+rmp::ui::end();
+</pre>
+
+<p>Written the other way round, <code>{ .grow_y = true, .width = 240 }</code> breaks the rule, and
+what happens next depends on the compiler. GCC refuses it: <em>designator order for field … does not
+match declaration order</em>. Clang accepts it with a warning, <code>-Wreorder-init-list</code>,
+and initialises the fields in declaration order anyway. A game is built with more than one
+compiler on its way to every target — the NetBSD build uses GCC — so an order that compiles with a
+warning on your machine is an order that can stop a build somewhere else. Treat that warning as an
+error.</p>
+
+<p data-fw-grep="include/rmp/ui.h::Sizing is interleaved by axis — x then y — rather than grouped by kind">Because
+of that, every options struct in the framework is declared in the order its fields are most likely
+to be written, rather than alphabetically or by importance. Sizing comes first, then appearance,
+then identity: in <code>rmp::ui</code>, an <code>id</code> is the last field of every struct
+that has one. And the sizing fields of a
+container are interleaved by axis, <code>grow_x, width, grow_y, height</code>, rather than grouped
+by kind: grouped, the most ordinary layout there is — a fixed-width sidebar that fills the height,
+<code>{ .width = 240, .grow_y = true }</code> — would be illegal. This way round every combination
+is in order.</p>
+
+<h2 id="aggregates">Only an aggregate can be written this way</h2>
+
+<p>Designated initialisers work on an <em>aggregate</em>: a struct with public fields and no
+constructors, no virtual functions and no virtual or private base. Give a struct a virtual
+function and the syntax stops working, with an error both compilers agree on:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="error" data-error="non-aggregate type">
+struct Spin {
+    virtual ~Spin() = default;
+    float degrees_per_second = 90;
+    void _update(rmp::Object &amp;self, float delta) {
+        self.rotation += degrees_per_second * delta;
+    }
+};
+
+Spin fast{ .degrees_per_second = 180 };
+</pre>
+
+<p>That is the whole reason a <a href="ref:rmp::Object::add">behavior</a> inherits from nothing.
+The obvious design — a <code>Behavior</code> base class with a virtual <code>update</code> — would
+have turned <code>add&lt;TopDown&gt;({ .speed = 220 })</code> into a constructor taking an options
+struct, and every later read into something like <code>get&lt;TopDown&gt;()-&gt;options.speed</code>.
+Without the base class, the fields <em>are</em> the configuration, and they stay live:</p>
+
+<pre data-lang="cpp" data-harness="object">
+add&lt;rmp::behavior::TopDown&gt;({ .speed = 220 });
+get&lt;rmp::behavior::TopDown&gt;()-&gt;speed = 400;
+</pre>
+
+<p data-fw-grep="include/rmp/object.h::a behavior must not have virtual functions: a struct with them">A
+behavior with a virtual function would compile up to the moment someone wrote its options, so
+<code>add()</code> refuses one outright, with a sentence that says why. The hooks a behavior may
+have are found at compile time with <code>requires</code> instead of through virtual
+functions.</p>
+
+<p>The same reasoning is why the small struct an <a href="ref:rmp::Sprite"><code>rmp::Sprite</code></a>
+uses to track its animation is public: a private member would stop the sprite being an
+aggregate.</p>
+
+<h2 id="through-a-template">Through a template, the type needs a name</h2>
+
+<p>A braced list on its own has no type, and a function template that forwards its arguments
+cannot deduce one for it. So data passed to a scene through
+<a href="ref:rmp::Scene::change"><code>change()</code></a>, <code>push()</code> or
+<code>replace()</code> cannot be a bare braced list:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="no matching function for call to" data-given="struct GameScene : rmp::Scene { struct Start { int level = 1; bool hard = false; }; explicit GameScene(Start) {} };">
+rmp::Scene::change&lt;GameScene&gt;({ .level = 3, .hard = true });
+</pre>
+
+<p>Give the struct a name and it works, designators and all:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class GameScene : public rmp::Scene {
+public:
+    struct Start {
+        int level = 1;
+        bool hard = false;
+    };
+    explicit GameScene(Start start) : _start(start) {}
+
+private:
+    Start _start;
+};
+
+void play_level_three() {
+    rmp::Scene::change&lt;GameScene&gt;(GameScene::Start{ .level = 3, .hard = true });
+}
+</pre>
+
+<p>That is C++, not a decision of the framework's. <code>spawn()</code> does not have the problem,
+because it is not variadic: it takes an <code>rmp::ObjectOptions</code>, and the braced list knows
+what to become.</p>

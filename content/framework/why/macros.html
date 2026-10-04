@@ -1,0 +1,169 @@
+<!--
+title: Macros
+description: Macros are not the enemy — where the framework uses one because nothing else can do the job, the one rule it keeps about them, and how their names stay out of everyone else's way.
+order: 80
+-->
+<h1>Macros</h1>
+
+<p class="lede">The framework is built on raylib, which is C, and it does not pretend otherwise:
+raylib's macros — <code>RAYWHITE</code>, <code>CLITERAL</code>, <code>DEG2RAD</code> — are used
+as they are, in the framework and in your game. The framework adds macros of its own only where a
+macro is the one tool that can do the job, and keeps one rule about them: no header makes you use
+one, except for the line that starts your game.</p>
+
+<h2 id="entry-point">The entry point</h2>
+
+<p>The clearest case. Depending on the platform, the entry point of a program is one of three
+different things: a <code>main()</code> that runs a loop, a <code>main()</code> that hands one
+frame function to the browser and returns, or three <code>extern "C"</code> functions that iOS
+calls. No function and no template can define <code>main()</code> on one platform and three other
+functions on another; the preprocessor can. So the entry point is a macro:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="struct MainMenuScene : rmp::Scene {};">
+RMP_GAME(MainMenuScene);
+</pre>
+
+<p data-fw-grep="include/rmp/app.h::#define RMP_GAME\(SceneType\)">
+<a href="ref:RMP_GAME"><code>RMP_GAME</code></a> writes the three hooks for the scene stack and
+hands them to <a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a>, which picks the shape
+for the platform being compiled. A game that wants its own hooks calls
+<code>RMP_ENTRY_POINT</code> directly, as <a href="/framework/the-frame.html#own-frame">One frame</a>
+shows. The bodies are written once, in <code>rmp/app.h</code>, and every platform-specific thing
+they do is a call to a function compiled in <code>src/rmp/app.cpp</code>: the macro is only the
+shape of the entry point.</p>
+
+<p data-fw-grep="include/rmp/app.h::#define RMP_DECLARE_ENTRY_POINT_ONCE">One more macro rides along
+with them, <a href="ref:RMP_DECLARE_ENTRY_POINT_ONCE"><code>RMP_DECLARE_ENTRY_POINT_ONCE</code></a>,
+and its only job is to make two mistakes read like sentences. Each entry point defines a function
+called <code>rmp_entry_point_is_declared_exactly_once</code>, and the framework refers to it. A
+program with two entry points gets a duplicate definition of that name from the linker; a program
+with none is told that name is missing — instead of a message about <code>main</code> that says
+nothing to someone who never wrote one.</p>
+
+<h2 id="toml-values">The values from the .toml</h2>
+
+<p data-fw-grep="tools/configure.py::\(&quot;RMP_WINDOW_WIDTH&quot;, &quot;window\.width&quot;">Every value of
+<code>raylib_multiplatform.toml</code> a game can read in code is a macro of the generated
+<code>rmp/config.h</code>: <code>RMP_WINDOW_WIDTH</code>, <code>RMP_WINDOW_TITLE</code>,
+<code>RMP_MAX_DELTA</code> and the rest. They are macros and not constants for two reasons. A game
+in plain C uses them too, and C has no namespace to keep a constant in:</p>
+
+<pre data-lang="c" data-harness="c99">
+#include &lt;rmp/config.h&gt;
+
+int main(void) {
+    InitWindow(RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT, RMP_WINDOW_TITLE);
+    while (!WindowShouldClose()) {
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        EndDrawing();
+    }
+    CloseWindow();
+    return 0;
+}
+</pre>
+
+<p>And the preprocessor can test a macro, so code that only makes sense with a setting can be left
+out of the build when the setting is off. clang-tidy's suggestion to turn macros into an enum is
+switched off for exactly these.</p>
+
+<h2 id="report-once">Said once</h2>
+
+<p data-fw-grep="src/rmp/internal.h::static const char rmp_report_site_ = 0;">Inside the framework,
+one macro carries every diagnostic a game can trigger every frame — an action nobody defined, a
+tag that is not in the sprite sheet, a <code>pop()</code> with nothing underneath. It is
+RMP_REPORT_ONCE, in <code>src/rmp/internal.h</code>, and it is a macro because every place it is
+written needs a variable of its own, and only a macro can declare one there for you.</p>
+
+<pre data-lang="text">
+#define RMP_REPORT_ONCE(...)                                        \
+    do {                                                            \
+        static const char rmp_report_site_ = 0;                     \
+        ::rmp::detail::report_once(&amp;rmp_report_site_, __VA_ARGS__); \
+    } while (0)
+</pre>
+
+<p>Each place the macro is written gets its own static variable, and that variable's address is
+the key. The report function keeps the keys it has seen and prints a line only for a new one, so a
+mistake in a game's <code>_update</code> is one line in the log and not sixty a second. A second
+form takes a key as well, so a missing action called "jump" and a missing action called "fire" are
+two lines. Under <a href="/reference/configuration.html#dev-strict"><code>[dev] strict</code></a>
+the first report aborts a debug build. It is the framework's own tool and not part of the API:
+<a href="/framework/why/no-exceptions.html">No exceptions</a> says what it reports and what it
+deliberately does not.</p>
+
+<h2 id="build-macros">Set by the build</h2>
+
+<p data-fw-grep="src/rmp/app.cpp::#error &quot;RMP_PRODUCTION_BUILD is not defined: the build system has to pass it \(0 or 1\)&quot;">Two
+more macros come from the build system rather than from the <code>.toml</code>.
+RMP_PRODUCTION_BUILD is 1 in a release build and 0 otherwise, so a game can keep debugging aids
+out of what it ships:</p>
+
+<pre data-lang="cpp" data-harness="function">
+#if !RMP_PRODUCTION_BUILD
+DrawFPS(10, 10);
+#endif
+</pre>
+
+<p>Every build system defines it — CMake from its <code>PRODUCTION_BUILD</code> option, Gradle per
+build variant, the Xcode project per configuration — and the framework refuses to compile if one
+forgets, with an <code>#error</code> that says so. That refusal exists because of how the
+preprocessor treats a name it does not know: in an <code>#if</code> it is not an error, it is 0, and
+a release build would quietly include everything meant only for debugging.</p>
+
+<p>The other is RMP_RESOURCES_PATH, the folder assets are read from: the absolute path of the
+project's <code>resources/</code> while you develop, so the game finds its assets from any working
+directory, and <code>./resources/</code> beside the executable in a release. Each executable gets
+its own, which is how an example with its own art reads its own folder.</p>
+
+<p>The CMake options themselves keep CMake's own names, <code>PRODUCTION_BUILD</code> and
+<code>RESOURCES_PATH</code>: they live in CMake's cache and never reach the preprocessor. What C++
+sees is always spelled <code>RMP_</code>.</p>
+
+<h2 id="the-rule">The rule: a header never makes you write one</h2>
+
+<p data-fw-grep="src/rmp/ui/controls.cpp::Clay__OpenElement\(\);">Clay, the layout engine under
+<code>rmp::ui</code>, is a C library whose API is mostly macros: an element is
+<code>CLAY(...) { ... }</code>. <code>rmp::ui</code> does not hand you that. Its containers are
+functions that take a lambda, and behind them <code>rmp/ui.h</code> declares a function that opens
+an element and one that closes it, both compiled in <code>src/rmp/ui/</code>, where they call
+Clay's own functions rather than its macros. So no Clay type or macro appears in the header you
+include, and there is no closing call to forget: the container closes when your lambda
+returns.</p>
+
+<p>Clay's macros are not forbidden to you, only kept out of your way. A game can include Clay and
+use them directly, and <a href="/examples/ui/03_clay_direct.html">an example does</a>.</p>
+
+<h2 id="constants">What the framework adds is a constant</h2>
+
+<p data-fw-grep="include/rmp/math.h::Constants and not macros,\s+// like the rest of what we add">raylib's
+colours are macros, because raylib is C. The two the framework adds, in <code>rmp/math.h</code>,
+are <code>constexpr</code> values in <code>namespace rmp</code>:
+<a href="ref:rmp::ALICE_BLUE"><code>rmp::ALICE_BLUE</code></a> and
+<a href="ref:rmp::GIORNO_GOLD"><code>rmp::GIORNO_GOLD</code></a>. Outside the cases above, that is
+the rule: a value the framework defines is a constant in a namespace, where it cannot collide with
+anything.</p>
+
+<h2 id="names">One namespace for every macro</h2>
+
+<p>The preprocessor has a single namespace, shared by raylib, the C library, every vendored
+library and your game, and it runs before the compiler knows what a namespace is. Three rules
+follow, and <code>tools/naming_check.sh</code> enforces all three:</p>
+
+<ul>
+<li><strong>Every macro of the framework starts with <code>RMP_</code></strong>, and never with
+<code>__</code> or an underscore and a capital letter, which belong to the compiler and the C
+library. A vendored library's own switches keep their names, in the one file that configures
+it.</li>
+<li><strong>No constant is named like somebody else's macro.</strong> <code>PI</code>,
+<code>MIN</code>, <code>MAX</code>, <code>EPSILON</code>: each is a macro on some platform, and a
+constant with that name compiles everywhere except there. <a href="/framework/why/naming.html">Naming</a>
+lists them.</li>
+<li><strong>No retired name is left in an <code>#if</code>.</strong> When a macro is renamed, a test
+of the old name does not fail: the old name is undefined, and undefined is 0.</li>
+</ul>
+
+<p data-fw-grep="include/rmp/app.h::// clang-format off">And one practical note. The platform
+entry-point macros in <code>rmp/app.h</code> are the one place the framework's sources are exempt
+from automatic formatting, because their bodies hold block comments, and every formatter mangles
+a block comment inside a macro.</p>

@@ -1,16 +1,58 @@
 <!--
 title: The framework
-description: How the framework is put together, and why it is built the way it is.
+description: How raylib_multiplatform is put together — its layers, one frame in order, the config pipeline, how it is tested, its licences — and why it is built the way it is.
 order: 1
 -->
 <h1>The framework</h1>
 
-<p class="lede">What the framework is made of, and the reasons behind the shape it has. You do not
-need any of this to make a game; it is here for when you want to know why.</p>
+<p class="lede">What the framework is made of, the order it does things in, and the reasons behind
+the shape it has. You do not need any of this to make a game. It is here for when you want to know
+why something works the way it does, or what exactly happens between your <code>_update</code> and
+the picture on the screen.</p>
 
-<p>Three things, in short. The <code>rmp</code> library, compiled once and linked by your game: the
-headers under <code>include/rmp/</code>, one per module, and their implementation under
-<code>src/rmp/</code>. One configuration file, <code>raylib_multiplatform.toml</code>, which
+<h2>In short</h2>
+
+<p>Three things. The <code>rmp</code> library: one header per module under
+<code>include/rmp/</code> and their implementation under <code>src/rmp/</code>, compiled into
+your game. One configuration file, <code>raylib_multiplatform.toml</code>, which
 <code>tools/configure.py</code> turns into what CMake, Gradle and Xcode read, so they cannot
-disagree with it. And CI that builds the game for {{count:targets}} targets, starts it, and checks
-that it drew.</p>
+disagree with it. And a CI that builds the game for {{count:targets}} targets, starts it, and
+checks that it drew.</p>
+
+<h2>How it is put together</h2>
+
+<dl>
+<dt><a href="/framework/architecture.html">Architecture</a></dt>
+<dd>The five layers, from your code down to the targets: what each one is responsible for, which
+libraries sit where, and how the modules depend on one another.</dd>
+<dt><a href="/framework/the-frame.html">One frame</a></dt>
+<dd>Everything that happens between one picture and the next, in the order the framework does it:
+input, the scenes and their objects, collision, the camera, drawing, and the changes that wait for
+the end of the frame.</dd>
+<dt><a href="/framework/config-pipeline.html">The config pipeline</a></dt>
+<dd>How one <code>.toml</code> becomes the input of every build system, why a mistake in it stops
+in the first second with the line it is on, and what each generated file is for.</dd>
+<dt><a href="/framework/testing.html">Testing</a></dt>
+<dd>Unit tests with no window, a frame rendered in software and compared, the game booted on
+every target a runner can start, every example run, a game played by a bot — and what
+<code>rmp test</code> runs in your game.</dd>
+<dt><a href="/framework/licences.html">Licences</a></dt>
+<dd>The framework's MIT licence, the modified raylib under it, every component it carries, and the
+notice that ships with your game.</dd>
+</dl>
+
+<h2>Why it is built this way</h2>
+
+<p>The decisions behind the API, each with its reason and, where there is one, the tool that keeps
+it true. They start from <a href="/framework/why/the-three-function-menu.html">the rule above the
+others</a>: a main menu is three function calls, and nothing is allowed to make it longer.</p>
+
+<ul>
+<li><a href="/framework/why/naming.html">Naming</a> and <a href="/framework/why/the-access-rule.html">the access rule</a>: what a name tells you before you look it up.</li>
+<li><a href="/framework/why/one-header-per-module.html">One header per module</a>: no umbrella header, and every include measured.</li>
+<li><a href="/framework/why/designated-initialisers.html">Designated initialisers</a>: options as <code>{ .speed = 320 }</code>, and why their order is fixed.</li>
+<li><a href="/framework/why/ownership.html">Ownership</a>: nothing to free, and a handle for what you keep.</li>
+<li><a href="/framework/why/no-exceptions.html">No exceptions</a>: what the framework does instead of throwing.</li>
+<li><a href="/framework/why/macros.html">Macros</a>: where one is the right tool, and the rule about them.</li>
+<li><a href="/framework/why/delta-and-time.html">Time is a parameter</a>: <code>delta</code>, the clock, and <code>[app] max_delta</code>.</li>
+</ul>

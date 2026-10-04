@@ -1,0 +1,75 @@
+<!--
+title: Why it is built this way
+description: The decisions that give the framework its shape, each with the reason behind it and the check that keeps it true.
+order: 50
+-->
+<h1>Why it is built this way</h1>
+
+<p class="lede">A framework is mostly decisions, and a decision you cannot see the reason for
+looks like an accident. These pages give the reasons: why a menu is three calls, why a hook starts
+with an underscore, why nothing throws, why every struct of options is ordered the way it is. Each
+one is a rule the framework holds itself to, and most of them are checked by a tool rather than
+remembered.</p>
+
+<h2>The rule above the others</h2>
+
+<p><a href="/framework/why/the-three-function-menu.html">The three-function menu</a>. The API has
+to be as simple as possible for the person making the game, and a main menu written in three calls
+is the measure. Every other decision on these pages is answerable to it.</p>
+
+<h2>How the code reads</h2>
+
+<dl>
+<dt><a href="/framework/why/naming.html">Naming</a></dt>
+<dd>One spelling per kind of name, so a type, a value and a constant never look alike where they
+are used, and no prefix carries meaning a dot can carry better.</dd>
+<dt><a href="/framework/why/the-access-rule.html">The access rule</a></dt>
+<dd><code>_name</code> is a method of yours the framework calls; <code>on_name</code> is a function
+you hand to it. Two spellings, two directions.</dd>
+<dt><a href="/framework/why/designated-initialisers.html">Designated initialisers</a></dt>
+<dd>Why options are written <code>{ .speed = 320 }</code>, why the order of the fields matters,
+and why a behavior has no base class.</dd>
+<dt><a href="/framework/why/macros.html">Macros</a></dt>
+<dd>Where a macro is the right tool — the entry point, the values from the <code>.toml</code> — and
+the one rule about them: a header never makes you use one.</dd>
+</dl>
+
+<h2>How the framework holds together</h2>
+
+<dl>
+<dt><a href="/framework/why/one-header-per-module.html">One header per module</a></dt>
+<dd>No umbrella header, headers that do not include each other, and the cost of every include
+measured rather than guessed.</dd>
+<dt><a href="/framework/why/ownership.html">Ownership</a></dt>
+<dd>Everything is owned by something that releases it: a texture, an object, a scene, a callback.
+No raw pointer you have to free, and the handle for what you keep across frames.</dd>
+<dt><a href="/framework/why/no-exceptions.html">No exceptions</a></dt>
+<dd>What the framework does instead of throwing, and why throwing in the middle of a frame is not
+an option.</dd>
+<dt><a href="/framework/why/delta-and-time.html">Time is a parameter</a></dt>
+<dd>Why every hook is handed <code>delta</code>, where the clock is read, and what
+<code>[app] max_delta</code> protects you from.</dd>
+</dl>
+
+<h2>Checked, not remembered</h2>
+
+<p>A rule written only in a document is kept until the day someone has not read it. So wherever a
+mistake can be described precisely, something in the framework's own test run rejects it:</p>
+
+<table>
+<thead><tr><th>Rule</th><th>What enforces it</th></tr></thead>
+<tbody>
+<tr><td>Naming, and the eight hook names</td><td><code>.clang-tidy</code>, <code>-Wshadow</code> and <code>tools/naming_check.sh</code></td></tr>
+<tr><td>No owning raw pointer in the framework</td><td><code>tools/ownership_check.sh</code>, and two ownership checks of clang-tidy</td></tr>
+<tr><td>Every public header compiles on its own and carries the <code>.toml</code> values</td><td><code>tools/header_check.sh</code></td></tr>
+<tr><td>What each public header costs to include</td><td><code>tools/header_cost.py</code>, against <code>tools/header_budget.txt</code></td></tr>
+<tr><td>Nothing in the framework reads the clock, the input or the random state on its own</td><td><code>tools/seam_check.sh</code></td></tr>
+<tr><td>A mistake in the <code>.toml</code> stops before the build</td><td><code>tools/configure.py</code>, and <code>tests/configure_test.py</code> for each refusal</td></tr>
+<tr><td>Every vendored component has a licence the project can ship</td><td><code>tools/license_db.py</code></td></tr>
+</tbody>
+</table>
+
+<p>The scripts are stages of the framework's <a href="/reference/commands.html#test"><code>rmp
+test</code></a>, clang-tidy is <a href="/reference/commands.html#lint"><code>rmp lint</code></a>,
+and the CI runs all of them on every push. <a href="/framework/testing.html">Testing</a> has the
+rest.</p>

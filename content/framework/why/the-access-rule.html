@@ -1,0 +1,109 @@
+<!--
+title: The access rule
+description: Why a method the framework calls on your type starts with an underscore, why a function you hand to the framework starts with on_, and why the two can live on the same object.
+order: 30
+-->
+<h1>The access rule</h1>
+
+<p class="lede">There are two ways for the framework to run your code, and the name says which one
+it is. A method whose name starts with <code>_</code> is one of yours that the framework calls:
+you override it and never call it yourself. A function whose name starts with <code>on_</code> is
+one you hand to the framework, which keeps it and calls it when something happens.</p>
+
+<h2 id="hooks">_name: the framework calls your method</h2>
+
+<p>These are the hooks, and there are exactly eight names:</p>
+
+<table>
+<thead><tr><th>Hook</th><th>On a scene</th><th>On an object</th><th>On a behavior</th></tr></thead>
+<tbody>
+<tr><td><code>_ready</code></td><td>entering the stack</td><td>after <code>spawn()</code></td><td>when it is added</td></tr>
+<tr><td><code>_update</code></td><td>every frame</td><td>every frame</td><td>every frame, before the move</td></tr>
+<tr><td><code>_late_update</code></td><td></td><td></td><td>every frame, after the move</td></tr>
+<tr><td><code>_draw</code></td><td>in screen space</td><td>after its sprite or shape</td><td>after the object is drawn</td></tr>
+<tr><td><code>_collision</code></td><td></td><td>once per touching pair per frame</td><td>the same</td></tr>
+<tr><td><code>_end</code></td><td>leaving for good</td><td>on destruction</td><td>when removed, or the object dies</td></tr>
+<tr><td><code>_suspend</code></td><td>something was pushed over it</td><td></td><td></td></tr>
+<tr><td><code>_resume</code></td><td>it came off again</td><td></td><td></td></tr>
+</tbody>
+</table>
+
+<p>A scene and an object override them as virtual functions; a behavior simply declares the ones it
+wants, and the framework finds them when it is compiled. Either way the rule is the same: you
+write it, the framework decides when it runs. <a href="/framework/the-frame.html">One frame</a>
+gives the exact order.</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Coin : public rmp::Object {
+    void _ready() override { shape = rmp::circle(8); }
+    void _update(float delta) override { rotation += 90 * delta; }
+    void _collision(rmp::Object &amp;other) override {
+        if (other.solid) destroy();
+    }
+};
+</pre>
+
+<h2 id="callbacks">on_name: you hand the framework a function</h2>
+
+<p>Sometimes a subclass is more than you want: one coin out of many needs to do something special
+when it is touched, or a scene wants to know when an object it spawned is clicked. Then you hand
+the framework a function instead, and the name says that is what you are doing.</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static int score = 0;">
+auto &amp;coin = spawn({ .position = { 300, 200 }, .size = { 16, 16 } });
+coin.on_collision([](rmp::Object &amp;self, rmp::Object &amp;other) {
+    if (other.solid) {
+        score += 10;
+        self.destroy();
+    }
+});
+coin.on_click([](rmp::Object &amp;self) { self.visible = false; });
+</pre>
+
+<p>The functions the framework takes this way are
+<a href="ref:rmp::Object::on_click"><code>on_click</code></a>,
+<a href="ref:rmp::Object::on_drag"><code>on_drag</code></a> and
+<a href="ref:rmp::Object::on_collision"><code>on_collision</code></a> on an object,
+<a href="ref:rmp::Tilemap::on_object"><code>on_object</code></a> on a map, and the
+<code>on_</code> fields of the behaviors that report something —
+<a href="ref:rmp::behavior::Health"><code>Health</code></a>'s <code>on_death</code> and
+<code>on_damage</code>, <a href="ref:rmp::behavior::Timer"><code>Timer</code></a>'s
+<code>on_timeout</code>, <a href="ref:rmp::behavior::Spawner"><code>Spawner</code></a>'s
+<code>on_spawn</code>. A game that writes its own entry point names its three hooks the same way,
+<code>on_ready</code>, <code>on_frame</code> and <code>on_exit</code>, because those too are
+functions it hands to the framework. Setting a callback a second time replaces the first: there is
+no list of handlers, because a list of handlers is a signal system, and that is a bigger idea than
+this needs.</p>
+
+<h2 id="both">Both at once</h2>
+
+<p data-fw-grep="src/rmp/collision.cpp::if \(a_was\) a\._collision\(b\);\s+if \(a_was\) collide_behaviors\(a, b\);[\s\S]*?if \(a_was\) Storage::notify_collision\(a, b\);">The
+two spellings never collide, which is the reason there are two. An object can override
+<code>_collision</code> and carry an <code>on_collision</code>, and both run: the override first,
+then its behaviors', then the function it was handed. Nobody has to choose between subclassing and
+a callback, and reading either one, you know which way the call goes.</p>
+
+<h2 id="why-underscore">Why an underscore</h2>
+
+<p>Because it is the one mark that is legal exactly where it is needed. In C++ a name that starts
+with an underscore is reserved at global scope, for the compiler and the C library — and a hook is
+never at global scope: it is a member of your class, where <code>_ready</code> is an ordinary,
+legal name. That is also why the hooks of an entry point, which are free functions, are
+<code>on_ready</code> and not <code>_ready</code>.</p>
+
+<p>The scene's last hook is <code>_end</code> and not <code>_exit</code> for a related reason:
+<code>exit()</code> is a function of the C library, and a member with that name in a class you
+write would hide it.</p>
+
+<p data-fw-grep=".clang-tidy::MethodIgnoredRegexp">The framework holds itself to the same rule.
+clang-tidy is given the eight hook names and refuses any other method that starts with an
+underscore, so a helper of the framework's never looks like a hook, and a private field is never
+named like one: an object keeps the functions it was handed in members called
+<code>_click_handler</code>, <code>_drag_handler</code> and <code>_collision_handler</code>.</p>
+
+<h2 id="detail">The third kind: detail</h2>
+
+<p>One more spelling marks what is neither yours nor for you. A namespace called
+<code>detail</code>, or a member whose name starts with <code>detail_</code>, belongs to the
+framework and its tests. It is public only because C++ needs it to be — a template in a header has
+to reach it — and it is not part of the API: the reference does not show it.</p>
