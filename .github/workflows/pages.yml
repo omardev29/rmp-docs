@@ -54,8 +54,63 @@ jobs:
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
           echo "framework $REF, image $IMAGE"
 
-  check:
+  # The framework's examples, built from FRAMEWORK_REF: for the web (the ones
+  # examples.toml plays in their pages), and booted under the software
+  # renderer for a screenshot each (the posters). Cached by the commit, so a
+  # change to the pages alone does not build them again.
+  examples:
     needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    container:
+      image: ${{ needs.resolve.outputs.image }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: omardev29/raylib_multiplatform
+          ref: ${{ needs.resolve.outputs.ref }}
+          path: framework
+
+      - id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: built-examples
+          key: examples-${{ needs.resolve.outputs.ref }}-${{ hashFiles('examples.toml') }}
+
+      - name: Build the playable examples for the web, and every poster
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/framework"
+          TARGETS=$(python3 -c "import tomllib; d = tomllib.load(open('examples.toml', 'rb'))['examples']; print(' '.join('example_' + k.replace('/', '_') for k, v in d.items() if v.get('play')))")
+          echo "web targets: $TARGETS"
+          cd framework
+          python3 tools/configure.py > /dev/null
+          cmake --preset web -DRMP_BUILD_EXAMPLES=ON > /dev/null
+          # A list of target names, split on purpose.
+          # shellcheck disable=SC2086
+          cmake --build build/web --target $TARGETS
+          bash tools/examples_build.sh
+          mkdir -p ../built-examples/web ../built-examples/posters
+          for t in $TARGETS; do
+            cp "build/web/$t.js" "build/web/$t.wasm" ../built-examples/web/
+            if [ -f "build/web/$t.data" ]; then cp "build/web/$t.data" ../built-examples/web/; fi
+          done
+          cp build/examples-check/screenshots/*.png ../built-examples/posters/
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: built-examples
+          path: built-examples/
+          retention-days: 7
+
+  check:
+    needs: [resolve, examples]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     container:
@@ -103,8 +158,15 @@ jobs:
           RMP_DOCS_REQUIRE_COMPILE: "1"
         run: python3 -m unittest discover -s tests -v
 
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: built-examples
+          path: built-examples
+
       - name: Build, every gate, every C and C++ block compiled
-        run: python3 tools/build.py build --framework framework --tier compile
+        run: |
+          python3 tools/build.py build --framework framework --tier compile \
+            --examples-web built-examples/web --posters built-examples/posters
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:

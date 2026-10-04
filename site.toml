@@ -48,7 +48,7 @@ allow = [
   "https://github.com/nicbarker/clay",
   "https://www.python.org/downloads/",
   "https://cmake.org/",
-  "https://ldtk.io/",
+  "https://ldtk.io",
   "https://www.mapeditor.org/",
   "https://www.aseprite.org/",
   "https://emscripten.org/",

@@ -227,3 +227,36 @@ figure > figcaption {
   .nav-tree a[aria-current="page"], .sections a[aria-current] { outline: 2px solid Highlight; }
   .k, .p { font-weight: 800; }
 }
+
+/* --- an example, played in the page -------------------------------------- */
+.player {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  margin: 0 0 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+.player img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.player iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; }
+.play-button {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-height: var(--touch);
+  padding: 0 1.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: 650 1rem var(--font-ui);
+  cursor: pointer;
+}
+.play-button:hover { filter: brightness(1.08); }
+details.source { margin: 0 0 0.75rem; }
+details.source > summary { cursor: pointer; font-family: var(--font-ui); padding: 0.4rem 0; }
+details.source > summary small { color: var(--text-muted); margin-left: 0.5rem; }
+.example-card img { display: block; width: 100%; height: auto; margin: -1rem -1.1rem 0.75rem;
+                    width: calc(100% + 2.2rem); max-width: none; border-radius: var(--radius) var(--radius) 0 0; }

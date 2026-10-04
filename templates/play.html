@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}}</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #121216; color: #e8e6e1;
+               font: 15px/1.5 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; outline: none; }
+  #status { position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+            padding: 1rem; }
+  #status[hidden] { display: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+<div id="status" role="status">Loading…</div>
+<script>
+  // The example, as the framework built it for the web: its own .js loader,
+  // .wasm and .data, in this folder. Nothing here is the example's code; this
+  // page only gives it a canvas and says what is happening.
+  (function () {
+    var status = document.getElementById("status");
+    function fail(why) { status.hidden = false; status.textContent = why; }
+    if (typeof WebAssembly !== "object") {
+      fail("This browser cannot run WebAssembly, which the example is compiled to.");
+      return;
+    }
+    var probe = document.createElement("canvas");
+    if (!(probe.getContext("webgl2") || probe.getContext("webgl"))) {
+      fail("This browser has WebGL turned off, and the example draws with it.");
+      return;
+    }
+    window.Module = {
+      canvas: document.getElementById("canvas"),
+      print: function (text) { console.log(text); },
+      printErr: function (text) { console.warn(text); },
+      setStatus: function (text) {
+        if (!text) { status.hidden = true; return; }
+        status.hidden = false;
+        status.textContent = text;
+      },
+      onAbort: function (what) { fail("The example stopped: " + what); },
+    };
+    var script = document.createElement("script");
+    script.src = "{{target}}.js";
+    script.onerror = function () { fail("The example could not be loaded."); };
+    document.body.appendChild(script);
+    document.getElementById("canvas").focus();
+  })();
+</script>
+</body>
+</html>

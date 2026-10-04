@@ -48,6 +48,10 @@ def main(argv):
     ap.add_argument("port", nargs="?", type=int, default=8040)
     ap.add_argument("--framework", type=Path)
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--examples-web", type=Path, metavar="DIR",
+                    help="the framework's web build of the examples (build/web): played in their pages")
+    ap.add_argument("--posters", type=Path, metavar="DIR",
+                    help="the examples job's screenshots, one <target>.png each")
     ap.add_argument("--tier", choices=("static", "compile"), default="static",
                     help="static: the gates; compile: and every C/C++ block compiled")
     args = ap.parse_args(argv)
@@ -57,7 +61,8 @@ def main(argv):
             print(f"{name:16} {says}")
         return 0
 
-    site = Site(framework=args.framework, out=args.out).build(write=args.command != "check")
+    site = Site(framework=args.framework, out=args.out, examples_web=args.examples_web,
+                posters=args.posters).build(write=args.command != "check")
     for w in site.warnings:
         print(f"warning: {w}")
     problems = [p for p in site.problems if p.gate != "html"] + checks.run(context(site))

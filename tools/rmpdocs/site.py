@@ -31,6 +31,7 @@ from .checks import Problem
 from .highlight import LANGS, highlight
 from .facts import Facts
 from . import generated
+from . import examples as examples_mod
 from .reference import Reference
 from .snippets import Snippet, harness_file
 from . import search as search_index
@@ -107,7 +108,7 @@ def front_matter(text: str) -> tuple[dict, str, int]:
 
 class Site:
     def __init__(self, framework: Path | None = None, out: Path | None = None,
-                 docs: Path = DOCS):
+                 docs: Path = DOCS, examples_web: Path | None = None, posters: Path | None = None):
         self.docs = docs
         self.config = tomllib.loads((docs / "site.toml").read_text(encoding="utf-8"))
         self.refconf = tomllib.loads((docs / "reference.toml").read_text(encoding="utf-8"))
@@ -119,6 +120,11 @@ class Site:
         self.outputs: dict[str, str] = {}
         self.warnings: list[str] = []
         self.facts = Facts(self.framework)
+        self.examples_web = examples_web
+        self.posters_dir = posters
+        self.examples: list = []
+        self.examples_built: dict = {}
+        self.posters: set = set()
         self.snippets: list[Snippet] = []
 
     # -- the framework ---------------------------------------------------------
@@ -196,6 +202,46 @@ class Site:
                                    source=rp.source or "include/rmp", section="reference",
                                    kind="reference", order=rp.order,
                                    nav_title=rp.nav_title, root=root, meta={"line": rp.line}))
+
+    def example_pages(self):
+        conf_path = self.docs / "examples.toml"
+        conf = tomllib.loads(conf_path.read_text(encoding="utf-8")) if conf_path.is_file() else {}
+        self.examples, problems = examples_mod.load(self.framework, conf)
+        for p in problems:
+            self.problems.append(Problem("examples", "examples.toml", 0, p))
+        # What can be shown: a web build for each playable example, a poster
+        # for each. Copied into the site in write().
+        for ex in self.examples:
+            if self.examples_web is not None and ex.play:
+                files = [self.examples_web / f"{ex.target}{e}" for e in (".js", ".wasm", ".data")]
+                if files[0].is_file() and files[1].is_file():
+                    self.examples_built[ex.target] = sum(f.stat().st_size for f in files if f.is_file())
+            if self.posters_dir is not None and (self.posters_dir / f"{ex.target}.png").is_file():
+                self.posters.add(examples_mod.poster_name(ex))
+        repo = self.config["site"]["framework_repo"]
+        areas = sorted({ex.area for ex in self.examples if ex.area})
+        for area in areas:
+            items = [ex for ex in self.examples if ex.area == area]
+            rows = "".join(f'<li><a href="/{ex.url}">{html.escape(ex.title)}</a> — '
+                           f"{examples_mod.markdown_inline(prose.first_sentence(ex.summary) or ex.summary, repo, self.ref)}</li>"
+                           for ex in items)
+            title = "UI" if area == "ui" else area.capitalize()
+            body = f"<h1>{title}</h1><ul>{rows}</ul>"
+            root, errors = dom.parse(body)
+            self.pages.append(Page(url=f"examples/{area}/index.html", title=title,
+                                   description=f"The examples under examples/{area}/.",
+                                   source="tools/rmpdocs/examples.py", section="examples",
+                                   kind="generated", order=areas.index(area) + 10, root=root))
+        for i, ex in enumerate(self.examples):
+            body = examples_mod.page_body(ex, repo, self.ref, self.examples_built, self.posters)
+            root, errors = dom.parse(body)
+            for e in errors:
+                self.problems.append(Problem("html", f"generated:{ex.url}", e.line, e.message))
+            summary = re.sub(r"<[^>]+>", "", examples_mod.markdown_inline(
+                prose.first_sentence(ex.summary) or ex.title, repo, self.ref))
+            self.pages.append(Page(url=ex.url, title=ex.title, description=html.unescape(summary),
+                                   source=f"examples/{ex.path}", section="examples", kind="generated",
+                                   order=i, root=root))
 
     # -- transforms ------------------------------------------------------------
 
@@ -278,12 +324,24 @@ class Site:
         """<div data-generated="targets-table"></div>: a table the build makes
         from the framework's tools."""
         for n in [n for n in root.walk() if n.get("data-generated")]:
-            make = generated.GENERATED_BLOCKS.get(n.get("data-generated"))
-            if make is None:
-                self.problems.append(Problem("facts", page.source, n.line,
-                                             f"data-generated={n.get('data-generated')!r} is not a table the build knows"))
-                continue
-            replace(n, dom.Raw(make(self.framework), n.line))
+            if n.get("data-generated") == "examples-gallery":
+                markup = examples_mod.gallery(self.examples, self.posters,
+                                              self.config["site"]["framework_repo"], self.ref)
+            else:
+                make = generated.GENERATED_BLOCKS.get(n.get("data-generated"))
+                if make is None:
+                    self.problems.append(Problem("facts", page.source, n.line,
+                                                 f"data-generated={n.get('data-generated')!r} is not a table the build knows"))
+                    continue
+                markup = make(self.framework)
+            # Parsed, not pasted: its links are rewritten and checked like the page's own.
+            made, errors = dom.parse(markup)
+            for e in errors:
+                self.problems.append(Problem("html", page.source, n.line, f"generated block: {e.message}"))
+            wrapper = dom.Node("div", {"class": "generated"})
+            for c in list(made.children):
+                wrapper.append(c)
+            replace(n, wrapper)
 
     def _facts(self, page: Page, root: dom.Node):
         """{{count:targets}} and friends: the framework's number, not a typed one."""
@@ -585,6 +643,7 @@ class Site:
             self.warnings.append("the framework's working tree has uncommitted changes")
         self.discover()
         self.reference()
+        self.example_pages()
         for page in self.pages:
             self.transform(page)
         layout = (self.docs / "templates" / "layout.html").read_text(encoding="utf-8")
@@ -622,6 +681,8 @@ class Site:
                 shutil.copy(src, assets / extra)
         (self.out / ".nojekyll").write_text("")
         (assets / "search.json").write_text(self.search_json, encoding="utf-8")
+        play = (self.docs / "templates" / "play.html").read_text(encoding="utf-8")
+        examples_mod.copy_artifacts(self.examples, self.examples_web, self.posters_dir, self.out, play)
 
 
 def toc_html(entries: list[tuple[int, str, str]]) -> str:

@@ -1,0 +1,29 @@
+# Every example of the framework: played in its page, or shown as code only,
+# with the reason. What an example IS -- its summary, its files, its keys --
+# comes from the framework; this file only decides how the page shows it.
+# A framework example without an entry here, or an entry for one that does not
+# exist, fails the build.
+
+[examples]
+"games/01_pong" = { play = true }
+"games/02_breakout" = { play = true }
+"games/03_space_invaders" = { play = true }
+"games/04_top_down" = { play = true }
+"games/05_endless_runner" = { play = true }
+"games/06_tetris" = { play = true }
+"games/07_platformer" = { play = true }
+"ui/01_menu" = { play = true }
+"ui/02_layout" = { play = true }
+"ui/03_clay_direct" = { play = true }
+"ui/04_settings" = { play = true }
+"ui/05_inventory" = { play = true }
+"ui/06_style" = { play = true }
+"ui/07_responsive" = { play = true }
+"scenes/01_stack" = { play = true }
+"input/01_actions" = { play = true }
+"assets/01_loading" = { play = true }
+"ads/01_interstitial" = { play = false, reason = "Ads are shown on Android only: in a browser every rmp::ads call does nothing, so there would be nothing to see." }
+"ads/02_rewarded" = { play = false, reason = "Ads are shown on Android only: in a browser every rmp::ads call does nothing, so there would be nothing to see." }
+"platform/02_mobile_raymob" = { play = false, reason = "It calls raymob's Android API -- vibration, the soft keyboard, the sensors -- which a browser does not have." }
+"platform/03_minimal_includes" = { play = false, reason = "It has no main() on purpose: it is compiled and never run, to prove that rmp/ui.h stands alone." }
+"plain_c" = { play = false, reason = "It writes its own while loop, which a browser cannot run without ASYNCIFY -- the web is one of the targets it gives up, and the file says so." }

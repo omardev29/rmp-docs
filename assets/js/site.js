@@ -114,3 +114,38 @@
     }
   });
 })();
+
+// --- examples: a poster until somebody asks, then the example itself ---------
+(function () {
+  "use strict";
+  var root = document.body.getAttribute("data-root") || "";
+  document.querySelectorAll(".player[data-play]").forEach(function (player) {
+    var button = player.querySelector(".play-button");
+    if (!button) return;
+    button.addEventListener("click", function () {
+      // One example at a time: another one playing is stopped by removing it.
+      document.querySelectorAll(".player iframe").forEach(function (f) {
+        var p = f.parentNode;
+        f.remove();
+        if (p.dataset.poster) p.insertAdjacentHTML("afterbegin", p.dataset.poster);
+      });
+      var img = player.querySelector("img");
+      player.dataset.poster = img ? img.outerHTML : "";
+      if (img) img.remove();
+      button.hidden = true;
+      var frame = document.createElement("iframe");
+      frame.src = root + player.getAttribute("data-play").replace(/^\//, "");
+      frame.width = 800;
+      frame.height = 450;
+      frame.title = "The example, running";
+      frame.setAttribute("allow", "autoplay; fullscreen; gamepad");
+      player.appendChild(frame);
+      // The example draws at its design size; the page scales it to fit, and
+      // the browser maps every click back through the same scale.
+      function fit() { frame.style.transform = "scale(" + player.clientWidth / 800 + ")"; }
+      fit();
+      window.addEventListener("resize", fit);
+      frame.addEventListener("load", function () { frame.contentWindow.focus(); });
+    });
+  });
+})();
