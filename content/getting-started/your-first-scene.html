@@ -1,0 +1,187 @@
+<!--
+title: Your first scene
+nav: 1. Your first scene
+description: Replace the menu rmp new made with one of your own, a title with Play and Quit, and add the scene that Play goes to.
+order: 10
+-->
+<h1>Your first scene</h1>
+
+<p class="lede">A scene is one screen of the game: the main menu is a scene, the level is a scene,
+a pause menu is a scene. The game <code>rmp new</code> made has one, a menu. This page replaces it
+with your own and adds a second one for Play to go to.</p>
+
+<h2>Where the game starts</h2>
+
+<p>Open <code>src/main.cpp</code>. You will not change it in this tutorial, and it is worth
+reading once:</p>
+
+<pre data-include="src/main.cpp"></pre>
+
+<p><a href="ref:RMP_GAME"><code>RMP_GAME</code></a> is the whole program. It opens the window
+described in <code>raylib_multiplatform.toml</code>, enters the scene you name, runs it every
+frame, and closes everything on the way out. There is no <code>InitWindow()</code> and no frame
+loop in your code because the platforms do not agree on who owns the loop: on the desktop it is a
+<code>while</code> in <code>main()</code>, in the browser it is the browser, and on iOS it is
+UIKit. The macro writes the right one for each, so your code is the same everywhere.</p>
+
+<p>The scene is named here, in C++, and not in the <code>.toml</code>. A name in a text file
+would have to be turned into a type at run time, and the usual way to do that in C++, a global
+that registers itself, is exactly what a linker throws away from a library when nothing refers to
+it, and the result is a game that runs on your desktop and finds no scenes on a phone. Naming the
+type means a typo is a compile error instead.</p>
+
+<h2>Name the game</h2>
+
+<p><code>rmp new</code> named the window after the folder. Give the game its real name in
+<code>raylib_multiplatform.toml</code>, under <code>[window]</code>:</p>
+
+<pre data-lang="toml" data-project="my_game" data-file="raylib_multiplatform.toml">
+[window]
+title = "Coin Rabbit"
+</pre>
+
+<p>The title goes in the window's title bar on the desktop, and under the app's icon on Android
+and iOS. The values your code can use reach it as macros, written again on every build from the
+<code>.toml</code>: this one is <code>RMP_WINDOW_TITLE</code>, and the menu below shows it. You
+never include anything to get them; every header of the framework brings them along.</p>
+
+<h2>The menu</h2>
+
+<p>A scene is a class that derives from <a href="ref:rmp::Scene"><code>rmp::Scene</code></a> and
+overrides the hooks it needs. Replace the whole of the template's menu, header first:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/main_menu.h">
+#pragma once
+// The title screen: the game's name, Play and Quit.
+
+#include &lt;rmp/scene.h&gt;
+
+class MainMenuScene : public rmp::Scene {
+public:
+    void _draw() override;
+};
+</pre>
+
+<p>The menu needs one hook, <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a>, which runs
+every frame, in screen space. The underscore is a rule that holds across the whole framework: a
+method whose name starts with <code>_</code> is one the framework calls on your type. You
+override it; you never call it yourself.</p>
+
+<p>Then the code, which replaces <code>src/scenes/main_menu.cpp</code>:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/main_menu.cpp">
+#include "main_menu.h"
+
+#include "game.h"
+
+#include &lt;rmp/app.h&gt;
+#include &lt;rmp/ui.h&gt;
+
+void MainMenuScene::_draw() {
+    rmp::ui::begin();
+    rmp::ui::text(RMP_WINDOW_TITLE, { .size = rmp::ui::Size::LARGE });
+    if (rmp::ui::button("Play", { .style = rmp::ui::Variant::PRIMARY })) {
+        rmp::Scene::change&lt;GameScene&gt;();
+    }
+#if !defined(PLATFORM_IOS)
+    if (rmp::ui::button("Quit")) rmp::app::quit();
+#endif
+    rmp::ui::end();
+}
+</pre>
+
+<p>Everything between <a href="ref:rmp::ui::begin"><code>rmp::ui::begin()</code></a> and
+<a href="ref:rmp::ui::end"><code>rmp::ui::end()</code></a> is laid out as a column in the middle
+of the screen, which is what a menu is. Nothing in it says where, or how big: the layout is
+worked out at the size you set in <code>[window]</code> and scaled to the real window, so the
+same menu fits a phone and a 4K monitor. A mouse, a finger, the keyboard and a gamepad all work
+it, with nothing written for any of them.</p>
+
+<p><a href="ref:rmp::ui::button"><code>rmp::ui::button()</code></a> draws a button and returns
+<code>true</code> on the frame it is pressed, so the button and what it does are one line. The
+braces after a label are an options struct written with designated initialisers:
+<code>{ .style = rmp::ui::Variant::PRIMARY }</code> marks Play as the button to press. C++20
+wants the fields in the order the struct declares them, and every options struct in the framework
+is ordered the way they are usually written.</p>
+
+<p><a href="ref:rmp::Scene::change"><code>rmp::Scene::change&lt;GameScene&gt;()</code></a> ends
+this scene and starts a <code>GameScene</code>. It does not happen on that line: it happens when
+the frame ends. The call is made from inside the menu's own <code>_draw()</code>, and destroying
+the menu right there would pull it out from under the code that is still running in it.</p>
+
+<p><a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> asks the game to close. It
+lets the frame finish and then shuts everything down in order, which is why it is not
+<code>exit()</code>. On iOS it does nothing at all, because Apple rejects an app that closes
+itself, and the <code>#if</code> hides the button there rather than leave one that does
+nothing.</p>
+
+<h2>A second scene</h2>
+
+<p>Play goes to <code>GameScene</code>, which does not exist yet. Make two new files in
+<code>src/scenes/</code>, a header and its code:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game.h">
+#pragma once
+// The game. For now, a screen that says so and a way back.
+
+#include &lt;rmp/scene.h&gt;
+
+class GameScene : public rmp::Scene {
+public:
+    void _draw() override;
+};
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game.cpp">
+#include "game.h"
+
+#include "main_menu.h"
+
+#include &lt;rmp/ui.h&gt;
+
+void GameScene::_draw() {
+    rmp::ui::begin();
+    rmp::ui::text("The game goes here.");
+    if (rmp::ui::button("Back")) rmp::Scene::change&lt;MainMenuScene&gt;();
+    rmp::ui::end();
+}
+</pre>
+
+<p>The game has nothing in it yet: a line of text, and a way back. Each scene's header includes
+only <code>&lt;rmp/scene.h&gt;</code>; it is the <code>.cpp</code> files that include each other's
+headers, which is what lets two scenes name each other without a circle of includes.</p>
+
+<p>Nothing else needs to know the new files exist. Every <code>.cpp</code> under <code>src/</code>
+is compiled, on every platform, so adding a scene is adding its files.</p>
+
+<h2>The hooks</h2>
+
+<p>These are all the hooks a scene can override. Each has an empty default, so a scene writes
+only the ones it uses.</p>
+
+<table>
+<thead><tr><th>Hook</th><th>Runs</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Scene::_ready"><code>_ready()</code></a></td><td>Once, when the scene starts. The window exists by then, so this is where a scene loads what it needs.</td></tr>
+<tr><td><a href="ref:rmp::Scene::_update"><code>_update(float delta)</code></a></td><td>Every frame, before anything is drawn. <code>delta</code> is the seconds since the last frame.</td></tr>
+<tr><td><a href="ref:rmp::Scene::_draw"><code>_draw()</code></a></td><td>Every frame, after the scene's objects have been drawn, in screen space.</td></tr>
+<tr><td><a href="ref:rmp::Scene::_suspend"><code>_suspend()</code></a> and <a href="ref:rmp::Scene::_resume"><code>_resume()</code></a></td><td>When another scene is put on top of this one, and when it comes off again.</td></tr>
+<tr><td><a href="ref:rmp::Scene::_end"><code>_end()</code></a></td><td>Once, when the scene ends for good.</td></tr>
+</tbody>
+</table>
+
+<p>The <a href="/manual/core/scenes.html">Scenes</a> chapter of the manual has the rest: the
+stack of scenes, and passing data from one to the next. The
+<a href="/manual/modules/ui.html">Interface</a> chapter has the rest of <code>rmp::ui</code>.</p>
+
+<h2>Run it</h2>
+
+<pre data-lang="shell">
+rmp run
+</pre>
+
+<p>The menu has the game's name, Play takes you to the game screen and Back brings you to the
+menu again. Try it without the mouse: the first button of each screen already has the focus, so
+Enter presses it, and the up and down arrows move between buttons. The template's
+<code>rabbit.png</code> is still in <code>resources/</code>, unused for now: it comes back as the
+player.</p>

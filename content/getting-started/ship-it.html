@@ -1,0 +1,114 @@
+<!--
+title: Ship it
+nav: 7. Ship it
+description: Give the game its real app ids, run the checks CI runs, put it on GitHub, and tag a release that CI builds for every platform.
+order: 70
+-->
+<h1>Ship it</h1>
+
+<p class="lede">The game is finished. What is left is to give it the identity stores will know it
+by, check it the way CI will, and tag a version: CI does the rest, and builds it for every
+platform the game has turned on.</p>
+
+<h2>Real app ids</h2>
+
+<p><code>rmp new</code> gave the game ids that start with <code>com.example.</code>, which a
+release refuses. Choose real ones, made of a domain you own written backwards and the game's name,
+and set them in <code>raylib_multiplatform.toml</code>:</p>
+
+<pre data-lang="toml" data-project="my_game" data-file="raylib_multiplatform.toml">
+[android]
+application_id = "com.yourname.coinrabbit"
+
+[ios]
+bundle_id = "com.yourname.coinrabbit"
+</pre>
+
+<p>Choose with care: once an app is published on Google Play under an id, that id is its id for
+good, and changing it means a new listing that starts with no players. The App Store's bundle id
+is the same kind of promise.</p>
+
+<p>The two kinds of id do not accept quite the same characters. Android takes letters, digits and
+underscores in each part, and Apple takes letters, digits and hyphens, so the safest id has
+neither. A hyphen in the Android id is refused, with the line it is on and an id that would work,
+the moment anything reads the file:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[android]
+application_id = "com.yourname.coin-rabbit"
+</pre>
+
+<p>That is the rule for the whole <code>.toml</code>: a value that cannot work stops the build
+before anything is compiled, and says where.</p>
+
+<h2>Check it</h2>
+
+<pre data-lang="shell">
+rmp test
+</pre>
+
+<p>In a game, <code>rmp test</code> runs three stages, and CI checks the same three things on
+every push:</p>
+
+<ul>
+<li><code>config</code>: the <code>.toml</code>, the versions the framework pins, and the licence
+of every library in the game;</li>
+<li><code>render</code>: the game built for raylib's software renderer, booted, drawing a frame
+with something on it, and closing cleanly, with no window and no graphics card;</li>
+<li><code>smoke</code>: the game built as you run it, booted for a few frames, checked to have
+loaded every asset it asked for and drawn something.</li>
+</ul>
+
+<p>A boot only reaches the first scene, so <code>rmp test</code> says the game starts, loads its
+art and draws its menu. Whether the game is fun is still yours to check, with
+<code>rmp run</code>.</p>
+
+<h2>Put it on GitHub</h2>
+
+<p>CI is GitHub Actions, and the workflows came with the game. Commit your work, make an empty
+repository on GitHub, and push to it:</p>
+
+<pre data-lang="shell">
+git add -A
+git commit -m "Coin Rabbit"
+git remote add origin https://github.com/yourname/my_game.git
+rmp push
+</pre>
+
+<p><code>rmp push</code> is <code>git push</code> with one check in front of it: it will not push
+while a CI run of the repository is still going, because a new push cancels it. It needs the
+<code>gh</code> command to ask; without it, it says so and pushes.</p>
+
+<p>Every push to <code>main</code> runs the fast lane: the checks above, and builds for Linux, the
+web, Windows and Android. Watch it on the repository's Actions tab.</p>
+
+<h2>Release</h2>
+
+<pre data-lang="shell">
+rmp deploy 1.0.0
+</pre>
+
+<p><code>rmp deploy</code> checks everything a release needs before it makes a tag that cannot be
+quietly taken back: that every change is committed, that <code>v1.0.0</code> is not already a
+tag, that the commit is the one GitHub has, and that the <code>.toml</code> is valid with real ids
+in it. Then it tags the commit <code>v1.0.0</code> and pushes the tag.</p>
+
+<p>The tag is the version: there is no version number in the project to keep in step with it.
+For a tag, CI builds every target that <code>[targets]</code> has turned on, all
+{{count:targets}} of them unless you turned some off, boots the ones it can, and, when every build
+has passed, publishes a GitHub release with them attached. It also pushes them to itch.io, if <code>[deploy.itch]</code> names your page
+there and the repository has the secret butler needs.</p>
+
+<p>The Android build is signed with a throwaway key, which Google Play does not accept, until the
+repository holds your upload key as a secret. The
+<a href="/publishing/index.html">Publishing</a> section has that, and everything else about where
+each build goes: <a href="/publishing/releases.html">releases and versions</a>,
+<a href="/publishing/itch.html">itch.io</a>, <a href="/publishing/google-play.html">Google
+Play</a> and <a href="/publishing/app-store.html">the App Store</a>.</p>
+
+<h2>What next</h2>
+
+<p>The game you built uses most of what the framework has: scenes, objects, behaviors, input,
+the interface, assets, audio and saving. The <a href="/manual/index.html">Manual</a> takes each of
+them further, and the <a href="/examples/index.html">Examples</a> are whole games to read, from
+Pong to a platformer whose levels are made in an editor.</p>

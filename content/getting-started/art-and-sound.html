@@ -1,0 +1,336 @@
+<!--
+title: Art and sound
+nav: 5. Art and sound
+description: Give the rabbit, the coins and the bats pictures and sounds copied from the framework's examples, loaded by name from resources/, and see what a release does with that folder.
+order: 50
+-->
+<h1>Art and sound</h1>
+
+<p class="lede">Boxes and circles were enough to make the game work. Now it gets pictures and
+sounds: the rabbit that has been in <code>resources/</code> since the start, and a coin, a bat and
+three sounds copied from one of the framework's own example games.</p>
+
+<h2>The files</h2>
+
+<p>Run these from the game's folder. They copy from the framework you cloned into your home
+folder when you installed <code>rmp</code>:</p>
+
+<pre data-lang="shell" data-project="my_game" data-file="resources/coin.aseprite" data-copy-from="examples/games/07_platformer/resources/coin.aseprite">
+cp ~/raylib_multiplatform/examples/games/07_platformer/resources/coin.aseprite resources/
+</pre>
+
+<pre data-lang="shell" data-project="my_game" data-file="resources/bat.aseprite" data-copy-from="examples/games/07_platformer/resources/bat.aseprite">
+cp ~/raylib_multiplatform/examples/games/07_platformer/resources/bat.aseprite resources/
+</pre>
+
+<pre data-lang="shell" data-project="my_game" data-file="resources/coin.ogg" data-copy-from="examples/games/07_platformer/resources/coin.ogg">
+cp ~/raylib_multiplatform/examples/games/07_platformer/resources/coin.ogg resources/
+</pre>
+
+<pre data-lang="shell" data-project="my_game" data-file="resources/hurt.ogg" data-copy-from="examples/games/07_platformer/resources/hurt.ogg">
+cp ~/raylib_multiplatform/examples/games/07_platformer/resources/hurt.ogg resources/
+</pre>
+
+<pre data-lang="shell" data-project="my_game" data-file="resources/music.ogg" data-copy-from="examples/games/07_platformer/resources/music.ogg">
+cp ~/raylib_multiplatform/examples/games/07_platformer/resources/music.ogg resources/
+</pre>
+
+<p>They are Kenney's work (kenney.nl), from his Pixel Platformer, Impact Sounds, Interface Sounds
+and Music Loops packs, and so is the rabbit, from his Animal Pack. All of it is CC0: public domain,
+free for any use, with nothing asked in return, not even a credit. The framework's copy keeps the
+details in <code>examples/games/07_platformer/resources/License-kenney.txt</code>, and the
+rabbit's licence is the <code>License.txt</code> already in your <code>resources/</code>.</p>
+
+<p>The two <code>.aseprite</code> files are sprite sheets as Aseprite saves them, several frames
+of a little animation in each. The framework reads them as they are: there is no export step
+between drawing a frame and seeing it in the game.</p>
+
+<h2>A picture for the rabbit</h2>
+
+<p>The player gets its picture in place of the white box, in its <code>_ready()</code>. Replace
+the player's code:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/objects/player.cpp">
+#include "player.h"
+
+#include "layers.h"
+
+#include &lt;rmp/assets.h&gt;
+#include &lt;rmp/behavior.h&gt;
+#include &lt;rmp/input.h&gt;
+#include &lt;rmp/math.h&gt;
+
+namespace {
+constexpr float SPEED = 260; // design units per second
+} // namespace
+
+void Player::_ready() {
+    sprite.texture = rmp::assets::load_texture("rabbit.png");
+    sprite.size = { 44, 64 };
+    // The body, and not the ears: a bat that only brushes an ear misses.
+    collider = rmp::rect({ 34, 40 });
+    collider.offset = { 0, 10 };
+
+    collision_layer = layer::PLAYER;
+    collision_mask = layer::COIN | layer::BAT;
+
+    // Eight directions, from the keyboard, a d-pad or a stick.
+    add&lt;rmp::behavior::TopDown&gt;({ .speed = SPEED });
+}
+
+void Player::_update(float /*delta*/) {
+    // The mouse held down, or a finger on the screen: run towards it. Not when
+    // the pointer is on a button, which is the interface's and not the game's.
+    if (rmp::input::pointer_down() &amp;&amp; !rmp::input::consumed_pointer()) {
+        const Vector2 to = rmp::input::pointer() - position;
+        if (Vector2Length(to) &gt; 8) velocity = Vector2Normalize(to) * SPEED;
+    }
+}
+</pre>
+
+<p><a href="ref:rmp::assets::load_texture"><code>rmp::assets::load_texture("rabbit.png")</code></a>
+takes a name, not a path: the file is looked for in <code>resources/</code>, or in the pack that
+a release can carry instead, as the end of this page shows. What it returns is an
+<a href="ref:rmp::Texture"><code>rmp::Texture</code></a>, which frees itself when the last copy of
+it goes, so there is no unload to remember; asking twice for the same name gives the same texture
+back, not a second copy.</p>
+
+<p>An object with a <a href="ref:rmp::Object::sprite"><code>sprite</code></a> draws that instead
+of its shape. The picture is 284 by 414 pixels, far too big for the arena, and
+<code>sprite.size</code> draws it at 44 by 64 units instead.</p>
+
+<p>Without a shape, an object collides as its picture, and a rabbit's picture is mostly ears. The
+<a href="ref:rmp::Object::collider"><code>collider</code></a> says what it collides as instead: a
+box over the body, moved down by its <code>offset</code>, so a bat that only brushes an ear
+misses.</p>
+
+<h2>Coins that spin, bats that flap</h2>
+
+<p>The coins and the bats lose their circles and get their sheets, and two sounds go in. Replace
+the game scene's code; its header does not change:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game.cpp">
+#include "game.h"
+
+#include "../objects/layers.h"
+#include "../objects/player.h"
+#include "game_over.h"
+#include "pause.h"
+
+#include &lt;rmp/assets.h&gt;
+#include &lt;rmp/audio.h&gt;
+#include &lt;rmp/behavior.h&gt;
+#include &lt;rmp/input.h&gt;
+#include &lt;rmp/random.h&gt;
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;algorithm&gt;
+#include &lt;string&gt;
+
+namespace {
+// The arena is the design resolution: [window] width and height in the .toml.
+constexpr Rectangle ARENA{ 0, 0, RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT };
+constexpr float SECONDS_PER_BAT = 4;
+} // namespace
+
+void GameScene::_ready() {
+    background = Color{ 52, 92, 60, 255 }; // grass
+
+    // P, Escape, or the gamepad's Start button.
+    rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
+    // raylib closes the window when Escape is pressed; this game uses Escape.
+    SetExitKey(KEY_NULL);
+
+    auto &amp;player = spawn&lt;Player&gt;({
+        .position = { ARENA.width / 2, ARENA.height / 2 },
+        .edges = rmp::Edge::CLAMP,
+        .bounds = ARENA,
+    });
+    player.add&lt;rmp::behavior::Health&gt;({
+        .hp = 3,
+        .destroy_on_death = false, // it stays on screen, under the game over
+        .on_death = [this](rmp::Object &amp;) { caught(); },
+        .on_damage = [](rmp::Object &amp;, int) { rmp::audio::play("hurt"); },
+        .hurt_by = layer::BAT,
+    });
+    _player = player.handle();
+
+    spawn_coin();
+}
+
+void GameScene::_update(float delta) {
+    // The whole arena on screen, whatever the window: a phone's, or one
+    // somebody has resized.
+    camera.zoom =
+        std::min(GetScreenWidth() / ARENA.width, GetScreenHeight() / ARENA.height);
+
+    if (rmp::input::just_pressed("pause")) rmp::Scene::push&lt;PauseScene&gt;();
+
+    _next_bat -= delta;
+    if (_next_bat &lt;= 0) {
+        spawn_bat();
+        _next_bat = SECONDS_PER_BAT;
+    }
+}
+
+void GameScene::_draw() {
+    const int lives = _player-&gt;get&lt;rmp::behavior::Health&gt;()-&gt;hp;
+    rmp::ui::begin({ .placement = rmp::ui::Align::TOP_LEFT });
+    rmp::ui::row({ .gap = 24 }, [&amp;] {
+        rmp::ui::text("Coins " + std::to_string(_coins));
+        rmp::ui::text("Lives " + std::to_string(lives));
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
+        // A phone has no key to pause with.
+        if (rmp::ui::button("Pause", { .style = rmp::ui::Variant::GHOST })) {
+            rmp::Scene::push&lt;PauseScene&gt;();
+        }
+#endif
+    });
+    rmp::ui::end();
+}
+
+void GameScene::spawn_coin() {
+    // Anywhere in the arena, clear of its edges and of the score at the top.
+    const Vector2 at{ rmp::random::range(40.0f, ARENA.width - 40),
+                      rmp::random::range(80.0f, ARENA.height - 40) };
+    auto &amp;coin = spawn({ .position = at, .scale = { 2, 2 } });
+    coin.sprite.sheet = rmp::assets::load_sheet("coin.aseprite");
+    coin.sprite.play("spin");
+    coin.collision_layer = layer::COIN;
+    coin.collision_mask = layer::PLAYER;
+    coin.on_collision([this](rmp::Object &amp;self, rmp::Object &amp;) {
+        self.destroy();
+        _coins++;
+        rmp::audio::play("coin");
+        spawn_coin();
+    });
+}
+
+void GameScene::spawn_bat() {
+    // From just outside the arena, above it or below it.
+    const Vector2 at{ rmp::random::range(0.0f, ARENA.width),
+                      rmp::random::chance(0.5f) ? -40.0f : ARENA.height + 40 };
+    auto &amp;bat = spawn({ .position = at, .scale = { 2, 2 } });
+    bat.sprite.sheet = rmp::assets::load_sheet("bat.aseprite");
+    bat.sprite.play("fly");
+    bat.collision_layer = layer::BAT;
+    bat.collision_mask = layer::PLAYER;
+    // Each one a little faster or slower, so that they do not fly as one.
+    bat.add&lt;rmp::behavior::Follow&gt;({
+        .target = _player,
+        .speed = rmp::random::range(70.0f, 120.0f),
+    });
+}
+
+void GameScene::caught() { rmp::Scene::push&lt;GameOverScene&gt;(_coins); }
+</pre>
+
+<p><a href="ref:rmp::assets::load_sheet"><code>rmp::assets::load_sheet()</code></a> reads an
+<code>.aseprite</code> file, with its frames, how long each one shows, and its tags: the named
+animations in it. <a href="ref:rmp::Sprite::play"><code>sprite.play("spin")</code></a> names one
+of those tags, and the framework moves through its frames from then on. The names are the ones in
+the file, and nothing else: <code>spin</code> and <code>fly</code> are what these two sheets call
+their animations. A tag the sheet does not have plays nothing and says so once, in the log.</p>
+
+<p>The art is small, 18 pixels for a coin and 24 for a bat, and <code>.scale = { 2, 2 }</code>
+draws it twice the size. <a href="ref:rmp::Object::scale"><code>scale</code></a> applies to what
+the object collides as as well, so the bigger bat bites from where it is drawn.</p>
+
+<h2>Sound</h2>
+
+<p><a href="ref:rmp::audio::play"><code>rmp::audio::play("coin")</code></a> plays a sound by name,
+without its extension: <code>coin</code> finds <code>coin.wav</code>, <code>coin.ogg</code>,
+<code>coin.mp3</code> or <code>coin.qoa</code>, the first of them that exists. The sound is loaded
+the first time it is played and kept, and playing it again while it still sounds starts another
+voice instead of cutting the first one off. The bite's sound goes in <code>Health</code>'s
+<code>.on_damage</code>, which runs every time a life is lost, the last one too.</p>
+
+<p>The sound device opens with the first sound, so a game that plays none never opens it. A
+machine with no sound device at all is not an error: every call simply does nothing.</p>
+
+<h3>Music</h3>
+
+<p>The music starts with the menu, so the menu gets a <code>_ready()</code>. Replace both of its
+files:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/main_menu.h">
+#pragma once
+// The title screen: the game's name, Play and Quit.
+
+#include &lt;rmp/scene.h&gt;
+
+class MainMenuScene : public rmp::Scene {
+public:
+    void _ready() override;
+    void _draw() override;
+};
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/main_menu.cpp">
+#include "main_menu.h"
+
+#include "game.h"
+
+#include &lt;rmp/app.h&gt;
+#include &lt;rmp/audio.h&gt;
+#include &lt;rmp/ui.h&gt;
+
+void MainMenuScene::_ready() {
+    // Already playing when the menu comes back after a game: then it carries on.
+    rmp::audio::music("music");
+}
+
+void MainMenuScene::_draw() {
+    rmp::ui::begin();
+    rmp::ui::text(RMP_WINDOW_TITLE, { .size = rmp::ui::Size::LARGE });
+    if (rmp::ui::button("Play", { .style = rmp::ui::Variant::PRIMARY })) {
+        rmp::Scene::change&lt;GameScene&gt;();
+    }
+#if !defined(PLATFORM_IOS)
+    if (rmp::ui::button("Quit")) rmp::app::quit();
+#endif
+    rmp::ui::end();
+}
+</pre>
+
+<p><a href="ref:rmp::audio::music"><code>rmp::audio::music("music")</code></a> streams
+<code>music.ogg</code>, looping, and the framework keeps it fed every frame, under a pause menu
+too. Asking for the track that is already playing does not start it again, so the song carries on
+when a game ends and the menu comes back, instead of jumping to its beginning.</p>
+
+<p>In a browser, nothing is heard until the player has clicked, touched or pressed a key: browsers
+keep a page silent until then, and no game can get round it.</p>
+
+<h2>resources/ in a release</h2>
+
+<p>While you work, the game reads the files in <code>resources/</code> as they are. A release can
+carry them as one file instead, <code>resources.rres</code>, encrypted, and the game reads that
+with the same calls and the same names: nothing in the code knows which it is. You can try it
+here:</p>
+
+<pre data-lang="shell">
+rmp pack
+rmp run
+rmp unpack
+</pre>
+
+<p><code>rmp pack</code> writes the pack into <code>resources/</code>, and the game reads it for
+as long as it is there; <code>rmp unpack</code> deletes it, and the loose files are read again.
+Most of the desktop builds CI makes for a release ship the pack in place of the loose files.
+The pack is flat: it takes the files directly in <code>resources/</code> and not those in a
+folder inside it, so keep <code>resources/</code> flat too.</p>
+
+<p>The encryption keeps casual hands off your files and nothing more. Its password is
+<code>[resources] rres_password</code> in the <code>.toml</code>, which <code>rmp new</code> made
+up for this game, and it ends up inside the game's binary.</p>
+
+<h2>Run it</h2>
+
+<pre data-lang="shell">
+rmp run
+</pre>
+
+<p>Music on the menu, a rabbit in the arena, and spinning coins and flapping bats, each with its
+sound. The <a href="/manual/modules/sprites.html">Sprites</a>,
+<a href="/manual/modules/assets.html">Assets</a> and <a href="/manual/modules/audio.html">Audio</a>
+chapters of the manual go further into each.</p>

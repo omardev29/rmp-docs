@@ -1,0 +1,358 @@
+<!--
+title: Coins and bats
+nav: 3. Coins and bats
+description: Something to collect and something to avoid: objects spawned at random, collision layers, a behavior that chases, lives, and a game over scene pushed on top of the game.
+order: 30
+-->
+<h1>Coins and bats</h1>
+
+<p class="lede">A game needs a goal and a danger. Here the goal is coins, one at a time and each
+in a new place, and the danger is bats that keep coming and chase the player. Three bites, and the
+game is over.</p>
+
+<h2>Who collides with whom</h2>
+
+<p>Every object collides with every other unless it is told otherwise, which is right until there
+are two kinds of thing that should not notice each other. A bat flying over a coin must not pick
+it up, and the game has to be able to say "bats hurt the player" without an <code>if</code> in
+every collision. That is what collision layers are for. Give each kind of thing one bit, in a new
+header beside the player's:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/objects/layers.h">
+#pragma once
+// Who collides with whom: one bit for each kind of thing in the game.
+
+namespace layer {
+constexpr unsigned PLAYER = 1u &lt;&lt; 0;
+constexpr unsigned COIN = 1u &lt;&lt; 1;
+constexpr unsigned BAT = 1u &lt;&lt; 2;
+} // namespace layer
+</pre>
+
+<p>Each object has two of these numbers:
+<a href="ref:rmp::Object::collision_layer"><code>collision_layer</code></a> is what it is, and
+<a href="ref:rmp::Object::collision_mask"><code>collision_mask</code></a> is what it collides
+with. Two objects touch when either one's mask has the other's layer in it. The player is on the
+player's layer and collides with coins and bats; the rest of its file is as it was:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/objects/player.cpp">
+#include "player.h"
+
+#include "layers.h"
+
+#include &lt;rmp/behavior.h&gt;
+#include &lt;rmp/input.h&gt;
+#include &lt;rmp/math.h&gt;
+
+namespace {
+constexpr float SPEED = 260; // design units per second
+} // namespace
+
+void Player::_ready() {
+    // A white box until it has a picture.
+    shape = rmp::rect({ 40, 40 });
+    shape.color = RAYWHITE;
+
+    collision_layer = layer::PLAYER;
+    collision_mask = layer::COIN | layer::BAT;
+
+    // Eight directions, from the keyboard, a d-pad or a stick.
+    add&lt;rmp::behavior::TopDown&gt;({ .speed = SPEED });
+}
+
+void Player::_update(float /*delta*/) {
+    // The mouse held down, or a finger on the screen: run towards it. Not when
+    // the pointer is on a button, which is the interface's and not the game's.
+    if (rmp::input::pointer_down() &amp;&amp; !rmp::input::consumed_pointer()) {
+        const Vector2 to = rmp::input::pointer() - position;
+        if (Vector2Length(to) &gt; 8) velocity = Vector2Normalize(to) * SPEED;
+    }
+}
+</pre>
+
+<p>The coins and the bats each have the player's bit in their mask and nothing else, so a bat and
+a coin never touch, and neither do two bats. The
+<a href="/manual/core/collision.html">Collision</a> chapter of the manual has the rest:
+solid objects that push each other apart, and the edges of the world.</p>
+
+<h2>The game scene</h2>
+
+<p>The game scene gets three things to do, each in a function of its own: make a coin, make a bat,
+and end the game. Replace both files:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game.h">
+#pragma once
+// The game: the rabbit, the coins and the bats, in an arena the size of the
+// design resolution.
+
+#include &lt;rmp/scene.h&gt;
+
+class GameScene : public rmp::Scene {
+public:
+    void _ready() override;
+    void _update(float delta) override;
+    void _draw() override;
+
+private:
+    void spawn_coin();
+    void spawn_bat();
+    void caught();
+
+    rmp::Handle&lt;rmp::Object&gt; _player; // kept across frames, so a handle
+    int _coins = 0;
+    float _next_bat = 1; // seconds until the next bat comes
+};
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game.cpp">
+#include "game.h"
+
+#include "../objects/layers.h"
+#include "../objects/player.h"
+#include "game_over.h"
+#include "main_menu.h"
+
+#include &lt;rmp/behavior.h&gt;
+#include &lt;rmp/input.h&gt;
+#include &lt;rmp/random.h&gt;
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;algorithm&gt;
+#include &lt;string&gt;
+
+namespace {
+// The arena is the design resolution: [window] width and height in the .toml.
+constexpr Rectangle ARENA{ 0, 0, RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT };
+constexpr float SECONDS_PER_BAT = 4;
+} // namespace
+
+void GameScene::_ready() {
+    background = Color{ 52, 92, 60, 255 }; // grass
+
+    // P, Escape, or the gamepad's Start button.
+    rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
+    // raylib closes the window when Escape is pressed; this game uses Escape.
+    SetExitKey(KEY_NULL);
+
+    auto &amp;player = spawn&lt;Player&gt;({
+        .position = { ARENA.width / 2, ARENA.height / 2 },
+        .edges = rmp::Edge::CLAMP,
+        .bounds = ARENA,
+    });
+    player.add&lt;rmp::behavior::Health&gt;({
+        .hp = 3,
+        .destroy_on_death = false, // it stays on screen, under the game over
+        .on_death = [this](rmp::Object &amp;) { caught(); },
+        .hurt_by = layer::BAT,
+    });
+    _player = player.handle();
+
+    spawn_coin();
+}
+
+void GameScene::_update(float delta) {
+    // The whole arena on screen, whatever the window: a phone's, or one
+    // somebody has resized.
+    camera.zoom =
+        std::min(GetScreenWidth() / ARENA.width, GetScreenHeight() / ARENA.height);
+
+    // There is no pause menu yet, so for now "pause" goes back to the menu.
+    if (rmp::input::just_pressed("pause")) rmp::Scene::change&lt;MainMenuScene&gt;();
+
+    _next_bat -= delta;
+    if (_next_bat &lt;= 0) {
+        spawn_bat();
+        _next_bat = SECONDS_PER_BAT;
+    }
+}
+
+void GameScene::_draw() {
+    const int lives = _player-&gt;get&lt;rmp::behavior::Health&gt;()-&gt;hp;
+    rmp::ui::begin({ .placement = rmp::ui::Align::TOP_LEFT });
+    rmp::ui::row({ .gap = 24 }, [&amp;] {
+        rmp::ui::text("Coins " + std::to_string(_coins));
+        rmp::ui::text("Lives " + std::to_string(lives));
+    });
+    rmp::ui::end();
+}
+
+void GameScene::spawn_coin() {
+    // Anywhere in the arena, clear of its edges and of the score at the top.
+    const Vector2 at{ rmp::random::range(40.0f, ARENA.width - 40),
+                      rmp::random::range(80.0f, ARENA.height - 40) };
+    auto &amp;coin = spawn({ .position = at, .shape = rmp::circle(10) });
+    coin.shape.color = GOLD;
+    coin.collision_layer = layer::COIN;
+    coin.collision_mask = layer::PLAYER;
+    coin.on_collision([this](rmp::Object &amp;self, rmp::Object &amp;) {
+        self.destroy();
+        _coins++;
+        spawn_coin();
+    });
+}
+
+void GameScene::spawn_bat() {
+    // From just outside the arena, above it or below it.
+    const Vector2 at{ rmp::random::range(0.0f, ARENA.width),
+                      rmp::random::chance(0.5f) ? -40.0f : ARENA.height + 40 };
+    auto &amp;bat = spawn({ .position = at, .shape = rmp::circle(16) });
+    bat.shape.color = Color{ 90, 60, 120, 255 };
+    bat.collision_layer = layer::BAT;
+    bat.collision_mask = layer::PLAYER;
+    // Each one a little faster or slower, so that they do not fly as one.
+    bat.add&lt;rmp::behavior::Follow&gt;({
+        .target = _player,
+        .speed = rmp::random::range(70.0f, 120.0f),
+    });
+}
+
+void GameScene::caught() { rmp::Scene::push&lt;GameOverScene&gt;(_coins); }
+</pre>
+
+<h3>Coins</h3>
+
+<p>A coin needs no class of its own: it is a plain <a href="ref:rmp::Object"><code>rmp::Object</code></a>,
+which is what <a href="ref:rmp::Scene::spawn"><code>spawn()</code></a> makes when it is not given
+a type. Its shape is a gold circle, made with <a href="ref:rmp::circle"><code>rmp::circle()</code></a>,
+and it goes somewhere random in the arena:
+<a href="ref:rmp::random::range"><code>rmp::random::range()</code></a> is a number between two
+others, from a generator the framework seeds from the clock when the game starts.</p>
+
+<p><code>spawn()</code> returns a reference to the new object, good for the rest of the frame,
+which is all <code>spawn_coin()</code> needs it for. What the coin does when it is touched is a
+function handed to it with <a href="ref:rmp::Object::on_collision"><code>on_collision()</code></a>,
+which runs when the coin touches something its layers allow, and that can only be the player:</p>
+
+<ul>
+<li><a href="ref:rmp::Object::destroy"><code>self.destroy()</code></a> takes the coin out. It
+stops being drawn and touched at once, and its memory goes when the frame ends, so nothing still
+running in this frame is left holding a dangling reference.</li>
+<li><code>_coins++</code> counts it. The lambda captures <code>this</code>, the scene, which owns
+the coin and therefore outlives it.</li>
+<li><code>spawn_coin()</code> puts the next one somewhere else.</li>
+</ul>
+
+<p>The two kinds of name are the framework's rule for who calls whom: <code>_collision()</code>,
+with an underscore, would be a hook you override in a class of your own; <code>on_collision()</code>
+takes a function, for when a class would be more than the job needs.</p>
+
+<h3>Bats</h3>
+
+<p>A bat starts just outside the arena, above it or below it, which
+<a href="ref:rmp::random::chance"><code>rmp::random::chance(0.5f)</code></a> decides. It chases
+the player with another behavior from the catalogue,
+<a href="ref:rmp::behavior::Follow"><code>rmp::behavior::Follow</code></a>, at a speed of its
+own so that the bats spread out instead of flying as one. The first comes after a second and
+then one every four: <code>_update()</code> counts <code>_next_bat</code> down by
+<code>delta</code>, the seconds since the last frame, and makes a bat when it reaches zero.</p>
+
+<p><code>Follow</code> is given the player as a handle, an
+<a href="ref:rmp::Handle"><code>rmp::Handle</code></a> made by
+<a href="ref:rmp::Object::handle"><code>player.handle()</code></a>, and not as a reference, and
+the scene keeps one in <code>_player</code> the same way. A reference is good for the frame
+it was got in: a destroyed object's memory goes when that frame ends, and a reference kept past
+it points at nothing. A handle knows when its object is gone, and reads as empty from then on.</p>
+
+<h3>Lives</h3>
+
+<p>The player gets a second behavior, <a href="ref:rmp::behavior::Health"><code>rmp::behavior::Health</code></a>,
+and it is the whole of being hurt. The scene adds it, and not the player's own file, because what
+a death means is the game's business: here, it ends the game.</p>
+
+<ul>
+<li><code>.hp = 3</code> is three lives.</li>
+<li><a href="ref:rmp::behavior::Health::hurt_by"><code>.hurt_by = layer::BAT</code></a> says what
+costs one: touching anything on the bats' layer.</li>
+<li>After a bite the player cannot be bitten again for a moment, and blinks while it lasts, so a
+bat sitting on the rabbit costs one life and not sixty a second.</li>
+<li><a href="ref:rmp::behavior::Health::on_death"><code>.on_death</code></a> runs once, when the
+last life goes, and calls <code>caught()</code>. <code>.destroy_on_death = false</code> leaves
+the rabbit on screen for the game over to be drawn over.</li>
+</ul>
+
+<p>The fields are written in the order <code>Health</code> declares them, which C++20 requires of
+designated initialisers.</p>
+
+<h3>The score</h3>
+
+<p><code>_draw()</code> puts the coins and the lives in the top-left corner, with
+<code>rmp::ui</code> again: <code>begin()</code> with <code>.placement</code> set to
+<a href="ref:rmp::ui::Align"><code>rmp::ui::Align::TOP_LEFT</code></a>, and a
+<a href="ref:rmp::ui::row"><code>row</code></a> to put the two side by side. A container takes
+its contents as a lambda, so there is no closing call to forget. The strings are temporaries, and
+that is safe: <code>text()</code> copies what it is given.</p>
+
+<p>The lives are read from the player's <code>Health</code> through the handle, with
+<a href="ref:rmp::Object::get"><code>get&lt;rmp::behavior::Health&gt;()</code></a>. The scene
+draws its interface after its objects, so the score is always on top of the game.</p>
+
+<h2>Game over</h2>
+
+<p>When the last life goes, the game does not end: a new scene is put on top of it. Two new files
+in <code>src/scenes/</code>:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game_over.h">
+#pragma once
+// Pushed on top of the game when the rabbit is caught. The game stays on
+// screen, frozen, underneath.
+
+#include &lt;rmp/scene.h&gt;
+
+class GameOverScene : public rmp::Scene {
+public:
+    explicit GameOverScene(int coins) : _coins(coins) {}
+    void _draw() override;
+
+private:
+    int _coins;
+};
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game_over.cpp">
+#include "game_over.h"
+
+#include "game.h"
+#include "main_menu.h"
+
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;string&gt;
+
+void GameOverScene::_draw() {
+    // A veil over the game, which has already drawn this frame.
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color{ 0, 0, 0, 150 });
+
+    rmp::ui::begin();
+    rmp::ui::text("Caught!", { .size = rmp::ui::Size::LARGE });
+    rmp::ui::text(std::to_string(_coins) + " coins");
+    if (rmp::ui::button("Play again", { .style = rmp::ui::Variant::PRIMARY })) {
+        rmp::Scene::change&lt;GameScene&gt;();
+    }
+    if (rmp::ui::button("Menu")) rmp::Scene::change&lt;MainMenuScene&gt;();
+    rmp::ui::end();
+}
+</pre>
+
+<p><a href="ref:rmp::Scene::push"><code>rmp::Scene::push&lt;GameOverScene&gt;(_coins)</code></a>
+puts it on top of the game, and the arguments go to its constructor, which is how the score gets
+there. A scene pushed on top of another freezes it: the game below is still drawn, but nothing in
+it moves and it hears no input. Nothing in the game scene says "stop": it is simply not updated
+while something is on top of it.</p>
+
+<p>The veil is plain raylib, <code>DrawRectangle()</code>, called in <code>_draw()</code>: the game
+underneath has already drawn this frame, so the rectangle darkens it, and the menu is drawn over
+both.</p>
+
+<p>Play again is <code>rmp::Scene::change&lt;GameScene&gt;()</code>, which ends both scenes and
+starts a new game from nothing: a new <code>GameScene</code>, with no coins, no bats and three
+lives. Starting over needs no reset code, because everything that was the old game belonged to
+the old scene.</p>
+
+<h2>Run it</h2>
+
+<pre data-lang="shell">
+rmp run
+</pre>
+
+<p>Gather the gold coins and keep away from the purple bats. The third bite brings the game over
+up, frozen on the moment you were caught.</p>

@@ -1,0 +1,345 @@
+<!--
+title: Saving a record
+nav: 6. Saving a record
+description: Keep the best score between sessions with rmp::save and rmp::Value, and show it on the menu and on the game over screen.
+order: 60
+-->
+<h1>Saving a record</h1>
+
+<p class="lede">A score is more fun with something to beat. This page keeps the most coins anyone
+has gathered in one game, on disk, so that it is still there the next time the game starts, and
+shows it on the menu.</p>
+
+<h2>The record</h2>
+
+<p>Both the menu and the game need the best score, so it gets two small functions of its own, in
+two new files at the top of <code>src/</code>, next to <code>main.cpp</code>:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/record.h">
+#pragma once
+// The best score, kept on disk from one session to the next.
+
+// The most coins collected in one game, or 0 before the first game ends.
+int best_score();
+
+// Keeps `coins` as the best score if it beats it, and says whether it did.
+bool keep_if_best(int coins);
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/record.cpp">
+#include "record.h"
+
+#include &lt;rmp/save.h&gt;
+
+namespace {
+// The slot: the save file's name, without a folder and without an extension.
+constexpr const char *SLOT = "record";
+} // namespace
+
+int best_score() {
+    rmp::Value saved;
+    rmp::save::read(SLOT, &amp;saved);
+    // No save yet, or one without this key: the 0 is what reads then.
+    return saved["coins"].as_int(0);
+}
+
+bool keep_if_best(int coins) {
+    if (coins &lt;= best_score()) return false;
+    rmp::Value record;
+    record["coins"] = coins;
+    rmp::save::write(SLOT, record);
+    return true;
+}
+</pre>
+
+<p>A save is an <a href="ref:rmp::Value"><code>rmp::Value</code></a>: a tree of numbers, strings,
+lists and keyed objects, the same shapes JSON has, so a save can grow into something with structure
+without changing how it is written. Assigning to a key creates it:
+<code>record["coins"] = coins</code>.</p>
+
+<p><a href="ref:rmp::save::write"><code>rmp::save::write()</code></a> writes it to a
+<em>slot</em>, a file name without a folder or an extension. The file is written beside the old one
+first and replaces it only once it is complete, so a game that crashes, or a battery that dies, in
+the middle of a save leaves the previous save as it was.</p>
+
+<p><a href="ref:rmp::save::read"><code>rmp::save::read()</code></a> fills the
+<code>rmp::Value</code> it is given, or leaves it exactly as it was when it cannot: the first time
+the game runs there is no save at all. Every read of a value says what to give back when the key
+is not there, so <code>saved["coins"].as_int(0)</code> is <code>0</code> on the first run and the
+record from then on, with no special case. Reading creates nothing, and a key a later version of
+the game adds simply reads as its default in an older save.</p>
+
+<p><code>read()</code> also says why it did not fill the value, when that matters, and here it
+does not: no save and a damaged save both mean "no record yet". The
+<a href="/manual/modules/saving.html">Saving</a> chapter of the manual shows how to tell them
+apart.</p>
+
+<h2>Keeping it</h2>
+
+<p>The game keeps the record when the rabbit is caught, and tells the game over screen whether it
+was beaten. Replace the game scene's code; its header does not change:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game.cpp">
+#include "game.h"
+
+#include "../objects/layers.h"
+#include "../objects/player.h"
+#include "../record.h"
+#include "game_over.h"
+#include "pause.h"
+
+#include &lt;rmp/assets.h&gt;
+#include &lt;rmp/audio.h&gt;
+#include &lt;rmp/behavior.h&gt;
+#include &lt;rmp/input.h&gt;
+#include &lt;rmp/random.h&gt;
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;algorithm&gt;
+#include &lt;string&gt;
+
+namespace {
+// The arena is the design resolution: [window] width and height in the .toml.
+constexpr Rectangle ARENA{ 0, 0, RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT };
+constexpr float SECONDS_PER_BAT = 4;
+} // namespace
+
+void GameScene::_ready() {
+    background = Color{ 52, 92, 60, 255 }; // grass
+
+    // P, Escape, or the gamepad's Start button.
+    rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
+    // raylib closes the window when Escape is pressed; this game uses Escape.
+    SetExitKey(KEY_NULL);
+
+    auto &amp;player = spawn&lt;Player&gt;({
+        .position = { ARENA.width / 2, ARENA.height / 2 },
+        .edges = rmp::Edge::CLAMP,
+        .bounds = ARENA,
+    });
+    player.add&lt;rmp::behavior::Health&gt;({
+        .hp = 3,
+        .destroy_on_death = false, // it stays on screen, under the game over
+        .on_death = [this](rmp::Object &amp;) { caught(); },
+        .on_damage = [](rmp::Object &amp;, int) { rmp::audio::play("hurt"); },
+        .hurt_by = layer::BAT,
+    });
+    _player = player.handle();
+
+    spawn_coin();
+}
+
+void GameScene::_update(float delta) {
+    // The whole arena on screen, whatever the window: a phone's, or one
+    // somebody has resized.
+    camera.zoom =
+        std::min(GetScreenWidth() / ARENA.width, GetScreenHeight() / ARENA.height);
+
+    if (rmp::input::just_pressed("pause")) rmp::Scene::push&lt;PauseScene&gt;();
+
+    _next_bat -= delta;
+    if (_next_bat &lt;= 0) {
+        spawn_bat();
+        _next_bat = SECONDS_PER_BAT;
+    }
+}
+
+void GameScene::_draw() {
+    const int lives = _player-&gt;get&lt;rmp::behavior::Health&gt;()-&gt;hp;
+    rmp::ui::begin({ .placement = rmp::ui::Align::TOP_LEFT });
+    rmp::ui::row({ .gap = 24 }, [&amp;] {
+        rmp::ui::text("Coins " + std::to_string(_coins));
+        rmp::ui::text("Lives " + std::to_string(lives));
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
+        // A phone has no key to pause with.
+        if (rmp::ui::button("Pause", { .style = rmp::ui::Variant::GHOST })) {
+            rmp::Scene::push&lt;PauseScene&gt;();
+        }
+#endif
+    });
+    rmp::ui::end();
+}
+
+void GameScene::spawn_coin() {
+    // Anywhere in the arena, clear of its edges and of the score at the top.
+    const Vector2 at{ rmp::random::range(40.0f, ARENA.width - 40),
+                      rmp::random::range(80.0f, ARENA.height - 40) };
+    auto &amp;coin = spawn({ .position = at, .scale = { 2, 2 } });
+    coin.sprite.sheet = rmp::assets::load_sheet("coin.aseprite");
+    coin.sprite.play("spin");
+    coin.collision_layer = layer::COIN;
+    coin.collision_mask = layer::PLAYER;
+    coin.on_collision([this](rmp::Object &amp;self, rmp::Object &amp;) {
+        self.destroy();
+        _coins++;
+        rmp::audio::play("coin");
+        spawn_coin();
+    });
+}
+
+void GameScene::spawn_bat() {
+    // From just outside the arena, above it or below it.
+    const Vector2 at{ rmp::random::range(0.0f, ARENA.width),
+                      rmp::random::chance(0.5f) ? -40.0f : ARENA.height + 40 };
+    auto &amp;bat = spawn({ .position = at, .scale = { 2, 2 } });
+    bat.sprite.sheet = rmp::assets::load_sheet("bat.aseprite");
+    bat.sprite.play("fly");
+    bat.collision_layer = layer::BAT;
+    bat.collision_mask = layer::PLAYER;
+    // Each one a little faster or slower, so that they do not fly as one.
+    bat.add&lt;rmp::behavior::Follow&gt;({
+        .target = _player,
+        .speed = rmp::random::range(70.0f, 120.0f),
+    });
+}
+
+void GameScene::caught() {
+    const bool record = keep_if_best(_coins);
+    rmp::Scene::push&lt;GameOverScene&gt;(_coins, record);
+}
+</pre>
+
+<p>The game over scene takes a second argument, and says so when there is a new best:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game_over.h">
+#pragma once
+// Pushed on top of the game when the rabbit is caught. The game stays on
+// screen, frozen, underneath.
+
+#include &lt;rmp/scene.h&gt;
+
+class GameOverScene : public rmp::Scene {
+public:
+    GameOverScene(int coins, bool record) : _coins(coins), _record(record) {}
+    void _draw() override;
+
+private:
+    int _coins;
+    bool _record;
+};
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game_over.cpp">
+#include "game_over.h"
+
+#include "game.h"
+#include "main_menu.h"
+
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;string&gt;
+
+void GameOverScene::_draw() {
+    // A veil over the game, which has already drawn this frame.
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color{ 0, 0, 0, 150 });
+
+    rmp::ui::begin();
+    rmp::ui::text("Caught!", { .size = rmp::ui::Size::LARGE });
+    rmp::ui::text(std::to_string(_coins) + " coins");
+    if (_record) {
+        rmp::ui::text("A new best!", { .color = rmp::ui::ColorRole::PRIMARY });
+    }
+    if (rmp::ui::button("Play again", { .style = rmp::ui::Variant::PRIMARY })) {
+        rmp::Scene::change&lt;GameScene&gt;();
+    }
+    if (rmp::ui::button("Menu")) rmp::Scene::change&lt;MainMenuScene&gt;();
+    rmp::ui::end();
+}
+</pre>
+
+<h2>Showing it</h2>
+
+<p>The menu shows the record under the title, once there is one:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/main_menu.h">
+#pragma once
+// The title screen: the game's name, the best score, Play and Quit.
+
+#include &lt;rmp/scene.h&gt;
+
+class MainMenuScene : public rmp::Scene {
+public:
+    void _ready() override;
+    void _draw() override;
+
+private:
+    int _best = 0; // read once, when the menu opens
+};
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/main_menu.cpp">
+#include "main_menu.h"
+
+#include "../record.h"
+#include "game.h"
+
+#include &lt;rmp/app.h&gt;
+#include &lt;rmp/audio.h&gt;
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;string&gt;
+
+void MainMenuScene::_ready() {
+    _best = best_score();
+    // Already playing when the menu comes back after a game: then it carries on.
+    rmp::audio::music("music");
+}
+
+void MainMenuScene::_draw() {
+    rmp::ui::begin();
+    rmp::ui::text(RMP_WINDOW_TITLE, { .size = rmp::ui::Size::LARGE });
+    if (_best &gt; 0) {
+        rmp::ui::text("Best: " + std::to_string(_best) + " coins",
+                      { .color = rmp::ui::ColorRole::MUTED });
+    }
+    if (rmp::ui::button("Play", { .style = rmp::ui::Variant::PRIMARY })) {
+        rmp::Scene::change&lt;GameScene&gt;();
+    }
+#if !defined(PLATFORM_IOS)
+    if (rmp::ui::button("Quit")) rmp::app::quit();
+#endif
+    rmp::ui::end();
+}
+</pre>
+
+<p>The menu reads the record once, in <code>_ready()</code>, and keeps it in
+<code>_best</code>, rather than reading a file sixty times a second in <code>_draw()</code>. The
+menu is a new scene every time a game ends and the player goes back to it, so it always shows the
+record as it is now.</p>
+
+<h2>Where it goes</h2>
+
+<p>The slot <code>record</code> is a file called <code>record.save</code>, in a folder named
+after <code>[project] name</code>, where each platform keeps an application's data:</p>
+
+<table>
+<thead><tr><th>Platform</th><th>Folder</th></tr></thead>
+<tbody>
+<tr><td>Linux and the BSDs</td><td><code>~/.local/share/my_game</code></td></tr>
+<tr><td>Windows</td><td><code>%APPDATA%\my_game</code></td></tr>
+<tr><td>macOS</td><td><code>~/Library/Application Support/my_game</code></td></tr>
+<tr><td>Android</td><td>the app's internal storage</td></tr>
+<tr><td>iOS</td><td>the app's Application Support folder</td></tr>
+<tr><td>Web</td><td>the browser's own storage, IndexedDB, which survives a reload</td></tr>
+</tbody>
+</table>
+
+<p><a href="ref:rmp::save::directory"><code>rmp::save::directory()</code></a> says which folder it
+is on the machine the game is running on. <code>[save] portable = true</code> in the
+<code>.toml</code> puts saves in a folder next to the game instead, on Windows, Linux and the BSDs,
+which is what a game handed out as a zip file wants.</p>
+
+<p>The file is a line of header and then the JSON, so anyone can read it in a text editor, and
+the framework notices if they change it: every save carries a checksum. <code>[save] encrypt = true</code> also seals it, which stops a
+player from simply typing in a better score, but the key is inside the game, so it stops the
+curious and not the determined.</p>
+
+<h2>Run it</h2>
+
+<pre data-lang="shell">
+rmp run
+</pre>
+
+<p>Gather a coin or two and get caught: the game over screen says "A new best!", and back on the
+menu the record is under the title. Close the game and start it again, and the record is still
+there.</p>

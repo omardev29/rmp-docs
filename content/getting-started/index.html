@@ -1,6 +1,6 @@
 <!--
 title: Getting started
-description: Install the rmp command once, make a game with it, and run it.
+description: Install the rmp command once, make a game with it, run it, and then build that game up one page at a time.
 order: 1
 -->
 <h1>Getting started</h1>
@@ -60,9 +60,52 @@ rmp run
 
 <p><code>rmp new</code> makes a folder with the framework, the build and CI for every target, and
 a small game in <code>src/</code> to start from. <code>rmp run</code> builds it and opens the
-window.</p>
+window: a menu with a rabbit on it. The first build compiles raylib and the framework, so it takes
+a while; after that only what changed is compiled again.</p>
+
+<p>The folder is also a git repository, with every file already added. Commit it, so that what
+the next pages change is yours to see in <code>git diff</code>:</p>
+
+<pre data-lang="shell">
+git commit -m "New game"
+</pre>
+
+<h2>What is yours</h2>
+
+<p>Most of the folder is the framework and the build, and you do not edit it. Your game is four
+places:</p>
+
+<table>
+<thead><tr><th>Path</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><code>src/main.cpp</code></td><td>Where the game starts. It names the first scene, and that is all it does.</td></tr>
+<tr><td><code>src/scenes/</code></td><td>The scenes, one per file: <code>main_menu.h</code> and <code>main_menu.cpp</code> are the menu you just saw.</td></tr>
+<tr><td><code>resources/</code></td><td>Pictures and sounds, loaded by name. <code>rabbit.png</code> is the one on the menu.</td></tr>
+<tr><td><code>raylib_multiplatform.toml</code></td><td>The game's name, its window, its app ids and which platforms to build.</td></tr>
+</tbody>
+</table>
+
+<p><code>src/rmp/</code> and <code>include/rmp/</code> are the framework itself, inside your game.
+Every other <code>.cpp</code> under <code>src/</code>, in any folder, is compiled without being
+listed anywhere: adding a file to the game touches no build file.</p>
 
 <p>The new game's <code>raylib_multiplatform.toml</code> has your game's name in it, and app ids
 that start with <code>com.example.</code>. Set real ones before your first release:
 <code>rmp deploy</code> refuses to tag a release while they are placeholders, because a Google Play
 app id can never change once it is published.</p>
+
+<h2>The tutorial</h2>
+
+<p>The pages that follow turn the game <code>rmp new</code> made into a real one, a step at a time:
+<em>Coin Rabbit</em>, in which a rabbit gathers coins while bats close in on it. Each page shows
+every file it adds or changes, whole, and ends with a game that builds and runs.</p>
+
+<ol>
+<li><a href="/getting-started/your-first-scene.html">Your first scene</a>: a menu of your own, and a second screen to go to.</li>
+<li><a href="/getting-started/a-player.html">A player</a>: an object that moves with the keyboard, a gamepad, the mouse or a finger.</li>
+<li><a href="/getting-started/coins-and-bats.html">Coins and bats</a>: something to collect, something to avoid, and a game over.</li>
+<li><a href="/getting-started/a-pause-menu.html">A pause menu</a>: a scene on top of the game.</li>
+<li><a href="/getting-started/art-and-sound.html">Art and sound</a>: pictures and sounds, loaded by name.</li>
+<li><a href="/getting-started/saving-a-record.html">Saving a record</a>: the best score, kept between sessions.</li>
+<li><a href="/getting-started/ship-it.html">Ship it</a>: real app ids, the checks, and a release built for every platform.</li>
+</ol>

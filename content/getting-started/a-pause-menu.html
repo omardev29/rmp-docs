@@ -1,0 +1,221 @@
+<!--
+title: A pause menu
+nav: 4. A pause menu
+description: Pause the game by pushing a scene on top of it, see what the scene stack's defaults freeze, and give phones a button to pause with.
+order: 40
+-->
+<h1>A pause menu</h1>
+
+<p class="lede">Pausing is the game over again, without the ending: a scene pushed on top of the
+game, which freezes it, and taken off again to carry on. The game scene does not get a
+<code>paused</code> flag, and nothing in it checks one.</p>
+
+<h2>The pause scene</h2>
+
+<p>Two new files in <code>src/scenes/</code>:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/pause.h">
+#pragma once
+// Pushed on top of the game. The game underneath freezes, stays on screen and
+// stops hearing the input: that is what any scene pushed on top does, so
+// nothing here says it.
+
+#include &lt;rmp/scene.h&gt;
+
+class PauseScene : public rmp::Scene {
+public:
+    void _update(float delta) override;
+    void _draw() override;
+};
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/pause.cpp">
+#include "pause.h"
+
+#include "main_menu.h"
+
+#include &lt;rmp/input.h&gt;
+#include &lt;rmp/ui.h&gt;
+
+void PauseScene::_update(float /*delta*/) {
+    // The same key that paused resumes.
+    if (rmp::input::just_pressed("pause")) rmp::Scene::pop();
+}
+
+void PauseScene::_draw() {
+    // A veil over the game, which has already drawn this frame.
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color{ 0, 0, 0, 150 });
+
+    rmp::ui::begin();
+    rmp::ui::text("Paused", { .size = rmp::ui::Size::LARGE });
+    if (rmp::ui::button("Resume")) rmp::Scene::pop();
+    if (rmp::ui::button("Menu")) rmp::Scene::change&lt;MainMenuScene&gt;();
+    rmp::ui::end();
+}
+</pre>
+
+<p><a href="ref:rmp::Scene::pop"><code>rmp::Scene::pop()</code></a> takes the pause scene off
+the top, and the game underneath carries on from the frame it stopped at, with every bat where it
+was. Menu is <code>change&lt;MainMenuScene&gt;()</code>, which ends both: the pause scene and the
+game under it.</p>
+
+<p>The same key that paused also resumes, which is why the pause scene reads the
+<code>pause</code> action in its own <code>_update()</code>. The press that pushed it does not pop
+it again straight away: the push happens at the end of the frame, and by the next one the key is
+held, not pressed.</p>
+
+<h2>What a scene lets through</h2>
+
+<p>Nothing in <code>PauseScene</code> says "freeze the game", and that is the point. Three fields
+of every scene decide what reaches the scene underneath it, and their defaults are a pause
+menu:</p>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::Scene::updates_below"><code>updates_below</code></a></td><td><code>false</code></td><td>The scene below keeps running.</td></tr>
+<tr><td><a href="ref:rmp::Scene::draws_below"><code>draws_below</code></a></td><td><code>true</code></td><td>The scene below stays on screen.</td></tr>
+<tr><td><a href="ref:rmp::Scene::input_below"><code>input_below</code></a></td><td><code>false</code></td><td>The scene below still hears the input.</td></tr>
+</tbody>
+</table>
+
+<p>So with the pause scene on top, the game is drawn and nothing in it runs: no bat moves, no
+<code>_update()</code> counts down to the next one, and the game's own <code>pause</code> check
+is not even reached. Its interface is drawn too, and nothing in it can be pressed. The game over
+scene of the last page works the same way, with the same defaults.</p>
+
+<h2>Pausing</h2>
+
+<p>The game scene now pushes the pause scene where it used to go back to the menu. Only its code
+changes; its header is as it was:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game.cpp">
+#include "game.h"
+
+#include "../objects/layers.h"
+#include "../objects/player.h"
+#include "game_over.h"
+#include "pause.h"
+
+#include &lt;rmp/behavior.h&gt;
+#include &lt;rmp/input.h&gt;
+#include &lt;rmp/random.h&gt;
+#include &lt;rmp/ui.h&gt;
+
+#include &lt;algorithm&gt;
+#include &lt;string&gt;
+
+namespace {
+// The arena is the design resolution: [window] width and height in the .toml.
+constexpr Rectangle ARENA{ 0, 0, RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT };
+constexpr float SECONDS_PER_BAT = 4;
+} // namespace
+
+void GameScene::_ready() {
+    background = Color{ 52, 92, 60, 255 }; // grass
+
+    // P, Escape, or the gamepad's Start button.
+    rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
+    // raylib closes the window when Escape is pressed; this game uses Escape.
+    SetExitKey(KEY_NULL);
+
+    auto &amp;player = spawn&lt;Player&gt;({
+        .position = { ARENA.width / 2, ARENA.height / 2 },
+        .edges = rmp::Edge::CLAMP,
+        .bounds = ARENA,
+    });
+    player.add&lt;rmp::behavior::Health&gt;({
+        .hp = 3,
+        .destroy_on_death = false, // it stays on screen, under the game over
+        .on_death = [this](rmp::Object &amp;) { caught(); },
+        .hurt_by = layer::BAT,
+    });
+    _player = player.handle();
+
+    spawn_coin();
+}
+
+void GameScene::_update(float delta) {
+    // The whole arena on screen, whatever the window: a phone's, or one
+    // somebody has resized.
+    camera.zoom =
+        std::min(GetScreenWidth() / ARENA.width, GetScreenHeight() / ARENA.height);
+
+    if (rmp::input::just_pressed("pause")) rmp::Scene::push&lt;PauseScene&gt;();
+
+    _next_bat -= delta;
+    if (_next_bat &lt;= 0) {
+        spawn_bat();
+        _next_bat = SECONDS_PER_BAT;
+    }
+}
+
+void GameScene::_draw() {
+    const int lives = _player-&gt;get&lt;rmp::behavior::Health&gt;()-&gt;hp;
+    rmp::ui::begin({ .placement = rmp::ui::Align::TOP_LEFT });
+    rmp::ui::row({ .gap = 24 }, [&amp;] {
+        rmp::ui::text("Coins " + std::to_string(_coins));
+        rmp::ui::text("Lives " + std::to_string(lives));
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
+        // A phone has no key to pause with.
+        if (rmp::ui::button("Pause", { .style = rmp::ui::Variant::GHOST })) {
+            rmp::Scene::push&lt;PauseScene&gt;();
+        }
+#endif
+    });
+    rmp::ui::end();
+}
+
+void GameScene::spawn_coin() {
+    // Anywhere in the arena, clear of its edges and of the score at the top.
+    const Vector2 at{ rmp::random::range(40.0f, ARENA.width - 40),
+                      rmp::random::range(80.0f, ARENA.height - 40) };
+    auto &amp;coin = spawn({ .position = at, .shape = rmp::circle(10) });
+    coin.shape.color = GOLD;
+    coin.collision_layer = layer::COIN;
+    coin.collision_mask = layer::PLAYER;
+    coin.on_collision([this](rmp::Object &amp;self, rmp::Object &amp;) {
+        self.destroy();
+        _coins++;
+        spawn_coin();
+    });
+}
+
+void GameScene::spawn_bat() {
+    // From just outside the arena, above it or below it.
+    const Vector2 at{ rmp::random::range(0.0f, ARENA.width),
+                      rmp::random::chance(0.5f) ? -40.0f : ARENA.height + 40 };
+    auto &amp;bat = spawn({ .position = at, .shape = rmp::circle(16) });
+    bat.shape.color = Color{ 90, 60, 120, 255 };
+    bat.collision_layer = layer::BAT;
+    bat.collision_mask = layer::PLAYER;
+    // Each one a little faster or slower, so that they do not fly as one.
+    bat.add&lt;rmp::behavior::Follow&gt;({
+        .target = _player,
+        .speed = rmp::random::range(70.0f, 120.0f),
+    });
+}
+
+void GameScene::caught() { rmp::Scene::push&lt;GameOverScene&gt;(_coins); }
+</pre>
+
+<p>The keyboard and the gamepad have their key, but a phone has neither, so on Android and iOS the
+score gets a Pause button. The <code>#if</code> keeps it to those two for a reason: a button on
+screen holds the keyboard's focus when nothing else does, so on a desktop Enter or Space would
+press it in the middle of the game, and the arrows that move the rabbit would light up its focus
+ring. The
+<a href="/manual/modules/ui.html#a-button-in-the-hud">interface chapter</a> shows the other way
+out, turning keyboard navigation off while the game is played.</p>
+
+<p>The button is also where the pointer check of the player pays off. A finger on Pause is a finger
+on the screen, and <code>consumed_pointer()</code> is what keeps the rabbit from running to the
+corner as the game pauses: the pointer is the interface's while it is on a button.</p>
+
+<h2>Run it</h2>
+
+<pre data-lang="shell">
+rmp run
+</pre>
+
+<p>P, Escape or the gamepad's Start button pauses, and the same key resumes. Resume does too, and
+Menu leaves the game.</p>

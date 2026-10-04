@@ -1,0 +1,243 @@
+<!--
+title: A player
+nav: 2. A player
+description: Put a player in the game scene, an object moved by a behavior from the catalogue, by the mouse or a finger, and by the input actions it reads.
+order: 20
+-->
+<h1>A player</h1>
+
+<p class="lede">A scene holds objects: the player, a coin, an enemy, a bullet are all the same
+kind of thing, and what makes them different is what you put in them. This page puts the first
+one in the game, a box for now, that moves with the keyboard, a gamepad, the mouse or a
+finger.</p>
+
+<h2>An object</h2>
+
+<p>The player gets a class of its own, because it has a few things to say about itself. Objects
+go in a folder of their own, beside the scenes, as the names of the two new files say:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/objects/player.h">
+#pragma once
+// The rabbit: what it looks like, what it collides as, and how it moves.
+
+#include &lt;rmp/object.h&gt;
+
+class Player : public rmp::Object {
+public:
+    void _ready() override;
+    void _update(float delta) override;
+};
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/objects/player.cpp">
+#include "player.h"
+
+#include &lt;rmp/behavior.h&gt;
+#include &lt;rmp/input.h&gt;
+#include &lt;rmp/math.h&gt;
+
+namespace {
+constexpr float SPEED = 260; // design units per second
+} // namespace
+
+void Player::_ready() {
+    // A white box until it has a picture.
+    shape = rmp::rect({ 40, 40 });
+    shape.color = RAYWHITE;
+
+    // Eight directions, from the keyboard, a d-pad or a stick.
+    add&lt;rmp::behavior::TopDown&gt;({ .speed = SPEED });
+}
+
+void Player::_update(float /*delta*/) {
+    // The mouse held down, or a finger on the screen: run towards it. Not when
+    // the pointer is on a button, which is the interface's and not the game's.
+    if (rmp::input::pointer_down() &amp;&amp; !rmp::input::consumed_pointer()) {
+        const Vector2 to = rmp::input::pointer() - position;
+        if (Vector2Length(to) &gt; 8) velocity = Vector2Normalize(to) * SPEED;
+    }
+}
+</pre>
+
+<p>An <a href="ref:rmp::Object"><code>rmp::Object</code></a> is mostly public fields that you
+read and write directly: <a href="ref:rmp::Object::position"><code>position</code></a>,
+<a href="ref:rmp::Object::velocity"><code>velocity</code></a>,
+<a href="ref:rmp::Object::shape"><code>shape</code></a>, and so on. There is no getter in front
+of them because there is nothing for one to do. <code>position</code> is the object's
+<em>centre</em>, unlike raylib, which draws from the top-left corner: the centre is what a
+rotation turns about and what a distance is measured from, so nothing has to be corrected by half
+a size.</p>
+
+<p>An object draws its <code>shape</code> when it has no picture: here a white box, 40 units a
+side. The picture comes later, and nothing else about the player will change when it does.</p>
+
+<p>It has the same kind of hooks as a scene. <a href="ref:rmp::Object::_ready"><code>_ready()</code></a>
+runs once, as soon as the object is in its scene; <a href="ref:rmp::Object::_update"><code>_update()</code></a>
+runs every frame.</p>
+
+<h3>A behavior</h3>
+
+<p>Moving in eight directions from the keyboard, the d-pad and the stick is not something to
+write by hand, so the player adds a behavior from the catalogue that does it:
+<a href="ref:rmp::behavior::TopDown"><code>rmp::behavior::TopDown</code></a>. A behavior is a
+plain struct, and its fields are its settings, written with designated initialisers:
+<code>{ .speed = SPEED }</code>. It reads the input, sets the object's velocity, and the
+framework moves the object by its velocity every frame. Going diagonally is not faster than
+going straight, which is the bug in most hand-written movement.</p>
+
+<p>The fields stay live after <a href="ref:rmp::Object::add"><code>add()</code></a>:
+<code>get&lt;rmp::behavior::TopDown&gt;()-&gt;speed = 400</code> would be a power-up.</p>
+
+<h3>The mouse, or a finger</h3>
+
+<p><code>_update()</code> adds the one thing <code>TopDown</code> does not do: while the mouse
+button is held, or a finger is on the screen, the player runs towards it. The framework treats the
+mouse and a touch as one pointer, which is what lets the same code run on a desktop and on a
+phone without an <code>#if</code>.</p>
+
+<ul>
+<li><a href="ref:rmp::input::pointer_down"><code>rmp::input::pointer_down()</code></a> is the
+mouse button, or a finger, held down.</li>
+<li><a href="ref:rmp::input::consumed_pointer"><code>rmp::input::consumed_pointer()</code></a>
+is true while the pointer belongs to someone else: a button of the interface under it, or a scene
+on top of this one. Without it, pressing a button on screen would also send the player running
+towards it.</li>
+<li><a href="ref:rmp::input::pointer"><code>rmp::input::pointer()</code></a> is where it is, in
+the same units as <code>position</code>, whatever the camera is doing.</li>
+</ul>
+
+<p>The arithmetic on <code>Vector2</code> comes from raylib's own <code>raymath.h</code>, which
+<code>&lt;rmp/math.h&gt;</code> includes: the operators <code>-</code> and <code>*</code>, and
+<code>Vector2Length()</code> and <code>Vector2Normalize()</code>. The object's own
+<code>_update()</code> runs after its behaviors' and before it is moved, so the velocity it sets
+is the one used.</p>
+
+<h2>Actions</h2>
+
+<p><code>TopDown</code> does not read keys. It reads <em>actions</em>: a name with any number of
+keys and buttons bound to it. These come defined:</p>
+
+<table>
+<thead><tr><th>Action</th><th>Keyboard</th><th>Gamepad</th></tr></thead>
+<tbody>
+<tr><td><code>move_left</code></td><td>A, Left</td><td>d-pad left, left stick</td></tr>
+<tr><td><code>move_right</code></td><td>D, Right</td><td>d-pad right, left stick</td></tr>
+<tr><td><code>move_up</code></td><td>W, Up</td><td>d-pad up, left stick</td></tr>
+<tr><td><code>move_down</code></td><td>S, Down</td><td>d-pad down, left stick</td></tr>
+<tr><td><code>ui_accept</code></td><td>Enter, Space</td><td>bottom face button</td></tr>
+<tr><td><code>ui_cancel</code></td><td>Escape</td><td>right face button</td></tr>
+</tbody>
+</table>
+
+<p>The game defines one more, in the game scene below:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
+</pre>
+
+<p>The type of each binding says which device it belongs to, so a key and a gamepad button can
+share a list, and a value that is neither does not compile. Defining a name again replaces it,
+which is why <a href="ref:rmp::input::action"><code>rmp::input::action()</code></a> can sit in a
+scene's <code>_ready()</code> and run every time the scene starts.</p>
+
+<p>The game then asks for the action by name, with
+<a href="ref:rmp::input::just_pressed"><code>rmp::input::just_pressed("pause")</code></a>, true on
+the frame it goes down. Asked by name, an action is quiet whenever something else has the input:
+a text field being typed in, or a scene on top of this one. That is what stops the key that closes
+a menu from also doing something in the game underneath.</p>
+
+<p>Escape needs one more line. raylib closes the window when Escape is pressed, on the desktop,
+unless it is told otherwise; <code>SetExitKey(KEY_NULL)</code> tells it otherwise, and Escape is
+the game's from then on.</p>
+
+<h2>The game scene</h2>
+
+<p>The game scene now has a player in it instead of the text. Replace both of its files:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game.h">
+#pragma once
+// The game: the player, in an arena the size of the design resolution.
+
+#include &lt;rmp/scene.h&gt;
+
+class GameScene : public rmp::Scene {
+public:
+    void _ready() override;
+    void _update(float delta) override;
+};
+</pre>
+
+<pre data-lang="cpp" data-project="my_game" data-file="src/scenes/game.cpp">
+#include "game.h"
+
+#include "../objects/player.h"
+#include "main_menu.h"
+
+#include &lt;rmp/input.h&gt;
+
+#include &lt;algorithm&gt;
+
+namespace {
+// The arena is the design resolution: [window] width and height in the .toml.
+constexpr Rectangle ARENA{ 0, 0, RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT };
+} // namespace
+
+void GameScene::_ready() {
+    background = Color{ 52, 92, 60, 255 }; // grass
+
+    // P, Escape, or the gamepad's Start button.
+    rmp::input::action("pause", KEY_P, KEY_ESCAPE, GAMEPAD_BUTTON_MIDDLE_RIGHT);
+    // raylib closes the window when Escape is pressed; this game uses Escape.
+    SetExitKey(KEY_NULL);
+
+    spawn&lt;Player&gt;({
+        .position = { ARENA.width / 2, ARENA.height / 2 },
+        .edges = rmp::Edge::CLAMP,
+        .bounds = ARENA,
+    });
+}
+
+void GameScene::_update(float /*delta*/) {
+    // The whole arena on screen, whatever the window: a phone's, or one
+    // somebody has resized.
+    camera.zoom =
+        std::min(GetScreenWidth() / ARENA.width, GetScreenHeight() / ARENA.height);
+
+    // There is no pause menu yet, so for now "pause" goes back to the menu.
+    if (rmp::input::just_pressed("pause")) rmp::Scene::change&lt;MainMenuScene&gt;();
+}
+</pre>
+
+<p><a href="ref:rmp::Scene::spawn"><code>spawn&lt;Player&gt;()</code></a> makes a
+<code>Player</code>, puts it in the scene, and calls its <code>_ready()</code>. The scene owns it
+from then on: it is updated and drawn with the scene, and it goes when the scene goes. The braces
+are its starting values, which <code>spawn()</code> applies before <code>_ready()</code> runs.</p>
+
+<p>The arena is the size the <code>.toml</code> gives the window, <code>[window]</code>
+<code>width</code> and <code>height</code>, which reach the code as
+<code>RMP_WINDOW_WIDTH</code> and <code>RMP_WINDOW_HEIGHT</code>. The player is centred in it,
+and <code>.edges = rmp::Edge::CLAMP</code> with <code>.bounds = ARENA</code> stops it at the
+arena's edges.</p>
+
+<p>The window is resizable, though, and a phone's screen is whatever size it is. The scene's
+<a href="ref:rmp::Scene::camera"><code>camera</code></a> decides what part of the world is on
+screen; it starts centred on the arena, and setting its <code>zoom</code> every frame to the
+smaller of the two ratios keeps the whole arena in view, at any size and either way round. The
+menu needed none of this: the interface scales on its own.</p>
+
+<p><a href="ref:rmp::Scene::background"><code>background</code></a> is the colour the frame is
+cleared with. There is no pause menu yet, so for now <code>pause</code> goes back to the menu.</p>
+
+<h2>Run it</h2>
+
+<pre data-lang="shell">
+rmp run
+</pre>
+
+<p>Play, and the box moves with WASD, the arrows, a gamepad, or the mouse held down, and stops at
+the edges. Make the window bigger and the arena grows with it. P or Escape goes back to the
+menu.</p>
+
+<p>The manual has a chapter for each thing this page touched: <a href="/manual/core/objects.html">Objects</a>,
+<a href="/manual/core/behaviors.html">Behaviors</a>, <a href="/manual/modules/input.html">Input</a>
+and the <a href="/manual/core/camera.html">Camera</a>.</p>
