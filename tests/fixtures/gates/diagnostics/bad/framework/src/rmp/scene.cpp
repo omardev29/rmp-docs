@@ -3,3 +3,5 @@ void pop() {
              "call rmp::app::quit() to leave");
     TraceLog(LOG_INFO, "AUDIO: %d voices", 8);
 }
+void empty() { TraceLog(LOG_WARNING, "SCENE: nothing to pop — the stack is empty"); }
+void dash() { TraceLog(LOG_WARNING, "SCENE: a dash — written as itself"); }

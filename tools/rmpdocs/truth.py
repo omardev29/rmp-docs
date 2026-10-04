@@ -322,60 +322,141 @@ def check_pictures(ctx: Context) -> list[Problem]:
 
 C_LITERAL = re.compile(r'"((?:\\.|[^"\\\n])*)"')
 PY_LITERAL = re.compile(r'(?:f|rf|fr)?"((?:\\.|[^"\\\n])*)"|(?:f|rf|fr)?\'((?:\\.|[^\'\\\n])*)\'')
+JS_LITERAL = re.compile(r'"((?:\\.|[^"\\\n])*)"|\'((?:\\.|[^\'\\\n])*)\'|`((?:\\.|[^`\\])*)`')
+C_ESCAPES = {"n": "\n", "t": "\t", '"': '"', "'": "'", "\\": "\\", "0": ""}
+
+PRINTF_HOLE = r"%[-+ #0]*\d*(?:\.\d+)?(?:hh|h|ll|l|z)?[sdifuxXcgpe]"
+BRACE_HOLE = r"\{[^{}]*\}"                      # Python's f-strings and str.format
+CMAKE_HOLE = r"\$\{[^}]*\}"                     # ${VAR}
+SHELL_HOLE = r"\$\{[^}]*\}|\$\w+|\$\([^)]*\)"   # ${x} $x $(cmd)
+JS_HOLE = r"\$\{[^}]*\}"                        # `${x}`
+
+# A message has to say something of its own: a literal whose words, holes
+# taken out, are shorter than this matches whatever is put in front of it --
+# `'{python}'` became `.+?` and passed every <samp> on the site.
+MIN_WORDS = 8
+
+
+def unescape_c(s: str) -> str:
+    """C's escapes, and only those. UTF-8 in a literal stays what it is --
+    decoding through unicode_escape read an em dash as three Latin-1 letters."""
+    s = re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), s)
+    return re.sub(r"\\(.)", lambda m: C_ESCAPES.get(m.group(1), m.group(1)), s)
+
+
+def unescape_py(s: str) -> str:
+    return re.sub(r"\\(.)", lambda m: C_ESCAPES.get(m.group(1), m.group(1)), s)
+
+
+def _join_adjacent(text: str) -> str:
+    """"a" "b", and "a" on one line and f"b" on the next, are one string to the
+    compiler and to whoever reads the message."""
+    text = re.sub(r'"\s*\n\s*(?:[rRfF]{1,2})?"', "", text)
+    text = re.sub(r"'\s*\n\s*(?:[rRfF]{1,2})?'", "", text)
+    return re.sub(r'"[ \t]+"', "", text)
 
 
 @functools.lru_cache(maxsize=4)
 def message_patterns(framework: str) -> tuple:
-    """A regex per message the framework can print: every string literal of
-    src/rmp/ and include/rmp/ (adjacent C literals joined, %d and the like as
-    wildcards), and of tools/rmp.py and tools/configure.py ({...} as wildcards)."""
+    """Every message the framework can print, as its literal parts -- with a
+    hole between each two: the string literals of src/rmp/, include/rmp/ and
+    tests/smoke_test.h (C, printf holes), of tools/rmp.py and
+    tools/configure.py ({...}), of CMakeLists.txt and cmake/ (${...}), of the
+    shell scripts ($x), and of the JavaScript in cmake/web/ and
+    .github/scripts/ (`${x}`). Whitespace collapsed, as a page shows it."""
     fw = Path(framework)
-    patterns = []
+    messages = []
 
     def add(text: str, holes: str):
-        if len(text.strip()) < 8:
-            return
-        parts = re.split(holes, text)
-        rx = ".+?".join(re.escape(p) for p in parts)
-        patterns.append(re.compile(rx))
+        parts = tuple(re.sub(r"\s+", " ", part) for part in re.split(holes, text))
+        if len("".join(parts).strip()) >= MIN_WORDS:
+            messages.append(parts)
 
-    for folder in ("src/rmp", "include/rmp"):
-        for f in sorted((fw / folder).rglob("*")):
-            if f.suffix not in (".cpp", ".h", ".c"):
-                continue
-            text = f.read_text(encoding="utf-8", errors="replace")
-            text = re.sub(r'"\s*\n\s*"', "", text)            # "a" "b" -> "ab"
-            text = re.sub(r'"\s+"', "", text)
-            for m in C_LITERAL.finditer(text):
-                add(bytes(m.group(1), "utf-8").decode("unicode_escape", errors="replace"),
-                    r"%[-+ #0]*\d*(?:\.\d+)?(?:hh|h|ll|l|z)?[sdifuxXcgpe]")
-    for rel in ("tools/rmp.py", "tools/configure.py"):
-        f = fw / rel
-        if f.is_file():
-            for m in PY_LITERAL.finditer(f.read_text(encoding="utf-8", errors="replace")):
-                add(m.group(1) if m.group(1) is not None else m.group(2), r"\{[^{}]*\}")
-    return tuple(patterns)
+    def files(*globs):
+        for g in globs:
+            yield from sorted(f for f in fw.glob(g) if f.is_file())
+
+    def read(f):
+        return f.read_text(encoding="utf-8", errors="replace")
+
+    for f in files("src/rmp/**/*.cpp", "src/rmp/**/*.h", "src/rmp/**/*.c", "include/rmp/**/*.h",
+                   "tests/smoke_test.h"):
+        for m in C_LITERAL.finditer(_join_adjacent(read(f))):
+            add(unescape_c(m.group(1)), PRINTF_HOLE)
+    for f in files("tools/rmp.py", "tools/configure.py"):
+        for m in PY_LITERAL.finditer(_join_adjacent(read(f))):
+            add(unescape_py(m.group(1) if m.group(1) is not None else m.group(2)), BRACE_HOLE)
+    for f in files("CMakeLists.txt", "cmake/**/*.cmake"):
+        for m in C_LITERAL.finditer(read(f)):
+            add(unescape_py(m.group(1)), CMAKE_HOLE)
+    for f in files("tools/*.sh", "rmp"):
+        for m in PY_LITERAL.finditer(read(f)):
+            add(m.group(1) if m.group(1) is not None else m.group(2), SHELL_HOLE)
+    for f in files("cmake/web/*.js", ".github/scripts/*.js"):
+        for m in JS_LITERAL.finditer(read(f)):
+            add(unescape_py(next(g for g in m.groups() if g is not None)), JS_HOLE)
+    return tuple(messages)
 
 
-@gate("diagnostics", "every message a page quotes in <samp> is one the framework prints: it "
-                     "matches a string literal of src/rmp, include/rmp, tools/rmp.py or "
-                     "tools/configure.py, with the format's holes filled by anything")
+def _any_suffix(s: str) -> str:
+    return "(?:" + "|".join(re.escape(s[k:]) for k in range(len(s) + 1)) + ")"
+
+
+def _any_prefix(s: str) -> str:
+    return "(?:" + "|".join(re.escape(s[:k]) for k in range(len(s) + 1)) + ")"
+
+
+def literal_in(piece: str, parts: tuple) -> int:
+    """How much of `piece` is the message's own words, if `piece` is a stretch
+    of some printing of it (the end of one literal part, the holes and parts
+    between, the start of a later part); -1 if it is not. What a hole
+    matched does not count: a stretch that is all hole says nothing."""
+    if any(piece in part for part in parts):
+        return len(piece)
+    best = -1
+    for a in range(len(parts)):
+        for b in range(a + 1, len(parts)):
+            middle = "".join(re.escape(part) + "(.+?)" for part in parts[a + 1:b])
+            rx = _any_suffix(parts[a]) + "(.+?)" + middle + _any_prefix(parts[b])
+            m = re.fullmatch(rx, piece, re.S)
+            if m:
+                best = max(best, len(piece) - sum(len(g) for g in m.groups()))
+    return best
+
+
+@gate("diagnostics", "every message a page quotes in <samp> is one the framework prints: all "
+                     "its pieces are stretches of ONE string literal of the framework's C++, "
+                     "tools, CMake or web scripts, the format's holes filled by anything")
 def check_diagnostics(ctx: Context) -> list[Problem]:
     fw = ctx.framework
     if fw is None:
         return []
-    patterns = message_patterns(str(fw))
+    messages = message_patterns(str(fw))
     out = []
     for path, root in _fragments(ctx):
         for n in root.walk():
             if n.tag != "samp":
                 continue
-            said = re.sub(r"\s+", " ", n.text()).strip()
+            said = shown = re.sub(r"\s+", " ", n.text()).strip()
+            # What prints a message is not the message: raylib's log level, and
+            # the word rmp and configure.py put in front of a refusal.
             said = re.sub(r"^(INFO|WARNING|ERROR|DEBUG|TRACE|FATAL): ", "", said)
-            pieces = [p.strip() for p in re.split(r"…|\.\.\.", said) if p.strip()]
-            for piece in pieces:
-                if not any(rx.search(piece) or (len(piece) >= 8 and piece in rx.pattern.replace("\\", ""))
-                           for rx in patterns):
-                    out.append(Problem("diagnostics", path, n.line,
-                                       f"<samp>{piece}</samp> is not a message the framework prints"))
+            said = re.sub(r"^(FALLA|FAIL|rmp|configure|error|warning): ", "", said)
+            pieces = [piece.strip() for piece in re.split(r"…|\.\.\.", said) if piece.strip()]
+            if not pieces:
+                continue
+            longest = max(pieces, key=len)
+
+            def holds(parts):
+                # "A … B" says ONE message holds both, and together they say
+                # something of its own. The longest piece first: it is the
+                # one that rules most messages out.
+                if literal_in(longest, parts) < 0:
+                    return False
+                said_of_its_own = [literal_in(x, parts) for x in pieces]
+                return min(said_of_its_own) >= 0 and sum(said_of_its_own) >= MIN_WORDS
+
+            if not any(holds(parts) for parts in messages):
+                out.append(Problem("diagnostics", path, n.line,
+                                   f"<samp>{shown}</samp> is not a message the framework prints"))
     return out
