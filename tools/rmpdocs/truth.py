@@ -460,7 +460,7 @@ def check_diagnostics(ctx: Context) -> list[Problem]:
             # What prints a message is not the message: raylib's log level, and
             # the word rmp and configure.py put in front of a refusal.
             said = re.sub(r"^(INFO|WARNING|ERROR|DEBUG|TRACE|FATAL): ", "", said)
-            said = re.sub(r"^(FALLA|FAIL|rmp|configure|error|warning): ", "", said)
+            said = re.sub(r"^(FAIL|rmp|configure|error|warning): ", "", said)
             pieces = [piece.strip() for piece in re.split(r"…|\.\.\.", said) if piece.strip()]
             if not pieces:
                 continue
