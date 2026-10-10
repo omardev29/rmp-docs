@@ -144,11 +144,10 @@ private:
         camera.limits = map.bounds();
     }
 
-    void _update(float delta) override {
-        const rmp::Object *player = _player.get();
-        if (player == nullptr) return;
-        const char *next = map.neighbour_at(player-&gt;position);
-        if (next[0] != '\0') rmp::Scene::change&lt;Level&gt;(next, player-&gt;position);
+    void _update(float) override {
+        if (!_player) return;
+        const std::string_view next = map.neighbour_at(_player-&gt;position);
+        if (!next.empty()) rmp::Scene::change&lt;Level&gt;(std::string(next), _player-&gt;position);
     }
 
     std::string _name;
@@ -157,8 +156,11 @@ private:
 };
 </pre>
 
-<p><a href="ref:rmp::Tilemap::level"><code>level()</code></a> is the identifier of the level
-loaded. The platformer in <a href="/examples/games/07_platformer.html">examples/games/07_platformer</a>
+<p data-fw-grep="include/rmp/tilemap.h::// Views of the parsed map, each followed by a NUL: valid while it is loaded\.\s+\[\[nodiscard\]\] std::string_view level\(\) const;\s+\[\[nodiscard\]\] std::string_view neighbour_at\(Vector2 world_position\) const;">Both
+answers are <code>std::string_view</code>s of the map's own text, good while the map is loaded,
+which is why the next scene is handed a <code>std::string</code> of the name: by the time it
+loads, this map is gone. <a href="ref:rmp::Tilemap::level"><code>level()</code></a> is the
+identifier of the level loaded. The platformer in <a href="/examples/games/07_platformer.html">examples/games/07_platformer</a>
 is a world of three levels side by side in a GridVania layout, walked through exactly like this:
 <a href="fw:examples/games/07_platformer/src/scenes/level.cpp#L132-L140">level.cpp</a>.</p>
 
@@ -250,6 +252,11 @@ map.on_object("Door", [](rmp::Scene &amp;s, const rmp::MapObject &amp;o) {
 });
 </pre>
 
+<p data-fw-grep="include/rmp/tilemap.h::// Its names, and the text a property holds, are views of the parsed map: valid\s+// while the map is loaded, which is all of spawn_objects\(\) -- keep a\s+// std::string of one to hold it longer\.">The
+key and the door keep <code>std::string</code>s, and not what the map hands them: a
+<code>MapObject</code>'s names and the text of its properties are <code>std::string_view</code>s of
+the parsed map, good while the map is loaded, which is all of <code>spawn_objects()</code>.</p>
+
 <p>An <code>iid</code> also outlives the scene, which makes it the way to remember that a coin was
 collected or a door opened when the player walks back into a level: the platformer keeps the
 <code>iid</code>s of what is gone in an <a href="ref:rmp::global"><code>rmp::global</code></a> and
@@ -317,7 +324,7 @@ there is floor just ahead of its feet:</p>
 // Walking right: is there anything to stand on one pixel ahead and one below?
 const Rectangle body = world_collider();
 const Vector2 ahead{ body.x + body.width + 1, body.y + body.height + 1 };
-if (!scene()-&gt;map.solid_at(ahead)) velocity.x = -velocity.x;
+if (!scene().map.solid_at(ahead)) velocity.x = -velocity.x;
 </pre>
 
 <p><a href="ref:rmp::Tilemap::draw"><code>draw()</code></a> is public for a game that wants the

@@ -42,7 +42,8 @@ the one rule about them: a header never makes you use one.</dd>
 measured rather than guessed.</dd>
 <dt><a href="/framework/why/ownership.html">Ownership</a></dt>
 <dd>Everything is owned by something that releases it: a texture, an object, a scene, a callback.
-No raw pointer you have to free, and the handle for what you keep across frames.</dd>
+No raw pointer in the API, nothing you have to free, and the handle for what you keep across
+frames.</dd>
 <dt><a href="/framework/why/no-exceptions.html">No exceptions</a></dt>
 <dd>What the framework does instead of throwing, and why throwing in the middle of a frame is not
 an option.</dd>
@@ -61,6 +62,7 @@ mistake can be described precisely, something in the framework's own test run re
 <tbody>
 <tr><td>Naming, and the eight hook names</td><td><code>.clang-tidy</code>, <code>-Wshadow</code> and <code>tools/naming_check.sh</code></td></tr>
 <tr><td>No owning raw pointer in the framework</td><td><code>tools/ownership_check.sh</code>, and two ownership checks of clang-tidy</td></tr>
+<tr><td>No raw pointer and no C string in a declaration a game can name</td><td><code>tools/pointer_check.py</code>, against <code>tools/pointer_ratchet.txt</code></td></tr>
 <tr><td>Every public header compiles on its own and carries the <code>.toml</code> values</td><td><code>tools/header_check.sh</code></td></tr>
 <tr><td>What each public header costs to include</td><td><code>tools/header_cost.py</code>, against <code>tools/header_budget.txt</code></td></tr>
 <tr><td>Nothing in the framework reads the clock, the input or the random state on its own</td><td><code>tools/seam_check.sh</code></td></tr>

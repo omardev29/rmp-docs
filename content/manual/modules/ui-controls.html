@@ -1,20 +1,20 @@
 <!--
 title: Interface controls
-description: Checkboxes, sliders, dropdowns and text fields: each takes a pointer to your variable, writes to it, and says on which frame it changed.
+description: Checkboxes, sliders, dropdowns and text fields: each takes your variable by reference, writes to it, and says on which frame it changed.
 order: 24
 -->
 <h1>Interface controls</h1>
 
 <p class="lede">Four controls own a value: a checkbox, a slider, a dropdown and a text field. Each
-one takes a pointer to <em>your</em> variable and writes to it, and that is the whole of their state
-model — there is no widget object holding a copy, and nothing to keep in sync.</p>
+one takes <em>your</em> variable, by reference, and writes to it, and that is the whole of their
+state model — there is no widget object holding a copy, and nothing to keep in sync.</p>
 
-<pre data-lang="cpp" data-harness="function" data-given="struct Settings { bool fullscreen = false; float music = 0.5f; int quality = 1; char name[24] = &quot;Player&quot;; }; static Settings settings; static const char *const QUALITY[] = { &quot;Low&quot;, &quot;Medium&quot;, &quot;High&quot; };">
+<pre data-lang="cpp" data-harness="function" data-given="struct Settings { bool fullscreen = false; float music = 0.5f; int quality = 1; std::string name = &quot;Player&quot;; }; static Settings settings;">
 rmp::ui::begin();
-rmp::ui::checkbox("Fullscreen", &amp;settings.fullscreen);
-rmp::ui::slider("Music", &amp;settings.music, 0.0f, 1.0f);
-rmp::ui::dropdown("Quality", &amp;settings.quality, QUALITY, 3);
-rmp::ui::text_input("Name", settings.name, sizeof(settings.name));
+rmp::ui::checkbox("Fullscreen", settings.fullscreen);
+rmp::ui::slider("Music", settings.music, 0.0f, 1.0f);
+rmp::ui::dropdown("Quality", settings.quality, { "Low", "Medium", "High" });
+rmp::ui::text_input("Name", settings.name);
 rmp::ui::end();
 </pre>
 
@@ -31,11 +31,11 @@ easy to save:</p>
 changes" reads the way it sounds:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="struct Settings { bool fullscreen = false; }; static Settings cfg; void apply(const Settings &amp;);">
-if (rmp::ui::checkbox("Fullscreen", &amp;cfg.fullscreen)) apply(cfg);
+if (rmp::ui::checkbox("Fullscreen", cfg.fullscreen)) apply(cfg);
 </pre>
 
-<p>The pointer is yours and is not kept past the call. A null one draws nothing and returns
-<code>false</code>.</p>
+<p>The variable stays yours: the control reads it and writes it during the call, and keeps nothing
+of it afterwards.</p>
 
 <p>What the interface does keep is the state that means nothing to your game — whether a dropdown is
 open, whether a slider is being dragged — and it keeps it by the control's id, which is its label
@@ -78,7 +78,7 @@ its row is clicked, or when it is pressed — Enter, Space, the bottom face butt
 focus. It returns <code>true</code> on the frame it flipped:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="static bool light = false;">
-if (rmp::ui::checkbox("Light theme", &amp;light))
+if (rmp::ui::checkbox("Light theme", light))
     rmp::ui::set_theme(light ? rmp::ui::theme_light() : rmp::ui::theme_dark());
 </pre>
 
@@ -97,9 +97,9 @@ does not have. Its size is the theme's
 minimum and a maximum:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="static float music = 0.8f; static float sensitivity = 0.35f;">
-if (rmp::ui::slider("Music", &amp;music, 0.0f, 1.0f))
+if (rmp::ui::slider("Music", music, 0.0f, 1.0f))
     rmp::audio::set_volume(rmp::audio::Bus::MUSIC, music);
-rmp::ui::slider("Sensitivity", &amp;sensitivity, 0.0f, 1.0f, { .step = 0.05f });
+rmp::ui::slider("Sensitivity", sensitivity, 0.0f, 1.0f, { .step = 0.05f });
 </pre>
 
 <ul>
@@ -137,13 +137,18 @@ Nothing is drawn when <code>max</code> is not above <code>min</code>.</p>
 
 <h2>Dropdown</h2>
 
-<p><a href="ref:rmp::ui::dropdown"><code>rmp::ui::dropdown</code></a> picks one string of an array.
-The value it writes is an index into that array:</p>
+<p><a href="ref:rmp::ui::dropdown"><code>rmp::ui::dropdown</code></a> picks one string of a list.
+The value it writes is an index into that list:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="static int quality = 1; void apply_quality(int);">
-static const char *const QUALITY[] = { "Low", "Medium", "High", "Ultra" };
-if (rmp::ui::dropdown("Quality", &amp;quality, QUALITY, 4)) apply_quality(quality);
+if (rmp::ui::dropdown("Quality", quality, { "Low", "Medium", "High", "Ultra" }))
+    apply_quality(quality);
 </pre>
+
+<p>The list can be written in place, as there, or kept somewhere — a <code>std::array</code>, a
+<code>std::vector</code> or a plain array of <code>std::string_view</code> — and handed over as
+it is, because the dropdown takes a <code>std::span</code> of them and the span knows its length.
+<code>settings.h</code> above keeps its two lists that way.</p>
 
 <p>A click on it opens the list, which floats over whatever is below instead of pushing it down the
 screen. A click on an item picks it and closes the list; a click anywhere else closes it. The return
@@ -160,9 +165,10 @@ the player has used a key it lights up the way an item under the pointer does. E
 bottom face button picks the highlighted item and closes the list, returning <code>true</code> if it
 is a different one; Escape or the right face button closes it and changes nothing.</p>
 
-<p>The index is clamped into the array on every call, so a value read from an old save cannot point
-past the end of a shorter list. Nothing is drawn when the array is null or <code>count</code> is not
-above 0. The strings are copied as they are drawn, so they only have to live through the call.
+<p>The index is clamped into the list on every call, so a value read from an old save cannot point
+past the end of a shorter list. Nothing is drawn for an empty list. The strings are copied as they
+are drawn, so they only have to live through the call — which is what lets a list written in place
+be a temporary.
 <a href="ref:rmp::ui::DropdownOptions"><code>DropdownOptions</code></a> is
 <a href="ref:rmp::ui::DropdownOptions::width"><code>width</code></a> — of the field, in design
 units, 0 filling the space available — <a href="ref:rmp::ui::DropdownOptions::enabled"><code>enabled</code></a>
@@ -172,20 +178,20 @@ and <a href="ref:rmp::ui::DropdownOptions::id"><code>id</code></a>. Two dropdown
 <h2>Text field</h2>
 
 <p><a href="ref:rmp::ui::text_input"><code>rmp::ui::text_input</code></a> edits a
-<code>char</code> buffer of yours. It writes into it, NUL-terminated, and never past
-<code>capacity - 1</code>:</p>
+<code>std::string</code> of yours, in UTF-8:</p>
 
 <pre data-lang="cpp" data-harness="function">
-static char name[24] = "";
-rmp::ui::text_input("Name", name, sizeof(name), { .placeholder = "your name" });
+static std::string name;
+rmp::ui::text_input("Name", name, { .placeholder = "your name", .max_length = 16 });
 </pre>
 
-<p>While the field is typing — which is not the same as having the focus; see
-<a href="#typing-is-having-the-keyboard">below</a> — characters are added at the end, printable ASCII
-from space to <code>~</code>, and Backspace removes the last one, repeating while it is held. A blinking
-<code>_</code> marks the end of the text. There is no caret to move, no selection and no clipboard.
-Typing arrives through raylib's <code>GetCharPressed()</code>; the field does not open an on-screen
-keyboard on Android or iOS.</p>
+<p data-fw-grep="src/rmp/ui/controls.cpp::bool utf8_append\(std::string &amp;text, int codepoint, int max_length\) \{[\s\S]*?const bool control = codepoint &lt; 0x20 \|\| \(codepoint &gt;= 0x7F &amp;&amp; codepoint &lt; 0xA0\);">While
+the field is typing — which is not the same as having the focus; see
+<a href="#typing-is-having-the-keyboard">below</a> — what the player types is added at the end, any
+character but a control character, and Backspace removes the last character, never half of one,
+repeating while it is held. A blinking <code>_</code> marks the end of the text. There is no caret
+to move, no selection and no clipboard. Typing arrives through raylib's
+<code>GetCharPressed()</code>; the field does not open an on-screen keyboard on Android or iOS.</p>
 
 <p>The return value is <code>true</code> on the frames the text changed.
 <a href="ref:rmp::ui::TextInputOptions"><code>TextInputOptions</code></a>:</p>
@@ -197,11 +203,16 @@ keyboard on Android or iOS.</p>
 <tr><td><a href="ref:rmp::ui::TextInputOptions::enabled"><code>enabled</code></a></td><td><code>true</code></td><td>As above.</td></tr>
 <tr><td><a href="ref:rmp::ui::TextInputOptions::placeholder"><code>placeholder</code></a></td><td>none</td><td>Shown in the theme's <code>text_muted</code> while the field is empty and not typing. It is copied, so a temporary is fine.</td></tr>
 <tr><td><a href="ref:rmp::ui::TextInputOptions::id"><code>id</code></a></td><td>none</td><td>As above.</td></tr>
+<tr><td><a href="ref:rmp::ui::TextInputOptions::max_length"><code>max_length</code></a></td><td>0</td><td>The most characters it holds; 0 is no limit.</td></tr>
 </tbody>
 </table>
 
-<p>An empty label draws the field alone. A <code>capacity</code> below 2 — no room for a character and
-its terminator — draws nothing.</p>
+<p data-fw-grep="src/rmp/ui/controls.cpp::// A value longer than the field may hold -- handed in that way, or a\s+// max_length that came down -- is cut to it here, at the end of a\s+// character, and that is a change like any other\.">A
+<code>max_length</code> counts characters, which is what a player counts: an <code>é</code> is one,
+not the two bytes it takes. Typing stops at it. A string longer than that — one you hand in, or one
+left by a <code>max_length</code> that came down — is cut to it when the field is drawn, at the end
+of a character, and the field returns <code>true</code> for that frame like for any other change.
+An empty label draws the field alone.</p>
 
 <h3>Typing is having the keyboard</h3>
 

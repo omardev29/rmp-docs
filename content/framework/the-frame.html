@@ -369,7 +369,8 @@ now, with nothing mid-frame, does anything go away.</p>
 until here. That is why the reference <a href="ref:rmp::Scene::spawn"><code>spawn()</code></a>
 returns is good for the whole frame, and why <code>other</code> in a <code>_collision</code> is
 always a real object even when it is dying. Freeing a slot bumps its generation, so every
-<a href="ref:rmp::Handle"><code>rmp::Handle</code></a> to it now answers <code>nullptr</code>.</p>
+<a href="ref:rmp::Handle"><code>rmp::Handle</code></a> to it stays empty — as it has been since
+<code>destroy()</code> — even once the slot holds a new object.</p>
 
 <p data-fw-grep="src/rmp/scene.cpp::std::vector&lt;Pending&gt; batch;\s+batch\.swap\(scene_stack\.pending\);"><strong>Scene
 changes are applied</strong>, in the order they were asked for, so <code>push</code> then

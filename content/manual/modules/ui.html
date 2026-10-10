@@ -194,12 +194,12 @@ before others with the same label renumbers them, and the hover, the focus or th
 different control with nothing in your code having changed. The
 <code>id</code> field is the escape: a name that is the same control whatever else is on screen.</p>
 
-<pre data-lang="cpp" data-harness="function" data-given="struct Slot { const char *name; bool used; }; static Slot slots[3]; void erase(int);">
+<pre data-lang="cpp" data-harness="function" data-given="struct Slot { std::string name; bool used; }; static Slot slots[3]; void erase(int);">
 for (int i = 0; i &lt; 3; i++) {
     if (!slots[i].used) continue;
     rmp::ui::text(slots[i].name);
-    std::string id = "erase" + std::to_string(i);
-    if (rmp::ui::button("Erase", { .id = id.c_str() })) erase(i);
+    const std::string id = "erase" + std::to_string(i);
+    if (rmp::ui::button("Erase", { .id = id })) erase(i);
 }
 </pre>
 

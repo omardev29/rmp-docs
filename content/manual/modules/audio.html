@@ -164,9 +164,9 @@ class SoundSettings : public rmp::Scene {
 
     void _draw() override {
         rmp::ui::begin();
-        if (rmp::ui::slider("Music", &amp;_music, 0, 1))
+        if (rmp::ui::slider("Music", _music, 0, 1))
             rmp::audio::set_volume(rmp::audio::Bus::MUSIC, _music);
-        if (rmp::ui::slider("Effects", &amp;_effects, 0, 1))
+        if (rmp::ui::slider("Effects", _effects, 0, 1))
             rmp::audio::set_volume(rmp::audio::Bus::SFX, _effects);
         if (rmp::ui::button("Back")) rmp::Scene::pop();
         rmp::ui::end();

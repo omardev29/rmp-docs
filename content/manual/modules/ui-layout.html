@@ -281,10 +281,10 @@ An inventory then reflows on a phone held upright instead of staying at the numb
 desktop. This is also the row that wraps: there is no wrap flag on <code>row()</code>, because
 <code>grid({ .columns = 0 })</code> is one.</p>
 
-<pre data-lang="cpp" data-harness="function" data-given="static const char *names[] = { &quot;Sword&quot;, &quot;Shield&quot;, &quot;Potion&quot;, &quot;Rope&quot; };">
+<pre data-lang="cpp" data-harness="function" data-given="static const std::string_view names[] = { &quot;Sword&quot;, &quot;Shield&quot;, &quot;Potion&quot;, &quot;Rope&quot; };">
 rmp::ui::panel({ .box = { .width = 480 } }, [&amp;] {
     rmp::ui::grid({ .columns = 0, .min_cell = 88, .id = "inventory" }, [&amp;] {
-        for (const char *name : names)
+        for (const std::string_view name : names)
             rmp::ui::cell([&amp;] { rmp::ui::text(name, { .size = 13 }); });
     });
 });

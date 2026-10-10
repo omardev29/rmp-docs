@@ -58,7 +58,7 @@ theme = "blue"
 <p>After that it is a runtime call, so an appearance setting in the game is one line:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="static bool light = false;">
-if (rmp::ui::checkbox("Light theme", &amp;light))
+if (rmp::ui::checkbox("Light theme", light))
     rmp::ui::set_theme(light ? rmp::ui::theme_light() : rmp::ui::theme_dark());
 </pre>
 

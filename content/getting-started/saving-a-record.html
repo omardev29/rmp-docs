@@ -31,14 +31,16 @@ bool keep_if_best(int coins);
 
 #include &lt;rmp/save.h&gt;
 
+#include &lt;string_view&gt;
+
 namespace {
 // The slot: the save file's name, without a folder and without an extension.
-constexpr const char *SLOT = "record";
+constexpr std::string_view SLOT = "record";
 } // namespace
 
 int best_score() {
     rmp::Value saved;
-    rmp::save::read(SLOT, &amp;saved);
+    rmp::save::read(SLOT, saved);
     // No save yet, or one without this key: the 0 is what reads then.
     return saved["coins"].as_int(0);
 }

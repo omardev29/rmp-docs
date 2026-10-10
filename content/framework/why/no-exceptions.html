@@ -70,7 +70,7 @@ before it.</p>
 
 <pre data-lang="cpp" data-harness="function">
 rmp::Value save;
-const rmp::save::Result got = rmp::save::read("slot1", &amp;save);
+const rmp::save::Result got = rmp::save::read("slot1", save);
 if (got.status == rmp::save::Status::MODIFIED) {
     TraceLog(LOG_WARNING, "the save was edited or damaged; starting over");
 }
@@ -80,12 +80,19 @@ const float volume = save["settings"]["volume"].as_float(0.8f);
 
 <h3>A lookup can come back empty</h3>
 
-<p>Where the caller may want to know, the answer is a null pointer or a <code>false</code>:
-<a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a> returns <code>nullptr</code> when
-the object has no such behavior, a <a href="ref:rmp::Handle"><code>Handle</code></a> answers
-<code>nullptr</code> once its object is gone, and
-<a href="ref:rmp::save::write"><code>rmp::save::write()</code></a> returns whether the save
-reached the disk.</p>
+<p>Where the caller may want to know, the answer is an empty
+<a href="ref:rmp::Ref"><code>rmp::Ref</code></a> or a <code>false</code>:
+<a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a> comes back empty when the object
+has no such behavior, a <a href="ref:rmp::Handle"><code>Handle</code></a> is empty once its
+object is gone, and <a href="ref:rmp::save::write"><code>rmp::save::write()</code></a> returns
+whether the save reached the disk.</p>
+
+<p data-fw-grep="src/rmp/object.cpp::void report_empty_ref\(int type\) \{\s+RMP_REPORT_ONCE_KEYED">And
+forgetting to ask does not crash either. Reaching through an empty one with <code>-&gt;</code> or
+<code>*</code> is a mistake in the game, said once in the log for each type, and the line goes to
+a stand-in: a <code>B</code> made for the purpose, so a read gives the default and a write lands
+nowhere. A type with no default constructor has no stand-in, and for that one the program ends
+there, after the same message.</p>
 
 <h3>A mistake in the game is said once</h3>
 

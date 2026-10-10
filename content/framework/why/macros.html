@@ -99,6 +99,13 @@ the first report aborts a debug build. It is the framework's own tool and not pa
 <a href="/framework/why/no-exceptions.html">No exceptions</a> says what it reports and what it
 deliberately does not.</p>
 
+<p data-fw-grep="src/rmp/internal.h::#elif defined\(__GNUC__\) \|\| defined\(__clang__\)\n#define RMP_PRINTF_FORMAT\(string_index, first_to_check\) \\\n    __attribute__\(\(format\(printf, string_index, first_to_check\)\)\)[\s\S]*?#pragma GCC diagnostic error &quot;-Wformat&quot;">Its
+message is a <code>printf</code> format, because it ends in raylib's <code>TraceLog()</code>, and
+GCC and Clang check that format against the values like <code>printf</code>'s own — as an error,
+not a warning. A <code>%s</code> handed a number would print rubbish, and only on the one frame the
+mistake happens, which in a diagnostic is the frame nobody is watching; it does not compile
+instead.</p>
+
 <h2 id="build-macros">Set by the build</h2>
 
 <p data-fw-grep="src/rmp/app.cpp::#error &quot;RMP_PRODUCTION_BUILD is not defined: the build system has to pass it \(0 or 1\)&quot;">Two
@@ -152,13 +159,13 @@ use them directly, and <a href="/examples/ui/03_clay_direct.html">an example doe
 
 <h2 id="constants">What the framework adds is a constant</h2>
 
-<p data-fw-grep="include/rmp/math.h::Constants and not macros,\s+// like the rest of what we add">raylib's
-colours are macros, because raylib is C. The two the framework adds, in <code>rmp/math.h</code>,
-are <code>constexpr</code> values in <code>namespace rmp</code>:
-<a href="ref:rmp::ALICE_BLUE"><code>rmp::ALICE_BLUE</code></a> and
-<a href="ref:rmp::GIORNO_GOLD"><code>rmp::GIORNO_GOLD</code></a>. Outside the cases above, that is
-the rule: a value the framework defines is a constant in a namespace, where it cannot collide with
-anything.</p>
+<p data-fw-grep="include/rmp/behavior.h::inline constexpr int MAX_SPAWNED = 64;">raylib's
+colours are macros, because raylib is C. A value the framework adds is a
+<code>constexpr</code> constant in a namespace instead:
+<a href="ref:rmp::behavior::MAX_SPAWNED"><code>rmp::behavior::MAX_SPAWNED</code></a>, how many
+objects one <code>Spawner</code> keeps track of, is a constant of <code>rmp::behavior</code>.
+Outside the cases above, that is the rule: a value the framework defines is a constant in a
+namespace, where it cannot collide with anything.</p>
 
 <h2 id="names">One namespace for every macro</h2>
 

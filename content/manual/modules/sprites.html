@@ -93,7 +93,9 @@ sprite.play("idle");
 <p>The names are yours. They are the <em>tags</em> in your Aseprite file: the framework does not
 know or expect an <code>idle</code> or a <code>walk</code>, and <code>play("idle")</code> works
 because the file has a tag called that. A tag is a run of frames with a name, and each frame shows
-for the time you gave it in Aseprite, so the animation plays at the speed you drew it at.</p>
+for the time you gave it in Aseprite, so the animation plays at the speed you drew it at. The name
+is a <code>std::string_view</code>, so a literal, a <code>std::string</code> or a view of one goes in
+as it is.</p>
 
 <h3>Choosing the animation every frame</h3>
 
@@ -157,7 +159,10 @@ frame.</p>
 <dt><a href="ref:rmp::Sprite::playing"><code>playing()</code></a></dt>
 <dd data-fw-grep="src/rmp/animation.cpp::void Sprite::stop\(\) \{\s*ours\.done = true;\s*ours\.elapsed = 0;\s*\}">The name of the tag last started with <code>play()</code>, or <code>""</code> before any has
 been. It keeps naming that tag after <code>stop()</code> and after a tag that does not loop has
-finished; <code>finished()</code> is what says the clock has stopped.</dd>
+finished; <code>finished()</code> is what says the clock has stopped.
+<span data-fw-grep="src/rmp/animation.cpp::std::string_view Sprite::playing\(\) const \{[^}]*return data\.tag\(ours\.tag\)\.name;">It is a
+<code>std::string_view</code> of the sheet's own copy of the name, good for as long as the sheet is
+loaded.</span></dd>
 <dt><a href="ref:rmp::Sprite::stop"><code>stop()</code></a></dt>
 <dd>Holds the current frame, as a finished animation does.</dd>
 <dt><a href="ref:rmp::Sprite::frame_index"><code>frame_index()</code></a> and <a href="ref:rmp::Sprite::set_frame"><code>set_frame(i)</code></a></dt>
@@ -193,11 +198,12 @@ Forward, and nothing says so.</li>
 <li>Save the <code>.aseprite</code> into <code>resources/</code>.</li>
 </ol>
 
-<p data-fw-grep="include/rmp/assets.h::constexpr int MAX_TAG_NAME = 32;">Every visible layer is blended into the frame, the way Aseprite shows it with the Normal blend
+<p data-fw-grep="src/rmp/animation.cpp::// All of it, whatever its length; a tag the file left unnamed is &quot;&quot;\.\s+ours\.name = tag\.name != nullptr \? tag\.name : &quot;&quot;;">Every visible layer is blended into the frame, the way Aseprite shows it with the Normal blend
 mode; a hidden layer is left out, so a sketch or a reference layer can stay in the file. Other
 blend modes are not reproduced — merge such a layer down in Aseprite if it matters. RGBA,
-grayscale and indexed sprites all load. A tag's name is kept up to
-<a href="ref:rmp::MAX_TAG_NAME">31 characters</a>.</p>
+grayscale and indexed sprites all load. A tag's name is kept whole, however long it is: the
+<a href="ref:rmp::SheetTag::name"><code>name</code></a> of each
+<a href="ref:rmp::SheetTag"><code>rmp::SheetTag</code></a> is a <code>std::string</code>.</p>
 
 <p>All the frames are packed side by side into one texture, so a hundred enemies drawn from the
 same sheet are one texture and one name in the resource table: loading

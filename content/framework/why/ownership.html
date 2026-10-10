@@ -1,6 +1,6 @@
 <!--
 title: Ownership
-description: Why everything in the framework is owned by something that releases it — textures, objects, scenes, callbacks, behaviors — what you keep across frames instead of a pointer, and why Callback exists instead of std::function.
+description: Why everything in the framework is owned by something that releases it — textures, objects, scenes, callbacks, behaviors — why its API has no raw pointer, what you keep across frames, and why Callback exists instead of std::function.
 order: 60
 -->
 <h1>Ownership</h1>
@@ -27,19 +27,48 @@ first choice to last:</p>
 <tbody>
 <tr><td>a value</td><td>whatever fits: a <code>Vector2</code>, a <a href="ref:rmp::Shape"><code>Shape</code></a>, a behavior, an options struct</td></tr>
 <tr><td><code>T &amp;</code></td><td>something that certainly exists and keeps its identity for the length of the call</td></tr>
+<tr><td><code>std::span&lt;T&gt;</code>, <code>std::string_view</code></td><td>the caller's elements, or the caller's text, for the length of the call</td></tr>
+<tr><td><a href="ref:rmp::Ref"><code>rmp::Ref&lt;T&gt;</code></a></td><td>something that may not be there and is not yours, within the frame</td></tr>
 <tr><td><a href="ref:rmp::Handle"><code>rmp::Handle&lt;T&gt;</code></a></td><td>an object that can die, kept across frames</td></tr>
 <tr><td><code>std::unique_ptr&lt;T&gt;</code></td><td>sole ownership of something polymorphic or large</td></tr>
-<tr><td><code>T *</code></td><td>only when it can be null and cannot outlive what it points at; it never owns</td></tr>
 </tbody>
 </table>
 
-<p>The last row is a promise about the API: a raw pointer in a signature of the framework never
-owns what it points at, and its comment says so. <a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a>
-returns a behavior or <code>nullptr</code>; <a href="ref:rmp::Object::scene"><code>scene()</code></a>
-returns the scene the object is in; <a href="ref:rmp::RayQuery::ignore"><code>RayQuery::ignore</code></a>
-names an object a ray should pass through. None of them is yours to free. Where the framework does
-take ownership of something, it takes a <code>std::unique_ptr</code>, so the hand-over is written
-in the signature.</p>
+<p data-fw-grep="tools/pointer_check.py::The rule, Omar's of 2026-10-10: what rmp:: hands a game is values, references,\s+std::span, std::optional, rmp::Ref and rmp::Handle -- never a `T \*` and never a\s+`const char \*`">There
+is no <code>T *</code> in that list. A raw pointer in a signature leaves the reader to ask whether
+it may be null, whose it is and how long it lives, and its type answers none of the three; each
+form above answers all of them. So no declaration a game can name has one, and no C string either:
+text goes in as a <code>std::string_view</code> and comes back as a <code>std::string</code>, or as
+a view whose comment says how long it is good for. <code>tools/pointer_check.py</code> reads the
+headers' declarations and fails a public pointer; the ones left inside <code>detail</code>
+namespaces and private members are listed in <code>tools/pointer_ratchet.txt</code>, each with
+its reason, and that list only shrinks.</p>
+
+<p>The optional reference is the one form of the framework's own. An
+<a href="ref:rmp::Ref"><code>rmp::Ref&lt;T&gt;</code></a> is empty or refers to something; it owns
+nothing, and asking it is an <code>if</code>:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;player = spawn({ .size = { 26, 26 } });
+player.add&lt;rmp::behavior::Health&gt;({ .hp = 3 });
+
+if (auto health = player.get&lt;rmp::behavior::Health&gt;()) health-&gt;heal(1);
+</pre>
+
+<p><a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a> hands one back, empty when the
+object has no <code>B</code>, and so does <a href="ref:rmp::Handle::get"><code>Handle::get()</code></a>,
+empty once the object is gone. It is not a <code>T *</code>, which cannot say whether it may be
+null or whose it is, and not a <code>std::optional&lt;std::reference_wrapper&lt;T&gt;&gt;</code>,
+which says the same for the price of <code>&lt;functional&gt;</code> in every file with an object
+in it, and reads as <code>health-&gt;get().hp</code>.</p>
+
+<p>Where there is always an answer, the answer is a reference:
+<a href="ref:rmp::Object::scene"><code>scene()</code></a> is a <code>Scene &amp;</code>, because a
+spawned object always has its scene. And a field that names an object is a handle, as
+<a href="ref:rmp::RayQuery::ignore"><code>RayQuery::ignore</code></a>, the object a ray passes
+through, is the shooter's <code>handle()</code>. None of them is yours to free. Where the
+framework does take ownership of something, it takes a <code>std::unique_ptr</code>, so the
+hand-over is written in the signature.</p>
 
 <h2 id="assets">Assets</h2>
 
@@ -86,10 +115,9 @@ class Turret : public rmp::Object {
 public:
     rmp::Handle&lt;rmp::Object&gt; target;
 
-    void _update(float delta) override {
-        (void)delta;
-        rmp::Object *aim = target.get();
-        if (aim == nullptr) return; // it died, or there never was one
+    void _update(float) override {
+        auto aim = target.get();
+        if (!aim) return; // it died, or there never was one
         rotation = Vector2Angle({ 1, 0 }, Vector2Subtract(aim-&gt;position, position)) * RAD2DEG;
     }
 };
@@ -97,7 +125,7 @@ public:
 
 <p data-fw-grep="src/rmp/object.cpp::The generation goes up HERE and not on reuse">A handle is the
 object's slot and that slot's generation. When the object dies the generation goes up, so the
-handle answers <code>nullptr</code> from then on — and it stays dead even after the slot holds a
+handle is empty from then on — and it stays dead even after the slot holds a
 new object, which is the classic bug of keeping an index. Checking a handle is an integer
 comparison. A handle can be typed, <code>handle&lt;Goblin&gt;()</code>, so the field you read
 after the check needs no cast.</p>
@@ -153,8 +181,8 @@ captured.</p>
 
 <p>A behavior added to an object belongs to the object.
 <a href="ref:rmp::Object::add"><code>add&lt;B&gt;()</code></a> moves it into storage that never
-moves it again, and the reference it returns, like the pointer <code>get&lt;B&gt;()</code>
-returns, stays good for as long as the behavior is attached. Removing the behavior, or destroying
+moves it again, so the reference it returns, and the <code>rmp::Ref</code>
+<code>get&lt;B&gt;()</code> returns, stay good for as long as the behavior is attached. Removing the behavior, or destroying
 the object, runs its <code>_end</code> and frees it. A behavior's type is never erased into a
 <code>void *</code> you would have to delete: the storage holds it in a shared pointer that knows
 its destructor.</p>

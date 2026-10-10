@@ -93,18 +93,22 @@ call.</p>
 <h3>Spawning from somewhere else</h3>
 
 <p>Inside an object, <a href="ref:rmp::Object::scene"><code>scene()</code></a> is the scene it lives
-in, and spawning into it is <code>scene()-&gt;spawn(...)</code>. A
+in, and spawning into it is <code>scene().spawn(...)</code>. A
 <a href="ref:rmp::behavior::Spawner::on_spawn"><code>Spawner</code>'s <code>on_spawn</code></a> and a
 map's <a href="ref:rmp::Tilemap::on_object">object factory</a> are handed the scene; the other
 behavior callbacks, such as a <code>Timer</code>'s <code>on_timeout</code>, are handed the object, and
 reach the scene through its <code>scene()</code>.</p>
 
 <pre data-lang="cpp" data-harness="object">
-if (rmp::Scene *here = scene()) {
-    auto &amp;spark = here-&gt;spawn({ .position = position, .size = { 3, 3 } });
-    spark.velocity = { 0, -60 };
-}
+auto &amp;spark = scene().spawn({ .position = position, .size = { 3, 3 } });
+spark.velocity = { 0, -60 };
 </pre>
+
+<p data-fw-grep="src/rmp/object.cpp::Scene &amp;Object::scene\(\) const \{\s+if \(_scene\) return \*_scene;[\s\S]*?RMP_REPORT_ONCE\(&quot;OBJECT: scene\(\) on an object no scene spawned; answering &quot;\s+&quot;Scene::current\(\)">It
+is a reference, because a spawned object always has a scene. An object no scene spawned — a member,
+a local — has none of its own: asking it is a mistake in the game, said once in the log, and the
+answer is <a href="ref:rmp::Scene::current"><code>Scene::current()</code></a>, the scene on top of
+the stack.</p>
 
 <h2>Your own kind of object</h2>
 
@@ -373,8 +377,11 @@ void _update(float) override {
 
 <p><a href="ref:rmp::Object::handle"><code>handle()</code></a> makes one. It converts to
 <code>true</code> while the object is alive, <code>-&gt;</code> and <code>*</code> reach it, and
-<a href="ref:rmp::Handle::get"><code>get()</code></a> returns a pointer to it, or null. It becomes
-empty the moment <code>destroy()</code> is called, not when the memory goes. A default-constructed
+<a href="ref:rmp::Handle::get"><code>get()</code></a> returns it as an
+<a href="ref:rmp::Ref"><code>rmp::Ref</code></a>, empty once it is gone. It becomes empty the moment
+<code>destroy()</code> is called, not when the memory goes. <code>-&gt;</code> on an empty one is a
+mistake in the game, said once in the log, and reaches a stand-in made for the purpose instead of
+crashing: ask first, as the <code>if</code> above does. A default-constructed
 handle is empty, and two handles compare equal when they point at the same object.</p>
 
 <p>A handle is a slot number and a generation, so checking one costs an integer comparison — and it

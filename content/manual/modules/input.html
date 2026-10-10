@@ -224,7 +224,7 @@ switch the sticks off:</p>
 
 <pre data-lang="cpp" data-harness="function">
 static float deadzone = rmp::input::deadzone();
-if (rmp::ui::slider("Stick dead zone", &amp;deadzone, 0.0f, 0.5f)) rmp::input::set_deadzone(deadzone);
+if (rmp::ui::slider("Stick dead zone", deadzone, 0.0f, 0.5f)) rmp::input::set_deadzone(deadzone);
 </pre>
 
 <h2>The pointer</h2>

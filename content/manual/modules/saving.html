@@ -24,7 +24,7 @@ rmp::save::write("slot1", v);
 
 <pre data-lang="cpp" data-harness="function">
 rmp::Value v;
-rmp::save::read("slot1", &amp;v);
+rmp::save::read("slot1", v);
 const int level = v["level"].as_int(1); // 1 on the first run: there was nothing to read
 </pre>
 
@@ -107,7 +107,7 @@ with <code>type()</code>, <code>size()</code> and <code>key(i)</code>:</p>
 
 <pre data-lang="cpp" data-harness="function">
 rmp::Value v;
-rmp::save::read("slot1", &amp;v);
+rmp::save::read("slot1", v);
 const rmp::Value &amp;items = v["inventory"];
 std::vector&lt;std::string&gt; names;
 for (int i = 0; i &lt; items.size(); i++) names.emplace_back(items[i].as_string("?"));
@@ -145,7 +145,8 @@ level ends — not every frame.</p>
 
 <h3>What a read tells you</h3>
 
-<p><a href="ref:rmp::save::read"><code>read(slot, &amp;value)</code></a> returns a
+<p><a href="ref:rmp::save::read"><code>read(slot, value)</code></a> fills the Value you hand it, by
+reference, and returns a
 <a href="ref:rmp::save::Result"><code>Result</code></a> that is true in an <code>if</code> only when
 the save was read and checked. When it is false,
 <a href="ref:rmp::save::Result::status"><code>status</code></a> says why, because each reason is a
@@ -172,15 +173,15 @@ struct Settings {
     bool subtitles = false;
 };
 
-Settings load_settings(bool *damaged) {
-    Settings s;
+// Each field keeps its default unless the save has it. True when the file
+// was there and could not be trusted.
+bool load_settings(Settings &amp;s) {
     rmp::Value v;
-    const rmp::save::Result read = rmp::save::read("settings", &amp;v);
-    *damaged = read.status == rmp::save::Status::MODIFIED ||
-        read.status == rmp::save::Status::TRUNCATED;
+    const rmp::save::Result read = rmp::save::read("settings", v);
     s.music = v["music"].as_float(s.music);
     s.subtitles = v["subtitles"].as_bool(s.subtitles);
-    return s;
+    return read.status == rmp::save::Status::MODIFIED ||
+        read.status == rmp::save::Status::TRUNCATED;
 }
 </pre>
 
@@ -283,7 +284,7 @@ and the game moves the old meaning to the new one as it reads:</p>
 
 <pre data-lang="cpp" data-harness="function">
 rmp::Value v;
-if (rmp::save::read("slot1", &amp;v) &amp;&amp; v.version() &lt; 2) {
+if (rmp::save::read("slot1", v) &amp;&amp; v.version() &lt; 2) {
     v["coins"] = v["gold"].as_int(0);
     v.erase("gold");
 }
@@ -324,7 +325,7 @@ an update still has players with plain saves; it reads them for as long as they 
 with:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="static rmp::Value v;">
-rmp::save::read("slot1", &amp;v, { .sealed_only = false });
+rmp::save::read("slot1", v, { .sealed_only = false });
 </pre>
 
 <aside class="callout warning"><span class="callout-title">What sealing is for</span><p>It stops a

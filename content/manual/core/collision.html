@@ -326,13 +326,13 @@ next.</p>
 
 <p>The longer form takes an <a href="ref:rmp::RayQuery"><code>rmp::RayQuery</code></a>, and the field
 that matters most is <code>ignore</code>, because without it the first thing every shot hits is the
-thing that fired it:</p>
+thing that fired it. It is a handle, so an object shooting names itself with
+<code>handle()</code>:</p>
 
-<pre data-lang="cpp" data-harness="scene" data-given="static Vector2 muzzle{}, target{};
-static rmp::Object *shooter = nullptr;
+<pre data-lang="cpp" data-harness="object" data-given="static Vector2 target{};
 namespace layer { constexpr unsigned ENEMY = 1u &lt;&lt; 1; }">
-rmp::RayHit hit = raycast({ .from = muzzle, .to = target,
-                            .mask = layer::ENEMY, .ignore = shooter });
+rmp::RayHit hit = scene().raycast({ .from = position, .to = target,
+                                    .mask = layer::ENEMY, .ignore = handle() });
 </pre>
 
 <table>
@@ -340,7 +340,7 @@ rmp::RayHit hit = raycast({ .from = muzzle, .to = target,
 <tbody>
 <tr><td><code>from</code>, <code>to</code></td><td><code>{ 0, 0 }</code></td><td>The segment, in world units; nothing beyond <code>to</code> is hit.</td></tr>
 <tr><td><code>mask</code></td><td>every layer</td><td>Only objects on one of these layers are hit.</td></tr>
-<tr><td><code>ignore</code></td><td>none</td><td>One object to pass through: normally whoever is shooting.</td></tr>
+<tr><td><code>ignore</code></td><td>an empty handle</td><td>One object to pass through: normally whoever is shooting. An empty handle, or the handle of an object that is gone, passes through nothing.</td></tr>
 <tr><td><code>solid_only</code></td><td><code>false</code></td><td>Only solid objects are hit.</td></tr>
 </tbody>
 </table>
@@ -354,21 +354,26 @@ coin is skipped and the floor is found.</p>
 <p>The ray's <code>mask</code> is tested against the objects' layers only — a ray has no layer of its
 own for an object's mask to match.</p>
 
-<p><a href="ref:rmp::Scene::raycast_all"><code>raycast_all()</code></a> returns every hit along the
-ray, nearest first, up to as many as you make room for — for a shot that pierces, or a line of sight
-that has to know everything in the way:</p>
+<p><a href="ref:rmp::Scene::raycast_all"><code>raycast_all()</code></a> writes every hit along the
+ray into an array of yours, nearest first, as many as it holds, and returns how many it wrote — for
+a shot that pierces, or a line of sight that has to know everything in the way:</p>
 
-<pre data-lang="cpp" data-harness="scene" data-given="static Vector2 muzzle{}, target{};">
-rmp::RayHit hits[8];
-const int count = raycast_all({ .from = muzzle, .to = target }, hits, 8);
+<pre data-lang="cpp" data-harness="scene" data-given="#include &lt;array&gt;
+static Vector2 muzzle{}, target{};">
+std::array&lt;rmp::RayHit, 8&gt; hits;
+const int count = raycast_all({ .from = muzzle, .to = target }, hits);
 for (int i = 0; i &lt; count; i++) {
-    if (rmp::Object *object = hits[i].object.get()) object-&gt;destroy();
+    if (auto object = hits[i].object.get()) object-&gt;destroy();
 }
 </pre>
 
+<p>It takes a <code>std::span</code>, so a <code>std::array</code>, a <code>std::vector</code> or a
+plain array goes in as it is, and the span carries its length: there is no count to pass beside it
+and get wrong.</p>
+
 <p>Rays hit objects and not the map's cells; for those, ask the map with
 <code>solid_at()</code>. From inside an object, the scene is <code>scene()</code>:
-<code>scene()-&gt;raycast(from, to)</code>.</p>
+<code>scene().raycast(from, to)</code>.</p>
 
 <h3>What a ray sees</h3>
 

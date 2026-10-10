@@ -53,7 +53,7 @@ and one of the framework's are the same kind of thing, added, read and removed t
 <thead><tr><th>Call</th><th>Does</th></tr></thead>
 <tbody>
 <tr><td><a href="ref:rmp::Object::add"><code>add&lt;B&gt;({ ... })</code></a></td><td>Attaches a <code>B</code> made from the braces, runs its <code>_ready</code> if it has one, and returns a reference to it.</td></tr>
-<tr><td><a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a></td><td>A pointer to the object's <code>B</code>, or null when it has none.</td></tr>
+<tr><td><a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a></td><td>The object's <code>B</code>, as an <a href="ref:rmp::Ref"><code>rmp::Ref</code></a>: empty when it has none.</td></tr>
 <tr><td><a href="ref:rmp::Object::has"><code>has&lt;B&gt;()</code></a></td><td>Whether it has one.</td></tr>
 <tr><td><a href="ref:rmp::Object::remove"><code>remove&lt;B&gt;()</code></a></td><td>Takes it off, running its <code>_end</code> if it has one.</td></tr>
 </tbody>
@@ -65,11 +65,15 @@ and one of the framework's are the same kind of thing, added, read and removed t
 auto &amp;player = spawn({ .size = { 26, 26 } });
 player.add&lt;rmp::behavior::TopDown&gt;({ .speed = 240 });
 
-if (auto *walk = player.get&lt;rmp::behavior::TopDown&gt;()) walk-&gt;speed = 400;
+if (auto walk = player.get&lt;rmp::behavior::TopDown&gt;()) walk-&gt;speed = 400;
 </pre>
 
-<p>The reference <code>add()</code> returns and the pointer <code>get()</code> returns stay valid for
-as long as the behavior is attached: a behavior lives in memory of its own and never moves.</p>
+<p><code>get()</code> answers with an optional reference, and the <code>if</code> is how you ask it:
+true when the object has a <code>TopDown</code>, and then <code>-&gt;</code> reaches it. Reaching
+into an empty one without asking is a mistake in the game: it is said once in the log, and the
+line writes to a stand-in instead of crashing. The reference <code>add()</code> returns and the one
+<code>get()</code> returns stay valid for as long as the behavior is attached: a behavior lives in
+memory of its own and never moves.</p>
 
 <p>An object carries at most one behavior of each type. Adding a type it already has replaces the old
 one — its <code>_end</code> runs, then the new one's <code>_ready</code> — because two of the same is
