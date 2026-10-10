@@ -36,6 +36,11 @@ order: 20
 - A link to a reference entry: `<a href="ref:rmp::Scene::change">` — the `names` gate checks it.
 - A link to a framework file at the documented commit: `<a href="fw:src/rmp/app.cpp#L40-L60">`.
 - Outside links only to hosts in `site.toml [links] allow`, https only.
+- An address of this site written out — `curl -fsSL https://omardev29.github.io/rmp-docs/install.sh | sh`
+  — has to be a page or a file the site serves (the `installer` gate reads pages, the served
+  files and the framework's README and TECHNICAL.md). The files served as they are, `install.sh` and
+  `install.ps1`, are the framework's, named in `site.toml [served]`; link them as
+  `<a href="/install.sh">`.
 - `` `backticks` `` in text become `<code>`. Code-shaped names are checked: `rmp::...`,
   `RMP_...`, raylib/rlgl/Clay functions written as `Name()`, `KEY_...` and friends must exist.
 - A path written as code (`src/main.cpp`, `examples/games/01_pong`) must exist in the framework

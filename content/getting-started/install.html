@@ -1,0 +1,164 @@
+<!--
+title: Install rmp
+nav: Install
+description: One line in a terminal puts rmp on your PATH, on Linux, macOS, the BSDs and Windows: what each line runs, where it puts things, how to update it, and how to remove it.
+order: 5
+-->
+<h1>Install rmp</h1>
+
+<p class="lede">One line in a terminal gets the framework and puts <code>rmp</code> on your PATH.
+It installs into your home folder, as you, and asks for no administrator: nothing in it runs
+<code>sudo</code>, and nothing in it installs a package.</p>
+
+<h2 id="the-line">The line</h2>
+
+<p>On Linux and macOS:</p>
+
+<pre data-lang="shell">
+curl -fsSL https://omardev29.github.io/rmp-docs/install.sh | sh
+</pre>
+
+<p>The same script, fetched with what each system has. None of the three BSDs has
+<code>curl</code> in its base system:</p>
+
+<pre data-lang="shell">
+wget -qO- https://omardev29.github.io/rmp-docs/install.sh | sh      # Linux without curl
+fetch -o - https://omardev29.github.io/rmp-docs/install.sh | sh     # FreeBSD
+ftp -o - https://omardev29.github.io/rmp-docs/install.sh | sh       # OpenBSD, NetBSD
+</pre>
+
+<p>On Windows, in PowerShell — Windows PowerShell 5.1 or PowerShell 7:</p>
+
+<pre data-lang="powershell">
+irm https://omardev29.github.io/rmp-docs/install.ps1 | iex
+</pre>
+
+<p>Then open a new terminal and check:</p>
+
+<pre data-lang="shell">
+rmp help
+</pre>
+
+<p>A line that pipes a download into a shell runs whatever is at that address, so read it first if
+you like: it is <a href="/install.sh">install.sh</a> and <a href="/install.ps1">install.ps1</a>.
+They are the framework's <code>tools/install.sh</code> and <code>tools/install.ps1</code>, served
+by this site byte for byte as they are at the commit it documents — this site's own checks fail
+the day they are not.</p>
+
+<h2 id="what-it-needs">What it needs</h2>
+
+<p data-fw-grep="tools/install.sh::for py in python3 python3\.14 python3\.13 python3\.12 python3\.11 python; do">Two
+things, and the installer stops and says how to get whichever is missing, having installed
+nothing: <strong>git</strong>, which fetches the framework and every update after it, and
+<strong>Python 3.11</strong> or newer, which <code>rmp</code> is written in. It asks every Python it
+finds for its version rather than trusting the name: macOS's own <code>python3</code> is older than
+3.11, and on Windows <code>python3</code> can be the Microsoft Store's placeholder. On a Mac, git
+comes with Apple's command line tools, and without them the installer stops and says
+<code>xcode-select --install</code>.</p>
+
+<p data-fw-grep="tools/install.sh::# What a build needs beyond what rmp itself does\. Said, never installed\.">Building a game
+needs more — CMake, Ninja, a C++ compiler, and on Linux and FreeBSD the X11 development headers —
+and the installer looks for those at the end. What is missing is listed with the command that
+installs it on this system: <code>apt</code>, <code>dnf</code>, <code>pacman</code>,
+<code>zypper</code>, Homebrew, <code>pkg</code>, <code>pkg_add</code> or <code>pkgin</code>, and on
+Windows <code>winget</code>. The command is printed for you to run, as root where the system wants
+it; the installer never runs it.</p>
+
+<h2 id="where-it-puts-things">Where it puts things</h2>
+
+<table>
+<thead><tr><th></th><th>Linux, macOS, the BSDs</th><th>Windows</th></tr></thead>
+<tbody>
+<tr><td>The framework, a git clone of it</td><td><code>~/.local/share/rmp</code></td><td><code>%LOCALAPPDATA%\rmp</code></td></tr>
+<tr><td>The <code>rmp</code> you type</td><td><code>~/.local/bin/rmp</code>, a link to the clone's</td><td><code>%LOCALAPPDATA%\Programs\rmp\rmp.cmd</code>, a two-line script that calls the clone's</td></tr>
+<tr><td>Your PATH</td><td>a marked block in your shell's startup file, only if <code>~/.local/bin</code> is not on PATH already</td><td>that folder added to your user PATH</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="tools/install.sh::if ! GIT_TERMINAL_PROMPT=0 git clone --quiet --filter=blob:none --branch &quot;\$branch&quot;">The
+clone is of the framework's <code>main</code>, without the file contents of old commits, so it is
+the size of one checkout rather than of the whole history.</p>
+
+<p data-fw-grep="tools/rmp.py::def rc_file\(home: Path, env, system: str\) -&gt; tuple\[Path, str\]:">The
+startup file is the one your login shell reads, from <code>$SHELL</code>: <code>~/.zshrc</code> for
+zsh, in <code>$ZDOTDIR</code> when that is set; <code>~/.bashrc</code> for bash on Linux and, on
+macOS, the first of <code>~/.bash_profile</code>, <code>~/.bash_login</code> and
+<code>~/.profile</code> that exists; <code>~/.config/fish/conf.d/rmp.fish</code> for fish, under
+<code>$XDG_CONFIG_HOME</code> when that is set;
+<code>~/.cshrc</code> for csh, and <code>~/.tcshrc</code> for tcsh when there is one; for ksh, the
+file <code>$ENV</code> names, when it names one; and <code>~/.profile</code> for any other. The
+block it adds starts with <code># added by rmp install: ~/.local/bin on PATH</code> and ends with
+<code># end of rmp install</code>, and it is added once however many times you install.</p>
+
+<p data-fw-grep="tools/rmp.py::# Windows: a \.cmd shim in its own folder, and that folder on the User PATH\.\n# Not the clone's folder on PATH: PowerShell would find rmp\.ps1 there first,\n# and its default execution policy refuses to run a local script\.">On
+Windows the folder on PATH holds only that small script, and not the clone itself: in the clone,
+PowerShell would find <code>rmp.ps1</code> first, and its default execution policy refuses to run a
+script from your own disk. So nothing needs <code>Set-ExecutionPolicy</code>, and
+<code>rmp</code> is the same command in PowerShell and in cmd. Your user PATH is changed in place,
+keeping every entry it had, and Windows is told, so a terminal opened from now on sees it without
+logging out; the PowerShell window you installed from has it already.</p>
+
+<h2 id="again">Running it again, and updating</h2>
+
+<p data-fw-grep="tools/install.sh::if \[ -d &quot;\$dest/\.git&quot; \]; then\s+say &quot;rmp: updating the framework in \$dest&quot;\s+if ! &quot;\$dest/rmp&quot; update &lt; /dev/null; then">The
+same line run again updates instead of installing: when the clone is already there, it runs
+<code>rmp update</code> in it, and then <code>rmp install</code>, which finds everything in place and
+changes nothing. Or run the update yourself, from anywhere:</p>
+
+<pre data-lang="shell">
+rmp update
+</pre>
+
+<p>It fetches the framework's <code>main</code> and moves the clone forward to it, and says which
+commit it went from and to. It never merges: a clone with changes of its own, on another branch,
+or with commits the framework does not have is refused, and told what to do about it.</p>
+
+<p>Your games are not touched. Each game carries its own copy of the framework and of
+<code>rmp</code>, and keeps the one it was made with; <code>rmp new</code> makes the next game from
+the updated framework. <a href="/manual/basics/the-rmp-command.html#a-game-keeps-its-own-rmp">The
+rmp command</a> explains why.</p>
+
+<h2 id="from-a-clone">From a clone of your own</h2>
+
+<p>The installer is a clone and two commands, and the commands are <code>rmp</code>'s own. A
+framework you cloned yourself — to work on it, or into a folder you chose — goes on your PATH the
+same way, by running its <code>rmp</code> once by its path:</p>
+
+<pre data-lang="shell">
+git clone https://github.com/omardev29/raylib_multiplatform ~/raylib_multiplatform
+~/raylib_multiplatform/rmp install
+</pre>
+
+<p>On Windows, <code>rmp.cmd install</code> in that folder. <code>rmp install</code> makes the link,
+or the script on Windows, and says so when it is already there; when another <code>rmp</code> is in
+the way — a link to some other clone — it refuses and names it, and <code>rmp install force</code>
+replaces it. <code>rmp update</code> then updates that clone.</p>
+
+<p data-fw-grep="tools/rmp.py::GLOBAL_COMMANDS = \(&quot;new&quot;, &quot;install&quot;, &quot;update&quot;\)">Both
+act on the framework the <code>rmp</code> you typed belongs to, wherever you type them. A game's own
+copy refuses them: it is not the framework on your PATH, and it is never updated.</p>
+
+<h2 id="uninstall">Uninstalling</h2>
+
+<p>Nothing is installed anywhere else, so removing it is deleting what the table above lists. On
+Linux, macOS and the BSDs:</p>
+
+<pre data-lang="shell">
+rm ~/.local/bin/rmp
+rm -rf ~/.local/share/rmp
+</pre>
+
+<p>and, if the installer added one, the block from <code># added by rmp install</code> to
+<code># end of rmp install</code> in your shell's startup file — for fish, the whole of
+<code>rmp.fish</code>. Other programs install into <code>~/.local/bin</code>
+too, so you may want to keep that folder on your PATH anyway.</p>
+
+<p>On Windows, delete <code>%LOCALAPPDATA%\rmp</code> and <code>%LOCALAPPDATA%\Programs\rmp</code>,
+and take <code>%LOCALAPPDATA%\Programs\rmp</code> out of your user PATH in Windows' "Edit
+environment variables for your account".</p>
+
+<p>Your games keep working without it: each has its own <code>rmp</code> at its root,
+<code>./rmp</code>, <code>rmp.ps1</code> and <code>rmp.cmd</code>, and its own copy of the
+framework.</p>
+
+<p>Next: <a href="/getting-started/index.html#make-a-game">make a game</a>.</p>

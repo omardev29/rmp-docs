@@ -15,34 +15,27 @@ reference</a>, which is read from <code>rmp help</code> itself.</p>
 
 <h2>Getting it</h2>
 
-<p>Clone the <a href="https://github.com/omardev29/raylib_multiplatform">framework</a> once, into
-your home folder, and put that folder on your PATH:</p>
+<p>The installer gets the framework and puts <code>rmp</code> on your PATH, in one line:</p>
 
 <pre data-lang="shell">
-cd ~
-git clone https://github.com/omardev29/raylib_multiplatform
+curl -fsSL https://omardev29.github.io/rmp-docs/install.sh | sh
 </pre>
-
-<table>
-<thead><tr><th>Shell</th><th>Add to PATH, once</th></tr></thead>
-<tbody>
-<tr><td>bash on Linux</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.bashrc</code></td></tr>
-<tr><td>bash on macOS</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.bash_profile</code></td></tr>
-<tr><td>zsh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.zshrc</code></td></tr>
-<tr><td>ksh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.profile</code></td></tr>
-<tr><td>PowerShell and cmd</td><td><code>[Environment]::SetEnvironmentVariable("Path", "$HOME\raylib_multiplatform;" + [Environment]::GetEnvironmentVariable("Path", "User"), "User")</code></td></tr>
-</tbody>
-</table>
-
-<p>On Windows, PowerShell also has to be allowed to run a local script, once:</p>
 
 <pre data-lang="powershell">
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+irm https://omardev29.github.io/rmp-docs/install.ps1 | iex
 </pre>
 
-<p>Then open a new terminal. Building a game also needs
-<a href="https://www.python.org/downloads/">Python</a> 3.11 or newer, <a href="https://cmake.org/">CMake</a>,
-Ninja and a C++ compiler on the PATH, and on Linux the X11 development libraries:</p>
+<p><a href="/getting-started/install.html">Install rmp</a> has the line for every system, where it
+puts things, and how to remove them. Underneath, it is a clone of the framework and two of
+<code>rmp</code>'s own commands, and a clone you made yourself goes on your PATH with the second:</p>
+
+<pre data-lang="shell">
+~/raylib_multiplatform/rmp install
+</pre>
+
+<p>Building a game also needs <a href="https://www.python.org/downloads/">Python</a> 3.11 or newer,
+<a href="https://cmake.org/">CMake</a>, Ninja and a C++ compiler on the PATH, and on Linux the X11
+development libraries; the installer lists whichever this machine lacks:</p>
 
 <pre data-lang="shell">
 sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
@@ -76,8 +69,8 @@ When none will do, the command says so and stops:</p>
 
 <p><code>rmp</code> works on the project it is standing in: the nearest folder, from the current one
 upwards, that holds a <code>raylib_multiplatform.toml</code>. So it works from any subfolder of a
-game. Outside a project, only <code>rmp new</code> and <code>rmp help</code> mean anything, and the
-others say so.</p>
+game. Outside a project, only <code>rmp new</code>, <code>rmp install</code>, <code>rmp update</code>
+and <code>rmp help</code> mean anything, and the others say so.</p>
 
 <p>The project is either a game or the framework itself — the framework is the one that also holds
 its own test suite. <code>rmp lint</code> and <code>rmp example</code> are the framework's maintenance
@@ -90,9 +83,12 @@ project's copy of <code>tools/rmp.py</code>. A game therefore keeps the <code>rm
 with — its build, its checks, its release steps — when the framework on your PATH moves on. Games
 made months apart each behave the way they did when they were made.</p>
 
-<p><code>rmp new</code> is the exception, and by design: it uses the framework that ships the
-<code>rmp</code> being run, because a new game is made from the framework you have installed, not
-from the game you happen to be standing in.</p>
+<p data-fw-grep="tools/rmp.py::GLOBAL_COMMANDS = \(&quot;new&quot;, &quot;install&quot;, &quot;update&quot;\)[\s\S]*?if root is not None and command not in GLOBAL_COMMANDS:\s+delegated = delegate\(root, argv\)"><code>rmp new</code>,
+<code>rmp install</code> and <code>rmp update</code> are the exceptions, by design: they act on the
+framework that ships the <code>rmp</code> being run, wherever they are typed. A new game is made from
+the framework you have installed, not from the game you happen to be standing in; and what goes on
+your PATH, and what updates, is that framework too. A game's own copy of <code>rmp</code> refuses
+the last two, because it is never what is on your PATH and never updated.</p>
 
 <p>One variable in the environment turns the hand-over off, so that the <code>rmp</code> on the PATH
 runs its own code on the project:</p>
@@ -228,6 +224,12 @@ release will, which refuses placeholder store ids and a version that is not
 <code>MAJOR.MINOR.PATCH</code>, and only then makes an annotated tag and pushes it. CI builds every
 enabled target and attaches them to the release. <code>rmp deploy 1.2.0-rc1</code> is a
 pre-release.</p>
+
+<h3>rmp install and rmp update</h3>
+
+<p><code>rmp install</code> puts the framework it belongs to on your PATH, and <code>rmp update</code>
+moves that framework forward to the latest <code>main</code>; the installer runs both for you.
+<a href="/getting-started/install.html">Install rmp</a> explains them.</p>
 
 <h3>rmp new and rmp help</h3>
 

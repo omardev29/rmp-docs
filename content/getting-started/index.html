@@ -26,29 +26,24 @@ sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-d
 
 <h2>Install rmp</h2>
 
-<p>Clone the framework into your home folder:</p>
+<p>One line, in a terminal. On Linux and macOS:</p>
 
 <pre data-lang="shell">
-cd ~
-git clone https://github.com/omardev29/raylib_multiplatform
+curl -fsSL https://omardev29.github.io/rmp-docs/install.sh | sh
 </pre>
 
-<p>Then put that folder on your PATH, once, in the file your shell reads when it starts:</p>
+<p>On Windows, in PowerShell:</p>
 
-<table>
-<thead><tr><th>Shell</th><th>Run once</th></tr></thead>
-<tbody>
-<tr><td>bash on Linux</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.bashrc</code></td></tr>
-<tr><td>bash on macOS</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.bash_profile</code></td></tr>
-<tr><td>zsh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.zshrc</code></td></tr>
-<tr><td>ksh</td><td><code>echo 'export PATH="$HOME/raylib_multiplatform:$PATH"' &gt;&gt; ~/.profile</code></td></tr>
-<tr><td>Windows: run it in PowerShell, and cmd sees it too</td><td><code>[Environment]::SetEnvironmentVariable("Path", "$HOME\raylib_multiplatform;" + [Environment]::GetEnvironmentVariable("Path", "User"), "User")</code></td></tr>
-</tbody>
-</table>
+<pre data-lang="powershell">
+irm https://omardev29.github.io/rmp-docs/install.ps1 | iex
+</pre>
 
-<p>On Windows, PowerShell also has to be allowed to run a script from your own disk, once:
-<code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>. Open a new terminal so the PATH
-takes effect, and check:</p>
+<p>It needs git and Python 3.11 or newer, and says how to get either if it is missing. It puts the
+framework in your home folder and <code>rmp</code> on your PATH, as you and without
+<code>sudo</code>, and at the end it lists anything a build still needs on this machine.
+<a href="/getting-started/install.html">Install rmp</a> has the line for the BSDs and for Linux
+without <code>curl</code>, where everything goes, and how to update and remove it. Open a new
+terminal, and check:</p>
 
 <pre data-lang="shell">
 rmp help

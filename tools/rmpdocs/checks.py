@@ -49,11 +49,15 @@ class Context:
     build_problems: list = field(default_factory=list)
     framework: Path | None = None                    # the framework checkout read
     refconf: dict = field(default_factory=dict)      # reference.toml
+    served: dict = field(default_factory=dict)       # site path -> bytes: site.toml [served]
+    ref: str = ""                                    # FRAMEWORK_REF
 
     @classmethod
     def from_folder(cls, folder: Path) -> "Context":
-        """A fixture: every .html under `out/` is a built page, `site.toml`
-        the configuration, the rest of the folder is the docs tree."""
+        """A fixture: every .html under `out/` is a built page, the files
+        site.toml [served] names are served from `out/` too, `site.toml` is the
+        configuration, `FRAMEWORK_REF` the commit, the rest of the folder is
+        the docs tree."""
         config = {}
         if (folder / "site.toml").is_file():
             config = tomllib.loads((folder / "site.toml").read_text(encoding="utf-8"))
@@ -73,8 +77,11 @@ class Context:
         refconf = {}
         if (folder / "reference.toml").is_file():
             refconf = tomllib.loads((folder / "reference.toml").read_text(encoding="utf-8"))
+        served = {name: (out / name).read_bytes() for name in config.get("served", {})
+                  if (out / name).is_file()}
+        ref = (folder / "FRAMEWORK_REF").read_text().strip() if (folder / "FRAMEWORK_REF").is_file() else ""
         return cls(docs=folder, outputs=outputs, config=config, sources=sources,
-                   framework=framework, refconf=refconf)
+                   framework=framework, refconf=refconf, served=served, ref=ref)
 
 
 def gate(name: str, says: str):
@@ -173,6 +180,11 @@ def check_links(ctx: Context) -> list[Problem]:
                     resolved = url
                 if resolved not in files:
                     if assets is not None and resolved in assets:
+                        continue
+                    if resolved in ctx.served:   # a file served as it is: the installers
+                        if frag:
+                            out.append(Problem("links", url, n.line, f"{target}: {resolved} is a "
+                                                                     "file the site serves, with no #anchors"))
                         continue
                     out.append(Problem("links", url, n.line, f"{target} leads to no page "
                                                              f"({resolved} does not exist)"))

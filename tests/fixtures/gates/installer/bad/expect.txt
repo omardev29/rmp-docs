@@ -1,0 +1,6 @@
+install.sh:2: is not tools/install.sh as it is at FRAMEWORK_REF
+install.ps1:1: is not tools/install.ps1 as it is at FRAMEWORK_REF
+with CRLF line endings
+the framework's checkout has no tools/uninstall.sh
+content/index.html:7: https://example.org/docs/install.bash is an address of this site
+README.md (framework):1: https://example.org/docs/setup.sh

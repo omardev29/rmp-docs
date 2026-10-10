@@ -36,6 +36,7 @@ from .reference import Reference
 from .snippets import Snippet, harness_file
 from .project import ProjectFile
 from . import search as search_index
+from . import served as served_mod
 
 DOCS = Path(__file__).resolve().parents[2]
 
@@ -128,6 +129,7 @@ class Site:
         self.posters: set = set()
         self.snippets: list[Snippet] = []
         self.project_files: dict[str, list[ProjectFile]] = {}   # project -> files, page order later
+        self.served: dict[str, bytes] = {}   # site path -> bytes, at the site's root
 
     # -- the framework ---------------------------------------------------------
 
@@ -683,6 +685,14 @@ class Site:
         out = re.sub(r"\{\{(\w+)\}\}", lambda m: values[m.group(1)], layout)
         return out
 
+    def serve_framework_files(self):
+        """site.toml [served]: framework files the site serves at its root,
+        as the checkout has them with the line endings its .gitattributes
+        gives them. The `installer` gate holds them to FRAMEWORK_REF."""
+        for name, path in self.config.get("served", {}).items():
+            if (self.framework / path).is_file():   # and when not, the gate says so
+                self.served[name] = served_mod.from_checkout(self.framework, path)
+
     # -- the whole thing ---------------------------------------------------------
 
     def build(self, write: bool = True) -> "Site":
@@ -695,6 +705,7 @@ class Site:
         self.discover()
         self.reference()
         self.example_pages()
+        self.serve_framework_files()
         for page in self.pages:
             self.transform(page)
         layout = (self.docs / "templates" / "layout.html").read_text(encoding="utf-8")
@@ -731,6 +742,9 @@ class Site:
             if src.is_file():
                 shutil.copy(src, assets / extra)
         (self.out / ".nojekyll").write_text("")
+        for name, data in self.served.items():
+            (self.out / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.out / name).write_bytes(data)
         (assets / "search.json").write_text(self.search_json, encoding="utf-8")
         play = (self.docs / "templates" / "play.html").read_text(encoding="utf-8")
         examples_mod.copy_artifacts(self.examples, self.examples_web, self.posters_dir, self.out, play)

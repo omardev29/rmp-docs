@@ -1,0 +1,7 @@
+[site]
+base_url = "https://example.org/docs/"
+
+[served]
+"install.sh" = "tools/install.sh"
+"install.ps1" = "tools/install.ps1"
+"uninstall.sh" = "tools/uninstall.sh"

@@ -1,0 +1,3 @@
+b.html leads to no page
+c.html has no id 'nowhere'
+is a file the site serves, with no #anchors

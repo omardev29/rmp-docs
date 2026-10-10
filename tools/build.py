@@ -35,7 +35,7 @@ def context(site: Site) -> checks.Context:
     config = dict(site.config, _search_json=getattr(site, "search_json", None))
     ctx = checks.Context(docs=site.docs, outputs=site.outputs, config=config,
                          build_problems=site.problems, framework=site.framework,
-                         refconf=site.refconf)
+                         refconf=site.refconf, served=site.served, ref=site.ref)
     for page in site.pages:
         if page.kind == "content":
             ctx.sources[page.source] = (site.docs / page.source).read_text(encoding="utf-8")

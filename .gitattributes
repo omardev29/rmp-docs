@@ -1,0 +1,3 @@
+# A served file is exactly what git writes out, CRLF included, on any machine:
+# no conversion of the installer gate's fixtures.
+tests/fixtures/gates/installer/** -text

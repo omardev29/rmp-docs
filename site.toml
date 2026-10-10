@@ -33,6 +33,13 @@ title = "Framework"
 id = "reference"
 title = "Reference"
 
+[served]
+# Files of the framework the site serves at its root, as they are at
+# FRAMEWORK_REF: the one-liners on the install page fetch these two. The
+# `installer` gate holds every byte, and the line endings, to the framework's.
+"install.sh" = "tools/install.sh"
+"install.ps1" = "tools/install.ps1"
+
 [budgets]
 page_kb = 400       # one built page, HTML only
 css_kb = 80         # every stylesheet together, before it is concatenated

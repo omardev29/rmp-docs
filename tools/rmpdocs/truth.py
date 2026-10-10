@@ -484,3 +484,73 @@ def check_diagnostics(ctx: Context) -> list[Problem]:
                 out.append(Problem("diagnostics", path, n.line,
                                    f"<samp>{shown}</samp> is not a message the framework prints"))
     return out
+
+
+# ---------------------------------------------------------------------------
+# the installers, and the URLs of this site
+# ---------------------------------------------------------------------------
+
+# Files of the framework a reader is sent to on this site, read at
+# FRAMEWORK_REF: what they say about the site's addresses is checked like a
+# page's own words. The installers print the other one's one-liner.
+FRAMEWORK_TEXTS = ("README.md", "TECHNICAL.md")
+
+
+@gate("installer", "every file site.toml [served] names is served, byte for byte the framework's "
+                   "at FRAMEWORK_REF with the line endings its .gitattributes gives it; and every "
+                   "URL of this site a page, a served file or the framework's README names -- "
+                   "`curl -fsSL .../install.sh | sh` -- is a page or a file the site serves")
+def check_installer(ctx: Context) -> list[Problem]:
+    from . import served as served_mod
+    fw = ctx.framework
+    if fw is None:
+        return []
+    out = []
+    for name, path in ctx.config.get("served", {}).items():
+        got = ctx.served.get(name)
+        if got is None:
+            why = (f"the framework's checkout has no {path}" if not (fw / path).is_file()
+                   else "the build did not write it")
+            out.append(Problem("installer", name, 0,
+                               f"site.toml [served] names it, and the site serves nothing there: {why}"))
+            continue
+        try:
+            want, eol = served_mod.expected(fw, ctx.ref, path)
+        except LookupError as e:
+            out.append(Problem("installer", name, 0, str(e)))
+            continue
+        if got != want:
+            at = served_mod.first_difference(got, want)
+            line = got.count(b"\n", 0, at) + 1
+            endings = f", with {eol.upper()} line endings" if eol else ""
+            out.append(Problem("installer", name, line,
+                               f"is not {path} as it is at FRAMEWORK_REF"
+                               f"{(' ' + ctx.ref[:8]) if ctx.ref else ''}{endings}: "
+                               f"the first byte that differs is byte {at} ({len(got)} bytes served, "
+                               f"{len(want)} expected)"))
+
+    base = ctx.config.get("site", {}).get("base_url", "")
+    if not base:
+        return out
+    known = set(ctx.outputs) | set(ctx.served)
+    texts = [(path, text) for path, text in ctx.sources.items()]
+    texts += [(f"{name} (served)", data.decode("utf-8", "replace")) for name, data in ctx.served.items()]
+    for rel in FRAMEWORK_TEXTS:
+        try:
+            texts.append((f"{rel} (framework)",
+                          served_mod.at_ref(fw, ctx.ref, rel).decode("utf-8", "replace")))
+        except LookupError:
+            pass
+    url = re.compile(re.escape(base) + r"([^\s\"'<>`)|\\\]]*)")
+    for where, text in texts:
+        for m in url.finditer(text):
+            target = m.group(1).partition("#")[0].partition("?")[0]
+            target = target.rstrip(".,;:")
+            resolved = target + "index.html" if target == "" or target.endswith("/") else target
+            if resolved in known:
+                continue
+            line = text.count("\n", 0, m.start()) + 1
+            out.append(Problem("installer", where, line,
+                               f"{base}{target} is an address of this site, and the site serves "
+                               f"nothing at {resolved}"))
+    return out

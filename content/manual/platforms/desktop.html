@@ -99,9 +99,11 @@ backend = "win32"
 
 <h3>Building on Windows</h3>
 
-<p><code>rmp</code> comes as <code>rmp.ps1</code> for PowerShell and <code>rmp.cmd</code> for cmd,
-and PowerShell has to be allowed to run a local script once
-(<code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>). The launchers look for a Python
+<p><code>rmp</code> comes as <code>rmp.ps1</code> for PowerShell and <code>rmp.cmd</code> for cmd.
+The <code>rmp</code> <a href="/getting-started/install.html">the installer</a> puts on your PATH is
+a <code>.cmd</code>, which PowerShell runs as it is; running a <code>rmp.ps1</code> yourself, such
+as <code>.\rmp.ps1</code> in a game's folder, needs PowerShell to be allowed to run a local
+script, once (<code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>). The launchers look for a Python
 3.11 or newer by running each candidate once to ask its version, so the Microsoft Store's
 <code>python3</code> placeholder, which fails that question, is passed over instead of being handed
 the command.</p>
