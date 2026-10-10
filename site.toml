@@ -30,6 +30,10 @@ id = "framework"
 title = "Framework"
 
 [[sections]]
+id = "guidelines"
+title = "Guidelines"
+
+[[sections]]
 id = "reference"
 title = "Reference"
 
@@ -67,6 +71,8 @@ allow = [
   "https://docs.github.com/",
   "https://openfontlicense.org/",
   "https://en.cppreference.com/",
+  "https://google.github.io/styleguide/",
+  "https://clang.llvm.org/extra/clang-tidy/",
 ]
 
 [counted]

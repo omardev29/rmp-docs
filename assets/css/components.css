@@ -61,8 +61,13 @@ pre code { background: none; border: 0; padding: 0; font-size: inherit; }
 .code-block:has(.code-head) .copy-button { position: static; opacity: 1; }
 @media (hover: none) { .copy-button { opacity: 1; } }
 
-.code-block.expect-error { border-color: var(--danger-edge); }
-.code-block.expect-error .code-head { color: var(--danger-edge); }
+.code-block.expect-error,
+.code-block.expect-refused { border-color: var(--danger-edge); }
+.code-block.expect-error .code-head,
+.code-block.expect-refused .code-head { color: var(--danger-edge); }
+/* Wrong, and compiles: what refuses it instead, said in the caption. */
+.code-head .verdict { min-width: 0; overflow-wrap: anywhere; }
+.code-head .verdict code { font-weight: 700; }
 .compiler-output {
   margin: 0;
   padding: 0.6rem 1rem;

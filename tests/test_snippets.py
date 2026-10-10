@@ -59,6 +59,93 @@ class CompileTest(unittest.TestCase):
                 self.assertIsNone(snippets.check([s], FRAMEWORK, jobs=1)[0][1])
 
 
+class LintTest(unittest.TestCase):
+    """The wrong way that compiles: clang-tidy, with the framework's own
+    .clang-tidy, has to refuse it with the check the page names; and the right
+    way on a Guidelines page has to pass it with nothing said. Each kind of
+    failure seen."""
+
+    @classmethod
+    def setUpClass(cls):
+        CompileTest.setUpClass()
+        if snippets.tidy() is None:
+            if os.environ.get("RMP_DOCS_REQUIRE_COMPILE"):
+                raise AssertionError("the compile tier is required here and there is no clang-tidy")
+            raise unittest.SkipTest("no clang-tidy on PATH")
+
+    def run_one(self, code, harness="toplevel", given="", **kw):
+        s = snippets.Snippet("content/x.html", 1, "cpp", code, harness, given, **kw)
+        return snippets.check([s], FRAMEWORK, jobs=1)[0][1]
+
+    C_CAST = "int half() { return (int)3.5; }"
+    CAST = "int half() { return static_cast<int>(3.5); }"
+
+    def test_a_c_cast_is_refused_by_the_check_the_page_names(self):
+        self.assertIsNone(self.run_one(self.C_CAST, expect_lint="modernize-avoid-c-style-cast"))
+
+    def test_the_wrong_check_is_red(self):
+        why = self.run_one(self.C_CAST, expect_lint="readability-redundant-casting")
+        self.assertIn("clang-tidy does not say it", why)
+        self.assertIn("[modernize-avoid-c-style-cast]", why)
+
+    def test_code_the_check_passes_is_red(self):
+        why = self.run_one(self.CAST, expect_lint="modernize-avoid-c-style-cast")
+        self.assertIn("clang-tidy says nothing about it", why)
+
+    def test_a_check_the_framework_does_not_run_is_red(self):
+        why = self.run_one("// TODO: something\nint half() { return 1; }",
+                           expect_lint="google-readability-todo")
+        self.assertIn("the framework does not run google-readability-todo", why)
+
+    def test_a_wrong_way_that_does_not_compile_is_red(self):
+        why = self.run_one("int half() { return (int)nothing; }", expect_lint="modernize-avoid-c-style-cast")
+        self.assertIn("does not compile", why)
+
+    def test_the_right_way_has_to_be_clean(self):
+        self.assertIsNone(self.run_one(self.CAST, lint_clean=True))
+        why = self.run_one(self.C_CAST, lint_clean=True)
+        self.assertIn("is shown as the right way", why)
+        self.assertIn("line 1:", why)
+        self.assertIn("[modernize-avoid-c-style-cast]", why)
+
+    def test_only_the_blocks_own_lines_count(self):
+        # The given is the reader's own code, and the harness is the site's.
+        self.assertIsNone(self.run_one(self.CAST, given="inline int other() { return (int)2.5; }",
+                                       lint_clean=True))
+
+    def test_a_line_is_the_blocks_own_line(self):
+        why = self.run_one("int one() { return 1; }\n\nint half() { return (int)3.5; }", lint_clean=True)
+        self.assertIn("line 3:", why)
+
+
+class GateExpectationTest(unittest.TestCase):
+    """The wrong way that compiles and that a text gate of the framework
+    refuses: tools/naming_check.sh, which reads every #if branch."""
+
+    @classmethod
+    def setUpClass(cls):
+        CompileTest.setUpClass()
+        if not (FRAMEWORK / "tools" / "naming_check.sh").is_file():
+            raise unittest.SkipTest("no tools/naming_check.sh in the framework")
+
+    def run_one(self, code, rule):
+        s = snippets.Snippet("content/x.html", 1, "cpp", code, "toplevel",
+                             expect_gate="naming", gate_rule=rule)
+        return snippets.check([s], FRAMEWORK, jobs=1)[0][1]
+
+    def test_a_k_constant_is_r2(self):
+        self.assertIsNone(self.run_one("constexpr int kMaxLives = 3;", "R2"))
+
+    def test_the_wrong_rule_is_red(self):
+        why = self.run_one("constexpr int kMaxLives = 3;", "R1")
+        self.assertIn("is shown as refused by R1", why)
+        self.assertIn("[R2]", why)
+
+    def test_a_name_the_gate_passes_is_red(self):
+        why = self.run_one("constexpr int MAX_LIVES = 3;", "R2")
+        self.assertIn("it says nothing", why)
+
+
 class StaticRuleTest(unittest.TestCase):
     """A block nothing compiles is refused at build time, before any compiler."""
 
@@ -92,6 +179,55 @@ class StaticRuleTest(unittest.TestCase):
 
     def test_a_harnessed_block_is_recorded(self):
         self.assertEqual(self.build_with('<pre data-lang="cpp" data-harness="function">int x;</pre>'), [])
+
+    def test_a_refusal_says_what_refuses_it(self):
+        self.assertIn("says which check",
+                      self.build_with('<pre data-lang="cpp" data-harness="toplevel" '
+                                      'data-expect="lint">int x;</pre>')[0])
+        self.assertIn("says which, and which rule",
+                      self.build_with('<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" '
+                                      'data-gate="nowhere" data-rule="R2">int x;</pre>')[0])
+        self.assertIn("says which, and which rule",
+                      self.build_with('<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" '
+                                      'data-gate="naming">int x;</pre>')[0])
+        self.assertIn("the expectations are",
+                      self.build_with('<pre data-lang="cpp" data-harness="toplevel" '
+                                      'data-expect="warning">int x;</pre>')[0])
+
+    def site_with(self, files: dict):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        root = Path(tmp)
+        for name in ("site.toml", "reference.toml", "FRAMEWORK_REF"):
+            shutil.copy(DOCS / name, root / name)
+        shutil.copytree(DOCS / "templates", root / "templates")
+        for rel, body in files.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(f"<!--\ntitle: T\ndescription: A page.\n-->\n<h1>T</h1>\n{body}\n")
+        return Site(framework=FRAMEWORK, docs=root).build(write=False)
+
+    def test_the_right_way_on_a_guidelines_page_is_held_clean(self):
+        block = '<pre data-lang="cpp" data-harness="toplevel">int x = 0;</pre>'
+        site = self.site_with({"content/index.html": block,
+                               "content/guidelines/index.html": block + "\n" +
+                               '<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" '
+                               'data-check="modernize-avoid-c-style-cast">int y = (int)1.5;</pre>'})
+        by_page = {(s.page, s.expect_lint): s.lint_clean for s in site.snippets}
+        self.assertEqual(by_page, {("content/index.html", ""): False,
+                                   ("content/guidelines/index.html", ""): True,
+                                   ("content/guidelines/index.html", "modernize-avoid-c-style-cast"): False})
+
+    def test_a_refused_block_says_so_in_its_caption(self):
+        site = self.site_with({"content/index.html":
+                               '<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" '
+                               'data-check="modernize-avoid-c-style-cast">int y = (int)1.5;</pre>\n'
+                               '<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" '
+                               'data-gate="naming" data-rule="R2">constexpr int kLives = 3;</pre>'})
+        body = next(p for p in site.pages if p.url == "index.html").body
+        self.assertEqual(body.count("expect-refused"), 2)
+        self.assertIn("Compiles; <code>rmp lint</code> refuses it: "
+                      "<code>modernize-avoid-c-style-cast</code>", body)
+        self.assertIn("Compiles; <code>rmp test naming</code> refuses it: <code>R2</code>", body)
 
     def test_a_mistake_looks_like_one_and_says_what_the_compiler_answers(self):
         with tempfile.TemporaryDirectory() as tmp:

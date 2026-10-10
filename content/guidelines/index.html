@@ -1,0 +1,56 @@
+<!--
+title: Guidelines
+description: How C++ is written in the framework and its examples: which rules decide, in what order, and how the code on these pages is checked against the tools that hold them.
+order: 1
+-->
+<h1>Guidelines</h1>
+
+<p class="lede">How C++ is written here: in the framework, in its examples, and in a game that
+wants to read like them. When a question has more than one good answer, three sources decide it,
+in this order, and a source lower down never overrules one above it.</p>
+
+<h2 id="who-decides">Who decides</h2>
+
+<ol>
+<li><strong>The API is as simple as possible for whoever uses it.</strong> This outranks every
+other rule. A main menu is three functions, and a rule that would make it longer loses, whatever
+else it buys. <a href="/framework/why/the-three-function-menu.html">The three-function menu</a>
+says why.</li>
+<li><strong>The framework's own decisions</strong>, each one with its reason: the
+<a href="/framework/why/naming.html">naming table</a>,
+<a href="/framework/why/one-header-per-module.html">one header per module</a>,
+<a href="/framework/why/ownership.html">ownership, and no raw pointer in the API</a>,
+<a href="/framework/why/no-exceptions.html">no exceptions</a>,
+<a href="/framework/why/designated-initialisers.html">designated initialisers in declaration
+order</a>, and the rest of <a href="/framework/why/index.html">why it is built this way</a>.</li>
+<li><strong><a href="https://google.github.io/styleguide/cppguide.html">Google's C++ Style
+Guide</a></strong>, for everything the first two leave open. Where the framework has decided
+otherwise, its decision holds, and the reason is written down with it.</li>
+</ol>
+
+<h2 id="checked">Checked like the code</h2>
+
+<p>A rule on these pages is shown in code, and the code is checked the way the framework's own is.
+A block that shows the right way is compiled against the framework's headers and has to pass
+clang-tidy, with the framework's own <code>.clang-tidy</code>, without a single warning. A block
+that shows the wrong way and still compiles says what refuses it — a check of clang-tidy, which
+<code>rmp lint</code> runs, or a gate of <code>rmp test</code> — and the build of this site runs that
+check on it and fails if it stays quiet. A block that does not compile at all is shown as not
+compiling, with the words the compiler uses. <a href="/framework/why/index.html#checked-not-remembered">Checked,
+not remembered</a> lists the rules the framework's tools hold today.</p>
+
+<h2 id="in-a-game">What a game gets</h2>
+
+<p data-fw-grep="tools/rmp.py::&quot;\.clang-tidy&quot;: &quot;the framework's lint rules, run by its own lint job&quot;">A
+game made with <code>rmp new</code> gets <code>.clang-format</code>, so <code>rmp fmt</code> formats
+it the framework's way, and the one compiler flag the framework hands every target that links it:
+under Clang, designated initialisers out of declaration order are an error, as they already are
+under GCC and MSVC. It does not get the framework's <code>.clang-tidy</code>: <code>rmp lint</code>
+is a command of the framework's own repository, and a game chooses its own checks.</p>
+
+<h2 id="the-pages">The pages</h2>
+
+<p>The rules themselves are being written, one page per subject: naming, formatting,
+<code>const</code>, pointers and ownership, strings, the parts of modern C++ the oldest compiler
+the framework supports can take, macros, where this framework and Google's guide part ways, and
+which tool holds which rule.</p>

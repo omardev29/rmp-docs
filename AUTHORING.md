@@ -77,6 +77,20 @@ and does not show. Keep them small and honest: they stand for the reader's own c
 A block that shows a mistake on purpose: `data-expect="error" data-error="no matching function"`
 — it must fail, and the compiler must say those words. Pick words GCC and Clang both print.
 
+A mistake that compiles says what refuses it instead, and the compile tier runs that to see it
+refuse:
+
+| Attribute | The block |
+| --- | --- |
+| `data-expect="lint" data-check="modernize-avoid-c-style-cast"` | compiles, the framework's `.clang-tidy` enables that check, and clang-tidy says it on a line of the block |
+| `data-expect="gate" data-gate="naming" data-rule="R2"` | compiles, and the framework's `tools/naming_check.sh` reports that rule on a line of the block |
+
+Its caption says so: "Compiles; `rmp lint` refuses it: `modernize-avoid-c-style-cast`", or
+"Compiles; `rmp test naming` refuses it: `R2`". On a page under `content/guidelines/`, every other
+C++ block is the right way, and has to pass clang-tidy with the framework's `.clang-tidy` with
+nothing said about its own lines. The compile tier needs `clang-tidy` on `PATH` for these —
+the version `thirdparty/FROZEN_VERSIONS.md` pins, which the site's CI image has.
+
 Quote a long piece of a real example with `data-include` rather than retyping it: the
 framework's CI builds and boots that file.
 

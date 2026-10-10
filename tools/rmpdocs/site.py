@@ -33,7 +33,7 @@ from .facts import Facts
 from . import generated
 from . import examples as examples_mod
 from .reference import Reference
-from .snippets import Snippet, harness_file
+from .snippets import GATES as snippet_gates, Snippet, harness_file
 from .project import ProjectFile
 from . import search as search_index
 from . import served as served_mod
@@ -338,9 +338,27 @@ class Site:
                 pre.attrs["class"] = " ".join([*pre.classes(), "expect-error"])
                 caption = caption or "Does not compile"
                 toml_out = ""
-            if caption:
-                inner = (f'<a class="file" href="{html.escape(link)}">{html.escape(caption)}</a>'
-                         if link else f'<span class="file">{html.escape(caption)}</span>')
+            # Wrong, and compiles: the caption says what refuses it instead --
+            # the check or the rule the compile tier sees refuse it.
+            verdict = ""
+            refused = pre.get("data-expect") if lang == "cpp" else ""
+            if refused == "lint" and pre.get("data-check"):
+                verdict = ("Compiles; <code>rmp lint</code> refuses it: "
+                           f"<code>{html.escape(pre.get('data-check'))}</code>")
+            elif refused == "gate" and pre.get("data-gate") in snippet_gates:
+                stage = snippet_gates[pre.get("data-gate")][1]
+                verdict = (f"Compiles; <code>rmp test {html.escape(stage)}</code> refuses it: "
+                           f"<code>{html.escape(pre.get('data-rule', ''))}</code>")
+            if verdict:
+                pre.attrs["class"] = " ".join([*pre.classes(), "expect-refused"])
+                toml_out = ""
+            if caption or verdict:
+                inner = ""
+                if caption:
+                    inner = (f'<a class="file" href="{html.escape(link)}">{html.escape(caption)}</a>'
+                             if link else f'<span class="file">{html.escape(caption)}</span>')
+                if verdict:
+                    inner += f'<span class="verdict">{verdict}</span>'
                 head = f'<div class="code-head">{inner}<span class="spacer"></span></div>'
             extra = " ".join(c for c in pre.classes())
             attrs = {k: v for k, v in pre.attrs.items()
@@ -406,15 +424,34 @@ class Site:
                                          f"data-harness={harness!r} is not a file in snippets/harness/"))
             return
         expect = pre.get("data-expect", "")
-        if expect not in ("", "error"):
+        if expect not in ("", "error", "lint", "gate"):
             self.problems.append(Problem("snippets", page.source, pre.line,
-                                         f"data-expect={expect!r}: the only expectation is \"error\""))
+                                         f"data-expect={expect!r}: the expectations are \"error\", "
+                                         "\"lint\" and \"gate\""))
         if expect == "error" and not pre.get("data-error"):
             self.problems.append(Problem("snippets", page.source, pre.line,
                                          "a block shown as a mistake says which error: data-error=\"...\""))
+        if expect == "lint" and not pre.get("data-check"):
+            self.problems.append(Problem("snippets", page.source, pre.line,
+                                         "a block shown as refused by clang-tidy says which check: "
+                                         "data-check=\"...\""))
+        if expect == "gate" and (pre.get("data-gate") not in snippet_gates or not pre.get("data-rule")):
+            self.problems.append(Problem("snippets", page.source, pre.line,
+                                         "a block shown as refused by a gate says which, and which rule: "
+                                         f"data-gate=\"{'|'.join(snippet_gates)}\" data-rule=\"...\""))
+        if expect in ("lint", "gate") and lang != "cpp":
+            self.problems.append(Problem("snippets", page.source, pre.line,
+                                         f"data-expect={expect!r} is for C++ blocks"))
+        # A page of the Guidelines that shows the right way shows code the
+        # rule's own tools pass: clang-tidy, with the framework's .clang-tidy.
+        clean = page.source.startswith("content/guidelines/") and expect == "" and lang == "cpp"
         self.snippets.append(Snippet(page.source, pre.line, lang, code, harness,
                                      given=pre.get("data-given", ""), expect_error=expect == "error",
-                                     error_text=pre.get("data-error", "")))
+                                     error_text=pre.get("data-error", ""),
+                                     expect_lint=pre.get("data-check", "") if expect == "lint" else "",
+                                     lint_clean=clean,
+                                     expect_gate=pre.get("data-gate", "") if expect == "gate" else "",
+                                     gate_rule=pre.get("data-rule", "") if expect == "gate" else ""))
 
     def _toml(self, page: Page, pre: dom.Node, code: str) -> str:
         """Every .toml block goes through the framework's own configure.py
