@@ -512,7 +512,10 @@ way, because a menu on its own needs nothing more.</p>
 data-fw-grep="src/rmp/ui/widgets.cpp::With no app there is no one to do it, so the first\s+// begin\(\) of the frame does it and end\(\) closes it">Both
 input layers work in a game that owns its frame. <a href="ref:rmp::input"><code>rmp::input</code></a>
 answers from the snapshot the runner took before <code>on_frame</code>, exactly as it does under
-<code>RMP_GAME</code>. <code>rmp::ui</code> needs nothing either: with no <code>frame()</code> to
+<code>RMP_GAME</code>. <span data-fw-grep="src/rmp/input.cpp::Vector2 pointer\(\) \{\n    if \(rmp::Scene::depth\(\) == 0\) return frames\.now\.pointer;\n    return rmp::Scene::current\(\)\.camera\.to_world\(frames\.now\.pointer\);">With no scene
+on the stack there is no camera to go through, so <code>rmp::input::pointer()</code> is the
+pointer's position on the screen, the same as <code>rmp::input::pointer_screen()</code>, with
+nothing said in the log.</span> <code>rmp::ui</code> needs nothing either: with no <code>frame()</code> to
 open the UI's frame, the first <code>rmp::ui::begin()</code> of a frame opens it and
 <code>rmp::ui::end()</code> closes it.</p></aside>
 

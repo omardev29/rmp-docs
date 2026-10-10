@@ -86,7 +86,10 @@ file to download that nobody can play. So CI unpacks <code>web-build.zip</code> 
 <code>my_game.html</code> to <code>index.html</code> before it pushes.</p>
 
 <p data-fw-grep=".github/workflows/_itch.yml::artifact: android-debug-apk, +channel: android">The Android channel gets the debug APK, the build CI makes on every run — Google Play is where
-the signed release bundle goes (<a href="/publishing/google-play.html">Google Play</a>).</p>
+the signed release bundle goes (<a href="/publishing/google-play.html">Google Play</a>).
+<span data-fw-grep="raymob/app/build.gradle::// Google's TEST ads in every debug build, whatever ids the \.toml\n            // carries\.">A
+debug build shows Google's test ads whatever ids the .toml carries, so a game with ads earns
+nothing from the APK players download here.</span></p>
 
 <p>Some targets have no channel, on purpose, and stay on the GitHub release only:</p>
 

@@ -125,9 +125,10 @@ it was measured at.</p>
 InitWindow(RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT, RMP_WINDOW_TITLE);
 </pre>
 
-<p><code>rmp/config.h</code> is the one framework header that every other one includes, and the
-only exception to the rule above. It earns that by costing nothing: it is nothing but
-<code>#define</code>s, and the one file it includes is the generated list of them. In return the
+<p data-fw-grep="include/rmp/config.h::one include, of the generated file that holds the #defines and includes\s+// nothing itself, 27 ms to parse against an empty file's 28[\s\S]*?#include &lt;rmp/generated/config\.h&gt;\s*$"><code>rmp/config.h</code> is the one framework header that every other one includes, and the
+only exception to the rule above. It earns that by costing nothing: its one include is the
+generated file of <code>#define</code>s, which includes nothing itself, and the two parse as fast as
+an empty file, within the noise of measuring it. In return the
 values are simply there, in every scene and every object, with nothing to remember. The framework's
 checks compile every public header on its own and fail the one that forgets it, so a new header
 cannot hand you an undefined macro.</p>

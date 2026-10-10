@@ -207,10 +207,17 @@ cancels the run in progress when a branch receives a new push, so pushing would 
 that was half done. It names the run instead, with the command to watch it. <code>rmp push force</code>
 pushes anyway. Without the <code>gh</code> command installed it cannot ask, says so, and pushes.</p>
 
-<p><code>rmp deploy 1.2.0</code> releases a version. It adds the <code>v</code>, and refuses — before
+<p data-fw-grep="tools/rmp.py::def cmd_push\(ctx, args\):[\s\S]*?if &quot;origin&quot; in remotes:\s+ctx\.run\(\[&quot;git&quot;, &quot;push&quot;, &quot;-u&quot;, &quot;origin&quot;, branch\]\)\s+return OK\s+if not remotes:\s+raise Refused\(&quot;there is no remote to push to\.">A
+branch with no upstream yet has nowhere to go, so its first push, to the remote called
+<code>origin</code>, is <code>git push -u origin</code> and the branch's name — <code>git push -u origin main</code> for the <code>main</code> of a game
+<code>rmp new</code> made, once <code>git remote add origin</code> has named its repository. Git
+then knows where the branch goes, and every push after it is a plain one. With no remote at all,
+<code>rmp push</code> refuses and says how to add one.</p>
+
+<p data-fw-grep="tools/rmp.py::raise Refused\(f&quot;origin/\{branch\} does not exist\. Push the branch first:\\n&quot;\s+&quot;  rmp push&quot;\)"><code>rmp deploy 1.2.0</code> releases a version. It adds the <code>v</code>, and refuses — before
 tagging anything — when there are uncommitted changes, when the tag already exists here or on the
-remote, when the branch has not been pushed, or when the commit you are on is not the one on the
-remote, since CI builds the tag from the remote. It then checks the <code>.toml</code> the way the
+remote, when the branch has not been pushed (<code>rmp push</code> is what it tells you to run), or
+when the commit you are on is not the one on the remote, since CI builds the tag from the remote. It then checks the <code>.toml</code> the way the
 release will, which refuses placeholder store ids and a version that is not
 <code>MAJOR.MINOR.PATCH</code>, and only then makes an annotated tag and pushes it. CI builds every
 enabled target and attaches them to the release. <code>rmp deploy 1.2.0-rc1</code> is a

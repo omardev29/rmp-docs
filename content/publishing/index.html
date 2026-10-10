@@ -55,7 +55,10 @@ warning and does without: the App Bundle is signed with a throwaway key, and not
 or tested.</p></li>
 </ol>
 
-<p>Then push your commits, so the commit you tag is one CI can check out:</p>
+<p>Then push your commits, so the commit you tag is one CI can check out. A game made with
+<code>rmp new</code> has a <code>main</code> branch that nothing ties to a remote yet: once
+<code>origin</code> is added, the first <code>rmp push</code> pushes <code>main</code> and sets it
+to track <code>origin</code>, and before that it says how to add one.</p>
 
 <pre data-lang="shell">
 rmp push
@@ -97,7 +100,7 @@ be.</p>
 <tr><td><a href="/publishing/desktop.html">Desktop and BSD archives</a></td><td>What is in each zip, the glibc floor on Linux, compressing with UPX, signing.</td></tr>
 <tr><td><a href="/publishing/web.html">The web build</a></td><td>The files, hosting them, memory, size and the browser backend.</td></tr>
 <tr><td><a href="/publishing/itch.html">itch.io</a></td><td>Pushing every build to itch.io with butler, on every tag.</td></tr>
-<tr><td><a href="/publishing/google-play.html">Google Play</a></td><td>The application id, signing the App Bundle, the version code, and real devices on Firebase Test Lab.</td></tr>
+<tr><td><a href="/publishing/google-play.html">Google Play</a></td><td>The application id, signing the App Bundle, the version code, and Firebase Test Lab.</td></tr>
 <tr><td><a href="/publishing/app-store.html">The App Store</a></td><td>What CI builds for iOS, what it leaves to Xcode on a Mac, and why.</td></tr>
 <tr><td><a href="/publishing/ci.html">Continuous integration</a></td><td>What every push checks, what only a tag builds, what is pinned, and how to read a red run.</td></tr>
 </tbody>
@@ -120,7 +123,7 @@ under <em>Settings → Secrets and variables → Actions</em>, and nowhere else.
 <tr><td><code>ANDROID_SIGNER_CN</code></td><td>variable</td><td>Optional. The CN of your upload key, so CI checks the bundle is signed by that key and not merely by some key.</td></tr>
 <tr><td><code>BUTLER_API_KEY</code></td><td>secret</td><td>An itch.io API key, for butler. <a href="/publishing/itch.html">itch.io</a></td></tr>
 <tr><td><code>ITCH_USER</code>, <code>ITCH_GAME</code></td><td>variables</td><td>Optional. When set, they win over <code>[deploy.itch]</code> in the .toml.</td></tr>
-<tr><td><code>GCP_SA_KEY</code></td><td>secret</td><td>A Google Cloud service-account key, the whole JSON file, for Firebase Test Lab. <a href="/publishing/google-play.html#real-devices-on-firebase-test-lab">Google Play</a></td></tr>
+<tr><td><code>GCP_SA_KEY</code></td><td>secret</td><td>A Google Cloud service-account key, the whole JSON file, for Firebase Test Lab. <a href="/publishing/google-play.html#firebase-test-lab">Google Play</a></td></tr>
 <tr><td><code>FIREBASE_PROJECT</code>, <code>FIREBASE_DEVICE</code></td><td>variables</td><td>Optional. When set, they win over <code>[deploy.firebase]</code> in the .toml.</td></tr>
 <tr><td><code>FIREBASE_RESULTS_BUCKET</code></td><td>variable</td><td>Optional. A Cloud Storage bucket the Test Lab results are written to and fetched back from.</td></tr>
 <tr><td><code>IOS_SIMULATOR_TEST</code></td><td>variable</td><td>Optional. <code>true</code> turns on the iOS simulator boot test, which is off. <a href="/publishing/app-store.html#what-ci-builds">The App Store</a></td></tr>

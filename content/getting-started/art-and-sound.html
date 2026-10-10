@@ -319,7 +319,7 @@ Most of the desktop builds CI makes for a release ship the pack in place of the 
 The pack is flat: it takes the files directly in <code>resources/</code> and not those in a
 folder inside it, so keep <code>resources/</code> flat too.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::std::filesystem::current_path\(folder, error\)">A release for
+<p data-fw-grep="src/rmp/app.cpp::void enter_executable_folder\(\) \{[\s\S]*?if \(!std::filesystem::is_directory\(folder / RMP_RESOURCES_PATH, error\)\) \{[\s\S]*?std::filesystem::current_path\(folder, error\);">A release for
 the desktop reads the <code>resources/</code> that sits next to its executable, so it starts the
 same from a file manager, a shortcut or a terminal open in some other folder: when there is one
 there, the game makes the executable's folder its working directory before it loads anything.

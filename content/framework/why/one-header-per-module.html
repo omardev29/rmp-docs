@@ -84,12 +84,13 @@ and defined in <code>src/rmp/app.cpp</code>, which is the one file that includes
 
 <h2 id="config">The one header every header includes</h2>
 
-<p data-fw-grep="include/rmp/config.h::nothing but #defines, no includes of its own, 27 ms to parse against an">Every
+<p data-fw-grep="include/rmp/config.h::earns it by measurement rather than by argument:\n// one include, of the generated file that holds the #defines and includes\n// nothing itself, 27 ms to parse against an empty file's 28\.[\s\S]*?^#include &lt;rmp/generated/config\.h&gt;$">Every
 public header includes <code>rmp/config.h</code>, the values from the <code>.toml</code>, so
 <code>RMP_WINDOW_WIDTH</code> and the rest are simply there wherever you are writing and you
 never type that include. It is the exception to the rule above, and it earns it by measurement:
-it is nothing but <code>#define</code>s with no includes of its own, and parsing it costs no more
-than parsing an empty file. <code>tools/header_check.sh</code> compiles every public header on its
+it has one include, <code>rmp/generated/config.h</code>, the <code>#define</code>s the
+<code>.toml</code> hands the code, which includes nothing, and parsing the two costs no more than
+parsing an empty file. <code>tools/header_check.sh</code> compiles every public header on its
 own and uses <code>RMP_WINDOW_WIDTH</code> after it, so a header that forgets it — or that only
 compiles when something else was included first — fails the framework's tests rather than a
 game's build.</p>

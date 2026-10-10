@@ -32,7 +32,7 @@ one and cannot read them.</p>
 <tr><td><code>rmp/config.h</code>, generated</td><td>Your C and C++: the <code>RMP_</code> values, such as <code>RMP_WINDOW_WIDTH</code>.</td></tr>
 <tr><td><code>raymob/generated.properties</code> and the manifest</td><td>Gradle: the application id, the SDK levels, the permissions, the orientation, the OpenGL ES version the game is compiled for, whether AdMob is in the build.</td></tr>
 <tr><td><code>ios/project.yml</code></td><td>XcodeGen, which makes the Xcode project: the bundle id, the deployment target, your <code>[ios.settings]</code>.</td></tr>
-<tr><td>the icons and the <code>LICENSES.txt</code> files</td><td>Every package the game ships in.</td></tr>
+<tr><td>the icons and the <code>LICENSES.txt</code> files</td><td>The packages the game ships in: the icons go into the Android, iOS and Windows ones, a <code>LICENSES.txt</code> into each.</td></tr>
 </tbody>
 </table>
 
@@ -208,7 +208,7 @@ defaults.</p>
 <tr><td><a href="/reference/configuration.html#section-android"><code>[android]</code></a>, <a href="/reference/configuration.html#section-ios"><code>[ios]</code></a></td><td>The store identities, the oldest OS versions supported, the OpenGL ES version Android is compiled for and requires, the Play Store category. <code>[ios.settings]</code> passes raw Xcode build settings through, such as a signing team.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-android-display"><code>[android.display]</code></a>, <a href="/reference/configuration.html#section-android-permissions"><code>[android.permissions]</code></a>, <a href="/reference/configuration.html#section-android-features"><code>[android.features]</code></a></td><td>Screen behaviour on Android (keep the screen on, hide the system bars, draw behind the notch), the permissions the app asks for, and the hardware the Play Store requires.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-android-admob"><code>[android.admob]</code></a></td><td>Whether AdMob is in the Android build at all — not unless the game turns it on — and the app and ad unit ids. See <a href="ref:rmp::ads"><code>rmp::ads</code></a>.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-icon"><code>[icon]</code></a></td><td>The picture every app icon is made from, and the colour behind Android's adaptive icon.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-icon"><code>[icon]</code></a></td><td>The picture the Android, iOS and Windows icons are made from, and the colour behind Android's adaptive icon.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-app"><code>[app]</code></a></td><td>The longest step the game logic is ever handed, so a stalled frame is a moment of slow motion and not a teleport through a wall.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-ui"><code>[ui]</code></a></td><td>The theme, font, font size and scale <a href="ref:rmp::ui"><code>rmp::ui</code></a> starts with, and the ceiling on its layout tree.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-input"><code>[input]</code></a></td><td>The analogue stick's dead zone. See <a href="ref:rmp::input"><code>rmp::input</code></a>.</td></tr>
@@ -217,10 +217,10 @@ defaults.</p>
 <tr><td><a href="/reference/configuration.html#section-resources"><code>[resources]</code></a></td><td>The password the asset pack is encrypted with.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-raylib"><code>[raylib]</code></a></td><td>raylib modules a game does not use, left out to shrink the binary.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-web"><code>[web]</code></a></td><td>The browser build's memory, whether it may grow, and which layer raylib talks to.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-linux"><code>[linux]</code></a>, <a href="/reference/configuration.html#section-windows"><code>[windows]</code></a></td><td>The windowing backend on each, native Wayland, and the oldest glibc the <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code> binaries may need.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-linux"><code>[linux]</code></a>, <a href="/reference/configuration.html#section-windows"><code>[windows]</code></a></td><td data-fw-grep=".github/workflows/_linux.yml::^  riscv64:\n(?:(?!^  \S)[\s\S])*?- name: The glibc it needs, against the floor the \.toml gives it\s+run: bash tools/glibc_check\.sh build/\$\{\{ inputs\.project_name \}\} 2\.38">The windowing backend on each, native Wayland, and the oldest glibc the <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code> binaries may need. <code>linux-riscv64-glibc</code> is cross-compiled against Ubuntu 24.04's glibc and needs 2.38, which its CI job holds it to.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-upx"><code>[upx]</code></a></td><td>Which shipped binaries are compressed with UPX. A target that cannot be compressed is refused by name, with the reason.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-dev"><code>[dev]</code></a></td><td>Debug builds only: their compiler and linker, and whether a framework warning aborts them. The debug builds CI runs its checks with read it too; the release and web builds that ship never do.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-deploy"><code>[deploy]</code></a>, <a href="/reference/configuration.html#section-deploy-itch"><code>[deploy.itch]</code></a>, <a href="/reference/configuration.html#section-deploy-firebase"><code>[deploy.firebase]</code></a></td><td>Whether a <code>LICENSES.txt</code> ships with the game, where a release is published on itch.io, and the Firebase project that runs the Android build on real phones.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-deploy"><code>[deploy]</code></a>, <a href="/reference/configuration.html#section-deploy-itch"><code>[deploy.itch]</code></a>, <a href="/reference/configuration.html#section-deploy-firebase"><code>[deploy.firebase]</code></a></td><td>Whether a <code>LICENSES.txt</code> ships with the game, where a release is published on itch.io, and the Firebase project whose Test Lab runs the Android build and taps through it.</td></tr>
 </tbody>
 </table>
 
@@ -299,8 +299,8 @@ advertising-id permission and owes Play no advertising-id declaration; the
 <a href="ref:rmp::ads"><code>rmp::ads</code></a> calls still compile and do nothing, as they do on
 every other platform. AdMob also stays out of a build whose targets do not include Android.</p>
 
-<p>Turned on, the three ids go into the manifest and the SDK as they are written, and the SDK stops
-the app at startup over an app id it cannot read. So each one has to be a string, always, and while
+<p>Turned on, the three ids go into the release build's manifest and SDK as they are written, and
+the SDK stops the app at startup over an app id it cannot read. So each one has to be a string, always, and while
 AdMob is on it has to have AdMob's shape: <code>ca-app-pub-</code>, sixteen digits, <code>~</code> and
 ten digits for <code>app_id</code>, and the same with a <code>/</code> for <code>interstitial_id</code>
 and <code>rewarded_id</code>. The defaults are Google's test ids, which have that shape. An empty
@@ -311,6 +311,12 @@ id, a malformed one, or an app id where a unit id goes, is refused at its line:<
 enabled = true
 app_id  = ""
 </pre>
+
+<p data-fw-grep="raymob/app/build.gradle::debug \{\s+debuggable true[\s\S]*?buildConfigField\(&quot;String&quot;, &quot;ADMOB_INTERSTITIAL_ID&quot;, &quot;\\&quot;\$\{googleTestAds\.interstitial_id\}\\&quot;&quot;\)\s+buildConfigField\(&quot;String&quot;, &quot;ADMOB_REWARDED_ID&quot;, &quot;\\&quot;\$\{googleTestAds\.rewarded_id\}\\&quot;&quot;\)\s+manifestPlaceholders\['ADMOB_APP_ID'\] = googleTestAds\.app_id">A
+debug APK — the one <code>rmp android</code> builds, and the one CI hands to Firebase Test Lab, whose
+crawler taps whatever is on the screen — shows Google's test ads whatever ids the
+<code>.toml</code> holds, because a tap on a real ad from your
+own build is invalid traffic, and invalid traffic is how an AdMob account gets suspended.</p>
 
 <h3>[dev]: debug builds, not the build that ships</h3>
 

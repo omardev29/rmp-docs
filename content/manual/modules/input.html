@@ -24,12 +24,14 @@ with <code>RMP_ENTRY_POINT</code> gets the same reading before its <code>on_fram
 its actions there exactly as a scene does.</p>
 
 <aside class="callout"><span class="callout-title">Without scenes</span>
-<p>A game written with <code>RMP_ENTRY_POINT</code> and no scenes has no scene stack, so the
+<p data-fw-grep="src/rmp/input.cpp::Vector2 pointer\(\) \{\s+if \(rmp::Scene::depth\(\) == 0\) return frames\.now\.pointer;">A
+game written with <code>RMP_ENTRY_POINT</code> and no scenes has no scene stack, so the
 third rule of <a href="#who-hears-a-press">who hears a press</a> never applies to it, and the
 interface's two rules apply as they do anywhere.
 <a href="ref:rmp::input::pointer"><code>pointer()</code></a> goes through the camera of the scene on
-top, so with no scene it is a mistake the log names once, <samp>SCENE: current() with an empty stack …</samp>;
-such a game reads <a href="ref:rmp::input::pointer_screen"><code>pointer_screen()</code></a>.</p></aside>
+top, and with no scene there is no camera: there it is
+<a href="ref:rmp::input::pointer_screen"><code>pointer_screen()</code></a>, the position in the
+window's pixels, and nothing is reported.</p></aside>
 
 <h2>Actions</h2>
 
@@ -234,7 +236,7 @@ the same code works on a desktop and on a phone, with no <code>#if</code>:</p>
 <thead><tr><th>Call</th><th>Gives</th></tr></thead>
 <tbody>
 <tr><td><a href="ref:rmp::input::pointer_screen"><code>pointer_screen()</code></a></td><td>Where it is, in pixels, from the top-left of the window.</td></tr>
-<tr><td><a href="ref:rmp::input::pointer"><code>pointer()</code></a></td><td data-fw-grep="src/rmp/camera.cpp::\.offset = Vector2\{ screen\.x / 2, screen\.y / 2 \}">Where it is in the world, through the camera of the scene on top of the stack: what you compare an object's position with. The same as <code>pointer_screen()</code> while that camera has not moved and the window is the size <code>[window] width</code> and <code>height</code> ask for. The camera puts its <a href="ref:rmp::Camera::position"><code>position</code></a>, which starts at the middle of that size, in the middle of the real window, so in a window of any other size — resized, or a phone's screen — the two differ even when the camera has not moved.</td></tr>
+<tr><td><a href="ref:rmp::input::pointer"><code>pointer()</code></a></td><td data-fw-grep="src/rmp/camera.cpp::\.offset = Vector2\{ screen\.x / 2, screen\.y / 2 \}">Where it is in the world, through the camera of the scene on top of the stack: what you compare an object's position with. With no scene on the stack, as in a game on <code>RMP_ENTRY_POINT</code> without scenes, there is no camera, and it is <code>pointer_screen()</code>. The same as <code>pointer_screen()</code> while that camera has not moved and the window is the size <code>[window] width</code> and <code>height</code> ask for. The camera puts its <a href="ref:rmp::Camera::position"><code>position</code></a>, which starts at the middle of that size, in the middle of the real window, so in a window of any other size — resized, or a phone's screen — the two differ even when the camera has not moved.</td></tr>
 <tr><td><a href="ref:rmp::input::pointer_delta"><code>pointer_delta()</code></a></td><td>How far it moved since the last frame, in pixels. Zero on the first frame.</td></tr>
 <tr><td><a href="ref:rmp::input::pointer_down"><code>pointer_down()</code></a></td><td>The left button, or a finger, is held.</td></tr>
 <tr><td><a href="ref:rmp::input::pointer_pressed"><code>pointer_pressed()</code></a></td><td>The frame it goes down.</td></tr>

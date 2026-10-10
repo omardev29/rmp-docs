@@ -1,6 +1,6 @@
 <!--
 title: Google Play
-description: Google Play takes a signed App Bundle: CI builds and verifies one on every run, signs it with your upload key from four repository secrets, and can run the game on real phones in Firebase Test Lab.
+description: Google Play takes a signed App Bundle: CI builds and verifies one on every run, signs it with your upload key from four repository secrets, and can run the game in Firebase Test Lab.
 order: 50
 -->
 <h1>Google Play</h1>
@@ -203,8 +203,8 @@ whatever <code>enabled</code> says.</p>
 
 <p data-fw-grep="tools/configure.py::self\.pattern = r&quot;ca-app-pub-\[0-9\]\{16\}&quot;">The three ids, <code>app_id</code>, <code>interstitial_id</code> and
 <code>rewarded_id</code>, are Google's official test ids until you replace them with your own,
-which a game with ads does before it publishes. They go into the manifest and the SDK as they are
-written, and the SDK stops an app at startup over an app id it cannot read, so while ads are on
+which a game with ads does before it publishes. They go into the release build's manifest and SDK
+as they are written, and the SDK stops an app at startup over an app id it cannot read, so while ads are on
 each one has to have AdMob's shape — the app id <code>ca-app-pub-</code>, 16 digits,
 <code>~</code>, 10 digits; a unit id the same with a <code>/</code>. An empty id, a malformed one,
 or an app id and a unit id swapped is refused at its line:</p>
@@ -215,15 +215,21 @@ enabled = true
 app_id  = "ca-app-pub-3940256099942544/1033173712"
 </pre>
 
+<p data-fw-grep="raymob/app/build.gradle::// Google's TEST ads in every debug build, whatever ids the \.toml\n            // carries\.[\s\S]*?Release keeps the\n            // \.toml's ids\.">The debug build never uses them. Whatever ids the .toml carries, the debug APK —
+the one <code>rmp android</code> builds for your own phone, and the one Firebase Test Lab's robot
+taps through — shows Google's test ads, because a tap on a real ad from either is invalid traffic,
+which is how AdMob accounts get suspended. Only the release build, the App Bundle you upload to
+Play, carries your ids.</p>
+
 <p>Showing ads to players in the EEA or the UK requires a Google-certified consent platform, and
 the framework does not ship one: with ads on, that traffic is served badly or not at all until the
 game adds it.</p>
 
-<h2 id="real-devices-on-firebase-test-lab">Real devices on Firebase Test Lab</h2>
+<h2 id="firebase-test-lab">Firebase Test Lab</h2>
 
 <p data-fw-grep=".github/workflows/_firebase.yml::--timeout 5m">CI never starts the Android build itself: an emulator inside a runner with no acceleration is
 slow, and fails for reasons that have nothing to do with the game. Firebase Test Lab installs the
-APK on a real phone in Google's lab, lets its robot explore the game for up to five minutes, and
+APK on one of Google's devices — by default MediumPhone.arm, one of Test Lab's Arm virtual devices (an emulator Google runs, with the GPU accelerated), or the physical model <code>[deploy.firebase] device</code> names — lets its robot explore the game for up to five minutes, and
 reports whether it started and kept running.</p>
 
 <p>It is optional, and off until it is configured:</p>
@@ -262,12 +268,11 @@ results are written there and fetched back into the run.</li>
 <p>The repository variables <code>FIREBASE_PROJECT</code> and <code>FIREBASE_DEVICE</code> are read
 too, and when set they win over the .toml.</p>
 
-<p data-fw-grep="raymob/app/build.gradle::buildConfigField\(.String., .ADMOB_INTERSTITIAL_ID.">Test Lab runs on full runs only — a tag, or a run started by hand with <code>full</code> —
-after the Android build. It sends the <strong>debug</strong> APK and refuses anything else. The
-robot taps whatever it finds, ads included, and the debug build shows the ads of the same
-<code>[android.admob]</code> ids as the release: with ads on and your own ids in the .toml, the
-robot's taps are clicks on your real ad units, which AdMob counts as invalid traffic. The results
-are kept with the run
+<p data-fw-grep="raymob/app/build.gradle::debug \{\n            debuggable true\n            jniDebuggable true\n[\s\S]*?buildConfigField\(&quot;String&quot;, &quot;ADMOB_INTERSTITIAL_ID&quot;, &quot;\\&quot;\$\{googleTestAds\.interstitial_id\}\\&quot;&quot;\)\n            buildConfigField\(&quot;String&quot;, &quot;ADMOB_REWARDED_ID&quot;, &quot;\\&quot;\$\{googleTestAds\.rewarded_id\}\\&quot;&quot;\)\n            manifestPlaceholders\['ADMOB_APP_ID'\] = googleTestAds\.app_id\n        \}\n        release \{">Test Lab runs on full runs only — a tag, or a run started by hand with <code>full</code> —
+after the Android build. It sends the <strong>debug</strong> APK and refuses anything else,
+because the robot taps whatever it finds, ads included, and only the debug build is safe to tap:
+whatever ids the .toml carries, it shows Google's test ads, so the robot's taps never reach your
+real ad units, where AdMob would count them as invalid traffic. The results are kept with the run
 for seven days as <code>firebase-testlab-results</code>. A failure there fails its own job and does
 not hold back the release.</p>
 

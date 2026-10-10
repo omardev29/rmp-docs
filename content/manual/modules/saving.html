@@ -224,12 +224,15 @@ as long as the tab.</p>
 
 <h3>Portable saves</h3>
 
-<p>A game handed out as a zip — on itch.io, say — is expected to keep everything in its own
+<p data-fw-grep="src/rmp/save.cpp::std::string portable_folder\(\) \{(?:[^\n]*\n)*?\s*if \(dir == nullptr \|\| dir\[0\] == '\\0' \|\| std::strcmp\(dir, &quot;\./&quot;\) == 0\) \{\s+TraceLog\(LOG_WARNING,">A
+game handed out as a zip — on itch.io, say — is expected to keep everything in its own
 folder, so that deleting the folder deletes the game. <code>[save] portable = true</code> puts the
-saves in a <code>saves</code> folder next to the executable instead. Only Windows, Linux and the
-BSDs have such a place; on macOS, Android, iOS and the web the setting is ignored. Where the system
-does not say where the executable is — raylib cannot tell on NetBSD and OpenBSD — the saves go to
-the user's folder, and the log says that too.</p>
+saves in a <code>saves</code> folder next to the executable instead. Only Windows, Linux and
+FreeBSD have such a place; on macOS, Android, iOS and the web the setting is ignored. NetBSD and
+OpenBSD cannot say where an executable is — raylib's <code>GetApplicationDirectory()</code> has no
+answer there — so the saves go to the user's folder, and the log says so once:</p>
+
+<p><samp>SAVE: [save] portable: this system does not say where the executable is; saving in the user's folder instead</samp></p>
 
 <p>If that folder cannot be written — a portable build copied into Program Files — the saves go
 to the user's folder instead, and the log says so once:</p>

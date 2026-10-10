@@ -349,7 +349,7 @@ decode, fails the build instead of reaching a player as a blank sprite.</p>
 <p data-fw-grep=".github/workflows/_apple.yml::if: vars.IOS_SIMULATOR_TEST == 'true'">iOS
 and Android are not counted. iOS is not booted: the hosted simulator does not come up, so that step
 runs only when the repository variable <code>IOS_SIMULATOR_TEST</code> is <code>true</code>.
-Android's test runs on real devices and has no log to read, so it shows that the game starts, not
+Android's test runs in Firebase Test Lab and has no log to read, so it shows that the game starts, not
 this count.</p>
 
 <p>The count covers what is loaded by then: the first scene's <code>_ready()</code>, or a game's

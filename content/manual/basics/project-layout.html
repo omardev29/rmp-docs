@@ -92,7 +92,7 @@ my_game/
 ├── include/
 │   └── rmp/                    the framework's headers
 ├── resources/                  yours: art, sounds, fonts, levels (rabbit.png to start)
-├── branding/icon.png           yours: the one picture every app icon is made from
+├── branding/icon.png           yours: the one picture the app icons are made from
 ├── README.md                   yours: written by rmp new
 ├── rmp  rmp.ps1  rmp.cmd       the command, for sh, PowerShell and cmd
 ├── tools/                      configure.py, rmp.py, the licence check, the packer, CI's scripts
@@ -156,19 +156,28 @@ CMake, no Gradle and no Xcode project; the next build finds it.</p>
 compiled once into a library called <code>rmp</code>, which the game links. That is why changing a
 scene recompiles the scene and not the framework.</p>
 
-<p data-fw-grep="CMakeLists.txt::if\(RMP_SOURCES\)\s+add_library\(rmp STATIC">A game whose
-<code>src/</code> holds no C++ at all — <code>main.cpp</code>, the scenes and <code>src/rmp/</code>
-deleted, and a <code>main.c</code> in their place — is built as plain C: its own <code>main()</code>,
-raylib, and no framework library. With <code>src/rmp/</code> gone there is no <code>rmp</code>
-library to build, and none is built; a C++ file left in <code>src/</code> without it stops the
-configure with a message that says so. What the C game still includes from the framework is
-written in C: <code>rmp/config.h</code> for the <code>.toml</code>'s values, which is why
-<code>include/rmp/</code> stays, and <code>tests/smoke_test.h</code> for the boot checks CI runs.
+<p data-fw-grep="CMakeLists.txt::function\(rmp_add_game NAME DIR\)[\s\S]*?if\(_plain_c\)\s+add_executable\(\$\{NAME\} \$\{_game_sources\}\)\s+set_property\(TARGET \$\{NAME\} PROPERTY C_STANDARD 99\)\s+target_link_libraries\(\$\{NAME\} PRIVATE raylib_static\)">A
+game whose own sources hold no C++ — <code>main.cpp</code> and the scenes deleted, and a
+<code>main.c</code> in their place — is built as plain C: its own <code>main()</code>, linked to
+raylib alone.</p>
+
+<p data-fw-grep="CMakeLists.txt::file\(GLOB_RECURSE RMP_SOURCES CONFIGURE_DEPENDS\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/src/rmp/\*\.cpp&quot;[\s\S]*?if\(RMP_SOURCES\)\s+add_library\(rmp STATIC"><code>src/rmp/</code>
+goes too, because nothing in a C game uses it and yet it would be built: the framework library is
+built from it whenever it has sources, so kept, it is the whole C++ framework compiled for nothing on
+the desktops, and compiled into the game on Android and iOS, whose builds take everything under
+<code>src/</code>. With it gone there is no <code>rmp</code> library, and none is built; a C++ file
+left in <code>src/</code> without it stops the configure with a message that says so.</p>
+
+<p data-fw-grep="CMakeLists.txt::if\(_plain_c\)\s+add_executable\(\$\{NAME\} \$\{_game_sources\}\)[\s\S]*?target_include_directories\(\$\{NAME\} PRIVATE &quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/include&quot;\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/tests&quot;\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/thirdparty/raymob&quot;\)">What
+the C game still includes is written in C, and on its include path on every target:
+<code>rmp/config.h</code> for the <code>.toml</code>'s values, which is why <code>include/rmp/</code>
+stays, <code>tests/smoke_test.h</code> for the boot checks CI runs, and <code>&lt;admob.h&gt;</code>,
+the ads as C functions, which do nothing off Android.
 <a href="/manual/raylib/plain-c.html">Plain C</a> explains it, and <code>examples/plain_c</code> is
 that shape.</p>
 
-<p data-fw-grep="tools/ship_resources.sh::&gt; &quot;\$DEST/resources/PACK_SKIPPED\.txt&quot;">It keeps the
-builds, the generated identities and icons and the release pipeline. It gives up the asset pack,
+<p data-fw-grep="tools/ship_resources.sh::&gt; &quot;\$DEST/resources/PACK_SKIPPED\.txt&quot;">A plain C
+game keeps the builds, the generated identities and icons and the release pipeline. It gives up the asset pack,
 which raylib alone cannot read: its releases ship the loose files of <code>resources/</code>, with a
 <code>PACK_SKIPPED.txt</code> beside them saying why. And it gives up the web and iOS, whose frame
 loops belong to the browser and to UIKit and are written by the framework's entry point.</p>
@@ -201,9 +210,11 @@ APK's assets and iOS copies the folder into the app bundle.</p>
 
 <h2>branding/</h2>
 
-<p><code>branding/icon.png</code> is one square PNG, 1024×1024 recommended, and every icon of every
-platform is made from it: each Android density with its round and adaptive variants, the Play Store
-image, the iOS app icon and the <code>.ico</code> embedded in the Windows executable.</p>
+<p data-fw-grep="tools/configure.py::def generate_icons\(cfg: dict, required: bool\) -&gt; None:[\s\S]*?generate_ios_icon\(cfg, src\)\s+generate_windows_icon\(src\)"><code>branding/icon.png</code> is one square PNG, 1024×1024 recommended, and the Android, iOS
+and Windows icons are made from it: each Android density with its round and adaptive variants, the
+Play Store image, the iOS app icon and the <code>.ico</code> embedded in the Windows executable. The
+other targets have no icon of their own to make: macOS, Linux and the BSDs ship a bare executable,
+and the web a page.</p>
 
 <p>It is not in <code>resources/</code> on purpose. Everything there is packed and shipped with the
 game, and a launcher icon is an input of the build, not an asset the game loads.</p>

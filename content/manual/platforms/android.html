@@ -178,8 +178,15 @@ whatever it says.</p>
 enabled = true
 </pre>
 
-<p>The three ids, <code>app_id</code>, <code>interstitial_id</code> and <code>rewarded_id</code>, start
-as Google's test ids; replace them with your own from the AdMob console before publishing. They are
+<p data-fw-grep="raymob/app/build.gradle::debug \{\s+debuggable true\s+jniDebuggable true(?:\s*//[^\n]*)*\s+buildConfigField\(&quot;String&quot;, &quot;ADMOB_INTERSTITIAL_ID&quot;, &quot;\\&quot;\$\{googleTestAds\.interstitial_id\}[^\n]*\n[^\n]*googleTestAds\.rewarded_id[^\n]*\n\s*manifestPlaceholders\['ADMOB_APP_ID'\] = googleTestAds\.app_id">The
+three ids, <code>app_id</code>, <code>interstitial_id</code> and <code>rewarded_id</code>, start
+as Google's test ids; replace them with your own from the AdMob console before publishing. Your own ids
+reach the release build only. The debug build — what <code>rmp android</code> makes and what Firebase
+Test Lab's Robo crawler taps through — overrides all three with Google's test ids whatever the
+<code>.toml</code> says, because a tap on a real ad from your own build is invalid traffic, and
+invalid traffic is how AdMob accounts get suspended.</p>
+
+<p>The ids are
 strings, always, and while AdMob is on each must have the shape AdMob gives it — the app id
 <code>ca-app-pub-</code>, 16 digits, <code>~</code>, 10 digits; an ad unit id the same with a
 <code>/</code> — because the Google Mobile Ads SDK stops an app at startup over an app id it cannot
@@ -261,4 +268,7 @@ and the native library; builds the release AAB, signs it and verifies the signat
 compiler's own records that the release was compiled as a release; and checks that Gradle put back
 every source it rewrote. It does not run the game: an Android emulator on a CI runner is slow and
 fails for reasons that have nothing to do with the game. A release can also send the debug APK to
-Firebase Test Lab, to be started on a real phone — see <a href="/publishing/index.html">Publishing</a>.</p>
+Firebase Test Lab, to be started on one of its devices — by default MediumPhone.arm, an Arm virtual
+device — and crawled by its Robo test, which taps whatever
+is on the screen — the debug APK and never the release, because the debug build shows only Google's
+test ads. See <a href="/publishing/index.html">Publishing</a>.</p>

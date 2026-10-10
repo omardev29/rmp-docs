@@ -87,12 +87,16 @@ does not have loads nothing and the log lists the names it does have.</p>
 <h3>Setting up the project</h3>
 
 <ul>
-<li><strong>Images next to it.</strong> The tileset images go in <code>resources/</code> beside the
+<li data-fw-grep="src/rmp/tilemap.cpp::void report_tileset_image\(const char \*image, const char \*map\) \{[^}]*resource_exists\(image\)"><strong>Images next to it.</strong> The tileset images go in <code>resources/</code> beside the
 <code>.ldtk</code>. LDtk stores paths relative to the project, and only their file name is kept,
-because <code>resources/</code> is flat. A tileset image that is not there, or does not decode, is a
-warning naming the file and a failed load; the level still loads, and that tileset draws nothing. A tileset must be a picture
-<code>load_texture()</code> reads, such as a PNG; LDtk's built-in icon atlas has no file and draws
-nothing either.</li>
+because <code>resources/</code> is flat. A tileset image that does not become a texture is a
+warning naming the file, and the level still loads with that tileset drawing nothing. The warning
+says which of two things happened: the image is not there,
+<samp>MAP: the tileset image … is not in resources/</samp>, or it is there and did not load,
+<samp>MAP: the tileset image … is in resources/ but did not load: it does not decode, or there is no window to upload it to yet</samp>
+— the file you can see, refused. A missing or broken image is also a failed load. A tileset must
+be a picture <code>load_texture()</code> reads, such as a PNG; LDtk's built-in icon atlas has no
+file and draws nothing either.</li>
 <li data-fw-grep="src/rmp/ldtk.cpp::same_word\(text\(value, .identifier.\), .solid.\)"><strong>Solid cells.</strong> An IntGrid layer value whose identifier is <code>solid</code> makes
 every cell painted with it solid. So does any tile tagged <code>solid</code> through its tileset's
 enum for tile marking, even under another tile. Either is compared without case, because LDtk's

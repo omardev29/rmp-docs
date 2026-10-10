@@ -320,11 +320,11 @@ the music fed every frame. What <code>RMP_GAME</code> adds is the part that read
 <code>[window]</code>: with <code>RMP_ENTRY_POINT</code>, vsync and the frame cap are yours to set,
 like the window.</p>
 
-<p data-fw-grep="src/rmp/input.cpp::Vector2 pointer\(\) \{ return rmp::Scene::current\(\)\.camera\.to_world">One part of <code>rmp::input</code> needs a scene:
-<a href="ref:rmp::input::pointer"><code>pointer()</code></a> converts through the current scene's
-camera, and with no scene stack it reports that there is none — a warning, once, which
-<code>[dev] strict</code> turns into an abort in a debug build — and converts through a stand-in scene's camera, which matches the screen
-only while the window is the design size. Without scenes, use <code>pointer_screen()</code>.</p>
+<p data-fw-grep="src/rmp/input.cpp::Vector2 pointer\(\) \{\s+if \(rmp::Scene::depth\(\) == 0\) return frames\.now\.pointer;\s+return rmp::Scene::current\(\)\.camera\.to_world\(frames\.now\.pointer\);">In a scene,
+<a href="ref:rmp::input::pointer"><code>pointer()</code></a> is the pointer in world units, converted
+through the current scene's camera. With no scene on the stack there is no camera to go through, so
+here it is the position on the screen, the same as <code>pointer_screen()</code>, and it says
+nothing about it: either one works in a game without scenes.</p>
 
 <p>The UI examples are written this way, because a menu needs no scene. Plain C is one step further
 down: <a href="/manual/raylib/plain-c.html">Plain C</a> is a game with its own <code>main()</code>,

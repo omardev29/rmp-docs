@@ -565,10 +565,19 @@ and the iOS project compile <code>src/</code> as a whole into the app, framework
 together.</p>
 
 <p data-fw-grep="CMakeLists.txt::if\(RMP_SOURCES\)\s+add_library\(rmp STATIC">The library is
-built only when <code>src/rmp/</code> has sources. A game in plain C deletes that folder, and its
-build then has no framework library at all — only raylib, the game's own C, and the framework's
-headers that are plain C: <code>rmp/config.h</code> for the values of the <code>.toml</code> and
-<code>tests/smoke_test.h</code> for the CI's hooks.</p>
+built only when <code>src/rmp/</code> has sources. A game in plain C deletes that folder because
+nothing in it is used: <span data-fw-grep="CMakeLists.txt::list\(FILTER _game_sources EXCLUDE REGEX &quot;/src/rmp/&quot;\)[\s\S]*?if\(_plain_c\)\s+add_executable\(\$\{NAME\} \$\{_game_sources\}\)\s+set_property\(TARGET \$\{NAME\} PROPERTY C_STANDARD 99\)\s+target_link_libraries\(\$\{NAME\} PRIVATE raylib_static\)">a game with no C++ of its own in
+<code>src/</code>, outside <code>src/rmp/</code>, is linked to raylib alone</span>, so a
+<code>src/rmp/</code> left behind would be the whole framework compiled for nothing in a CMake
+build, and compiled into the game on Android and iOS, which take everything under
+<code>src/</code>. With it gone the build has no framework library at all — only raylib, the
+game's own C, and the headers that are plain C.</p>
+
+<p data-fw-grep="CMakeLists.txt::if\(_plain_c\)\s+add_executable\(\$\{NAME\} \$\{_game_sources\}\)[\s\S]*?target_include_directories\(\$\{NAME\} PRIVATE &quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/include&quot;\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/tests&quot;\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/thirdparty/raymob&quot;\)">Those
+headers are on a plain C game's include path on every target: <code>rmp/config.h</code> for the
+values of the <code>.toml</code>, <code>tests/smoke_test.h</code> for the CI's hooks, and
+<code>&lt;admob.h&gt;</code> from <code>thirdparty/raymob</code> for the ads as C functions,
+which do nothing anywhere but Android.</p>
 
 <h2 id="raylib">raylib 6.0, modified</h2>
 

@@ -73,7 +73,10 @@ executable, when that folder has a <code>resources/</code> beside it, and says s
 a change of directory rather than a different path, so a plain raylib call with a relative path
 under <code>resources/</code> finds its file too. The iOS app does the same with its bundle. A
 release with no <code>resources/</code> next to the executable — built in the project and started
-from the project's root — keeps reading the working directory's.</p>
+from the project's root — keeps reading the working directory's.
+<span data-fw-grep="examples/plain_c/src/main.c::const char \*folder = GetApplicationDirectory\(\);\n    if \(folder\[0\] != '\\0' &amp;&amp;\n        DirectoryExists\(TextFormat\(&quot;%s%s&quot;, folder, RMP_RESOURCES_PATH\)\)\) \{\n        ChangeDirectory\(folder\);">A
+game in plain C has no entry point of the framework's to do this, so its own <code>main()</code>
+makes the same move under the same condition, as <code>examples/plain_c</code> shows.</span></p>
 
 <p>NetBSD and OpenBSD are the exception: raylib cannot ask either system where an executable is,
 so there the game reads <code>resources/</code> from the working directory and logs
@@ -81,10 +84,12 @@ so there the game reads <code>resources/</code> from the working directory and l
 directory, …</samp>. On those two, whatever launches the game has to start it in its own
 folder.</p>
 
-<p>On every desktop target it runs but NetBSD and OpenBSD, CI starts a release from somewhere
-other than its folder. <code>tools/shipped_check.sh</code> lays a software-rendered release out the way the archive ships
-it and starts it from another folder, on macOS and on the BSDs; on NetBSD and OpenBSD it starts it
-from its own and requires that log line instead. The Linux x64 and ARM64 jobs unzip the archive
+<p data-fw-grep="tools/shipped_check.sh::# First, the release where it was built, started from the project folder --[\s\S]*?LOG=&quot;\$ROOT/\$BUILD/source-tree\.log&quot;[\s\S]*?LOG=&quot;\$ROOT/\$BUILD/shipped\.log&quot;">On every desktop target it runs but NetBSD and OpenBSD, CI starts a release from somewhere
+other than its folder. <code>tools/shipped_check.sh</code>, on macOS and on the BSDs, builds a
+software-rendered release and starts it twice. First where it was built, from the project folder:
+with no <code>resources/</code> next to it, it has to stay where it was started and read the
+root's. Then laid out the way the archive ships it, from another folder; on NetBSD and OpenBSD it
+starts that one from its own folder and requires the log line above instead. The Linux x64 and ARM64 jobs unzip the archive
 they ship and start it from another folder, the Windows job starts the <code>.exe</code> from one,
 and the musl and DRM runs start it from <code>/</code>.</p>
 
@@ -179,10 +184,11 @@ built that way and checked. The rest are built differently:</p>
 <li><strong>DRM</strong> links the system's <code>libdrm</code>, <code>libgbm</code> and
 <code>libEGL</code> directly, and those were built against the build machine's glibc, so its floor
 is the build machine's. Its job prints the floor the binary really has, on every run.</li>
-<li data-fw-grep=".github/workflows/_linux.yml::glibc_check\.sh build/\$\{\{ inputs\.project_name \}\} report\n\n      - name: Test \(static\) — binary exists, is RISC-V ELF"><strong><code>linux-riscv64-glibc</code></strong> is built with the cross compiler in CI's
-image against that image's own riscv64 glibc, so its floor is the build machine's too, and is
-not lowered. Its job prints the floor the binary really has, on every run, without failing on
-it.</li>
+<li data-fw-grep=".github/workflows/_linux.yml::# Held to its OWN floor, not \[linux\] glibc's\. This target is\n      # cross-compiled with the image's riscv64 GNU toolchain[\s\S]*?run: bash tools/glibc_check\.sh build/\$\{\{ inputs\.project_name \}\} 2\.38\n\n      - name: Test \(static\) — binary exists, is RISC-V ELF"><strong><code>linux-riscv64-glibc</code></strong> is built with the cross compiler in CI's
+image against that image's own riscv64 glibc, Ubuntu 24.04's, so <code>[linux] glibc</code> does
+not reach it. <span data-fw-grep="raylib_multiplatform.toml::linux-riscv64-glibc is cross-compiled with the distribution's GNU\n#        toolchain against Ubuntu 24\.04's glibc, and needs glibc 2\.38 or newer\n#        \(Ubuntu 24\.04, Debian 13 and Fedora 39 have it; Debian 12 and Ubuntu\n#        22\.04 do not\)">It needs glibc 2.38 or newer: Ubuntu 24.04, Debian 13 and Fedora 39 have
+it, Debian 12 and Ubuntu 22.04 do not.</span> Its job holds it to that floor of its own and fails
+if the binary ever asks for more, naming the symbols that do.</li>
 <li><strong><code>linux-x64-musl</code></strong> has no glibc to ask for.</li>
 </ul>
 
@@ -227,6 +233,10 @@ rendering on every player.</li>
 <p><code>macos-build.zip</code> holds one executable with both an arm64 and an x86_64 slice, for
 Apple silicon and Intel Macs, next to its <code>resources/</code> folder. It is a plain executable,
 not an <code>.app</code> bundle. CI checks both slices are in the file.</p>
+
+<p data-fw-grep="raylib_multiplatform.toml::The app icon on Android, iOS and\n# Windows comes out of this one file[\s\S]*?The other\n# targets ship a bare executable \(macOS, Linux, the BSDs\) or a page \(web\), with\n# no icon of their own to make from it\.">Like the Linux and BSD executables, it carries no icon:
+<code>[icon] source</code> makes the app icon of Windows, Android and iOS only, because the
+other targets ship a bare executable or a page, with no icon of their own to make from it.</p>
 
 <p data-fw-grep="tools/binary_check.py::ARCH_FLOOR = \{&quot;arm64&quot;: \(11, 0\)\}">It opens on macOS 10.15 on an Intel Mac and on macOS 11 on Apple silicon. Every slice of a Mach-O
 records the oldest macOS it runs on, and a Mac older than that refuses to open it, with no message

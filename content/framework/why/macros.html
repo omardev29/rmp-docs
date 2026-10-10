@@ -50,8 +50,8 @@ reports anything. At run time the constructor calls the empty function once.</p>
 <h2 id="toml-values">The values from the .toml</h2>
 
 <p data-fw-grep="tools/configure.py::\(&quot;RMP_WINDOW_WIDTH&quot;, &quot;window\.width&quot;">Every value of
-<code>raylib_multiplatform.toml</code> a game can read in code is a macro of the generated
-<code>rmp/config.h</code>: <code>RMP_WINDOW_WIDTH</code>, <code>RMP_WINDOW_TITLE</code>,
+<code>raylib_multiplatform.toml</code> a game can read in code is a macro of
+<code>rmp/config.h</code>, through the generated file it includes: <code>RMP_WINDOW_WIDTH</code>, <code>RMP_WINDOW_TITLE</code>,
 <code>RMP_MAX_DELTA</code> and the rest. They are macros and not constants for two reasons. A game
 in plain C uses them too, and C has no namespace to keep a constant in:</p>
 

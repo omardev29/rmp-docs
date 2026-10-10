@@ -118,7 +118,9 @@ ready" and the rest of the game is there to work on. Ads on iOS are not implemen
 
 <p><code>rmp::ads</code> forwards each call to a C function in <code>&lt;admob.h&gt;</code>, one for
 each of the calls above, with the same meaning and the same no-op off Android. A C source file in
-the game, which has no namespace to call into, calls them directly:</p>
+the game, which has no namespace to call into, calls them directly — and so does a game written
+entirely in <a href="/manual/raylib/plain-c.html#ads-in-plain-c">plain C</a>, which has
+<code>&lt;admob.h&gt;</code> on its include path on every target:</p>
 
 <pre data-lang="c" data-harness="c99">
 #include &lt;admob.h&gt;
@@ -151,16 +153,23 @@ rewarded_id     = "ca-app-pub-3940256099942544/5224354917"
 
 <dl>
 <dt><code>app_id</code></dt>
-<dd>Your AdMob app's id. It goes into the Android manifest.</dd>
+<dd>Your AdMob app's id. It goes into the Android manifest of the release build.</dd>
 <dt><code>interstitial_id</code>, <code>rewarded_id</code></dt>
 <dd>The ad unit each kind is loaded from.</dd>
 </dl>
 
 <aside class="callout warning"><span class="callout-title">These are Google's test ids</span>
 <p>The three ids above are the defaults, and they are the ones Google publishes for testing: they serve
-test ads. Replace them with your own before you publish — and not before. Clicking
-real ads from your own build is the fastest way to get an AdMob account suspended, so keep the
-test ids until the day the game goes out.</p></aside>
+test ads. Replace them with your own before you publish. Clicking real ads from your own build is
+invalid traffic, and invalid traffic is how AdMob accounts get suspended.</p></aside>
+
+<p data-fw-grep="raymob/app/build.gradle::debug \{\s+debuggable true\s+jniDebuggable true(?:\s*//[^\n]*)*\s+buildConfigField\(&quot;String&quot;, &quot;ADMOB_INTERSTITIAL_ID&quot;, &quot;\\&quot;\$\{googleTestAds\.interstitial_id\}[^\n]*\n[^\n]*googleTestAds\.rewarded_id[^\n]*\n\s*manifestPlaceholders\['ADMOB_APP_ID'\] = googleTestAds\.app_id">Your
+ids reach the release build only. The Android debug build — the one <code>rmp android</code> makes,
+the one you tap through yourself, and the one Firebase Test Lab's Robo crawler taps at random —
+carries Google's test ids whatever the <code>.toml</code> says, the app id in its manifest
+included, so it shows test ads even after your own ids are in. A release build carries your ids
+and serves real ads wherever it is installed, your own phone included, so do not tap the ads in
+it.</p>
 
 <p data-fw-grep="tools/configure.py::self\.pattern = r&quot;ca-app-pub-\[0-9\]\{16\}&quot;">Each id is a string, in
 quotes, whether ads are on or not. While they are on, each one is also checked when the

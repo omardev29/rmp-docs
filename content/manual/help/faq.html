@@ -120,8 +120,9 @@ runners under a virtual X server, never on a Pi. See
 there are no DLLs to ship: CI reads every <code>.exe</code> it ships and fails on an import that is
 not part of Windows 10. The macOS build opens on macOS 10.15 on Intel and macOS 11 on Apple silicon.
 A Linux build opens X11 and OpenGL at run time from the system, and needs no glibc newer than
-<code>[linux] glibc</code>. The DRM builds are the exception: they link libdrm, GBM and EGL
-directly, and those have to be on the machine that runs them.
+<code>[linux] glibc</code> — except the RISC-V build, which <code>[linux] glibc</code> does not
+reach and which needs glibc 2.38 or newer. The DRM builds are the other exception: they link
+libdrm, GBM and EGL directly, and those have to be on the machine that runs them.
 <a href="/publishing/desktop.html">Desktop and BSD archives</a> has each one.</p>
 
 <h3>Where do saves go?</h3>

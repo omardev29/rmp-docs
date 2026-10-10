@@ -122,22 +122,28 @@ is loaded in a headless browser that checks the canvas really has pixels on it. 
 the simulator, where booting it and reading the markers is a step a repository switches on.</p>
 
 <p data-fw-grep=".github/workflows/_firebase.yml::--type robo">Android is the exception: no CI job
-reads its markers. When a project is configured for it, the APK is started on a real device in
-Firebase Test Lab under a Robo test, which explores the app with no test code of its own and has no
-log to read the markers from. It proves the game starts on real hardware without crashing, and no
-more.</p>
+reads its markers. When a project is configured for it, the debug APK is started in Firebase Test Lab, by
+default on MediumPhone.arm, an Arm virtual device, under a Robo test, which explores the app with no test code of its own and has
+no log to read the markers from. It proves the game starts on that device without crashing, and
+no more. <span data-fw-grep="raymob/app/build.gradle::// Google's TEST ads in every debug build, whatever ids the \.toml\n            // carries\. It is the build you tap through yourself, and the one\n            // Firebase Test Lab's Robo crawler taps at random">The robot taps whatever is on the screen,
+and the debug build shows Google's test ads whatever ids the <code>.toml</code> carries, so none
+of its taps lands on a real ad.</span></p>
 
-<p data-fw-grep="tools/shipped_check.sh::A release, laid out the way the archive ships it, started from SOMEWHERE ELSE\.">A
+<p data-fw-grep="tools/shipped_check.sh::There is no resources/ next to the executable, so it must stay where it\n# was started and read the root's: only a resources/ beside the binary may move\n# it\.[\s\S]*?source-tree\.log[\s\S]*?shipped\.log">A
 release is also started the way a player starts it: from somewhere other than its own folder. A
 production build reads <code>./resources/</code>, and a boot started from the folder where
 <code>resources/</code> happens to be passes whether or not the game finds its files on its own.
-So <code>tools/shipped_check.sh</code> builds the release under the software renderer, lays it out
-as the archive ships it and starts it from another folder, and it must boot with
-<code>assets_failed=0</code>; the macOS and BSD jobs run it. Linux x64 and arm64 start the unzipped
+So <code>tools/shipped_check.sh</code> builds the release under the software renderer and starts
+it twice, and each start must boot with <code>assets_failed=0</code>. First where it was built,
+from the project folder, with no <code>resources/</code> next to the executable: only a
+<code>resources/</code> beside it may move a release, so this one has to stay where it was started
+and read the project's. Then laid out as the archive ships it, from another folder. The macOS and
+BSD jobs run it, and so does the job that makes a game in plain C, whose own <code>main()</code>
+does the moving instead of the framework's entry point. Linux x64 and arm64 start the unzipped
 archive from another folder, Windows starts the <code>.exe</code> from one, and the musl and DRM
 containers start the game from <code>/</code>. On NetBSD and OpenBSD, which cannot say where an
-executable is, the check starts the release from its own folder and wants the line that says
-so.</p>
+executable is, the check starts the shipped release from its own folder and wants the line that
+says so.</p>
 
 <h2 id="binaries">What ships, read out of the binary</h2>
 
@@ -255,7 +261,8 @@ summary <code>rmp help test</code> prints for each.</p>
 push to the framework runs every stage of <code>rmp test</code> in its <code>lint</code> job — a
 test of the command checks that the two lists agree — boots every example, makes a new game with
 <code>rmp new</code> and runs that game's own checks, follows the recipe at the top of
-<code>examples/plain_c/src/main.c</code> in a copy of that game and boots the result, checks this
+<code>examples/plain_c/src/main.c</code> in a copy of that game, boots the result and starts its
+release from the project folder and from another, checks this
 documentation site against the commit, and builds the fast lane: Linux x64, the web, Android and Windows x64. A release tag
 builds every target, and so can a run started by hand. The Linux jobs run inside a build image
 pinned by digest, with every compiler and tool already in it, so a build does not depend on a

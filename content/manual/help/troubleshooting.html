@@ -144,7 +144,9 @@ why it looked there:</p>
 
 <ul>
 <li><samp>ASSETS: no … next to the executable; reading the working directory's, …</samp> — there is
-no <code>resources/</code> beside the executable. Put it there, the way the archive does.</li>
+no <code>resources/</code> beside the executable. Put it there, the way the archive does, or start
+the game from a folder that has one: the release <code>rmp build release</code> leaves in
+<code>build/</code> reads the project folder's when it is started from the project folder.</li>
 <li><samp>ASSETS: this system does not say where the executable is, so … is read from the working
 directory, …</samp> — OpenBSD and NetBSD, where raylib cannot say where the executable is. Start
 the game from its own folder there.</li>
@@ -292,6 +294,16 @@ user's folder instead</samp> — raylib cannot tell where the executable is on t
 no "next to the executable" to save in.</p>
 
 <h2>In CI</h2>
+
+<h3>There is no remote to push to</h3>
+
+<p data-fw-grep="tools/rmp.py::def cmd_push\(ctx, args\):(?:[^\n]*\n)*?\s*if &quot;origin&quot; in remotes:\s+ctx\.run\(\[&quot;git&quot;, &quot;push&quot;, &quot;-u&quot;, &quot;origin&quot;, branch\]\)(?:[^\n]*\n)*?\s*if not remotes:\s+raise Refused\(&quot;there is no remote to push to"><samp>FAIL:
+there is no remote to push to. Make the repository on GitHub, then: …</samp> — a game made with
+<code>rmp new</code> is a git repository with no remote. Make an empty repository on GitHub, add it
+with <code>git remote add origin</code> and its URL, and run <code>rmp push</code> again. The first
+push of a branch sets its upstream on <code>origin</code>, so plain <code>rmp push</code> is all it
+takes from then on. <code>rmp deploy</code> on a branch that was never pushed says the same thing
+the other way round: push it first, with <code>rmp push</code>.</p>
 
 <h3>A run was cancelled</h3>
 

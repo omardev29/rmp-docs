@@ -27,12 +27,15 @@ cp &lt;the framework&gt;/examples/plain_c/src/main.c src/
 rmp run
 </pre>
 
-<p data-fw-grep=".github/workflows/ci.yml::RECIPE=\$\(sed -n 's\|\^//     \\\(rm src/main\\\.cpp">The
+<p data-fw-grep=".github/workflows/ci.yml::RECIPE=\$\(sed -n 's\|\^//     \\\(rm src/main\\\.cpp(?:[^\n]*\n)*?\s*sh tools/shipped_check\.sh Ninja">The
 framework's CI follows it on every commit, in a copy of a game freshly made with
 <code>rmp new</code>: it reads the first line out of the example and runs it, copies the file in as
 the second line says, and then, in place of <code>rmp run</code>, runs that game's render check —
 <code>rmp test render</code> — which has to build it, boot it with its one asset loaded, see a frame
-drawn and see it exit cleanly. The examples job boots the example itself like every other one.</p>
+drawn and see it exit cleanly. Then it starts that game's release with
+<code>tools/shipped_check.sh</code>, from the project folder and from a folder with no
+<code>resources/</code> in it, and both have to load the asset. The examples job boots the example
+itself like every other one.</p>
 
 <h2>How the build tells</h2>
 
@@ -43,24 +46,30 @@ raylib and nothing else — no entry point of ours, no library of ours. With <co
 gone, CMake builds no framework library at all, and its configure says
 <samp>=== NO src/rmp/: no framework library, a plain C game ===</samp>.</p>
 
-<p>The recipe deletes <code>src/rmp/</code> rather than leaving it unused, because two other parts
-of the pipeline look at the folder itself. Android's build compiles every <code>.c</code> and
-<code>.cpp</code> under <code>src/</code> into the game's library, <code>src/rmp/</code> with it when
-it is there. And a release decides by it what to ship in <code>resources/</code>: the pack while the
-folder is there, the loose files once it is gone (<a href="#the-release-packages">below</a>).</p>
+<p data-fw-grep="CMakeLists.txt::file\(GLOB_RECURSE RMP_SOURCES CONFIGURE_DEPENDS\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/src/rmp/\*\.cpp&quot;(?:[^\n]*\n)*?if\(RMP_SOURCES\)\s+add_library\(rmp STATIC \$\{RMP_SOURCES\}">The
+recipe deletes <code>src/rmp/</code>, the framework's own source, because a plain C game uses none
+of it and the builds would compile it anyway. CMake builds the framework library from
+<code>src/rmp/</code> whenever the folder holds sources, even while the game itself is linked to
+raylib alone: kept, it is the whole C++ framework compiled for nothing. Android's and iOS's builds
+take everything under <code>src/</code>, so there it would be compiled into the game itself. And a
+release decides by the folder what to ship in <code>resources/</code>: the pack while it is there,
+the loose files once it is gone (<a href="#the-release-packages">below</a>).</p>
 
 <p>Put a <code>.cpp</code> file back without <code>src/rmp/</code> and the configure stops, naming
 the problem: <samp>… has C++ sources and there is no src/rmp/, so no framework to link …</samp>. A
 C++ game keeps <code>src/rmp/</code>, and with it the framework's entry point and library.</p>
 
-<p>Both values the build defines for every game are still there: RMP_RESOURCES_PATH, the folder the
+<p data-fw-grep="include/rmp/config.h::// one include, of the generated file that holds the #defines and includes\s+// nothing itself(?:[^\n]*\n)*?#include &lt;rmp/generated/config\.h&gt;">Both values the build defines for every game are still there: RMP_RESOURCES_PATH, the folder the
 files are read from — an absolute path to <code>resources/</code> in a debug build,
 <code>./resources/</code> in a release, and empty on Android, where the files sit at the root of the
 APK's assets — and RMP_PRODUCTION_BUILD, <code>0</code> or <code>1</code>.
 So is everything <code>raylib_multiplatform.toml</code> sets, through <code>rmp/config.h</code>, the
-one header of ours that is nothing but <code>#define</code>s. A plain C game's include path is
-raylib's, the game's <code>include/</code>, where <code>rmp/config.h</code> is, and
-<code>tests/</code>, where <code>smoke_test.h</code> is:</p>
+one header of ours that is plain <code>#define</code>s: its one include is
+<code>rmp/generated/config.h</code>, the file <code>configure.py</code> writes from the
+<code>.toml</code>, which includes nothing. A plain C game's include path is
+raylib's, the game's <code>include/</code>, where <code>rmp/config.h</code> is,
+<code>tests/</code>, where <code>smoke_test.h</code> is, and <code>thirdparty/raymob</code>, where
+<code>&lt;admob.h&gt;</code> is (<a href="#ads-in-plain-c">below</a>):</p>
 
 <pre data-lang="c" data-harness="c99" data-given="#include &lt;rmp/config.h&gt;">
 int main(void) {
@@ -84,8 +93,9 @@ int main(void) {
 <li>The build for the targets that can run the file (below), configured from
 <code>raylib_multiplatform.toml</code> as it is for every game: <code>rmp run</code>,
 <code>rmp build release</code> and <code>cmake --preset debug</code> work the same.</li>
-<li>The identifiers and the icons: the Android application id, the iOS bundle id and every icon
-size generated from <code>[icon] source</code>.</li>
+<li>The identifiers and the icons: the Android application id, the iOS bundle id, and the
+Android icons, the iOS AppIcon and the Windows <code>.ico</code> generated from
+<code>[icon] source</code>.</li>
 <li>The version from the git tag, the pinned toolchains, CI and the release.</li>
 <li>raylib itself, all of it, at the version and with the patches the framework vendors.</li>
 </ul>
@@ -95,13 +105,30 @@ size generated from <code>[icon] source</code>.</li>
 <table>
 <thead><tr><th>Given up</th><th>What it means</th></tr></thead>
 <tbody>
-<tr><td>Everything under <code>rmp::</code></td><td>Scenes, objects and behaviors, the interface, named input, audio by name, saves, random, ads. Your code is raylib's API and your own.</td></tr>
+<tr><td>Everything under <code>rmp::</code></td><td>Scenes, objects and behaviors, the interface, named input, audio by name, saves, random, and <code>rmp::ads</code> — though not the ads themselves (<a href="#ads-in-plain-c">below</a>). Your code is raylib's API and your own.</td></tr>
 <tr><td>The entry point</td><td>Your <code>main()</code> owns the loop, which is exactly what the web and iOS do not allow (below). No <code>[app] max_delta</code> clamp on <code>GetFrameTime()</code>, and no <code>rmp::app::quit()</code>: the loop ends when your condition says so. Escape stays raylib's exit key and closes the window, unless your code calls <code>SetExitKey(KEY_NULL)</code>.</td></tr>
-<tr><td>Starting a release from anywhere</td><td>The framework's entry point moves a desktop release into the executable's folder, so that <code>./resources/</code> is the one next to it. In plain C that is yours, and the example does it in a release with <code>ChangeDirectory(GetApplicationDirectory())</code>.</td></tr>
+<tr><td>Starting a release from anywhere</td><td data-fw-grep="examples/plain_c/src/main.c::#if RMP_PRODUCTION_BUILD[^\n]*\n(?:[^\n]*\n)*?\s*DirectoryExists\(TextFormat\(&quot;%s%s&quot;, folder, RMP_RESOURCES_PATH\)\)\) \{\s+ChangeDirectory\(folder\);">The framework's entry point moves a desktop release into the executable's folder when a <code>resources/</code> sits next to it, so that <code>./resources/</code> is that one wherever the game was started from. In plain C that is yours, and the example does the same in a release: <code>ChangeDirectory()</code> into <code>GetApplicationDirectory()</code> only when <code>DirectoryExists()</code> finds <code>resources/</code> there. Otherwise it stays put and reads the working directory's — which is what <code>rmp build release</code> needs, since it leaves the executable in <code>build/</code> and <code>resources/</code> in the project folder. On NetBSD and OpenBSD, which cannot say where an executable is, the folder is empty and the release always reads the working directory's.</td></tr>
 <tr><td>The asset pack</td><td>Reading <code>resources.rres</code> is the framework's runtime, and raylib alone cannot. A plain C game reads loose files only, and its release ships them — see <a href="#the-release-packages">the release packages</a>.</td></tr>
 <tr><td>The boot and render reports</td><td>The entry point prints what CI looks for; a plain C game calls the same hooks itself. See <a href="#the-smoke-test">the smoke test</a>.</td></tr>
 </tbody>
 </table>
+
+<h2 id="ads-in-plain-c">Ads</h2>
+
+<p data-fw-grep="CMakeLists.txt::if\(_plain_c\)\s+add_executable[^\n]*\n(?:[^\n]*\n)*?\s*&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/thirdparty/raymob&quot;\)">The ads
+survive without <code>rmp::</code>. <a href="ref:rmp::ads"><code>rmp::ads</code></a> is a wrapper
+over the C functions in <code>&lt;admob.h&gt;</code>, and a plain C game has that header on its
+include path on every target: the real calls on Android, <code>static inline</code> functions that
+do nothing everywhere else, so the same calls compile wherever the game builds. The calls and what they mean
+are on <a href="/manual/modules/ads.html#everywhere-but-android">the Ads page</a>, and
+<code>[android.admob]</code> turns them on as it does for any game.</p>
+
+<pre data-lang="c" data-harness="c99" data-given="#include &lt;admob.h&gt;">
+void game_over(void) {
+    if (IsInterstitialAdLoaded()) ShowInterstitialAd();
+    RequestInterstitialAd();
+}
+</pre>
 
 <h2>Which targets run it</h2>
 

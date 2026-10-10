@@ -133,7 +133,12 @@ version.</samp> When <code>origin</code> cannot be asked at all — no remote, n
 stops it too, with what git said.</p></li>
 <li><p><strong>Your branch is on <code>origin</code>.</strong> CI checks the tag out from GitHub,
 so a tag on a commit that exists only on your machine builds nothing:
-<samp>FAIL: origin/main does not exist. Push the branch first:</samp></p></li>
+<samp>FAIL: origin/main does not exist. Push the branch first:</samp>, followed by
+<code>rmp push</code>.
+<span data-fw-grep="tools/rmp.py::def cmd_push\(ctx, args\):[\s\S]*?if branch and git_out\(ctx, &quot;config&quot;, f&quot;branch\.\{branch\}\.merge&quot;\)\.returncode != 0:[\s\S]*?ctx\.run\(\[&quot;git&quot;, &quot;push&quot;, &quot;-u&quot;, &quot;origin&quot;, branch\]\)[\s\S]*?there is no remote to push to">The
+first <code>rmp push</code> of a branch with no upstream is <code>git push -u origin
+&lt;branch&gt;</code>, which pushes it and ties it to <code>origin</code>; with no remote at all,
+it stops and says how to add one.</span></p></li>
 <li><p><strong>The commit is the one <code>origin</code> has.</strong> <code>HEAD</code> must be
 exactly what <code>origin/&lt;branch&gt;</code> points at, as of your last fetch:
 <samp>FAIL: HEAD is not what origin/main points at (as of your last fetch).</samp> It suggests
@@ -212,7 +217,7 @@ the previous one, and these are its files. A target your game does not build has
 <tr><td><code>macos-build.zip</code></td><td>macOS: one universal executable for Apple silicon and Intel, its assets and <code>LICENSES.txt</code>.</td></tr>
 <tr><td><code>bsd-freebsd-x86-64-build.zip</code><br><code>bsd-freebsd-arm64-build.zip</code><br><code>bsd-openbsd-x86-64-build.zip</code><br><code>bsd-openbsd-arm64-build.zip</code><br><code>bsd-netbsd-x86-64-build.zip</code></td><td>FreeBSD, OpenBSD and NetBSD, built in their own virtual machines.</td></tr>
 <tr><td><code>web-build.zip</code></td><td>The browser build. <a href="/publishing/web.html">The web build</a></td></tr>
-<tr><td>the debug <code>.apk</code></td><td>The Android debug build: installable on a phone, not what Play takes.</td></tr>
+<tr data-fw-grep="raymob/app/build.gradle::// Google's TEST ads in every debug build, whatever ids the \.toml\n            // carries\."><td>the debug <code>.apk</code></td><td>The Android debug build: installable on a phone, not what Play takes. It shows Google's test ads, whatever ids the .toml carries.</td></tr>
 <tr><td>the release <code>.aab</code></td><td>The App Bundle signed with your upload key. Only there when the Android signing secrets are set. <a href="/publishing/google-play.html">Google Play</a></td></tr>
 <tr><td><code>ios-raylib-xcframework.zip</code></td><td>The iOS engine, <code>raylib.xcframework</code>, for device and simulator.</td></tr>
 <tr><td><code>ios-app-simulator.zip</code></td><td>The game built for the iOS simulator: unsigned, and not installable on a device. <a href="/publishing/app-store.html">The App Store</a></td></tr>
