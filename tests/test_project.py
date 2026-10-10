@@ -56,6 +56,18 @@ class BuildTest(unittest.TestCase):
         self.assertIs(results[1][0], bad)
         self.assertIn("does not build and boot after this page", results[1][1])
 
+    def test_a_step_that_breaks_the_games_own_tests_is_red(self):
+        # Builds and boots, and the test rmp new wrote stops holding: the menu
+        # it tests no longer loads a file.
+        menu = ('#include "main_menu.h"\n#include <rmp/ui.h>\n'
+                'void MainMenuScene::_ready() {}\n'
+                'void MainMenuScene::_draw() { rmp::ui::begin(); rmp::ui::text("Menu"); rmp::ui::end(); }\n')
+        bad = project.Step("content/one.html", [project.ProjectFile(
+            "content/one.html", 1, "src/scenes/main_menu.cpp", menu, "cpp")])
+        results = project.run(FRAMEWORK, "tutorial_check", [bad])
+        self.assertIs(results[0][0], bad)
+        self.assertIn("the game's own tests, rmp test unit, fail after this page", results[0][1] or "")
+
 
 class RelativeFrameworkTest(unittest.TestCase):
     """CI names the framework relative to the docs (RMP_FRAMEWORK=framework),

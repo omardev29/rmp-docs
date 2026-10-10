@@ -76,7 +76,7 @@ git commit -m "New game"
 
 <h2>What is yours</h2>
 
-<p>Most of the folder is the framework and the build, and you do not edit it. Your game is six
+<p>Most of the folder is the framework and the build, and you do not edit it. Your game is seven
 places:</p>
 
 <table>
@@ -86,6 +86,7 @@ places:</p>
 <tr><td><code>src/scenes/</code></td><td>The scenes, one per file: <code>main_menu.h</code> and <code>main_menu.cpp</code> are the menu you just saw.</td></tr>
 <tr><td><code>include/</code></td><td>Your headers, when you want them apart from the code. This tutorial keeps each header beside its <code>.cpp</code> instead.</td></tr>
 <tr><td><code>resources/</code></td><td>Pictures and sounds, loaded by name. <code>rabbit.png</code> is the one on the menu.</td></tr>
+<tr><td><code>tests/game/</code></td><td>Tests of your game, run with no window by <code>rmp test unit</code>. It starts with one, of the menu.</td></tr>
 <tr><td><code>branding/icon.png</code></td><td>The app's icon: the Android and iOS icons, and the one inside the Windows <code>.exe</code>, are all made from this one picture. It is not in <code>resources/</code> because the game never loads it.</td></tr>
 <tr><td><code>raylib_multiplatform.toml</code></td><td>The game's name, its window, its app ids and which platforms to build.</td></tr>
 </tbody>

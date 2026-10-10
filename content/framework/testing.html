@@ -27,6 +27,12 @@ by the build, so a new test needs no change to CMake.</p>
 twice. Once in the order they are written, and once shuffled with a fixed seed, so a test that only
 passes because an earlier one left something behind is found, and found again the next time.</p>
 
+<p data-fw-grep="tools/rmp.py::# The demo game's tests: the copy every game starts from\.\s+\(&quot;build&quot;, &quot;game_test&quot;\),\s+\(&quot;run&quot;, \[&quot;build/game_test&quot;\]\)">The
+same stage then builds and runs <code>tests/game/</code>, the tests every game is given, against
+the small game in the framework's own <code>src/</code> — the copy every game starts from — so a
+test a new game would fail on its first day fails here first. <a href="#game-tests">Below</a> is
+what they are.</p>
+
 <p>Two kinds of test need something real underneath, and get it:</p>
 
 <ul>
@@ -244,6 +250,7 @@ a mistake that could be described precisely enough for a machine to reject it:</
 <tr><td><code>shell</code></td><td>a script writes <code>A &amp;&amp; B || C</code>, which runs <code>C</code> when <code>B</code> fails</td></tr>
 <tr><td><code>naming</code></td><td>a name breaks the <a href="/framework/why/naming.html">naming rules</a> in any branch of any <code>#if</code></td></tr>
 <tr><td><code>ownership</code></td><td>the framework allocates or frees memory by hand</td></tr>
+<tr><td><code>pointers</code></td><td>a declaration a game can name has a raw pointer or a C string in it — <a href="/framework/why/ownership.html#preference">Ownership</a> says what goes there instead</td></tr>
 <tr><td><code>headers</code></td><td>a public header does not compile on its own, or lacks the <code>.toml</code> values</td></tr>
 <tr><td><code>cost</code></td><td>a public header's preprocessed size moved away from its budget</td></tr>
 <tr><td><code>configure</code></td><td><code>tools/configure.py</code> accepts something it should refuse, or the other way round, or the suite itself leaves a file the checkout generated changed</td></tr>
@@ -280,6 +287,7 @@ a game:</p>
 
 <pre data-lang="shell">
 rmp test
+rmp test unit
 rmp test smoke
 </pre>
 
@@ -288,6 +296,10 @@ rmp test smoke
 <dd>The game's <code>.toml</code> through <code>configure.py --check</code>, the pinned versions,
 and the licence record: a library added to <code>thirdparty/</code> without its row in
 <code>THIRD_PARTY_LICENSES.md</code> fails here. See <a href="/framework/licences.html">Licences</a>.</dd>
+<dt><code>unit</code></dt>
+<dd>The game's own tests, in <code>tests/game/</code>, built with the game and run with no window:
+<a href="#game-tests">below</a>. With no <code>.cpp</code> in that folder the stage has nothing to
+check, and says <samp>skip  nothing matches tests/game/*.cpp</samp> instead of failing.</dd>
 <dt><code>render</code></dt>
 <dd>The game built against the software renderer, booted for ten frames, and checked for a clean
 boot, pixels on the screen and a clean exit. A game has no golden hash: its title screen is its
@@ -300,3 +312,33 @@ loaded and a frame drawn.</dd>
 <p>A game's CI runs the same stages in its own <code>lint</code> job, and builds its targets the
 way the framework's does. The framework's own tests stay with the framework: they test the
 framework, and a game is built on one that has passed them.</p>
+
+<h3 id="game-tests">The game's own tests</h3>
+
+<p data-fw-grep="cmake/game_tests.cmake::list\(FILTER _rmp_game_test_sources EXCLUDE REGEX &quot;/src/rmp/&quot;\)\s+list\(REMOVE_ITEM _rmp_game_test_sources &quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/src/main\.cpp&quot;\)">A
+game made with <code>rmp new</code> has a folder for tests of its own, <code>tests/game/</code>,
+and starts with one in it. Every <code>.cpp</code> there is built, with doctest, together with
+every <code>.cpp</code> and <code>.c</code> under the game's <code>src/</code> but
+<code>main.cpp</code> and the framework's <code>src/rmp/</code>, into one program,
+<code>game_test</code>, linked to the framework library. <code>main.cpp</code> stays out because
+<code>RMP_GAME</code> there is the game's <code>main()</code>, and doctest brings its own: a test
+file holds test cases and nothing else, and includes a scene the way <code>src/main.cpp</code>
+does.</p>
+
+<pre data-include="tests/game/main_menu_test.cpp"></pre>
+
+<p>It runs with no window, so there is no GPU: a texture comes back empty and a frame draws
+nothing, while files still load and the game's code still runs. What a test drives is what the
+framework takes in through its seams — the <code>delta</code> handed to a hook, the seed of
+<code>rmp::random</code>, the input devices — and what it reads is what the game keeps. Drawing is
+the boot's to check, in <code>render</code> and <code>smoke</code>.</p>
+
+<pre data-lang="shell">
+rmp test unit
+./build/game_test -tc="*menu*"
+</pre>
+
+<p><code>rmp test unit</code> builds the program and runs every case; the program itself takes
+doctest's options, such as one case by name. The game's CI runs the same program in its
+<code>lint</code> job. Delete <code>tests/game/</code> and neither asks for it again: the stage
+and the job both say there is nothing to run, and pass.</p>

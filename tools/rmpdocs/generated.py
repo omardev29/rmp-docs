@@ -42,8 +42,43 @@ def key_anchor(key: str) -> str:
     return key.replace(".", "-")
 
 
-def configuration_page(framework: Path) -> tuple[str, str, str]:
+def config_comments(rows: list[dict], refconf: dict) -> list[str]:
+    """reference.toml [config_comment."section.key"]: a key whose comment in the
+    framework's .toml says what the framework at FRAMEWORK_REF does not do. The
+    page shows `comment` instead -- and only while the framework's own comment
+    still starts with `replaces`: the day it changes, the build says so, and
+    whoever bumps FRAMEWORK_REF reads the new one and drops the entry when it
+    has become true. Rewrites `rows` in place; returns what is wrong."""
+    wrong = []
+    by_key = {r["key"]: r for r in rows}
+    for key, spec in refconf.get("config_comment", {}).items():
+        where = f'[config_comment."{key}"]'
+        if not isinstance(spec, dict):
+            wrong.append(f"{where}: a table, with replaces, comment and reason")
+            continue
+        missing = [f for f in ("replaces", "comment", "reason") if not str(spec.get(f, "")).strip()]
+        if missing:
+            wrong.append(f"{where}: no {', '.join(missing)}")
+            continue
+        row = by_key.get(key)
+        if row is None:
+            wrong.append(f"{where}: the .toml has no key {key}")
+            continue
+        if not row["comment"].startswith(spec["replaces"]):
+            wrong.append(f"{where}: the framework's comment no longer starts with "
+                         f"{spec['replaces']!r}. Read what it says now, and drop the entry if it is "
+                         "true of the framework at FRAMEWORK_REF:\n" + row["comment"])
+            continue
+        row["comment"] = spec["comment"].strip()
+    return wrong
+
+
+def configuration_page(framework: Path, refconf: dict | None = None,
+                       wrong: list | None = None) -> tuple[str, str, str]:
     rows = run_json(framework, "tools/configure.py", "--print-schema")
+    problems = config_comments(rows, refconf or {})
+    if wrong is not None:
+        wrong.extend(problems)
     sections: dict[str, list[dict]] = {}
     for r in rows:
         section, _, name = r["key"].rpartition(".")

@@ -82,7 +82,9 @@ sets, under their `[section]`. A file the reader copies from the framework (art,
 shell block with `data-project`, `data-file="resources/hit.wav"` and
 `data-copy-from="examples/games/01_pong/resources/hit.wav"`. `--tier project` makes the game with
 `rmp new`, and after each page — in sidebar order — applies its files, builds the game for the
-software renderer and boots it: it has to load every asset, draw, and exit cleanly.
+software renderer and boots it: it has to load every asset, draw, and exit cleanly. While the game
+has tests in `tests/game/`, they have to pass too, under `rmp test unit`: a page that changes what
+the test `rmp new` wrote tests gives its own version of that file.
 
 **Every `toml` block is run through `configure.py --check --config`**: it has to be accepted. A
 block that shows a refusal is `data-expect="reject"`; the build prints configure.py's real

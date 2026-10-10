@@ -189,8 +189,12 @@ class Site:
                 for w in wrong:
                     self.problems.append(Problem("reference", "reference.toml", 0, w))
                 rp.body += "\n" + generated.defines_table(self.framework) + "\n" + table
-        for url, title, body in (generated.configuration_page(self.framework),
-                                 generated.commands_page(self.framework)):
+        wrong: list[str] = []
+        pages = (generated.configuration_page(self.framework, self.refconf, wrong),
+                 generated.commands_page(self.framework))
+        for w in wrong:
+            self.problems.append(Problem("reference", "reference.toml", 0, w))
+        for url, title, body in pages:
             root, errors = dom.parse(body)
             for e in errors:
                 self.problems.append(Problem("html", f"generated:{url}", e.line, e.message))

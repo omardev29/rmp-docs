@@ -12,8 +12,10 @@ only the keys it changes, under their [section]; the step sets those keys.
 `rmp new`, then for every page of the tutorial, in the order the sidebar shows
 them: applies that page's files, builds the game for raylib's software
 renderer and runs it -- tools/render_check.sh, which says the game booted with
-every asset, drew, and exited cleanly. A step that does not build or does not
-boot is a problem on that page. What a reader types at step N works at step N.
+every asset, drew, and exited cleanly -- and, while the game has tests in
+tests/game/, runs them the way the reader would: `rmp test unit`. A step that
+does not build, does not boot, or fails the game's own tests is a problem on
+that page. What a reader types at step N works at step N.
 """
 
 from __future__ import annotations
@@ -120,5 +122,17 @@ def run(framework: Path, name: str, steps: list[Step], keep: Path | None = None)
                 tail = "\n".join(said[-25:])
                 results.append((step, f"the project does not build and boot after this page:\n{tail}"))
                 break
+            # The game's own tests, which rmp new gives every game and the
+            # reader's `rmp test` runs: a page that changes what they test has
+            # to change them too.
+            if any(project.glob("tests/game/*.cpp")):
+                unit = subprocess.run([sys.executable, "tools/rmp.py", "test", "unit"],
+                                      cwd=project, capture_output=True, text=True)
+                if unit.returncode != 0:
+                    said = (unit.stdout + unit.stderr).strip().splitlines()
+                    tail = "\n".join(said[-25:])
+                    results.append((step, "the game's own tests, rmp test unit, fail after this "
+                                          f"page:\n{tail}"))
+                    break
             results.append((step, None))
     return results

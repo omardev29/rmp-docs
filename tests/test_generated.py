@@ -53,5 +53,53 @@ class BuildDefinesTest(unittest.TestCase):
         self.assertTrue(refconf["build_defines"])
 
 
+class ConfigCommentTest(unittest.TestCase):
+    """reference.toml [config_comment]: the configuration reference shows the
+    framework's comment for every key, and an entry here replaces one that is
+    not true of the framework yet -- only while that comment is the one it was
+    written against."""
+
+    ROWS = [{"key": "android.gradle_offline", "comment": "Where CI's Android job gets Gradle. More."}]
+
+    def rows(self):
+        return [dict(r) for r in self.ROWS]
+
+    def test_an_entry_replaces_the_comment(self):
+        rows = self.rows()
+        wrong = generated.config_comments(rows, {"config_comment": {"android.gradle_offline": {
+            "replaces": "Where CI's Android job", "comment": "What it does.", "reason": "r"}}})
+        self.assertEqual(wrong, [])
+        self.assertEqual(rows[0]["comment"], "What it does.")
+
+    def test_a_comment_that_changed_is_red_and_shown_as_it_is(self):
+        rows = self.rows()
+        wrong = generated.config_comments(rows, {"config_comment": {"android.gradle_offline": {
+            "replaces": "Whether the Android job", "comment": "What it does.", "reason": "r"}}})
+        self.assertEqual(len(wrong), 1)
+        self.assertIn("no longer starts with", wrong[0])
+        self.assertIn("Where CI's Android job gets Gradle. More.", wrong[0])
+        self.assertEqual(rows[0]["comment"], self.ROWS[0]["comment"])
+
+    def test_a_key_the_toml_does_not_have_is_red(self):
+        wrong = generated.config_comments(self.rows(), {"config_comment": {"android.nothing": {
+            "replaces": "x", "comment": "y", "reason": "z"}}})
+        self.assertEqual(wrong, ['[config_comment."android.nothing"]: the .toml has no key android.nothing'])
+
+    def test_an_entry_says_what_and_why(self):
+        wrong = generated.config_comments(self.rows(), {"config_comment": {
+            "android.gradle_offline": {"replaces": "Where", "comment": " "}}})
+        self.assertEqual(wrong, ['[config_comment."android.gradle_offline"]: no comment, reason'])
+
+    def test_the_real_ones_hold(self):
+        import os
+        import tomllib
+        fw = Path(os.environ.get("RMP_FRAMEWORK", DOCS.parent / "raylib_multiplatform"))
+        if not (fw / "tools" / "configure.py").is_file():
+            self.skipTest("no framework next to rmp-docs")
+        rows = generated.run_json(fw, "tools/configure.py", "--print-schema")
+        refconf = tomllib.loads((DOCS / "reference.toml").read_text())
+        self.assertEqual(generated.config_comments(rows, refconf), [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -33,13 +33,15 @@ one and cannot read them.</p>
 <tr><td><code>raymob/generated.properties</code> and the manifest</td><td>Gradle: the application id, the SDK levels, the permissions, the orientation, the OpenGL ES version the game is compiled for, whether AdMob is in the build.</td></tr>
 <tr><td><code>ios/project.yml</code></td><td>XcodeGen, which makes the Xcode project: the bundle id, the deployment target, your <code>[ios.settings]</code>.</td></tr>
 <tr><td>the icons and the <code>LICENSES.txt</code> files</td><td>The packages the game ships in: the icons go into the Android, iOS and Windows ones, a <code>LICENSES.txt</code> into each.</td></tr>
+<tr><td>the triggers of <code>.github/workflows/ci.yml</code></td><td>GitHub Actions: whether a push and a pull request start a run, from <code>[ci] on_push</code>.</td></tr>
 </tbody>
 </table>
 
 <p>The build files stay dumb: they read what the generator wrote and never parse the
 <code>.toml</code> themselves, because three parsers would be three ways to drift. CI asks the same
 generator its questions — which targets are enabled, which jobs to start, where to publish — through
-its <code>--print-</code> options. None of the generated files is committed; see
+its <code>--print-</code> options. None of the generated files is committed but the triggers in
+<code>ci.yml</code>, which GitHub reads from the repository; see
 <a href="/manual/basics/project-layout.html#what-the-build-generates">what the build generates</a>.</p>
 
 <h3>When it runs</h3>
@@ -220,6 +222,7 @@ defaults.</p>
 <tr><td><a href="/reference/configuration.html#section-linux"><code>[linux]</code></a>, <a href="/reference/configuration.html#section-windows"><code>[windows]</code></a></td><td data-fw-grep=".github/workflows/_linux.yml::^  riscv64:\n(?:(?!^  \S)[\s\S])*?- name: The glibc it needs, against the floor the \.toml gives it\s+run: bash tools/glibc_check\.sh build/\$\{\{ inputs\.project_name \}\} 2\.38">The windowing backend on each, native Wayland, and the oldest glibc the <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code> binaries may need. <code>linux-riscv64-glibc</code> is cross-compiled against Ubuntu 24.04's glibc and needs 2.38, which its CI job holds it to.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-upx"><code>[upx]</code></a></td><td>Which shipped binaries are compressed with UPX. A target that cannot be compressed is refused by name, with the reason.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-dev"><code>[dev]</code></a></td><td>Debug builds only: their compiler and linker, and whether a framework warning aborts them. The debug builds CI runs its checks with read it too; the release and web builds that ship never do.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-ci"><code>[ci]</code></a></td><td>Whether CI runs on every push and every pull request, or only on a release tag and when you start it by hand. See <a href="/publishing/ci.html#on-push">Continuous integration</a>.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-deploy"><code>[deploy]</code></a>, <a href="/reference/configuration.html#section-deploy-itch"><code>[deploy.itch]</code></a>, <a href="/reference/configuration.html#section-deploy-firebase"><code>[deploy.firebase]</code></a></td><td>Whether a <code>LICENSES.txt</code> ships with the game, where a release is published on itch.io, and the Firebase project whose Test Lab runs the Android build and taps through it.</td></tr>
 </tbody>
 </table>

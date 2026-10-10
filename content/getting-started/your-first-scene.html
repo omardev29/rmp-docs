@@ -116,6 +116,40 @@ it writes a warning to the log, once, and returns (with <code>[dev] strict</code
 build stops at that warning, as at any other). The <code>#if</code> hides the button there rather
 than leave one that does nothing.</p>
 
+<h2>The menu's test</h2>
+
+<p>The game <code>rmp new</code> made also came with a test of its menu, in
+<code>tests/game/main_menu_test.cpp</code>. It makes the menu with no window, runs its
+<code>_ready()</code>, and checks that the menu asked for at least one file and found every file
+it asked for. Yours loads nothing yet — the rabbit comes back later — so the first half no longer
+holds. Replace the test with the half that does:</p>
+
+<pre data-lang="cpp" data-project="my_game" data-file="tests/game/main_menu_test.cpp">
+// The main menu finds every file it loads: a file renamed in resources/ and
+// not in the code leaves a hole in the picture rather than a crash, and this
+// says which.
+
+#include &lt;doctest.h&gt;
+
+#include &lt;rmp/assets.h&gt;
+
+#include "scenes/main_menu.h"
+
+TEST_CASE("the main menu finds every file it loads") {
+    const int failed = rmp::assets::failed_loads();
+
+    MainMenuScene menu;
+    menu._ready();
+
+    CHECK(rmp::assets::failed_loads() == failed);
+}
+</pre>
+
+<p>A test is the one place that calls a hook itself: it stands in for the framework. Every file
+in <code>tests/game/</code> is built with your game — everything in <code>src/</code> but
+<code>main.cpp</code> — and run with no window by <code>rmp test unit</code>, and by CI.
+<a href="/framework/testing.html#game-tests">Testing</a> has the rest.</p>
+
 <h2>A second scene</h2>
 
 <p>Play goes to <code>GameScene</code>, which does not exist yet. Make two new files in

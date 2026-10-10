@@ -22,10 +22,15 @@ plain C — <code>&lt;rmp/config.h&gt;</code> and <code>&lt;smoke_test.h&gt;</co
 <p>The recipe, from the folder of a game made with <code>rmp new</code>:</p>
 
 <pre data-lang="shell">
-rm src/main.cpp &amp;&amp; rm -r src/rmp/ src/scenes/
+rm src/main.cpp &amp;&amp; rm -r src/rmp/ src/scenes/ tests/game/
 cp &lt;the framework&gt;/examples/plain_c/src/main.c src/
 rmp run
 </pre>
+
+<p data-fw-grep="examples/plain_c/src/main.c::// under src/\. With it gone there is no framework library at all\. tests/game/\n// goes with src/scenes/: it tests the main menu, through the framework\."><code>tests/game/</code>
+goes with <code>src/scenes/</code>: the test a new game starts with is a test of the main menu,
+written in C++ against the framework, and its program is built with the framework library — which
+a plain C game no longer has.</p>
 
 <p data-fw-grep=".github/workflows/ci.yml::RECIPE=\$\(sed -n 's\|\^//     \\\(rm src/main\\\.cpp(?:[^\n]*\n)*?\s*sh tools/shipped_check\.sh Ninja">The
 framework's CI follows it on every commit, in a copy of a game freshly made with

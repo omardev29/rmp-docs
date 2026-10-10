@@ -157,12 +157,13 @@ phone. <a href="/manual/platforms/android.html">Android</a> has the rest.</p>
 <h3>rmp test</h3>
 
 <p><code>rmp test</code> checks the game, stage by stage, and stops at the first that fails.
-<code>rmp test smoke</code> runs a single stage. In a game there are three, in this order:</p>
+<code>rmp test smoke</code> runs a single stage. In a game there are four, in this order:</p>
 
 <table>
 <thead><tr><th>Stage</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><code>config</code></td><td>Validates <code>raylib_multiplatform.toml</code> the way every build does, checks that the pinned versions agree with each other, and checks every licence of everything vendored.</td></tr>
+<tr><td><code>unit</code></td><td>Builds your tests in <code>tests/game/</code> with the game and runs them with no window. With no <code>.cpp</code> there, it says so and passes. See <a href="/framework/testing.html#game-tests">Testing</a>.</td></tr>
 <tr><td><code>render</code></td><td>Builds the game a second time against raylib's software renderer, which draws into memory with no GPU and no window, runs it for ten frames, and requires that it booted with no asset failing to load, drew something, honoured <code>[window] vsync</code> and reached the end of its frames.</td></tr>
 <tr><td><code>smoke</code></td><td>Builds the game in debug, runs it for ten frames for real, and requires that it booted with no asset failing to load and put pixels on the screen.</td></tr>
 </tbody>
@@ -178,8 +179,10 @@ Windows installs is the one <code>rmp</code> looks for.</p>
 
 <h3>rmp fmt</h3>
 
-<p><code>rmp fmt</code> formats your C and C++ — everything under <code>src/</code> and
-<code>include/</code> except the framework's own folders and generated files — with whichever
+<p data-fw-grep="tools/rmp.py::&quot;game&quot;: \(&quot;include&quot;, &quot;src&quot;, &quot;tests&quot;\)\}\s+FMT_SKIP = \(&quot;src/rmp/&quot;, &quot;include/rmp/&quot;, &quot;tests/smoke_test\.h&quot;\)"><code>rmp fmt</code>
+formats your C and C++ — everything under <code>src/</code>, <code>include/</code> and
+<code>tests/</code> except the framework's own folders, <code>tests/smoke_test.h</code> and
+generated files — with whichever
 clang-format is on your <code>PATH</code>. <code>rmp fmt check</code> only reports what would change.
 Neither compares that clang-format's version with the one pinned in
 <code>thirdparty/FROZEN_VERSIONS.md</code>, and a different version would reformat files that were
@@ -205,7 +208,10 @@ clean a machine without Pillow builds an <code>.exe</code> with no icon.</p>
 <p><code>rmp push</code> is <code>git push</code>, refused while a CI run is still in flight: CI
 cancels the run in progress when a branch receives a new push, so pushing would throw away a run
 that was half done. It names the run instead, with the command to watch it. <code>rmp push force</code>
-pushes anyway. Without the <code>gh</code> command installed it cannot ask, says so, and pushes.</p>
+pushes anyway. Without the <code>gh</code> command installed it cannot ask, says so, and pushes.
+With <a href="/publishing/ci.html#on-push"><code>[ci] on_push = false</code></a> a push starts no
+run to cancel, so it asks nothing and pushes — unless <code>ci.yml</code> has changes not committed
+yet, when the commit being pushed may still start one.</p>
 
 <p data-fw-grep="tools/rmp.py::def cmd_push\(ctx, args\):[\s\S]*?if &quot;origin&quot; in remotes:\s+ctx\.run\(\[&quot;git&quot;, &quot;push&quot;, &quot;-u&quot;, &quot;origin&quot;, branch\]\)\s+return OK\s+if not remotes:\s+raise Refused\(&quot;there is no remote to push to\.">A
 branch with no upstream yet has nowhere to go, so its first push, to the remote called

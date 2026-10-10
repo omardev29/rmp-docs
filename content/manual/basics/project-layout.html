@@ -101,7 +101,9 @@ my_game/
 ├── cmake/                      the build's helpers; cmake/generated/ appears here
 ├── raymob/                     the Android app shell (Gradle)
 ├── ios/                        the iOS scaffold; ios/project.yml appears here
-├── tests/smoke_test.h          the boot and render check CI runs on every target
+├── tests/
+│   ├── game/                   yours: tests of your game, with no window (main_menu_test.cpp)
+│   └── smoke_test.h            the boot and render check CI runs on every target
 ├── thirdparty/                 raylib and the other vendored libraries, pinned
 ├── THIRD_PARTY_LICENSES.md     every vendored component and its licence
 ├── .github/workflows/          CI for every enabled target, and the release
@@ -119,6 +121,7 @@ my_game/
 <tr><td><code>include/</code></td><td>Headers you want on the include path from anywhere in <code>src/</code>. Headers that sit next to their <code>.cpp</code> in <code>src/</code> work too, included by their relative path.</td></tr>
 <tr><td><code>resources/</code></td><td>Everything the game loads at run time, loaded by name.</td></tr>
 <tr><td><code>branding/icon.png</code></td><td>The app icon, one square PNG.</td></tr>
+<tr><td><code>tests/game/</code></td><td>Your tests: doctest cases built with everything in <code>src/</code> but <code>main.cpp</code>, run with no window by <code>rmp test unit</code> and by CI. See <a href="/framework/testing.html#game-tests">Testing</a>.</td></tr>
 </tbody>
 </table>
 
@@ -140,7 +143,7 @@ game, to add a source file or to pick platforms; all three are the <code>.toml</
 did when it was made; <a href="/manual/basics/the-rmp-command.html#a-game-keeps-its-own-rmp">The rmp
 command</a> has the detail.</p>
 
-<p>A game does not get the framework's <code>examples/</code>, its tests or its maintenance tools.
+<p>A game does not get the framework's <code>examples/</code>, its own tests or its maintenance tools.
 The examples are on this site, under <a href="/examples/index.html">Examples</a>, each one a small
 game of its own that can be read and copied from.</p>
 
@@ -157,8 +160,8 @@ compiled once into a library called <code>rmp</code>, which the game links. That
 scene recompiles the scene and not the framework.</p>
 
 <p data-fw-grep="CMakeLists.txt::function\(rmp_add_game NAME DIR\)[\s\S]*?if\(_plain_c\)\s+add_executable\(\$\{NAME\} \$\{_game_sources\}\)\s+set_property\(TARGET \$\{NAME\} PROPERTY C_STANDARD 99\)\s+target_link_libraries\(\$\{NAME\} PRIVATE raylib_static\)">A
-game whose own sources hold no C++ — <code>main.cpp</code> and the scenes deleted, and a
-<code>main.c</code> in their place — is built as plain C: its own <code>main()</code>, linked to
+game whose own sources hold no C++ — <code>main.cpp</code>, the scenes and <code>tests/game/</code>
+deleted, and a <code>main.c</code> in their place — is built as plain C: its own <code>main()</code>, linked to
 raylib alone.</p>
 
 <p data-fw-grep="CMakeLists.txt::file\(GLOB_RECURSE RMP_SOURCES CONFIGURE_DEPENDS\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/src/rmp/\*\.cpp&quot;[\s\S]*?if\(RMP_SOURCES\)\s+add_library\(rmp STATIC"><code>src/rmp/</code>
@@ -245,6 +248,11 @@ with the <code>.toml</code>, and <code>git status</code> stays clean after a bui
 
 <p>The app icons are generated too, into the Android resource folders and an asset catalogue under
 <code>ios/</code>, and ignored the same way.</p>
+
+<p>One generated part is committed, because GitHub reads it before anything runs: the triggers of
+<code>.github/workflows/ci.yml</code>, which the configure writes from
+<a href="/reference/configuration.html#ci-on_push"><code>[ci] on_push</code></a>.
+<a href="/publishing/ci.html#when-it-runs">Continuous integration</a> explains it.</p>
 
 <p data-fw-grep="tools/rmp.py::CLEAN_PATHS = \(&quot;build&quot;, &quot;raymob/app/generated&quot;, &quot;raymob/generated\.properties&quot;,\s+&quot;cmake/generated&quot;, &quot;include/rmp/generated&quot;, &quot;ios/project\.yml&quot;\)"><code>rmp clean</code> deletes <code>build/</code> and every generated file except the Android and iOS
 icons, which stay because making the Android ones again needs Pillow. The Windows icon lives in

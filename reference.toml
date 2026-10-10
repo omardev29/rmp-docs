@@ -26,3 +26,19 @@ doc = "1 in a release build and 0 in a debug one, on every platform: `rmp build 
 [build_defines.RMP_RESOURCES_PATH]
 set_in = ["CMakeLists.txt"]
 doc = "The folder loose resources are read from, ending in a slash. A game does not need it: `rmp::assets` resolves a name against the pack first and this folder second, and so does plain raylib's `LoadTexture()` on a path inside it."
+
+# Keys of the .toml whose comment in the framework's own .toml describes what the
+# framework at FRAMEWORK_REF does not do. The configuration reference shows
+# `comment` in its place, and only while the framework's comment still starts
+# with `replaces`: when that comment changes the build fails, and whoever bumps
+# FRAMEWORK_REF reads the new one and drops the entry once it is true.
+[config_comment."android.gradle_offline"]
+replaces = "Where CI's Android job gets Gradle and the libraries the app builds with."
+comment = """
+Written into raymob/generated.properties as `gradle.offline`, and refused
+unless it is `true` or `false`. Nothing reads it at the commit this site
+documents: CI's Android job downloads Gradle and the libraries the app builds
+with, and caches them between runs, whichever it says, and `rmp android`
+does the same.
+"""
+reason = "The framework's comment describes an Android job that runs Gradle with --offline from the build image. At FRAMEWORK_REF no workflow reads gradle.offline, and _android.yml runs ./gradlew without --offline."
