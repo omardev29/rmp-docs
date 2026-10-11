@@ -92,8 +92,9 @@ game's, from the <code>src/main.cpp</code> that <code>rmp new</code> writes.</p>
 recommends <code>const</code> in APIs and says <code>const</code> on a local variable is "neither
 encouraged nor discouraged". The framework requires it on every local that does not change, so the
 value at the bottom of a function is known, at its declaration, to be the one at the top. On a
-by-value parameter both agree: it goes in the definition and not in the declaration, where it means
-nothing to the caller. Checked by <code>misc-const-correctness</code>, in the framework and the
+by-value parameter the two agree that <code>const</code> stays out of the declaration, where it
+means nothing to the caller. Google's guide says nothing of the definition; the framework puts it
+there. Checked by <code>misc-const-correctness</code>, in the framework and the
 examples. <a href="/guidelines/const.html">const</a> has the rest.</p>
 
 <p data-fw-grep="CLAUDE.md::`constexpr`/`consteval`/`constinit`\s+wherever possible">Google also warns
@@ -171,8 +172,11 @@ exit.</p>
 
 <p data-fw-grep=".clang-tidy::the options structs and rmp::object\s+#\s+are public data BY DESIGN">Google
 makes a class's data members private, and keeps <code>struct</code> for passive data.
-<a href="ref:rmp::Object"><code>rmp::Object</code></a> is a class whose position, velocity and size
-are public fields, and every options struct is public data. <code>ball.position.x += 4;</code> is
+<a href="ref:rmp::Object"><code>rmp::Object</code></a> is a class whose
+<a href="ref:rmp::Object::position"><code>position</code></a>,
+<a href="ref:rmp::Object::velocity"><code>velocity</code></a> and
+<a href="ref:rmp::Object::shape"><code>shape</code></a> are public fields, and every options struct
+is public data. <code>ball.position.x += 4;</code> is
 the simplest way to move a ball, and a setter would make it longer for nothing:
 <code>misc-non-private-member-variables-in-classes</code> is switched off for that reason.</p>
 
@@ -181,8 +185,7 @@ the simplest way to move a ball, and a setter would make it longer for nothing:
 <p>Google requires <code>explicit</code> on every one-argument constructor and conversion operator,
 and grants a waiver for types designed to be interchangeable. The framework's API has a few such
 conversions, each because the simple call would be longer without it, and each with a
-<code>NOLINT</code> for <code>google-explicit-constructor</code> and its reason on the line before
-it:</p>
+<code>NOLINT</code> for <code>google-explicit-constructor</code> and its reason beside it:</p>
 
 <ul>
 <li data-fw-grep="include/rmp/save.h::NOLINTNEXTLINE\(google-explicit-constructor\): v\[&quot;alive&quot;\] = true; a bool is a Value">a
