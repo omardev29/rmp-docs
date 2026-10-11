@@ -104,10 +104,12 @@ DrawCircleV(centre, 8, RED);
 
 <p data-fw-grep=".clang-tidy::key: cppcoreguidelines-macro-usage\.AllowedRegexp">Checked by
 <code>cppcoreguidelines-macro-usage</code>, in the framework and in the examples. It refuses a macro
-that could be a constant or a function, and lets through one that uses <code>#</code> or
-<code>##</code>, which nothing else can do. The framework's own macros are named to it one by one, in
-its <code>AllowedRegexp</code>, so a new macro in the framework is a question for whoever reviews
-it, not something that slips past. clang-tidy's suggestion to turn the <code>.toml</code>'s values
+whose body is only a literal, which could be a constant, and a macro with parameters, which could
+be a function; it lets through one that uses <code>#</code> or <code>##</code>, which nothing else
+can do, and one that wraps a compiler's <code>__attribute__</code>, as the framework's check of
+<code>printf</code> formats does. The framework's own macros that it would refuse are named to it one by one, in its
+<code>AllowedRegexp</code>, so a new one in the framework is a question for whoever reviews it, not
+something that slips past. clang-tidy's suggestion to turn the <code>.toml</code>'s values
 into an enum, <code>modernize-macro-to-enum</code>, is switched off for them: the C entry point
 reads them too.</p>
 
