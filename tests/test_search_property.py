@@ -104,31 +104,60 @@ class VisibleTextTest(unittest.TestCase):
         self.assertEqual(search.visible_text(markup), collapse("".join(seen)))
 
 
+NAME = st.from_regex(r"rmp::[a-z]{1,4}(::[a-z_]{1,6})?", fullmatch=True)
+SUMMARY = st.tuples(st.sampled_from(["function", "class", "field", ""]),
+                    st.text(alphabet=st.characters(exclude_categories=("Cs",)), max_size=200))
+
+
+def expected_index(made) -> dict:
+    """The inverted index build() promises, worked out on its own: per word,
+    [page, weight] -- a title's word 10, a heading's 4, the description's 2,
+    the text's 1 (not a stop word, not one letter), added up and capped at 99
+    -- heaviest first, then in page order."""
+    weights: dict[str, dict[int, int]] = {}
+    for i, page in enumerate(made):
+        said = ([(w, 10) for w in search.tokens(page.title)]
+                + [(w, 4) for _l, _i, h in page.toc for w in search.tokens(h)]
+                + [(w, 2) for w in search.tokens(page.description)]
+                + [(w, 1) for w in search.tokens(search.visible_text(page.body))
+                   if w not in search.STOP and len(w) > 1])
+        for w, weight in said:
+            weights.setdefault(w, {})
+            weights[w][i] = weights[w].get(i, 0) + weight
+    return {w: sorted(([d, min(v, 99)] for d, v in weights[w].items()), key=lambda e: (-e[1], e[0]))
+            for w in sorted(weights)}
+
+
 class BuildTest(unittest.TestCase):
 
-    @given(st.lists(st.tuples(TEXT, TEXT, st.lists(TEXT, max_size=3), PAGE), max_size=4))
-    def test_every_word_of_a_page_is_in_the_index_under_it(self, pages):
-        made = [SimpleNamespace(title=title, url=f"p{i}.html", section="s", description=description,
+    @given(st.lists(st.tuples(TEXT, TEXT, st.lists(TEXT, max_size=24), PAGE), max_size=4),
+           st.dictionaries(NAME, st.text(max_size=12), max_size=4),
+           st.dictionaries(NAME, SUMMARY, max_size=4))
+    def test_the_json_is_exactly_what_the_pages_say(self, pages, reference, summaries):
+        made = [SimpleNamespace(title=title, url=f"p{i}.html", section=f"s{i % 2}", description=description,
                                 toc=[(2, f"h{j}", h) for j, h in enumerate(headings)],
                                 body=page_markup(blocks)[0])
                 for i, (title, description, headings, blocks) in enumerate(pages)]
-        data = json.loads(search.build(made, {"rmp::x": "reference/x.html#x"}, {"rmp::x": ("function", "Does.")}))
-        self.assertEqual(len(data["docs"]), len(made))
-        self.assertEqual(data["symbols"], [{"n": "rmp::x", "u": "reference/x.html#x", "k": "function", "d": "Does."}])
-        hits = {(w, d): v for w, entries in data["index"].items() for d, v in entries}
-        for i, page in enumerate(made):
-            words = {w: 10 for w in search.tokens(page.title)}
-            for h in [t for _l, _i, t in page.toc]:
-                words.update({w: max(words.get(w, 0), 4) for w in search.tokens(h)})
-            words.update({w: max(words.get(w, 0), 2) for w in search.tokens(page.description)})
-            words.update({w: max(words.get(w, 0), 1) for w in search.tokens(search.visible_text(page.body))
-                          if w not in search.STOP and len(w) > 1})
-            for w, least in words.items():
-                self.assertGreaterEqual(hits.get((w, i), 0), min(least, 99), (w, i))
-        for entries in data["index"].values():
-            weights = [v for _d, v in entries]
-            self.assertEqual(weights, sorted(weights, reverse=True))
-            self.assertTrue(all(1 <= v <= 99 for v in weights))
+        data = json.loads(search.build(made, reference, summaries))
+        self.assertEqual(sorted(data), ["docs", "index", "symbols"])
+        self.assertEqual(data["docs"], [
+            {"t": p.title, "u": p.url, "s": p.section, "h": [h for _l, _i, h in p.toc][:20],
+             "x": p.description or search.visible_text(p.body)[:160]} for p in made])
+        self.assertEqual(data["symbols"], [
+            {"n": name, "u": url, "k": summaries.get(name, ("", ""))[0],
+             "d": summaries.get(name, ("", ""))[1][:140]} for name, url in sorted(reference.items())])
+        self.assertEqual(data["index"], expected_index(made))
+
+    def test_one_page_by_hand(self):
+        """The model above, checked against numbers worked out by hand."""
+        page = SimpleNamespace(title="Button button", url="b.html", section="ui", description="A button.",
+                               toc=[(2, "x", "Button")], body="<p>the button, and a b</p>")
+        data = json.loads(search.build([page], {}, {}))
+        self.assertEqual(data["index"]["button"], [[0, 10 + 10 + 4 + 2 + 1]])
+        self.assertEqual(data["index"]["a"], [[0, 2]])      # the description's: no stop words there
+        self.assertNotIn("and", data["index"])                # the text's: a stop word
+        self.assertNotIn("b", data["index"])                  # the text's: one letter
+        self.assertEqual(data["index"], expected_index([page]))
 
 
 if __name__ == "__main__":
