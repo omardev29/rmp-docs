@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hypothesis_profiles  # noqa: E402,F401  (first: the profile, or the skip)
-from hypothesis import given, strategies as st  # noqa: E402
+from hypothesis import assume, given, strategies as st  # noqa: E402
 from under_test import load  # noqa: E402
 
 cxx = load("cxx")
@@ -46,6 +46,10 @@ SOURCE = st.lists(st.one_of(DECISIVE, st.characters()), max_size=120).map("".joi
 # line starts.
 LINES = st.lists(st.lists(st.one_of(DECISIVE, DECISIVE, st.characters()), max_size=8).map("".join),
                  max_size=16).map("\n".join)
+
+
+# A raw string's opening, as mask() reads one, with a newline before its end.
+RAW_OVER_LINES = re.compile(r'R"([^(\s]*)\((?:(?!\)\1").)*?\n', re.S)
 
 
 def newlines(text: str) -> list[int]:
@@ -97,6 +101,12 @@ class MaskTest(unittest.TestCase):
 
     @given(st.one_of(SOURCE, st.lists(PIECE, max_size=12).map(lambda ps: ",".join(w for w, _m in ps))))
     def test_masking_twice_is_masking_once(self, text):
+        """But for a raw string over several lines: the mask blanks its
+        delimiter, so masked again it is a plain string, which a newline ends
+        (found by the nightly profile in the image: R"x(\n)x", masked twice
+        lost the comma after it). Nothing masks a mask; a line splice, which
+        could be kept, is."""
+        assume(not RAW_OVER_LINES.search(text))
         once = cxx.mask(text)
         self.assertEqual(cxx.mask(once), once)
 

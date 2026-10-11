@@ -146,7 +146,9 @@ def mask(text: str) -> str:
     semicolons are only ever code. Every newline stays where it was -- a
     line number read off the mask is the text's -- and so does the backslash
     of a line splice inside a literal (`"a\\` at the end of a line, the
-    literal going on below): masking the mask again reads the same literal."""
+    literal going on below): masking the mask again reads the same literal.
+    (Not so a raw string over several lines, whose delimiter is blanked:
+    masked again, it is a plain string that a newline ends.)"""
     out = []
     i, n = 0, len(text)
     while i < n:
