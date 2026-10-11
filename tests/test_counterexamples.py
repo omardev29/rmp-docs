@@ -161,36 +161,52 @@ class SerializeCounterexamples(unittest.TestCase):
 
 class ParseCounterexamples(unittest.TestCase):
     """test_dom_property.ParseTest: markup a browser repairs in silence is an
-    error, not a guess the page ships."""
+    error, not a guess the page ships. Each error whole, as the build prints
+    it."""
 
     def says(self, markup: str, *expected: str):
-        _root, errors = dom.parse(markup)
-        for text in expected:
-            self.assertTrue(any(text in str(e) for e in errors), (markup, [str(e) for e in errors]))
+        _root, errors = dom.parse(markup, 7)
+        self.assertEqual([str(e) for e in errors], [f"line 7: {e}" for e in expected])
 
     def test_markup_that_never_ends(self):
         # Each swallowed `<p id="end">end</p>` after it without a word.
-        end = '<p id="end">end</p>'
-        self.says("<!--" + end, "never ends")
-        self.says("<a href='x" + end, "never ends")
-        self.says("x <", "never ends")
+        tail = "never ends: markup needs its closing >, and a < that is text is &lt;"
+        self.says('<!--<p id="end">end</p>', f"""'<!--<p id="end">end</p>' {tail}""")
+        self.says("<a href='x", f"\"<a href='x\" {tail}")
+        self.says("x <", f"'<' {tail}")
 
     def test_what_the_parser_drops_or_turns_into_a_comment(self):
-        self.says("<?x?>", "processing instruction")
-        self.says("<p></<p id=\"end\">end</p>", "is not a tag")
-        self.says("</ p>", "is not a tag")
-        self.says("<!-<!-->", "is not a tag")
-        self.says("</>", "closes nothing")
+        comment = "is not a tag: a browser reads it as a comment"
+        self.says("<?x?>", "<?x?> is a processing instruction, and HTML has none")
+        self.says('<p></<p id="end">end</p>', f"""'</<p id="end">' {comment}""")
+        self.says("</ p>", f"'</ p>' {comment}")
+        self.says("<!-<!-->", f"'<!-<!-->' {comment}")
+        self.says("</>", "</> closes nothing: a browser drops it")
+        self.says("<script></></script>")
 
     def test_a_doctype_anywhere_but_first(self):
-        self.says("<p><!DOCTYPE<p id=\"end\">end</p>", "is not <!doctype html> at the start")
-        self.says("<p>x</p><!doctype html>", "is not <!doctype html> at the start")
-        self.assertEqual(dom.parse("<!doctype html>\n<p>x</p>")[1], [])
+        ignored = "is not <!doctype html> at the start: a browser ignores it"
+        self.says('<p><!DOCTYPE<p id="end">end</p>', f'<!DOCTYPE<p id="end"> {ignored}')
+        self.says("<p>x</p><!doctype html>", f"<!doctype html> {ignored}")
+        self.says("<!doctype html><!doctype html>", f"<!doctype html> {ignored}")
+        self.says("<!doctype html>\n<p>x</p>")
+        self.says("\n  <!DOCTYPE  HTML>")
 
     def test_a_tag_that_lost_its_quote_or_its_end(self):
-        self.says('<p/<p id="end">end</p>', "an attribute called '<p'")
-        self.says('<p><img src=x<p id="end">end</p>', "a < inside a tag")
-        self.assertEqual(dom.parse('<a title="a<b" href=x>y</a>')[1], [])
+        self.says('<p/<p id="end">end</p>',
+                  """'<p/<p id="end">': a < inside a tag, where a quote or a > is missing""",
+                  "<p> has an attribute called '<p'")
+        self.says('<img src=x<p id="end">', """'<img src=x<p id="end">': a < inside a tag, where a quote or a > is missing""")
+        self.says('<a title="a<b" href=x>y</a>')
+
+    def test_what_was_said_before(self):
+        self.says("<p class=a class=b>x</p>", "<p> has the attribute 'class' twice")
+        self.says("<svg><path d='m'/></svg><p/>", "<p/> is not a void element; close it")
+        self.says("<br></br>", "</br>: br is a void element")
+        # Was "opened on line 1": the message named the line in the fragment,
+        # the error the line in the file.
+        self.assertEqual([str(e) for e in dom.parse("<p>\n<b>x</p>", 7)[1]],
+                         ["line 8: </p> closes <b> opened on line 8"])
 
 
 class TransformCounterexamples(unittest.TestCase):

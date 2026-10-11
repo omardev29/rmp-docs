@@ -107,17 +107,26 @@ class Raw:
 
 class HtmlError(Exception):
     def __init__(self, line: int, message: str):
-        super().__init__(f"line {line}: {message}")
+        super().__init__(line, message)
         self.line = line
         self.message = message
 
+    def __str__(self):
+        return f"line {self.line}: {self.message}"
+
 
 class _Builder(HTMLParser):
-    def __init__(self):
+    def __init__(self, first_line: int = 1):
         super().__init__(convert_charrefs=True)
         self.root = Node("#root")
         self.stack = [self.root]
         self.errors: list[HtmlError] = []
+        self.shift = first_line - 1
+
+    def _line(self) -> int:
+        """The line in the file, not in the fragment: what every node, every
+        error and every message that names another line says."""
+        return self.getpos()[0] + self.shift
 
     def _node(self, tag, attrs) -> Node:
         """The element of a start tag, and what is wrong with how it is
@@ -125,7 +134,7 @@ class _Builder(HTMLParser):
         <p> an attribute called `<p`), a `<` outside the quotes (`<img src=x`
         with its `>` forgotten takes the next tag in as its value), an
         attribute twice."""
-        line = self.getpos()[0]
+        line = self._line()
         raw = self.get_starttag_text() or ""
         if "<" in re.sub(r"\"[^\"]*\"|'[^']*'", "", raw[1:]):
             self.errors.append(HtmlError(line, f"{raw[:40]!r}: a < inside a tag, where a quote or "
@@ -158,7 +167,7 @@ class _Builder(HTMLParser):
             self.errors.append(HtmlError(line, f"<{tag}/> is not a void element; close it"))
 
     def handle_endtag(self, tag):
-        line = self.getpos()[0]
+        line = self._line()
         if tag in VOID:
             self.errors.append(HtmlError(line, f"</{tag}>: {tag} is a void element"))
             return
@@ -178,10 +187,10 @@ class _Builder(HTMLParser):
         self.stack.pop()
 
     def handle_data(self, data):
-        self.stack[-1].append(Text(data, self.getpos()[0]))
+        self.stack[-1].append(Text(data, self._line()))
 
     def handle_comment(self, data):
-        self.stack[-1].append(Comment(data, self.getpos()[0]))
+        self.stack[-1].append(Comment(data, self._line()))
 
     def handle_decl(self, decl):
         # `<!doctype html>`, before everything, is the one declaration HTML
@@ -189,12 +198,12 @@ class _Builder(HTMLParser):
         # doctype inside an element -- is markup the browser ignores.
         if " ".join(decl.lower().split()) != "doctype html" or len(self.stack) > 1 or \
                 any(not (isinstance(c, Text) and not c.data.strip()) for c in self.root.children):
-            self.errors.append(HtmlError(self.getpos()[0], f"<!{decl[:40]}> is not <!doctype html> "
+            self.errors.append(HtmlError(self._line(), f"<!{decl[:40]}> is not <!doctype html> "
                                                            "at the start: a browser ignores it"))
-        self.stack[-1].append(Raw(f"<!{decl}>", self.getpos()[0]))
+        self.stack[-1].append(Raw(f"<!{decl}>", self._line()))
 
     def unknown_decl(self, data):
-        self.errors.append(HtmlError(self.getpos()[0], f"unknown declaration {data!r}"))
+        self.errors.append(HtmlError(self._line(), f"unknown declaration {data!r}"))
 
     # The two ways the parser reads markup that is not markup -- as a browser
     # does, and as a browser does, without a word. `</ p>`, `</<p>` and `<!x>`
@@ -202,41 +211,35 @@ class _Builder(HTMLParser):
     def parse_bogus_comment(self, i, report=1):
         end = super().parse_bogus_comment(i, report)
         if report and end > i:
-            self.errors.append(HtmlError(self.getpos()[0], f"{self.rawdata[i:end][:40]!r} is not a tag: "
+            self.errors.append(HtmlError(self._line(), f"{self.rawdata[i:end][:40]!r} is not a tag: "
                                                            "a browser reads it as a comment"))
         return end
 
     def parse_endtag(self, i):
         if self.rawdata.startswith("</>", i) and getattr(self, "cdata_elem", None) is None:
-            self.errors.append(HtmlError(self.getpos()[0], "</> closes nothing: a browser drops it"))
+            self.errors.append(HtmlError(self._line(), "</> closes nothing: a browser drops it"))
         return super().parse_endtag(i)
 
     def handle_pi(self, data):
         # The parser drops one without a word; a browser reads it as a comment.
-        self.errors.append(HtmlError(self.getpos()[0], f"<?{data[:40]}> is a processing "
+        self.errors.append(HtmlError(self._line(), f"<?{data[:40]}> is a processing "
                                                        "instruction, and HTML has none"))
 
 
 def parse(markup: str, first_line: int = 1) -> tuple[Node, list[HtmlError]]:
     """The tree and every well-formedness problem found, by line."""
-    b = _Builder()
+    b = _Builder(first_line)
     b.feed(markup)
     # What the parser has not read once it has every byte is markup it is
     # still waiting to see end: an attribute's quote, a tag's >, a comment's
     # -->. close() then drops it, or makes a guess of it, without a word --
     # and the page loses everything from there on.
     if b.rawdata.startswith("<") and getattr(b, "cdata_elem", None) is None:
-        b.errors.append(HtmlError(b.getpos()[0], f"{b.rawdata[:40]!r} never ends: markup needs its "
+        b.errors.append(HtmlError(b._line(), f"{b.rawdata[:40]!r} never ends: markup needs its "
                                                  "closing >, and a < that is text is &lt;"))
     b.close()
     for open_node in b.stack[1:]:
         b.errors.append(HtmlError(open_node.line, f"<{open_node.tag}> is never closed"))
-    if first_line != 1:
-        shift = first_line - 1
-        for n in b.root.walk():
-            n.line += shift
-        for e in b.errors:
-            e.line += shift
     return b.root, b.errors
 
 

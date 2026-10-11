@@ -19,6 +19,7 @@ A counterexample becomes a named case in tests/test_counterexamples.py.
 from __future__ import annotations
 
 import html
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -158,7 +159,8 @@ class SerializeTest(unittest.TestCase):
 FRAGMENT = st.lists(st.one_of(TEXT, st.sampled_from(
     ["<p>", "</p>", "<div class='a'>", "</div>", "<br>", "<b>", "</b>", "<!-- c -->",
      "<script>", "</script>", "<pre>", "</pre>", '<a href="x">', "</a>", "<a href='", '<a title="',
-     "<p", "</p", "<!--", "<!DOCTYPE", "<?x?>", "<?php", "<", "</", "<!x", "<![CDATA[", "<img src=x"])),
+     "<p", "</p", "<!--", "<!DOCTYPE", "<?x?>", "<?php", "<", "</", "<!x", "<![CDATA[", "<img src=x",
+     "<svg>", "</svg>", "<path d='m'/>", "<p/>", "<br/>", "<!doctype html>", "\n", "<p class=a class=b>"])),
     max_size=12).map("".join)
 END = '<p id="end">end</p>'
 
@@ -193,6 +195,48 @@ class ParseTest(unittest.TestCase):
         root, errors = dom.parse(text + END)
         if not errors:
             self.assertEqual(shape(root)[2][-1:], [("p", {"id": "end"}, [("text", "end")])], written(root))
+
+
+    @given(FRAGMENT, st.integers(1, 500))
+    def test_a_fragment_further_down_a_file_is_the_same_fragment_further_down(self, text, first):
+        root, errors = dom.parse(text)
+        moved, moved_errors = dom.parse(text, first)
+
+        def further(message):   # a message that names another line names it in the file too
+            return re.sub(r"on line (\d+)", lambda m: f"on line {int(m.group(1)) + first - 1}", message)
+
+        self.assertEqual([(e.line + first - 1, further(e.message)) for e in errors],
+                         [(e.line, e.message) for e in moved_errors])
+        self.assertEqual([str(e) for e in moved_errors], [f"line {e.line}: {e.message}" for e in moved_errors])
+        def everything(node):   # every node, text and comments included
+            return [node] + [d for c in getattr(node, "children", []) for d in everything(c)]
+        self.assertEqual([n.line + first - 1 for n in everything(root)][1:],
+                         [n.line for n in everything(moved)][1:])
+
+
+class NodeTest(unittest.TestCase):
+
+    @given(ORDINARY)
+    def test_text_is_every_text_node_in_order(self, root):
+        def texts(node):
+            return "".join(c.data if isinstance(c, dom.Text) else texts(c) if isinstance(c, dom.Node) else ""
+                           for c in node.children)
+        self.assertEqual(root.text(), texts(root))
+        again, _errors = dom.parse(dom.serialize(root))
+        self.assertEqual(again.text(), root.text())
+
+    @given(ROOT)
+    def test_walk_is_every_element_once_depth_first(self, root):
+        def elements(node):
+            return [node] + [e for c in node.children if isinstance(c, dom.Node) for e in elements(c)]
+        self.assertEqual(list(root.walk()), elements(root))
+        for node in root.walk():
+            self.assertEqual(node.classes(), (node.attrs.get("class") or "").split())
+            self.assertEqual(node.get("class", "none"), node.attrs.get("class", "none"))
+            for c in node.children:
+                self.assertIs(c.parent, node)
+                self.assertEqual(c.text() if not isinstance(c, dom.Node) else "",
+                                 c.data if isinstance(c, dom.Text) else "")
 
 
 class EscapeTest(unittest.TestCase):
