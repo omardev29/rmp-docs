@@ -325,6 +325,72 @@ class RightWayGatesTest(unittest.TestCase):
         self.assertIsNone(self.run_one("void zero(int &value) { value = 0; }"))
 
 
+class RightWayGatesRunTest(unittest.TestCase):
+    """A text gate the right way is held to has to run and say nothing. One the
+    framework does not have, or one that fails without naming a line -- a
+    crash, or tools/pointer_check.py with no clang++ to read the header with --
+    is a problem, not a pass. The framework here is stand-in scripts, so no
+    compiler is needed to see it."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.fw = self.tmp / "framework"
+        (self.fw / "include" / "rmp").mkdir(parents=True)
+        (self.fw / "tools").mkdir()
+        for script in ("naming_check.sh", "ownership_check.sh"):
+            self.script(script, "exit 0\n")
+        # pointer_check.py's own behaviour: no clang++ is a skip, and exit 0,
+        # unless RMP_REQUIRE_CLANG=1 makes it a failure.
+        self.script("pointer_check.py",
+                    "import os, sys\n"
+                    "if os.environ.get('RMP_REQUIRE_CLANG') == '1':\n"
+                    "    print('FAIL: no clang++ to read the headers with, and RMP_REQUIRE_CLANG=1')\n"
+                    "    sys.exit(1)\n"
+                    "print('  skip  no clang++ on PATH: the public headers\\' pointers were not read')\n")
+
+    def script(self, name, text):
+        (self.fw / "tools" / name).write_text(text)
+
+    def judge(self, code="int score = 0;", harness="toplevel"):
+        s = snippets.Snippet("content/guidelines/x.html", 1, "cpp", code, harness, gates_clean=True)
+        (self.tmp / "unit").mkdir(exist_ok=True)
+        unit = snippets.materialise(s, self.fw, self.tmp / "unit")
+        return snippets.clean_gates(s, unit, self.fw)
+
+    def test_gates_that_run_and_say_nothing_pass(self):
+        self.assertIsNone(self.judge())
+
+    def test_a_gate_the_framework_does_not_have_is_a_problem(self):
+        (self.fw / "tools" / "ownership_check.sh").unlink()
+        self.assertIn("the framework has no tools/ownership_check.sh", self.judge() or "passed")
+
+    def test_a_gate_that_fails_without_naming_a_line_is_a_problem(self):
+        self.script("naming_check.sh", "echo 'Traceback (most recent call last):' >&2\n"
+                                       "echo \"NameError: name 'tree' is not defined\" >&2\nexit 1\n")
+        why = self.judge() or "passed"
+        self.assertIn("tools/naming_check.sh failed without naming a line (exit 1)", why)
+        self.assertIn("NameError: name 'tree' is not defined", why)
+
+    def test_a_header_no_clang_could_read_is_a_problem(self):
+        why = self.judge("#pragma once\n\nnamespace game {\ninline constexpr int LIVES = 3;\n}",
+                         harness=snippets.HEADER) or "passed"
+        self.assertIn("tools/pointer_check.py failed without naming a line (exit 1)", why)
+        self.assertIn("no clang++ to read the headers with", why)
+
+    def test_a_finding_on_the_harness_alone_is_not_the_blocks(self):
+        # The unit is the harness around the block: a FAIL line about one of
+        # the harness's lines is neither a finding of the block's nor a crash.
+        self.script("naming_check.sh", 'echo "FAIL  $1:1: R1 g_x -- a g_ name"\nexit 1\n')
+        self.assertIsNone(self.judge())
+
+    def test_a_finding_on_the_block_is_refused(self):
+        self.script("naming_check.sh", 'for i in $(seq 1 400); do echo "FAIL  $1:$i: R1 g_x -- a g_ name"; done\n'
+                                       "exit 1\n")
+        self.assertIn("is shown as the right way, and tools/naming_check.sh refuses it",
+                      self.judge() or "passed")
+
+
 class StaticRuleTest(unittest.TestCase):
     """A block nothing compiles is refused at build time, before any compiler."""
 

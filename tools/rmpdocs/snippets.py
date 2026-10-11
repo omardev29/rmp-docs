@@ -544,32 +544,57 @@ def gate_unit(s: Snippet, u: Unit, framework: Path):
     """(found, shown, printed): (rule, line in the block, what) for every
     finding of the block's gate on the block's own lines, those findings as
     the gate printed them, and all it printed."""
-    return run_gate(s.expect_gate, s, u, framework)
+    return run_gate(s.expect_gate, s, u, framework)[:3]
 
 
 def run_gate(name: str, s: Snippet, u: Unit, framework: Path):
-    """gate_unit, for the gate called `name`."""
+    """gate_unit, for the gate called `name`, and the gate's exit status."""
     gate = GATES[name]
     if name == "format":
         found, text = format_unit(u, framework, s.code)
-        return found, text, text
+        return found, text, text, 0
     if name == "pointers":
         ratchet = u.unit.parent / "no-ratchet.txt"
         ratchet.write_text("")
+        # With no clang++ it would skip and exit 0, which is not a reading.
         got = subprocess.run([sys.executable, "tools/pointer_check.py", "--include",
                               str(u.block.parents[1]), "--ratchet", str(ratchet)],
-                             capture_output=True, text=True, cwd=framework)
+                             capture_output=True, text=True, cwd=framework,
+                             env={**os.environ, "RMP_REQUIRE_CLANG": "1"})
         hits = _fail_lines(got.stdout, u, rules=False)
         # Its last line says what to write instead.
         hint = [line.strip() for line in got.stdout.splitlines()
                 if line.startswith("FAIL:") and not FAIL_LINE.match(line)]
         return ([(r, at, w) for r, at, w, _l in hits],
                 "\n".join([l for *_x, l in hits] + (hint[-1:] if hits else [])),
-                got.stdout + got.stderr)
+                got.stdout + got.stderr, got.returncode)
     got = subprocess.run([*gate.argv, str(u.block)], capture_output=True, text=True, cwd=framework)
     hits = _fail_lines(got.stdout, u, rules=gate.rules)
     return ([(r, at, w) for r, at, w, _l in hits], "\n".join(l for *_x, l in hits),
-            got.stdout + got.stderr)
+            got.stdout + got.stderr, got.returncode)
+
+
+def clean_gates(s: Snippet, u: Unit, framework: Path) -> str | None:
+    """What the text gates (CLEAN_GATES) say about a block shown as the
+    right way, or None when each of them ran and said nothing about its
+    lines. A gate the framework does not have, or one that fails without
+    naming a line -- a crash, or no clang++ for tools/pointer_check.py -- has
+    not passed the block, and says so."""
+    for name in [*CLEAN_GATES, *(["pointers"] if s.harness == HEADER else [])]:
+        script = GATES[name].argv[-1]
+        if not (framework / script).is_file():
+            return f"is shown as the right way, and the framework has no {script} to hold it to"
+        found, text, printed, status = run_gate(name, s, u, framework)
+        if found:
+            return (f"is shown as the right way, and {script} refuses it:\n"
+                    + (text or said([(r or name, at, w) for r, at, w in found])))
+        # A FAIL line about the harness's own lines is not the block's, and
+        # not a crash either.
+        if status != 0 and not any(FAIL_LINE.match(line) for line in printed.splitlines()):
+            tail = "\n".join(printed.strip().splitlines()[-6:])
+            return (f"is shown as the right way, and {script} failed without naming a line "
+                    f"(exit {status})" + (f":\n{tail}" if tail else ""))
+    return None
 
 
 def gate_one(s: Snippet, framework: Path) -> list[tuple[str, int, str]]:
@@ -659,15 +684,9 @@ def check(snippets: list[Snippet], framework: Path, jobs: int | None = None):
                 return ("is shown as the right way, and clang-format, with the framework's "
                         f".clang-format, would change it:\n{out[:600]}")
         if s.gates_clean:
-            names = [*CLEAN_GATES, *(["pointers"] if s.harness == HEADER else [])]
-            for name in names:
-                script = GATES[name].argv[-1]
-                if not (framework / script).is_file():
-                    continue
-                found, text, _printed = run_gate(name, s, u, framework)
-                if found:
-                    return (f"is shown as the right way, and {script} refuses it:\n"
-                            + (text or said([(r or name, at, w) for r, at, w in found])))
+            problem = clean_gates(s, u, framework)
+            if problem:
+                return problem
         if (s.expect_error or s.expect_lint or s.expect_gate) and not s.said:
             return "is shown as refused, and nothing the tool said about its lines could be shown"
         return None
