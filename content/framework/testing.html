@@ -550,6 +550,7 @@ a mistake that could be described precisely enough for a machine to reject it:</
 <tr><td><code>cppcheck</code></td><td>cppcheck, a second static analyser with its own reading of the code, finds anything in <code>src/rmp</code>, or a suppression of one has no reason or no longer matches anything</td></tr>
 <tr><td><code>headers</code></td><td>a public header does not compile on its own, or lacks the <code>.toml</code> values</td></tr>
 <tr><td><code>cost</code></td><td>a public header's preprocessed size moved away from its budget</td></tr>
+<tr><td><code>gates</code></td><td>a check above stops failing on the mistake it exists for — each runs on a copy of the tree with one planted in it</td></tr>
 <tr><td><code>configure</code></td><td><code>tools/configure.py</code> accepts something it should refuse, or the other way round, or the suite itself leaves a file the checkout generated changed</td></tr>
 <tr><td><code>rmp</code></td><td>the <code>rmp</code> command itself misbehaves — including when a file the framework tracks has not been classified as part of a new game or not</td></tr>
 <tr><td><code>binaries</code></td><td>the readers that judge a shipped <code>.exe</code> and Mac binary misread one — <a href="#binaries">above</a></td></tr>

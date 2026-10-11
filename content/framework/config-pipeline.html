@@ -235,13 +235,19 @@ is exactly an element you either ask for or do not.</p>
 <code>v1.2.3</code> is version 1.2.3, and Android's version code is computed from it so it always
 goes up — and every other build is <code>0.0.0-dev</code>.</p>
 
-<p data-fw-grep="tools/configure.py::is not vMAJOR\.MINOR\.PATCH \(optionally -rc1 / \+build\)">A
+<p data-fw-grep="tools/configure.py::is not vMAJOR\.MINOR\.PATCH in ASCII digits \(optionally -rc1 / ">A
 tag that starts with <code>v</code> is the release path, so one that does not read as
-<code>vMAJOR.MINOR.PATCH</code> is refused rather than published under a made-up number. A
-pre-release or build suffix after it is accepted — <code>v1.2.3-rc1</code>,
+<code>vMAJOR.MINOR.PATCH</code>, in ASCII digits, is refused rather than published under a
+made-up number. A pre-release or build suffix after it is accepted — <code>v1.2.3-rc1</code>,
 <code>v1.2.3+build</code> — and shares the version code of <code>v1.2.3</code>. Minor and patch
-each have to stay below 1000 for the code to keep going up. A tag that does not start with
-<code>v</code> is not a release: it builds as <code>0.0.0-dev</code>, with a warning.</p>
+each have to stay below 1000 for the code to keep going up.
+<span data-fw-grep="tools/configure.py::a number with a leading zero, which would share">A number
+with a leading zero is refused too</span> — <code>v01.2.3</code> would be a second release name
+with the version code of <code>v1.2.3</code> — and so is
+<span data-fw-grep="tools/configure.py::The first release is v0\.0\.1\.">
+<code>v0.0.0</code>, whose code would be 0: the first release is <code>v0.0.1</code></span>. A tag
+that does not start with <code>v</code> is not a release: it builds as <code>0.0.0-dev</code>,
+with a warning.</p>
 
 <h2 id="config-h">The generated header</h2>
 

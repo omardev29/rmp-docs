@@ -78,8 +78,9 @@ orientation = ["landscape"]
 <samp>refusing to build a release with placeholder identifiers</samp>, naming the Android
 application id or the iOS bundle id that still says <code>com.example.</code>. A Google Play id can
 never change once published, so it is checked before the first release rather than after it. Set
-real ids in the <code>.toml</code>. A tag that is not a version — <code>v1.2.3</code>, optionally
-with a pre-release part — is refused as well; see <a href="/publishing/releases.html">Releases</a>.</p>
+real ids in the <code>.toml</code>. A tag that is not a version — <code>v1.2.3</code> in ASCII
+digits, no number with a leading zero, optionally with a pre-release part — is refused as well, and
+so is <code>v0.0.0</code>; see <a href="/publishing/releases.html">Releases</a>.</p>
 
 <h2>Building</h2>
 
