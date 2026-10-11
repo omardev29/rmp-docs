@@ -344,9 +344,10 @@ kind of mistake where it happens instead of where it crashes, and each report st
 the line that did it, with the stack that got there:</p>
 
 <ul>
-<li><code>"address"</code>, AddressSanitizer: a read or a write past a buffer, a use after free or
+<li data-fw-grep="raylib_multiplatform.toml::About three times as\n#              slow \(the framework's unit tests: 5\.5 s, then 18\.6 s\) and two\n#              to three times the memory\."><code>"address"</code>, AddressSanitizer: a read or a write past a buffer, a use after free or
 after return, and on Linux, through LeakSanitizer, memory nobody freed, reported when the game
-exits. About twice as slow, and three times the memory.</li>
+exits. About three times as slow — the framework's unit tests take 5.5 seconds, and 18.6 under
+it — and two to three times the memory.</li>
 <li><code>"undefined"</code>, UndefinedBehaviorSanitizer: a signed overflow, a shift past the
 width, a float cast to an int it does not fit, a misaligned or null access. Cheap.</li>
 </ul>

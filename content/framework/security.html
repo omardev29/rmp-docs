@@ -1,6 +1,6 @@
 <!--
 title: Security
-description: Every safety measure the framework takes — the release hardened flag by flag, every debug build under the sanitizers, two static analysers, the shipped binary read back, the supply chain pinned, secrets kept out of the repository — what each one protects against, what it costs, and what is not done.
+description: Every safety measure the framework takes — the release hardened flag by flag, every debug build under the sanitizers, two static analysers, what its tests reach, the shipped binary read back, the supply chain pinned, secrets kept out of the repository — what each one protects against, what it costs, and what is not done.
 order: 65
 -->
 <h1>Security</h1>
@@ -22,6 +22,7 @@ measured it — and where it lives. The last section says plainly what is not do
 <tr><td><a href="#debug-checks">Library checks in debug</a></td><td>every debug build on the desktop</td><td>yes</td></tr>
 <tr><td><a href="#sanitizers">AddressSanitizer and UndefinedBehaviorSanitizer</a></td><td>every debug build of the framework on the desktop</td><td>off until <code>[dev] sanitize</code> lists them</td></tr>
 <tr><td><a href="#analysis">Static analysis</a></td><td>the framework's own code: <code>rmp lint</code>, <code>rmp test</code>, the lint job</td><td>no: the framework's code is checked before a game gets it</td></tr>
+<tr><td><a href="#coverage">What the tests reach</a></td><td>the framework's own code: <code>rmp test coverage</code>, the coverage job</td><td>no: it measures the framework's tests</td></tr>
 <tr><td><a href="#binaries">The shipped binary, read back</a></td><td>every release job in CI</td><td>yes: the same workflows</td></tr>
 <tr><td><a href="#supply-chain">The supply chain, pinned</a></td><td>CI</td><td>yes, at the pins the game was made with</td></tr>
 <tr><td><a href="#secrets">Secrets, signing, installing</a></td><td>the <code>.toml</code>, the Android job, the installer</td><td>yes</td></tr>
@@ -153,7 +154,7 @@ packed. <code>tools/size_budget.txt</code> holds them, and every release is
 <tbody>
 <tr data-fw-grep="tools/size_budget.txt::^linux-x64-glibc +elf +1236560 +366804 "><td><code>linux-x64-glibc</code></td><td>1,236,560</td><td>366,804</td></tr>
 <tr data-fw-grep="tools/size_budget.txt::^linux-arm64-glibc +elf +1162896 +346808 "><td><code>linux-arm64-glibc</code></td><td>1,162,896</td><td>346,808</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^linux-riscv64-glibc +elf +962752 +- "><td><code>linux-riscv64-glibc</code></td><td>962,752</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^linux-riscv64-glibc +elf +962752 +391504 "><td><code>linux-riscv64-glibc</code></td><td>962,752</td><td>391,504</td></tr>
 <tr data-fw-grep="tools/size_budget.txt::^linux-x64-musl +elf +1232664 +365412 "><td><code>linux-x64-musl</code></td><td>1,232,664</td><td>365,412</td></tr>
 <tr data-fw-grep="tools/size_budget.txt::^linux-x64-glibc-drm +elf +754856 +312400 "><td><code>linux-x64-glibc-drm</code></td><td>754,856</td><td>312,400</td></tr>
 <tr data-fw-grep="tools/size_budget.txt::^linux-arm64-glibc-drm +elf +660552 +- "><td><code>linux-arm64-glibc-drm</code></td><td>660,552</td><td>—</td></tr>
@@ -309,7 +310,7 @@ its AddressSanitizer will not start with it. So every sanitized program there ge
 
 <h3 id="debug-checks">The library checks, in every debug build</h3>
 
-<p data-fw-grep="cmake/sanitize.cmake::#   HARDENING, every Debug build, framework and game\.">Independently
+<p data-fw-grep="cmake/sanitize.cmake::#   HARDENING, every Debug build CMakeLists\.txt makes, framework and game --\n#   the desktop; Android's raymob CMake and the iOS Xcode project do not\n#   include this file\.">Independently
 of the sanitizers, every debug build on the desktop — the framework's and a game's — gets two more
 checks that need no runtime. Android's and iOS's debug builds are made by their own projects, and
 get neither.</p>
@@ -329,13 +330,14 @@ is not among them: it needs optimisation, and a debug build has none.</p>
 
 <h3 id="sanitizer-cost">What they cost</h3>
 
-<p data-fw-grep="raylib_multiplatform.toml::-- memory nobody freed, reported at exit\. About twice as slow\n#              and three times the memory\.">The
-framework's <code>.toml</code> puts AddressSanitizer at about twice as slow and three times the
-memory, and UndefinedBehaviorSanitizer as cheap.
-<span data-fw-grep=".github/workflows/ci.yml::It took 2m22s uninstrumented; locally the\n    # instrumented `rmp test examples` takes about three times as long\.">The one
-measurement of wall time in the framework is its examples: building and booting all of them took
-2 minutes 22 seconds uninstrumented, and instrumented, <code>rmp test examples</code> takes about
-three times as long.</span> None of it reaches a release.</p>
+<p data-fw-grep="raylib_multiplatform.toml::-- memory nobody freed, reported at exit\. About three times as\n#              slow \(the framework's unit tests: 5\.5 s, then 18\.6 s\) and two\n#              to three times the memory\.">AddressSanitizer
+is the expensive one. The framework's unit tests take 5.5 seconds without it and 18.6 with it,
+3.4 times as long, and the framework's <code>.toml</code> puts its memory at two to three times;
+UndefinedBehaviorSanitizer is cheap.
+<span data-fw-grep=".github/workflows/ci.yml::It took 2m22s uninstrumented; locally the\n    # instrumented `rmp test examples` takes about three times as long\.">The
+examples say the same: building and booting all of them took 2 minutes 22 seconds uninstrumented,
+and instrumented, <code>rmp test examples</code> takes about three times as long.</span> None of it
+reaches a release.</p>
 
 <h3 id="reports">A report fails the run</h3>
 
@@ -345,10 +347,12 @@ program's last line of its own, when it exits. So the checks that boot a game do
 markers it prints: <code>rmp test smoke</code> and <code>rmp test render</code> fail on a
 sanitizer's report anywhere in the output, with the first forty lines of it, and on any exit status
 but 0 — <samp>a sanitizer reported the run above (exit …)</samp>. Every example booted by
-<code>rmp test examples</code> is held to its exit status the same way.
+<code>rmp test examples</code>, and every one it <a href="/framework/testing.html#e2e">plays from a
+script</a>, is held to its exit status the same way.
 <span data-fw-grep="tests/configure_test.py::def test_no_launch_throws_its_exit_status_away\(self\):">So
 is every other start of a game in the tools and the workflows — a release started from another
-folder, the musl build on Alpine, the DRM build on its virtual display — but the iOS simulator's,
+folder, the musl build on Alpine, the DRM build on its virtual display, the RISC-V build under
+emulation — but the iOS simulator's,
 <a href="#not-done">below</a>; a test fails one that throws the status away.</span> <a href="/framework/testing.html#sanitize">Testing</a> has the runs
 these checks are part of, and the second one with gcc, <code>rmp test sanitize</code>.</p>
 
@@ -442,6 +446,21 @@ framework or in an example — the two shapes a leak and a double free take. The
 such a call are listed with the reason, and the list only shrinks.</dd>
 </dl>
 
+<h2 id="coverage">What the tests reach</h2>
+
+<p data-fw-grep="tools/coverage_check.sh::# What the tests run of the framework: clang's source-based coverage of\n# src/rmp/, held by two ratchets\.">The
+sanitizers and the analysers judge the code a run reaches and the code they read; neither says how
+much of the framework the tests run at all. <code>rmp test coverage</code> measures it, line by
+line, with clang's source-based coverage over the unit tests, the headless layout test and the
+one test that drives the real desktop runner. Two lists hold what it measured, and each moves one
+way: <code>tools/coverage_floor.txt</code>, the share of each file of <code>src/rmp/</code> the
+tests run, which only rises, and <code>tools/untested_api.txt</code>, the public functions no test
+calls, which only shrinks — a new function arrives with its test.
+<span data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, examples, rmp_new, coverage, docs,">Both
+are gates in the framework's <code>coverage</code> job, inside the build image they were measured
+in, and a release of the framework waits for it.</span>
+<a href="/framework/testing.html#coverage">Testing</a> has the detail.</p>
+
 <h2 id="binaries">The shipped binary, read back</h2>
 
 <p data-fw-grep="CMakeLists.txt::What the linker made of them is read\n# off the shipped binary by `tools/binary_check\.py elf` in the Linux jobs\.">A
@@ -524,7 +543,10 @@ with anonymous rate limits.</dd>
 <dt data-fw-grep="thirdparty/FROZEN_VERSIONS.md::\| GitHub Actions \| full commit SHAs \| Every `uses:` in `\.github/workflows/`, with the tag in a trailing comment\. \|">Every
 action, by commit</dt>
 <dd>Every GitHub Action a workflow uses is named by the full commit it resolves to, with the tag in
-a comment beside it: a tag can be moved, a commit cannot.</dd>
+a comment beside it: a tag can be moved, a commit cannot.
+<span data-fw-grep="tests/configure_test.py::class ActionsArePinnedByShaTest\(unittest\.TestCase\):[\s\S]*?self\.assertRegex\(ref, r&quot;\^\[\\w\.-\]\+/\[\\w\./-\]\+@\[0-9a-f\]\{40\}\$&quot;">A
+test of the framework reads every <code>uses:</code> in its workflows and fails on one that is not
+a full commit, or does not say which version that commit is.</span></dd>
 <dt data-fw-grep="tools/linux_build.sh::echo &quot;\$\{SHA\}  \$\{TMP\}/zig\.tar\.xz&quot; \| sha256sum -c -">Every
 download, by checksum</dt>
 <dd>Every file a job fetches by address — zig and UPX outside the image, Ninja and XcodeGen on
@@ -621,10 +643,9 @@ fuzzing.</strong> No fuzz target exists, so no parser of the framework — the L
 readers, the save reader, the resource pack — is fed generated input. The build image carries
 libFuzzer's runtime, with LLVM 18, and nothing runs it.</li>
 <li><strong>No property-based tests.</strong> Hypothesis is in the build image, and no test uses it.</li>
-<li><strong>No mutation testing.</strong> Mull and mutmut are in the build image, and neither runs on any code: no
-measure says how many mistakes in the framework its tests would miss.</li>
-<li><strong>No check that the GitHub Actions stay pinned to their commits.</strong> Every one is pinned, and nothing
-fails if a new one is not.</li>
+<li><strong>No mutation testing.</strong> Mull and mutmut are in the build image, and neither runs on any code.
+<a href="#coverage">Coverage</a> says which lines the tests run; nothing says how many mistakes in
+those lines the tests would miss.</li>
 <li><strong>No reading of how a Windows, macOS or BSD release was linked.</strong> The BSD releases are hardened
 like Linux's, Fortify aside, and the Windows ones by their linker's defaults, and nothing reads it
 back out of the binary: <code>binary_check.py windows</code> reads what an <code>.exe</code>
