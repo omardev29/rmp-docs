@@ -295,8 +295,9 @@ assets, objects and their handles, scenes, globals, callbacks — and why a call
 
 <p data-fw-grep="include/rmp/ui.h::// Closes the element even if the body throws\.">RAII is not only
 for memory. A container of the UI is opened by the function that takes its body and closed by a
-guard in that same function, so a body that returns early cannot leave it open and spoil the
-frame:</p>
+guard in that same function. The body is a lambda, so a <code>return</code> in it ends the body and
+not the container, and the guard closes the container even if the body throws: one left open would
+spoil the whole frame.</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="void resume(); void quit();">
 rmp::ui::panel([&amp;] {
