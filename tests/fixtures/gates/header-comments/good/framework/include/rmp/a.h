@@ -11,4 +11,12 @@ namespace rmp {
 // std::unique_ptr.
 void f();
 
+// ---------------------------------------------------------------------------
+// The pointer
+//
+// Mouse and finger are the same pointer, which is what lets the same code work
+// on every target.
+// ---------------------------------------------------------------------------
+void g();
+
 } // namespace rmp

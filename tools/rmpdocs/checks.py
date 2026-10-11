@@ -528,8 +528,9 @@ FRAMEWORK_PATH = re.compile(r"\b((?:src|include|tools|tests|examples|cmake|third
 
 @gate("header-comments", "what a header comment says about the framework is still true: the "
                          "files it names exist, the rmp:: names resolve, the [section] keys are in "
-                         "the .toml, a header that says it has no <x> does not include it, and "
-                         "there is no history (phase N) or retired wording in it")
+                         "the .toml, a header that says it has no <x> does not include it, "
+                         "there is no history (phase N) or retired wording in it, and a section "
+                         "banner's title -- the reference's heading -- ends on its own line")
 def check_header_comments(ctx: Context) -> list[Problem]:
     fw = ctx.framework
     if fw is None or not (fw / "include" / "rmp").is_dir():
@@ -576,6 +577,35 @@ def check_header_comments(ctx: Context) -> list[Problem]:
         for phrase in phrases:
             if phrase in low:
                 out.append(Problem("header-comments", header, line, f"says {phrase!r}"))
+    for h in sorted((fw / "include" / "rmp").glob("*.h")):
+        for line in run_on_banner_titles(h.read_text().splitlines()):
+            out.append(Problem("header-comments", f"include/rmp/{h.name}", line,
+                               "a banner's first line is its heading in the reference, and this one "
+                               "runs on into the next: end the title on its line, and leave a blank "
+                               "`//` before what follows"))
+    return out
+
+
+def run_on_banner_titles(lines: list[str]) -> list[int]:
+    """The 1-based line of every section banner -- not the file's own, which
+    is the page's introduction -- whose first line runs on into a second. The
+    reference makes that first line a heading: "The pointer. Mouse and finger
+    are the same pointer, which is what lets the" was one."""
+    from .cxx import BANNER
+    out, i, first = [], 0, True
+    while i < len(lines):
+        if BANNER.match(lines[i]):
+            j = i + 1
+            while j < len(lines) and not BANNER.match(lines[j]) and lines[j].strip().startswith("//"):
+                j += 1
+            if j < len(lines) and BANNER.match(lines[j]):
+                body = [re.sub(r"^\s*//\s?", "", x) for x in lines[i + 1:j]]
+                if not first and len(body) > 1 and body[0].strip() and body[1].strip():
+                    out.append(i + 2)
+                first = False
+                i = j + 1
+                continue
+        i += 1
     return out
 
 
