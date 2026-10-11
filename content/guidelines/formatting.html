@@ -257,7 +257,9 @@ destroys the part of the code that took longest to write.</p>
 it does not touch the entry-point macros of <code>rmp/app.h</code>, which sit between
 <code>// clang-format off</code> and <code>// clang-format on</code>: their bodies hold block
 comments, and every formatter mangles a <code>/* */</code> inside a macro's continued lines. They are
-the only code in the framework it is told to leave alone.</p>
+the only code of the framework's own it is told to leave alone<span data-fw-grep=".clang-format-ignore::thirdparty/\*\n[\s\S]*?include/rmp/generated/\*">;
+the vendored libraries and the headers generated from the <code>.toml</code> are left out whole, by
+<code>.clang-format-ignore</code></span>.</p>
 
 <h2 id="files">Files</h2>
 
