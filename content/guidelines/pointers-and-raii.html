@@ -136,7 +136,9 @@ if (auto health = player.get&lt;rmp::behavior::Health&gt;()) health-&gt;heal(1);
 <p data-fw-grep="include/rmp/object.h::// REACHING INTO AN EMPTY ONE is a mistake in the game, and is said once, per\n// type: \* and -&gt; then reach a stand-in">Reaching
 into an empty one without asking is a mistake in the game, and the framework says so once, in the
 log; the line that forgot the <code>if</code> then writes to a stand-in made for the purpose
-instead of taking the game down. <code>[dev] strict</code> stops a debug build there instead.</p>
+instead of taking the game down. <code>[dev] strict</code> stops a debug build there instead<span data-fw-grep="include/rmp/object.h::// debug build there instead\.\) A type with no default constructor has no\n// stand-in, and that one mistake ends the program">,
+and a type with no default constructor has no stand-in: there, the one mistake ends the
+program</span>.</p>
 
 <p>It is a type of the framework's own because the standard library's spelling,
 <code>std::optional&lt;std::reference_wrapper&lt;T&gt;&gt;</code>, costs
