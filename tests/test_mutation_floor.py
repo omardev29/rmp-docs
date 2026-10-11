@@ -9,7 +9,8 @@ them mean something -- each one a mistake that would pass in silence:
     nothing ever mutates the code it was written for), and
     every source and test the floor names exists (or mutmut runs nothing,
     and every mutant survives);
-  - tests/mutation/run.sh is ASCII and parses (macOS's bash 3.2 included).
+  - tests/mutation/run.sh is ASCII and parses (macOS's bash 3.2 included);
+  - the two Hypothesis profiles are what they say, on a CI runner too.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -95,6 +97,37 @@ class FloorTest(unittest.TestCase):
                              stdin=subprocess.DEVNULL, env={**os.environ, "RMP_FRAMEWORK": "/nonexistent"})
         self.assertEqual(out.returncode, 1)
         self.assertIn("no tools/mutation_report.py", out.stdout + out.stderr)
+
+
+class ProfilesTest(unittest.TestCase):
+
+    def profile(self, name: str, **env) -> subprocess.CompletedProcess:
+        """tests/hypothesis_profiles.py loaded in a process of its own, with
+        the profile and the environment asked for: what it settled on."""
+        code = ("import sys; sys.path.insert(0, 'tests'); import hypothesis_profiles, hypothesis; "
+                "s = hypothesis.settings.default; "
+                "print(s.derandomize, s.max_examples, s.database is None, s.deadline)")
+        return subprocess.run([sys.executable, "-c", code], cwd=DOCS, capture_output=True, text=True,
+                              env={**{k: v for k, v in os.environ.items() if k != "CI"},
+                                   "RMP_HYPOTHESIS_PROFILE": name, **env})
+
+    def test_the_profiles_are_what_they_say_on_a_ci_runner_too(self):
+        try:
+            import hypothesis  # noqa: F401
+        except ImportError:
+            if os.environ.get("RMP_REQUIRE_HYPOTHESIS") == "1":
+                raise
+            self.skipTest("hypothesis is not installed")
+        # Hypothesis derandomizes by itself where CI is set -- every GitHub
+        # runner -- and a nightly left to that default ran the same 5000
+        # examples every night (the framework's ce84f8f).
+        for env in ({}, {"CI": "true"}):
+            with self.subTest(env=env):
+                self.assertEqual(self.profile("ci", **env).stdout, "True 200 True None\n")
+                self.assertEqual(self.profile("nightly", **env).stdout, "False 5000 False None\n")
+        got = self.profile("weekly")
+        self.assertNotEqual(got.returncode, 0)
+        self.assertIn("RMP_HYPOTHESIS_PROFILE='weekly': one of ci, nightly", got.stderr)
 
 
 if __name__ == "__main__":

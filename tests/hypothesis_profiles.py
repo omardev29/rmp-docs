@@ -59,7 +59,11 @@ _QUIET = [hypothesis.HealthCheck.differing_executors]
 PROFILES = {
     "ci": dict(derandomize=True, max_examples=200, database=None, deadline=None,
                print_blob=True, suppress_health_check=_QUIET),
-    "nightly": dict(max_examples=5000, deadline=None, print_blob=True,
+    # derandomize=False said, not left to the default: Hypothesis turns
+    # derandomize on by itself where the CI variable is set -- every GitHub
+    # runner -- and the nightly would run the same 5000 examples every night
+    # (the framework's ce84f8f).
+    "nightly": dict(derandomize=False, max_examples=5000, deadline=None, print_blob=True,
                     suppress_health_check=_QUIET,
                     database=hypothesis.database.DirectoryBasedExampleDatabase(
                         str(DOCS / ".cache" / "hypothesis"))),
