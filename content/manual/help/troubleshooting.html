@@ -211,11 +211,12 @@ short, or in a format raylib does not read, counts as failed the same as a missi
 once <samp>ASSETS: '…' is in … but could not be decoded</samp>; a font is not replaced by raylib's
 built-in one under its name, it comes back empty. A song <code>rmp::audio::music()</code> cannot
 stream counts too, and says <samp>AUDIO: "…" is in resources/ but could not be streamed</samp>.</li>
-<li><strong>A pack that does not match the game.</strong> A packed picture that will not unpack
-says <samp>ASSETS: Failed to unpack '…' (code …, wrong password?)</samp> and then
-<samp>ASSETS: '…' not usable from pack, falling back to loose file</samp>; a packed sound or font
-says only the second, after rres's own warning that the decryption failed. That is a pack made with
-a different <code>[resources] rres_password</code>. <code>rmp pack</code> makes it again, or
+<li><strong>A pack that does not match the game.</strong> A packed picture that will not open
+says <samp>ASSETS: '…' not usable from pack (corrupt, or another password), falling back to loose
+file</samp>, and a packed sound or font <samp>ASSETS: '…' not usable from pack, falling back to
+loose file</samp>. That is a pack made with a different <code>[resources] rres_password</code>, or
+one cut short since; a pack whose directory itself is broken says
+<samp>ASSETS: … is cut short or corrupt, using loose files</samp> once, at startup. <code>rmp pack</code> makes it again, or
 <code>rmp unpack</code> goes back to loose files. A name the pack does not hold says the second line
 too for a sound or a font, and <samp>ASSETS: '…' not found in pack, falling back to loose
 file</samp> for a picture.</li>

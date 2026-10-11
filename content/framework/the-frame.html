@@ -160,9 +160,9 @@ never called.</p>
 
 <h3 id="delta">The delta</h3>
 
-<p data-fw-grep="src/rmp/clock.cpp::float clamped\(const float raw\) \{\s+if \(raw &lt; 0\) return 0\.0f;\s+if \(RMP_MAX_DELTA &gt; 0 &amp;&amp; raw &gt; RMP_MAX_DELTA\) return RMP_MAX_DELTA;[\s\S]*?float step_delta\(\) \{\s+timing\.last = clamped\(raw_delta\(\)\);">The
+<p data-fw-grep="src/rmp/clock.cpp::float clamped\(const float raw\) \{ return clamp_delta\(raw, RMP_MAX_DELTA\); \}[\s\S]*?if \(ceiling &amp;&amp; raw &gt; max\) return max;[\s\S]*?if \(!\(raw &gt;= 0\) \|\| !std::isfinite\(raw\)\) return 0\.0f;[\s\S]*?float step_delta\(\) \{\s+timing\.last = clamped\(raw_delta\(\)\);">The
 <code>delta</code> every hook receives is raylib's <code>GetFrameTime()</code> with two corrections:
-a negative reading becomes 0, and a reading longer than
+a negative reading, or one that is not a number, becomes 0, and a reading longer than
 <a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a> — a
 twentieth of a second unless you change it — is cut down to it. A frame that stalled for half a
 second, because the window was dragged or the debugger stopped, becomes a moment of slow motion

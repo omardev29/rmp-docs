@@ -87,7 +87,7 @@ keyboard and then for the first half of every second it types.
 file is not on the check's list, so a <code>GetTime()</code> or a key read straight from raylib
 there fails it, as in any other file that is not a seam.</span></p>
 
-<p data-fw-grep="src/rmp/clock.cpp::void set_fixed_delta\(float seconds\) \{ timing\.fixed = seconds &gt; 0 \? seconds : 0; \}">One
+<p data-fw-grep="src/rmp/clock.cpp::timing\.fixed = seconds &gt; 0 &amp;&amp; std::isfinite\(seconds\) \? seconds : 0;">One
 clock is also what lets a whole game be played the same way twice. A test can fix the step, so that
 every frame is exactly as long as it says whatever the machine took — still clamped by
 <code>[app] max_delta</code> — and name the seed the run starts from. That is how the framework's tests
@@ -127,7 +127,7 @@ to the flag at 60 frames a second and again at 240, and jumps from its moving pl
 and the next frame time comes back as half a second. A bullet at 900 units a second then moves 450
 units in one step — through the wall and out the other side, without ever overlapping it.</p>
 
-<p data-fw-grep="src/rmp/clock.cpp::float clamped\(const float raw\) \{\s+if \(raw &lt; 0\) return 0\.0f;\s+if \(RMP_MAX_DELTA &gt; 0 &amp;&amp; raw &gt; RMP_MAX_DELTA\) return RMP_MAX_DELTA;">So the
+<p data-fw-grep="src/rmp/clock.cpp::float clamped\(const float raw\) \{ return clamp_delta\(raw, RMP_MAX_DELTA\); \}[\s\S]*?if \(ceiling &amp;&amp; raw &gt; max\) return max;">So the
 <code>delta</code> the game is handed is clamped to
 <a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a>, a
 twentieth of a second unless you change it. A frame that really took longer arrives as a twentieth

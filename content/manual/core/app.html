@@ -182,7 +182,7 @@ framework's <code>.toml</code> says <code>letterbox</code>, and so does every ga
 stretch = "expand"
 </pre>
 
-<p data-fw-grep="src/rmp/stretch.cpp::void set_stretch\(const Stretch mode\) \{ world\.mode = mode; \}"><a href="ref:rmp::app::stretch"><code>rmp::app::stretch()</code></a>
+<p data-fw-grep="src/rmp/stretch.cpp::void set_stretch\(const Stretch mode\) \{\s+switch \(mode\) \{[\s\S]*?world\.mode = mode;"><a href="ref:rmp::app::stretch"><code>rmp::app::stretch()</code></a>
 is the mode in use, starting from the <code>.toml</code>'s, and
 <a href="ref:rmp::app::set_stretch"><code>rmp::app::set_stretch()</code></a> changes it from anywhere,
 at once: the next thing that asks sees the new one. The <code>.toml</code> is the place for a game's
