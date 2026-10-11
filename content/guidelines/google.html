@@ -46,11 +46,13 @@ in the framework and the examples.</p>
 <h3 id="pragma-once">#pragma once</h3>
 
 <p data-fw-grep=".clang-tidy::portability-avoid-pragma-once\s+#pragma once is the repository's">Google
-asks for <code>#define</code> guards named after the file's path. Every header here starts with
+asks for <code>#define</code> guards named after the file's path. A header here starts with
 <code>#pragma once</code> instead: one line that cannot be misspelt, copied into the wrong file or
 collide with another guard, and every compiler the framework builds with supports it.
 <code>portability-avoid-pragma-once</code>, which would refuse it, is switched off. Nothing checks
-that a header has it; a header without it is a question for review.</p>
+that a header has it; a header without it is a question for review<span data-fw-grep="tests/smoke_test.h::#ifndef RMP_SMOKE_TEST_H\n#define RMP_SMOKE_TEST_H">,
+and the framework has one: <code>tests/smoke_test.h</code>, which the plain C example includes too,
+keeps a guard</span>.</p>
 
 <h3 id="forward-declarations">Forward declarations between the framework's own headers</h3>
 

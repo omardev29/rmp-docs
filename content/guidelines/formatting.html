@@ -257,8 +257,10 @@ the only code in the framework it is told to leave alone.</p>
 <code>#pragma once</code>: every compiler the framework builds with understands it, and it cannot
 get out of step with the file's name the way an include guard can. clang-tidy has a check that
 would refuse it, <code>portability-avoid-pragma-once</code>, and the framework's
-<code>.clang-tidy</code> turns it off; nothing checks that a header has it, and every header of the
-framework does.</p>
+<code>.clang-tidy</code> turns it off. Nothing checks that a header has it, and every header of the
+framework does<span data-fw-grep="tests/smoke_test.h::#ifndef RMP_SMOKE_TEST_H\n#define RMP_SMOKE_TEST_H">
+but one: <code>tests/smoke_test.h</code>, which the plain C example includes too, has an include
+guard</span>.</p>
 
 <pre data-lang="cpp" data-harness="header">
 #pragma once
