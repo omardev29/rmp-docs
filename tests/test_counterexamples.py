@@ -9,14 +9,16 @@ tests/test_<module>_property.py.
 
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from under_test import load  # noqa: E402
+from under_test import DOCS, load  # noqa: E402
 
 cxx = load("cxx")
+dom = load("dom")
 
 
 class MaskCounterexamples(unittest.TestCase):
@@ -83,6 +85,113 @@ class ReadHeaderCounterexamples(unittest.TestCase):
         root = cxx.read_header("include/rmp/x.h", text)
         x = next(e for e in root.walk() if e.name == "x")
         self.assertEqual(x.qualname, "::".join(["a"] * cxx.MAX_NESTING + ["x"]))
+
+
+class SerializeCounterexamples(unittest.TestCase):
+    """test_dom_property.SerializeTest: what serialize() writes reads back
+    as the tree, or it refuses."""
+
+    def refused(self, node, says: str):
+        root = dom.el("#root", None, node) if not isinstance(node, dom.Comment) else dom.el("#root")
+        if isinstance(node, dom.Comment):
+            root.append(node)
+        with self.assertRaisesRegex(dom.HtmlError, says):
+            dom.serialize(root)
+
+    def test_a_comment_a_browser_would_end_early(self):
+        # Was '<!-->-->': a browser reads an empty comment, and "-->" on the page.
+        for data in (">", "->", "a-->b", "a--!>b", "x<!-"):
+            with self.subTest(data=data):
+                self.refused(dom.Comment(data), "cannot be written as a comment")
+
+    def test_a_comment_a_browser_reads_as_written(self):
+        for data in (" ok ", "a - b", "<!-- nested", "a->b", "-x-"):
+            with self.subTest(data=data):
+                root = dom.el("#root")
+                root.append(dom.Comment(data))
+                again, errors = dom.parse(dom.serialize(root))
+                self.assertEqual((errors, again.children[0].data), ([], data))
+
+    def test_a_script_that_says_its_own_end_tag(self):
+        # Was '<script></SCRIPT></script>': the page's script ended early.
+        self.refused(dom.el("div", None, dom.el("script", None, "x = '</SCRIPT>';")), "cannot say </script>")
+        self.refused(dom.el("style", None, "a{} </style >"), "cannot say </style>")
+
+    def test_a_text_only_element_holding_markup(self):
+        # Was '<textarea><!----></textarea>': read back as text.
+        area = dom.el("textarea")
+        area.append(dom.Comment(""))
+        self.refused(area, "<textarea> holds text and nothing else")
+        self.refused(dom.el("title", None, dom.el("b", None, "x")), "<title> holds text and nothing else")
+        self.refused(dom.el("script", None, dom.el("b")), "<script> holds text and nothing else")
+
+    def test_children_where_nothing_can_be_held(self):
+        self.refused(dom.el("br", None, "x"), "void element")
+        self.refused(dom.el("path", {"/": ""}, "x"), "written self-closed")
+
+    def test_self_closed_only_inside_an_svg(self):
+        self.refused(dom.el("p", {"/": ""}), "not a void element")
+        self.assertEqual(dom.serialize(dom.el("svg", None, dom.el("path", {"/": ""}))), "<svg><path/></svg>")
+
+    def test_a_name_that_cannot_be_written(self):
+        # Was '</><//>', and '<_></_>': a tag starts with a letter.
+        self.refused(dom.el("/"), "cannot be written as the name")
+        self.refused(dom.el("_"), "cannot be written as the name")
+        self.refused(dom.el("p", {"a b": "c"}), "cannot be written as the name")
+
+
+class ParseCounterexamples(unittest.TestCase):
+    """test_dom_property.ParseTest: markup a browser repairs in silence is an
+    error, not a guess the page ships."""
+
+    def says(self, markup: str, *expected: str):
+        _root, errors = dom.parse(markup)
+        for text in expected:
+            self.assertTrue(any(text in str(e) for e in errors), (markup, [str(e) for e in errors]))
+
+    def test_markup_that_never_ends(self):
+        # Each swallowed `<p id="end">end</p>` after it without a word.
+        end = '<p id="end">end</p>'
+        self.says("<!--" + end, "never ends")
+        self.says("<a href='x" + end, "never ends")
+        self.says("x <", "never ends")
+
+    def test_what_the_parser_drops_or_turns_into_a_comment(self):
+        self.says("<?x?>", "processing instruction")
+        self.says("<p></<p id=\"end\">end</p>", "is not a tag")
+        self.says("</ p>", "is not a tag")
+        self.says("<!-<!-->", "is not a tag")
+        self.says("</>", "closes nothing")
+
+    def test_a_doctype_anywhere_but_first(self):
+        self.says("<p><!DOCTYPE<p id=\"end\">end</p>", "is not <!doctype html> at the start")
+        self.says("<p>x</p><!doctype html>", "is not <!doctype html> at the start")
+        self.assertEqual(dom.parse("<!doctype html>\n<p>x</p>")[1], [])
+
+    def test_a_tag_that_lost_its_quote_or_its_end(self):
+        self.says('<p/<p id="end">end</p>', "an attribute called '<p'")
+        self.says('<p><img src=x<p id="end">end</p>', "a < inside a tag")
+        self.assertEqual(dom.parse('<a title="a<b" href=x>y</a>')[1], [])
+
+
+class TransformCounterexamples(unittest.TestCase):
+    """What serialize() refuses, in a page the build writes: a problem of
+    the html gate, with the page and the line -- not a traceback, and not
+    the markup a browser would read as something else."""
+
+    def test_a_page_whose_comment_a_browser_would_end_early(self):
+        framework = Path(os.environ.get("RMP_FRAMEWORK", DOCS.parent / "raylib_multiplatform"))
+        if not (framework / "include" / "rmp").is_dir():
+            self.skipTest("no framework checkout: set RMP_FRAMEWORK")
+        site = load("site")
+        built = site.Site(framework=framework)
+        root = dom.el("#root", None, dom.el("p", None, "x"))
+        root.append(dom.Comment("a-->b", 7))
+        page = site.Page(url="x.html", title="X", description="", section="", source="content/x.html", root=root)
+        built.transform(page)
+        self.assertEqual([(p.gate, p.where, p.line) for p in built.problems], [("html", "content/x.html", 7)])
+        self.assertIn("cannot be written as a comment", built.problems[0].message)
+        self.assertEqual(page.body, "")
 
 
 if __name__ == "__main__":
