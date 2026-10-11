@@ -390,6 +390,12 @@ scroll area that could bring it in. Nobody could see that control or click it, a
 say so unless the script happened to look there, so the script fails, naming the control, the frame
 and the size of the window.</p>
 
+<p data-fw-grep="tests/e2e/driver.cpp::void reported\(int line\) \{\n    const int count = rmp::detail::report_count\(\);">And
+a mistake of the game's that the framework reports during the run — a widget outside
+<code>begin()</code>/<code>end()</code>, an action nobody defined, a number that is not one — fails
+the script at its <code>end</code>, one line each, in the log's own words. An example is what people
+copy, and it makes none.</p>
+
 <p data-fw-grep="tests/e2e/compare.h::// A failure leaves three pictures: what was expected, what came out, and the\n// difference, the expected one darkened with every pixel that differs in red\.">Every
 shot is compared with the picture recorded for it — <code>shot red_wins</code> with
 <code>tests/e2e/golden/games/01_pong/red_wins.png</code> — <strong>exactly</strong>, pixel for
