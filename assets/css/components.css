@@ -110,7 +110,10 @@ h2:hover .heading-anchor, h3:hover .heading-anchor, h4:hover .heading-anchor,
 .callout.danger { border-left-color: var(--danger-edge); background: var(--danger); }
 
 /* The Guidelines' table of what checks what: the rule and its tool get the
-   width, the three columns of where it holds only what a short answer needs. */
+   width, the three columns of where it holds only what a short answer needs.
+   On a phone it keeps that much width and scrolls inside its wrap: squeezed to
+   360 px, five columns of check names broke every nine characters. */
+table[data-enforcement] { min-width: 40rem; }
 table[data-enforcement] td:nth-child(1) { width: 32%; }
 table[data-enforcement] td:nth-child(2) { width: 32%; }
 
