@@ -84,7 +84,8 @@ class Snippet:
 # The framework's text gates a block can be run through: the script, and the
 # `rmp test` stage it is, for the caption.
 GATES = {"naming": (["bash", "tools/naming_check.sh"], "naming"),
-         "style": (["bash", "tools/style_check.sh"], "style")}
+         "style": (["bash", "tools/style_check.sh"], "style"),
+         "ownership": (["bash", "tools/ownership_check.sh"], "ownership")}
 
 
 def harness_names() -> list[str]:

@@ -85,6 +85,7 @@ refuse:
 | `data-expect="lint" data-check="modernize-avoid-c-style-cast"` | compiles, the framework's `.clang-tidy` enables that check, and clang-tidy says it on a line of the block |
 | `data-expect="gate" data-gate="naming" data-rule="R2"` | compiles, and the framework's `tools/naming_check.sh` reports that rule on a line of the block |
 | `data-expect="gate" data-gate="style" data-rule="S6"` | compiles, and the framework's `tools/style_check.sh` reports that rule on a line of the block |
+| `data-expect="gate" data-gate="ownership" data-rule="O2"` | compiles, and the framework's `tools/ownership_check.sh` reports that rule on a line of the block |
 
 Its caption says so: "Compiles; `rmp lint` refuses it: `modernize-avoid-c-style-cast`", or
 "Compiles; `rmp test naming` refuses it: `R2`". On a page under `content/guidelines/`, every other

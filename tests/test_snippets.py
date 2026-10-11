@@ -207,6 +207,17 @@ class StyleTest(unittest.TestCase):
         self.assertEqual(len(got), 1)
         self.assertIs(got[0][0], f)
 
+    def test_a_page_can_show_a_raylib_load_refused_by_ownership(self):
+        CompileTest.setUpClass()
+        if not (FRAMEWORK / "tools" / "ownership_check.sh").is_file():
+            self.skipTest("no tools/ownership_check.sh in the framework")
+        s = snippets.Snippet("content/x.html", 1, "cpp",
+                             'Texture2D picture = LoadTexture("rabbit.png");\nUnloadTexture(picture);',
+                             "function", expect_gate="ownership", gate_rule="O2")
+        self.assertIsNone(snippets.check([s], FRAMEWORK, jobs=1)[0][1])
+        s.gate_rule = "O1"
+        self.assertIn("is shown as refused by O1", snippets.check([s], FRAMEWORK, jobs=1)[0][1])
+
     def test_a_page_can_show_it_refused(self):
         CompileTest.setUpClass()
         s = snippets.Snippet("content/x.html", 1, "cpp", "int count() { int n = 0; n++; return n; }",
