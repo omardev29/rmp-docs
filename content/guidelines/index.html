@@ -110,10 +110,11 @@ as they already are under GCC and MSVC.</li>
 </ul>
 
 <p data-fw-grep="CMakeLists.txt::function\(rmp_apply_warnings target\)[\s\S]*?-Wall -Wextra -Wno-missing-field-initializers\)\s+if\(RMP_WERROR\)">Its
-own code is also compiled with the warnings the framework's is, <code>-Wall -Wextra</code> under
-GCC and Clang in every build CMake makes — the desktop and the web; Android's and iOS's projects
-build without them — and with <code>-Wno-missing-field-initializers</code>, because leaving fields of an
-options struct out — <code>{ .width = 8 }</code> — is how the API is written. They stay warnings:
+own code is also compiled with the warnings the framework's is: <code>-Wall -Wextra</code> under
+GCC and Clang, with <code>-Wno-missing-field-initializers</code>, because leaving fields of an
+options struct out — <code>{ .width = 8 }</code> — is how the API is written. That is every build
+CMake makes, the desktop's and the web's; Android's and iOS's own projects build without them.
+They stay warnings:
 a newer compiler on its author's machine must not stop a build that was fine yesterday. A game can
 configure with <code>-DRMP_WERROR=ON</code> to make them errors, as the framework's own checks do.
 The vendored libraries are included as system headers, so the warnings are about the game's code
