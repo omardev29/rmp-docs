@@ -32,6 +32,11 @@ BANNER = re.compile(r"^\s*//\s*-{10,}\s*$")
 # `// ---- transform -----------`: a title inside a class, for what follows.
 MARKER = re.compile(r"^\s*//\s*-{3,}\s+(\S.*?)\s*-{3,}\s*$")
 ATTR = re.compile(r"\[\[[^\]]*\]\]\s*")
+# Scopes inside scopes, at most: every level is a recursion of scope() and of
+# Entity.walk(), and Python stops at a thousand frames with a RecursionError
+# -- a traceback, where a header this deep should be a ParseError. The
+# framework's deepest is three.
+MAX_NESTING = 64
 
 
 @dataclass
@@ -131,10 +136,17 @@ def _inside_literal(line: str, k: int) -> bool:
     return quote is not None
 
 
+def _blank(text: str) -> str:
+    return "".join("\n" if ch == "\n" else " " for ch in text)
+
+
 def mask(text: str) -> str:
     """The text, same length, with comments and the insides of string and
-    character literals turned into spaces (newlines kept), so that braces,
-    parentheses and semicolons are only ever code."""
+    character literals turned into spaces, so that braces, parentheses and
+    semicolons are only ever code. Every newline stays where it was -- a
+    line number read off the mask is the text's -- and so does the backslash
+    of a line splice inside a literal (`"a\\` at the end of a line, the
+    literal going on below): masking the mask again reads the same literal."""
     out = []
     i, n = 0, len(text)
     while i < n:
@@ -147,7 +159,7 @@ def mask(text: str) -> str:
         elif text.startswith("/*", i):
             j = text.find("*/", i + 2)
             j = n if j < 0 else j + 2
-            out.append("".join("\n" if ch == "\n" else " " for ch in text[i:j]))
+            out.append(_blank(text[i:j]))
             i = j
         elif c == '"' or (c == "'" and not (i > 0 and text[i - 1].isalnum()
                                              and i + 1 < n and text[i + 1].isalnum())):
@@ -155,16 +167,24 @@ def mask(text: str) -> str:
                 m = re.match(r'"([^(\s]*)\(', text[i:])
                 if m:
                     end = text.find(")" + m.group(1) + '"', i)
-                    end = n if end < 0 else end + len(m.group(1)) + 2
-                    out.append('"' + "".join("\n" if ch == "\n" else " "
-                                             for ch in text[i + 1:end - 1]) + '"')
-                    i = end
+                    if end < 0:
+                        # Never closed: the rest of the text is inside it.
+                        out.append('"' + _blank(text[i + 1:]))
+                        i = n
+                    else:
+                        end += len(m.group(1)) + 2
+                        out.append('"' + _blank(text[i + 1:end - 1]) + '"')
+                        i = end
                     continue
             j = i + 1
+            inside = []
             while j < n and text[j] != c and text[j] != "\n":
-                j += 2 if text[j] == "\\" else 1
-            out.append(c + " " * (min(j, n) - i - 1) + (c if j < n and text[j] == c else ""))
-            i = j + 1 if j < n and text[j] == c else j
+                step = text[j:j + 2] if text[j] == "\\" else text[j]
+                inside.append(step if step == "\\\n" else " " * len(step))
+                j += len(step)
+            closed = j < n and text[j] == c
+            out.append(c + "".join(inside) + (c if closed else ""))
+            i = j + 1 if closed else j
         else:
             out.append(c)
             i += 1
@@ -193,11 +213,19 @@ def _matching(masked: str, start: int, open_ch: str, close_ch: str) -> int:
 
 
 def _angle_close(masked: str, start: int) -> int:
+    """The `>` that closes the `<` at start. One inside parentheses is a
+    comparison, not a bracket: `template <int N = (1>2)>` closes at the last."""
     depth = 0
+    parens = 0
     for i in range(start, len(masked)):
-        if masked[i] == "<":
+        c = masked[i]
+        if c in "([{":
+            parens += 1
+        elif c in ")]}":
+            parens -= 1
+        elif c == "<" and parens == 0:
             depth += 1
-        elif masked[i] == ">":
+        elif c == ">" and parens == 0:
             depth -= 1
             if depth == 0:
                 return i
@@ -292,6 +320,12 @@ class HeaderReader:
         return block, banner
 
     def scope(self, start: int, end: int, owner: Entity, kind: str):
+        nesting, up = 0, owner
+        while up.parent is not None:
+            nesting, up = nesting + 1, up.parent
+        if nesting > MAX_NESTING:
+            raise ParseError(self.path, self.line_of(start),
+                             f"scopes nested deeper than {MAX_NESTING}: {owner.qualname[:90]}")
         access = "private" if kind == "class" else "public"
         floor_line = self.line_of(start) - 1
         group, group_doc, group_banner = "", "", None
@@ -427,6 +461,8 @@ class HeaderReader:
                 conditions.pop()
         elif word == "define":
             dm = re.match(r"#\s*define\s+(\w+)(\([^)]*\))?[ \t]*(.*)", text, re.S)
+            if dm is None:
+                raise ParseError(self.path, line, f"a #define with no name: {text.split(chr(10))[0][:90]}")
             name, params, body = dm.group(1), dm.group(2) or "", dm.group(3)
             block, _banner = self.comment_above(line, floor)
             existing = next((c for c in owner.children if c.kind == "macro" and c.name == name), None)
@@ -464,6 +500,8 @@ class HeaderReader:
         if scope_body is not None:
             head = cmasked[:cmasked.find("{")].strip()
             sm = SCOPE_HEAD.match(head)
+            if sm is None:
+                raise ParseError(self.path, line, f"cannot read the head of this scope: {collapse(head)[:90]}")
             body_start, body_end = scope_body
             if sm.group(1):                                   # namespace
                 name = sm.group(2) or ""
