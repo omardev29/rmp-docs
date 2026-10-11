@@ -43,7 +43,7 @@ int best() {
 over <code>data()</code> and its size, converted to the <code>int</code> raylib asks for.</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="#include &lt;array&gt;">
-const std::array&lt;Vector2, 3&gt; corners{ Vector2{ 0, 0 }, Vector2{ 40, 0 }, Vector2{ 20, 30 } };
+const std::array corners{ Vector2{ 0, 0 }, Vector2{ 40, 0 }, Vector2{ 20, 30 } };
 DrawTriangleFan(corners.data(), static_cast&lt;int&gt;(corners.size()), RED);
 </pre>
 
