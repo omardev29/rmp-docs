@@ -386,7 +386,8 @@ cannon.add&lt;rmp::behavior::Timer&gt;({
 <p><a href="ref:rmp::behavior::Timer"><code>Timer</code></a> calls <code>on_timeout</code> every
 <code>seconds</code>, with the object it is on; with <code>repeat = false</code> it calls once and is
 spent. A frame longer than the interval calls it once for each interval the frame covered, so a
-countdown keeps time on a slow machine.</p>
+countdown keeps time on a slow machine — up to a thousand calls in one frame, past which it drops
+the rest and says so once.</p>
 
 <h3>Lifespan</h3>
 

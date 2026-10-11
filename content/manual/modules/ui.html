@@ -720,7 +720,8 @@ your own is rasterised at that exact size, so it stays sharp. See
 <p><a href="ref:rmp::ui::scale"><code>rmp::ui::scale()</code></a> reads the factor in use.
 <a href="ref:rmp::ui::set_scale"><code>rmp::ui::set_scale()</code></a> pins it — an "interface
 size" option in a settings screen — and <code>0</code> goes back to automatic. A pinned scale is used
-as it is, without the clamp. <code>[ui] scale</code> pins it from the start; it is <code>0</code>,
+as it is, without the clamp, up to 16; past that it is 16, and a NaN or one below 0 is automatic,
+each said once. <code>[ui] scale</code> pins it from the start; it is <code>0</code>,
 automatic, unless you set it:</p>
 
 <pre data-lang="toml">

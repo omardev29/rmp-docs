@@ -36,7 +36,7 @@ initialiser has to write them:</p>
 <thead><tr><th>Field</th><th>Default</th><th>Means</th></tr></thead>
 <tbody>
 <tr><td><a href="ref:rmp::audio::PlayOptions::volume"><code>volume</code></a></td><td><code>1</code></td><td>0 to 1, for this play; multiplied by the <code>SFX</code> bus and by <code>MASTER</code>.</td></tr>
-<tr><td><a href="ref:rmp::audio::PlayOptions::pitch"><code>pitch</code></a></td><td><code>1</code></td><td>2 is an octave up, 0.5 an octave down. Zero, a negative number or a NaN plays at 1.</td></tr>
+<tr><td><a href="ref:rmp::audio::PlayOptions::pitch"><code>pitch</code></a></td><td><code>1</code></td><td>2 is an octave up, 0.5 an octave down, from 1/16 to 16: past either end it stops there. Zero, a negative number or a NaN plays at 1.</td></tr>
 <tr><td><a href="ref:rmp::audio::PlayOptions::pan"><code>pan</code></a></td><td><code>0</code></td><td>-1 is the left speaker, 0 the centre, 1 the right; clamped to that range.</td></tr>
 </tbody>
 </table>
