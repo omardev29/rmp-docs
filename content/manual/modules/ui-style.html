@@ -241,6 +241,15 @@ that decides whether a row still fits — is how wide the screen is next to how 
 window's size when it is called, so it needs no <code>begin()</code> first; a window with no height
 yet is <code>MEDIUM</code>.</p>
 
+<p data-fw-grep="src/rmp/ui/context.cpp::Breakpoint current_breakpoint\(\) \{\s+const Clay_Dimensions v = detail::content_area\(\);">More
+exactly, it is the shape of the game's area. Under
+<a href="/manual/core/app.html#a-window-of-another-size"><code>[window] stretch</code></a>
+<code>"letterbox"</code> — the default of a game <code>rmp new</code> makes — that is the design
+inside its bars, the same shape whatever the window does, and the breakpoint never changes. An
+interface that should change shape with the window wants <code>"none"</code> or
+<code>"expand"</code>, which give it the whole window; the responsive example sets
+<code>NONE</code> for that reason.</p>
+
 <p>Reach for a breakpoint when the layout has to become a different layout. Using one to pick a
 <em>size</em> undoes the work the scale already did, and is how a layout ends up right on exactly one
 machine. <a href="/examples/ui/07_responsive.html">The responsive example</a> turns a sidebar and its

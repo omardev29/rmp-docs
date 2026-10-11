@@ -56,8 +56,14 @@ column is as big as its contents, and the root places it — in the middle, unle
 <tr><td><a href="ref:rmp::ui::FrameOptions::gap"><code>gap</code></a></td><td>the theme's <code>gap</code></td><td>Between the things in the column.</td></tr>
 <tr><td><a href="ref:rmp::ui::FrameOptions::padding"><code>padding</code></a></td><td>the theme's <code>panel_padding</code></td><td>Kept clear around the edge of the screen.</td></tr>
 <tr><td><a href="ref:rmp::ui::FrameOptions::grow"><code>grow</code></a></td><td><code>false</code></td><td><code>true</code>: the column fills the window, less the padding, instead of fitting what is in it. See <a href="#filling-the-window">filling the window</a>.</td></tr>
+<tr><td><a href="ref:rmp::ui::FrameOptions::focus_first"><code>focus_first</code></a></td><td>unset</td><td>Whether the first control takes the focus by itself. Unset, the framework decides: yes, unless the scene drawing it is a game being played. See <a href="/manual/modules/ui.html#a-button-in-the-hud">a button in the HUD</a>.</td></tr>
 </tbody>
 </table>
+
+<p>The screen, here, is the game's area. Under <code>[window] stretch</code>
+<code>"letterbox"</code> that is the design inside its bars, and what the frame lays out keeps clear
+of them as it keeps clear of a phone's notch; see
+<a href="/manual/modules/ui.html#scale-and-design-units">scale and design units</a>.</p>
 
 <p><a href="ref:rmp::ui::Align"><code>Align</code></a> has the nine values you would guess, a
 three-by-three grid of the vertical (<code>TOP</code>, <code>CENTER</code>, <code>BOTTOM</code>)

@@ -151,6 +151,10 @@ class PauseScene : public rmp::Scene {
 };
 </pre>
 
+<p>With its <code>begin()</code>/<code>end()</code> pair turned into an
+<a href="/manual/modules/ui.html#overlays"><code>rmp::ui::overlay()</code></a>, the same scene dims
+or blurs the frozen game behind its menu, and takes every click and the focus while it is up.</p>
+
 <h2>What else a scene holds</h2>
 
 <dl>
