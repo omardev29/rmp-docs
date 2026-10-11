@@ -49,8 +49,9 @@ stage), <code>tools/style_check.sh</code> (S1 to S6, <code>style</code>),
 <code>rmp fmt</code> formats and nothing checks.</dd>
 <dt>The compiler</dt>
 <dd data-fw-grep="CMakeLists.txt::target_compile_options\(\$\{target\} PRIVATE -Wall -Wextra -Wno-missing-field-initializers\)">Every
-target built from the framework's sources and a game's is compiled with <code>-Wall
--Wextra</code> under GCC and Clang. The framework's own checks build with <code>RMP_WERROR</code>,
+target CMake builds from the framework's sources and a game's is compiled with <code>-Wall
+-Wextra</code> under GCC and Clang: the desktop and the web, and not Android's or iOS's own
+projects. The framework's own checks build with <code>RMP_WERROR</code>,
 which makes a warning an error; a game's warnings stay warnings unless it asks for the same.
 Designated initialisers out of order are an error everywhere.</dd>
 </dl>
