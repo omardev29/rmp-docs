@@ -50,8 +50,9 @@ class LoadTest(unittest.TestCase):
                              ("Pong", "example_games_01_pong", "examples/games/01_pong.html"))
 
     def test_the_real_framework_and_examples_toml_agree(self):
+        import os
         import tomllib
-        fw = DOCS.parent / "raylib_multiplatform"
+        fw = Path(os.environ.get("RMP_FRAMEWORK", DOCS.parent / "raylib_multiplatform"))
         if not (fw / "examples").is_dir():
             self.skipTest("no framework next to rmp-docs")
         conf = tomllib.loads((DOCS / "examples.toml").read_text())
