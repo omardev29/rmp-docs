@@ -277,7 +277,10 @@ is a value that can disagree with itself.</p>
 <li><code>--check</code> validates and writes nothing.</li>
 <li><code>--print-targets</code>, <code>--print-families</code> and <code>--print-matrix</code> tell
 the CI which targets are enabled and which jobs to run for them; a family with no enabled target
-is skipped whole.</li>
+is skipped whole. <span data-fw-grep="tools/configure.py::ap\.add_argument\(&quot;--only&quot;, metavar=&quot;GROUP_OR_TARGET\[,\.\.\.\]&quot;,"><code>--only</code>
+narrows what they print to the groups and targets it is given, separated by commas, and never adds
+one the <code>.toml</code> switched off: it is what a run started by hand with
+<a href="/publishing/ci.html#when-it-runs"><code>-f targets=</code></a> hands it.</span></li>
 <li><code>--print-schema</code> and <code>--print-defines</code> describe every key and every
 generated macro, which is where this site's <a href="/reference/configuration.html">Configuration</a>
 and <a href="/reference/macros.html">Macros</a> pages come from.</li>

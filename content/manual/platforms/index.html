@@ -103,11 +103,13 @@ raylib that it cannot reach.</p>
 <p>CI runs in two lanes. A push or a pull request gets the <strong>fast lane</strong>: the targets
 that catch most mistakes, in about ten minutes. A tag — a release — gets the <strong>full
 lane</strong>: every target the game has enabled, and then the release itself. The full lane can
-also be started by hand, for every target or for one group:</p>
+also be started by hand, for every target or for the groups and targets you list, separated by
+commas:</p>
 
 <pre data-lang="shell">
 gh workflow run ci.yml -f full=true        # every enabled target
 gh workflow run ci.yml -f targets=drm      # one group or target; implies the full lane
+gh workflow run ci.yml -f targets=linux-x64-glibc,windows-x64,macos
 </pre>
 
 <p>Building is not the bar. Wherever CI can start a desktop build, the game is started with a

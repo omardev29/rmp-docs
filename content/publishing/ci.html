@@ -19,7 +19,7 @@ pipeline is that a game which compiles and draws nothing is a red run.</p>
 <tbody>
 <tr><td>A push to <code>main</code>, a pull request</td><td>The fast lane: <code>linux-x64-glibc</code>, <code>web</code>, <code>windows-x64</code> and <code>android</code>, and the <code>lint</code> job. Nothing at all with <a href="#on-push"><code>[ci] on_push = false</code></a>.</td></tr>
 <tr><td>A tag starting with <code>v</code></td><td>The full matrix — every target <code>[targets]</code> enables — then the GitHub release, then itch.io.</td></tr>
-<tr><td>Started by hand</td><td>The fast lane, or the full matrix with <code>full</code>, or one group or target with <code>targets</code>.</td></tr>
+<tr><td>Started by hand</td><td>The fast lane, or the full matrix with <code>full</code>, or exactly the groups and targets <code>targets</code> lists, separated by commas.</td></tr>
 </tbody>
 </table>
 
@@ -29,10 +29,17 @@ A target switched off in <code>[targets]</code> is never built, on any event.</p
 <pre data-lang="shell">
 gh workflow run ci.yml -f full=true      # every enabled target, without a tag
 gh workflow run ci.yml -f targets=drm    # one group or target, built in full
+gh workflow run ci.yml -f targets=linux-x64-glibc,windows-x64,macos
 </pre>
 
-<p><code>targets</code> narrows what the .toml enables and can never add to it: naming a target
-the .toml switched off, or one that does not exist, stops the run in its first job. A third input,
+<p data-fw-grep="tools/configure.py::def narrow_to\(value: str, targets: list\[str\]\) -&gt; list\[str\]:"><code>targets</code>
+narrows what the .toml enables and can never add to it. It takes one group or target, or several
+separated by commas, and builds what they come to together, each in full. A name that does not
+exist, one whose targets the .toml all switched off, one given twice and an empty one between two
+commas each stop the run in its first job, saying which item it was: a run that asked for a
+platform and quietly did not build it would be a green that proved nothing about it. The last line
+above is the way to check a fix for a red fast lane on just the platforms it involves, before the
+next push. A third input,
 <code>image_digest</code>, builds with another build image than the pinned one, to try a new image
 before committing to it.</p>
 
@@ -131,13 +138,14 @@ compares every pinned version across the files that state it, checks the
 game's own tests in <code>tests/game/</code> — and says it skipped them when there are none — and
 draws a frame with raylib's software renderer, in a debug build that runs under whatever
 <a href="/manual/basics/configuration.html#sanitizers"><code>[dev] sanitize</code></a> lists. In the framework's own repository it also runs the
-framework's tests and gates, and jobs of its own build and boot every example and
-<a href="/framework/testing.html#e2e">play the examples that have a script</a>, measure
+framework's tests and gates, and jobs of its own run clang-tidy over its code, build and boot
+every example, <a href="/framework/testing.html#e2e">play the examples that have a script</a>,
+measure
 <a href="/framework/testing.html#coverage">what the framework's tests reach</a>, make a game with
 <code>rmp new</code> to test it — and a copy of that game in plain C, made the way
 <code>examples/plain_c</code> says, booted and its release started from the project folder and
 from another — and check this documentation against the commit.
-<span data-fw-grep=".github/workflows/ci.yml::# examples, rmp_new, coverage and docs are the framework's own; a game skips them\.">A
+<span data-fw-grep=".github/workflows/ci.yml::# tidy, examples, e2e, rmp_new, coverage and docs are the framework's own; a game skips\n  # them\.">A
 release of the framework waits for every one of those jobs; in a game they are skipped, and the
 release does not wait for them.</span></p>
 

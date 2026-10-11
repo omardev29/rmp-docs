@@ -224,7 +224,10 @@ so the gate is seen red before it is trusted green.</p>
 
 <p data-fw-grep="tools/examples_build.sh::1\. tools/examples_check\.sh: every example has the SHAPE of an entry point">The
 {{count:examples}} examples are tests too. <code>rmp test examples</code> — kept out of the plain
-<code>rmp test</code>, because it compiles all of them — runs one script, the same one CI runs:</p>
+<code>rmp test</code>, because it compiles all of them — runs one script, the one CI runs,
+<span data-fw-grep="tools/examples_build.sh::# 1-4 are `boot` and 5 is `e2e`, and with no argument it is both, one after\n# the other -- `rmp test examples`\. CI runs the two halves in two jobs side by\n# side">in
+its two halves: <code>boot</code>, the first four steps below, and <code>e2e</code>, the fifth,
+which CI runs in two jobs side by side.</span></p>
 
 <ol>
 <li data-fw-grep="tools/examples_check.sh::OPT_OUT=&quot;examples/plain_c/src/main\.c&quot;">Every
@@ -250,8 +253,9 @@ example with a script in <code>tests/e2e/</code> is played from it, and every pi
 takes is compared with the one recorded for it — <a href="#e2e">below</a>. As many scripts were
 found as were built and as were played, or the step fails.
 <span data-fw-grep="tools/examples_build.sh::slots=\$\(getconf _NPROCESSORS_ONLN 2&gt;/dev/null \|\| echo 1\)[\s\S]*?done \| sort -rn \| cut -d' ' -f2\)">They
-are played side by side, as many at once as the machine has processors, the one with the most
-frames first. Each has a folder of its own, and a frame is a sixtieth of a second however busy the
+are played side by side, as many at once as the machine has processors — <span data-fw-grep="tools/examples_build.sh::  case &quot;\$\{CMAKE_BUILD_PARALLEL_LEVEL:-\}&quot; in\n    '' \| \*\[!0-9\]\* \| 0\) ;;\n    \*\) slots=\$CMAKE_BUILD_PARALLEL_LEVEL ;;">or
+as <code>CMAKE_BUILD_PARALLEL_LEVEL</code> says, when it is set, because each is a sanitized
+program of a few hundred megabytes</span> — the one with the most frames first. Each has a folder of its own, and a frame is a sixtieth of a second however busy the
 machine is, so playing them together changes how long the step waits and nothing a script
 draws.</span> <span data-fw-grep="tools/examples_build.sh::E2E_LIMIT=&quot;timeout 600&quot;">A
 script still playing after ten minutes is stopped, and fails; macOS has no <code>timeout</code>,
@@ -260,6 +264,28 @@ and there nothing stops it.</span></li>
 
 <p>The screenshots are kept, because looking at a picture of every example is how most visual
 mistakes are found.</p>
+
+<p data-fw-grep="CMakeLists.txt::set\(RMP_RAYLIB_OPTIMIZED_SOURCES rcore\.c rshapes\.c rtext\.c\)[\s\S]*?PROPERTIES COMPILE_OPTIONS &quot;-O2;-ffp-contract=off&quot;\)">Every
+one of these is a debug build of the framework, at <code>-O0</code> and under the
+<a href="#sanitize">sanitizers</a>, and a frame drawn by raylib's software renderer is slow that
+way. So this build, and only this one, compiles the three files of raylib a frame spends its time
+in — <code>rcore.c</code>, which carries the rasteriser, <code>rshapes.c</code> and
+<code>rtext.c</code> — at <code>-O2 -ffp-contract=off</code>, still under the sanitizers.
+<span data-fw-grep="CMakeLists.txt::# Measured in the pinned image on four processors \(2026-10-11\): an e2e frame is\n# about five times faster -- Pong's script 85 s at -O0, 17 s this way">A
+frame costs about a fifth of what it did: measured in the build image, Pong's script plays in 17
+seconds instead of 85.</span>
+<span data-fw-grep="CMakeLists.txt::# -ffp-contract=off is what keeps the pixels: at -O2 a compiler may fuse a\n# multiply and an add into one FMA instruction, rounded once instead of twice[\s\S]*?It was adopted only after all 72 e2e shots came out\n# identical to their goldens">Turning
+off contraction is what keeps the pixels: at <code>-O2</code> a compiler may fuse a multiply and an
+add into one instruction that rounds once instead of twice, and every picture is compared byte for
+byte. It was adopted only once every picture the scripts take came out identical to the ones
+<code>-O0</code> draws.</span>
+<span data-fw-grep="CMakeLists.txt::rtextures\.c, rmodels\.c and raudio\.c are the file loaders \(stb_image,\n# cgltf, miniaudio\.\.\.\), where a malformed file finds a memory bug, and -O2\n# drops a load whose value nothing uses -- ASan cannot see a load that is not\n# there\.">The
+rest of raylib stays at <code>-O0</code>: the image, model and sound loaders are where a malformed
+file finds a memory bug, and an optimiser drops a read whose value nothing uses, which
+AddressSanitizer then cannot see.</span>
+<span data-fw-grep="CMakeLists.txt::The render check itself \(tools/render_check\.sh, build/memory, on\n# every platform including the BSDs and Apple silicon\), the coverage build\n# and the sanitizer runs do NOT ask for it">So
+does every other build of raylib for the software renderer: the render stage's golden frame is
+drawn at <code>-O0</code> wherever it is compared.</span></p>
 
 <h2 id="platformer">The platformer, played</h2>
 
@@ -314,7 +340,11 @@ up; a shot name used twice; a script with no <code>end</code>, or one that check
 <p data-fw-grep="tests/e2e/driver.cpp::constexpr float STEP = 1\.0f / 60;\nconstexpr std::uint64_t SEED = 1;">The
 game that plays it is the example exactly as it ships — its own <code>main.cpp</code> and its own
 entry point — built against the software renderer with <code>tests/e2e/driver.cpp</code> beside
-it, which installs itself before <code>main()</code> through the framework's seams. Every frame
+it, which installs itself before <code>main()</code> through the framework's seams.
+<span data-fw-grep="CMakeLists.txt::add_library\(rmp_e2e_driver OBJECT">The driver, the script
+reader and the comparison are compiled once, into a library every played example links; what one
+of them plays — its script, its pictures, the folder a failure goes to — is four strings in a file
+the build writes for it.</span> Every frame
 is exactly a sixtieth of a second and <code>rmp::random</code> starts from seed 1, so the run is the
 same run every time — the menus included, since <a href="/framework/why/delta-and-time.html">the
 UI reads the game's clock</a>. The script's keys, buttons and clicks reach <code>rmp::input</code>
@@ -343,7 +373,7 @@ the same script gives the same bytes, and a tolerance would only be somewhere fo
 hide. A shot that differs fails the script with its line —
 <code>E2E FAIL &lt;line&gt;: &lt;reason&gt;</code> — and leaves three pictures in
 <code>build/examples-check/e2e/</code>: the one expected, the one drawn, and the expected one
-darkened with every pixel that differs in red. The examples job uploads them. A script fails as
+darkened with every pixel that differs in red. The <code>e2e</code> job uploads them. A script fails as
 well when the game stops before <code>end</code>, exits with a status other than 0, or a sanitizer
 reports anything: it is a debug build of the framework, like every example.</p>
 
@@ -508,20 +538,42 @@ summary <code>rmp help test</code> prints for each.</p>
 <p data-fw-grep=".github/workflows/ci.yml::#   push / pull_request  -&gt;  fast lane: Linux x64, Web, Android, Windows x64">A
 push to the framework runs every stage of <code>rmp test</code> that checks something — all but
 the two that record a golden — in its <code>lint</code> job, or in a job of its own:
-<code>examples</code>, which builds and boots every example and plays the ones with a script, and
+<code>examples</code>, which builds and boots every example, <code>e2e</code>, which plays the
+ones with a script — the two halves of <code>rmp test examples</code> — and
 <code>coverage</code>, which measures what the tests reach.
-<span data-fw-grep="tests/rmp_test.py::    JOBS = \{\n        &quot;examples&quot;: &quot;examples&quot;,[^\n]*\n        &quot;coverage&quot;: &quot;coverage&quot;,[^\n]*\n    \}\n[\s\S]*?NOT_A_CHECK = \{&quot;render-update&quot;[^}]*&quot;e2e-update&quot;">A
-test of the command checks each stage against the job that runs it.</span> The same push makes a new game with
-<code>rmp new</code> and runs that game's own checks, follows the recipe at the top of
-<code>examples/plain_c/src/main.c</code> in a copy of that game, boots the result and starts its
-release from the project folder and from another, checks this
-documentation site against the commit, and builds the fast lane: Linux x64, the web, Android and Windows x64. A release tag
-builds every target, and so can a run started by hand.
-<span data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, examples, rmp_new, coverage, docs,">A
-release of the framework waits for all of it: the examples, the new game, the coverage and the
-documentation as well as every platform.</span> The Linux jobs run inside a build image
-pinned by digest, with every compiler and tool already in it, so a build does not depend on a
-download succeeding.</p>
+<span data-fw-grep="tests/rmp_test.py::    JOBS = \{\n        &quot;examples&quot;: &quot;examples&quot;,[^\n]*\n        &quot;coverage&quot;: &quot;coverage&quot;,[^\n]*\n    \}\n[\s\S]*?STEP_JOBS = \{[\s\S]*?&quot;tools/examples_build\.sh e2e&quot;: &quot;e2e&quot;,[\s\S]*?NOT_A_CHECK = \{&quot;render-update&quot;[^}]*&quot;e2e-update&quot;">A
+test of the command checks each stage, and each half of one, against the job that runs it.</span>
+<span data-fw-grep=".github/workflows/ci.yml::  tidy:\n    needs: config\n    if: needs\.config\.outputs\.framework == 'true'[\s\S]*?- name: clang-tidy\n        run: bash tools/lint\.sh">clang-tidy,
+which is <code>rmp lint</code> and not a stage, has a job of its own too, <code>tidy</code>.</span>
+<span data-fw-grep=".github/workflows/ci.yml::# that catch most regressions, beside the framework's own jobs \(lint, tidy,\n# examples, e2e, coverage, docs, rmp_new\), every one of them side by side">Each
+of these starts as soon as the configuration is read, beside the others and beside the platform
+builds, so the run takes as long as its longest job rather than their sum.</span> The same push
+makes a new game with <code>rmp new</code> and runs that game's own checks, follows the recipe at
+the top of <code>examples/plain_c/src/main.c</code> in a copy of that game, boots the result and
+starts its release from the project folder and from another, checks this documentation site
+against the commit, and builds the fast lane: Linux x64, the web, Android and Windows x64. A
+release tag builds every target, and so can a run started by hand.
+<span data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, tidy, examples, e2e, rmp_new, coverage, docs,">A
+release of the framework waits for all of it: clang-tidy, the examples and their scripts, the new
+game, the coverage and the documentation as well as every platform.</span> The Linux jobs run
+inside a build image pinned by digest, with every compiler and tool already in it, so a build does
+not depend on a download succeeding.</p>
+
+<p data-fw-grep="CLAUDE.md::One fast lane per TWO stages; a debug lane when it is red; the full\n  matrix once, at the very end of the plan">The
+framework's own changes are checked in three sizes of run. They are pushed two pieces of work at a
+time, so that one fast lane covers both. When that run is red, the fix is checked on a <em>debug
+lane</em>: a run started by hand for exactly the platforms involved — Linux, Windows and macOS,
+with Android or iOS only when the bug is there — and every one of the framework's own jobs beside
+them:</p>
+
+<pre data-lang="shell">
+gh workflow run ci.yml -f targets=linux-x64-glibc,windows-x64,macos
+</pre>
+
+<p data-fw-grep="CLAUDE.md::The full 17-target matrix \(~20 minutes\) runs\n  once, when the plan is done\. The BSDs are best effort: a failure there after\n  a green fast lane is a \*\*PSB\*\*">The
+full matrix of every target, about twenty minutes, runs once, when a whole piece of work is done —
+and on every release tag. A failure on a BSD after a green fast lane is a bug of that platform,
+fixed on its own.</p>
 
 <p data-fw-grep=".github/workflows/ci.yml::- name: Smoke on X11 and Mesa \(xvfb\)\n        run: xvfb-run -a \./rmp test smoke">The
 sanitized debug builds CI boots are drawn by raylib's software renderer, which links no window

@@ -21,7 +21,7 @@ measured it — and where it lives. The last section says plainly what is not do
 <tr><td><a href="#release">The release, hardened</a></td><td>every desktop release: Linux and the BSDs, macOS and Windows in part</td><td>yes: it is the same <code>CMakeLists.txt</code></td></tr>
 <tr><td><a href="#debug-checks">Library checks in debug</a></td><td>every debug build on the desktop</td><td>yes</td></tr>
 <tr><td><a href="#sanitizers">AddressSanitizer and UndefinedBehaviorSanitizer</a></td><td>every debug build of the framework on the desktop</td><td>off until <code>[dev] sanitize</code> lists them</td></tr>
-<tr><td><a href="#analysis">Static analysis</a></td><td>the framework's own code: <code>rmp lint</code>, <code>rmp test</code>, the lint job</td><td>no: the framework's code is checked before a game gets it</td></tr>
+<tr><td><a href="#analysis">Static analysis</a></td><td>the framework's own code: <code>rmp lint</code>, <code>rmp test</code>, the lint and tidy jobs</td><td>no: the framework's code is checked before a game gets it</td></tr>
 <tr><td><a href="#coverage">What the tests reach</a></td><td>the framework's own code: <code>rmp test coverage</code>, the coverage job</td><td>no: it measures the framework's tests</td></tr>
 <tr><td><a href="#binaries">The shipped binary, read back</a></td><td>every release job in CI</td><td>yes: the same workflows</td></tr>
 <tr><td><a href="#supply-chain">The supply chain, pinned</a></td><td>CI</td><td>yes, at the pins the game was made with</td></tr>
@@ -334,10 +334,12 @@ is not among them: it needs optimisation, and a debug build has none.</p>
 is the expensive one. The framework's unit tests take 5.5 seconds without it and 18.6 with it,
 3.4 times as long, and the framework's <code>.toml</code> puts its memory at two to three times;
 UndefinedBehaviorSanitizer is cheap.
-<span data-fw-grep=".github/workflows/ci.yml::It took 2m22s uninstrumented; locally the\n    # instrumented `rmp test examples` takes about three times as long\.">The
-examples say the same: building and booting all of them took 2 minutes 22 seconds uninstrumented,
-and instrumented, <code>rmp test examples</code> takes about three times as long.</span> None of it
-reaches a release.</p>
+<span data-fw-grep="CMakeLists.txt::# Measured in the pinned image on four processors \(2026-10-11\): an e2e frame is\n# about five times faster -- Pong's script 85 s at -O0, 17 s this way">The
+examples played from a script say the same from the other side: a frame of raylib's software
+renderer, unoptimised and instrumented, is slow enough that the build that plays them compiles the
+renderer's three files at <code>-O2</code>, still instrumented, and Pong's script then plays in 17
+seconds instead of 85 — <a href="/framework/testing.html#examples">Testing</a> says why the
+pictures stay the same.</span> None of it reaches a release.</p>
 
 <h3 id="reports">A report fails the run</h3>
 
@@ -406,7 +408,12 @@ memory, the performance and portability checks, and the checks that hold
 <span data-fw-grep="tools/lint.sh::find src tests examples tools cmake -name '\*\.c' \| grep -v _impl \| grep -v generated">It
 reads the C as well: the resource packer every desktop release runs, the plain C example and the
 sanitizer hooks.</span> A file with no compile command is a failure, never a guess at its
-flags.</dd>
+flags. <span data-fw-grep="tools/lint_debt.py::level = os\.environ\.get\(&quot;CMAKE_BUILD_PARALLEL_LEVEL&quot;, &quot;&quot;\)[\s\S]*?order = schedule\(files, REPO / &quot;build/lint/compile_commands\.json&quot;\)">Each
+file is read by a clang-tidy of its own, as many at once as the machine has processors — or as
+<code>CMAKE_BUILD_PARALLEL_LEVEL</code> says, when it is set — the costliest first, so the run does
+not end on one processor while the others wait.</span>
+<span data-fw-grep=".github/workflows/ci.yml::  tidy:\n    needs: config[\s\S]*?- name: clang-tidy\n        run: bash tools/lint\.sh">On
+every push it runs in the framework's <code>tidy</code> job, beside the others.</span></dd>
 <dt data-fw-grep="tools/lint_debt.txt::\A(?:#.*\n|\n)*(?:custom-rmp-raw-pointer[ \t]+\S+[ \t]+\d+\n)+\Z">The
 debt, which only shrinks</dt>
 <dd>What the code still owes the style guide is written down in <code>tools/lint_debt.txt</code>,
@@ -456,7 +463,7 @@ one test that drives the real desktop runner. Two lists hold what it measured, a
 way: <code>tools/coverage_floor.txt</code>, the share of each file of <code>src/rmp/</code> the
 tests run, which only rises, and <code>tools/untested_api.txt</code>, the public functions no test
 calls, which only shrinks — a new function arrives with its test.
-<span data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, examples, rmp_new, coverage, docs,">Both
+<span data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, tidy, examples, e2e, rmp_new, coverage, docs,">Both
 are gates in the framework's <code>coverage</code> job, inside the build image they were measured
 in, and a release of the framework waits for it.</span>
 <a href="/framework/testing.html#coverage">Testing</a> has the detail.</p>
@@ -521,7 +528,8 @@ download succeeding.</p>
 <dl>
 <dt data-fw-grep="tools/versions_check.sh::# Every container job must pin the same digest, and it must be the declared one\.">The
 build image, by digest</dt>
-<dd>The Linux, web and Android builds and the lint job run inside
+<dd>The Linux, web and Android builds, the lint job and the framework's own jobs — clang-tidy, the
+examples and their scripts, the coverage, the new game, the documentation — run inside
 <code>ghcr.io/omardev29/raylib-build</code>, named by its
 <code>sha256</code> digest in <code>ci.yml</code>, <code>web-backends.yml</code> and
 <code>thirdparty/FROZEN_VERSIONS.md</code>; <code>tools/versions_check.sh</code> fails if any two
