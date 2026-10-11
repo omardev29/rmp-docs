@@ -1,4 +1,6 @@
 `auto in the examples` says it holds in the examples, and none of modernize-use-auto runs there
+`Two checks, one off in the examples` says it holds in the examples, and modernize-use-auto does not run there
+`An exception that runs` names modernize-use-auto as not running in the framework, and it runs there
 `int, not in the framework` says no for the framework, and the framework's .clang-tidy runs google-runtime-int there
 S9 is not a rule of tools/style_check.sh
 does not run google-readability-todo, anywhere

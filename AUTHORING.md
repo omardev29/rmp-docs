@@ -116,7 +116,9 @@ in `<code>` (a clang-tidy check, `tools/<script>` with its rules — `tools/styl
 flag, `.clang-format`), and "yes" or "no" for the framework, the examples and a game. The
 `enforcement` gate holds each row to the framework's `.clang-tidy` and `examples/.clang-tidy`, to the
 scripts' rules and to what `rmp new` copies, both ways; and every check the framework's
-`.clang-tidy` files name, on or off, has to appear on a Guidelines page.
+`.clang-tidy` files name, on or off, has to appear on a Guidelines page. A "yes" holds for every
+check its row names: one that does not run there is named in the cell —
+"yes, but for `<code>modernize-use-auto</code>`" — and one named there must not run.
 
 Every block that is not shown as a mistake, on any page, and every file a tutorial writes, passes
 the framework's `tools/style_check.sh` too: `++i` where the old value is not read, no C cast, no

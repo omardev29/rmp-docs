@@ -222,7 +222,10 @@ def _row(path, row, fw, conf, game, flags_text) -> list[Problem]:
 
     # The framework and the examples: a check counts where its .clang-tidy
     # runs it. A script or a flag is the framework's own and is taken at its
-    # word there; it never makes a "no" wrong.
+    # word there; it never makes a "no" wrong. A yes holds for every check
+    # the row names, but one the cell itself names -- "yes, but for
+    # <code>modernize-use-auto</code>" -- since a row of several checks said
+    # yes for all of them at once where one did not run.
     for cell, scope, globs in ((cells[2], "the framework", conf["root"]),
                                (cells[3], "the examples", conf["examples"])):
         on = [c for c in checks if enabled(c, globs)] + tidy_flags
@@ -230,6 +233,17 @@ def _row(path, row, fw, conf, game, flags_text) -> list[Problem]:
             out.append(Problem("enforcement", path, row.line,
                                f"{where} says it holds in {scope}, and none of "
                                f"{', '.join(checks) or 'its tools'} runs there"))
+        elif says(cell):
+            named = set(_codes(cell))
+            for c in checks:
+                if not enabled(c, globs) and c not in named:
+                    out.append(Problem("enforcement", path, row.line,
+                                       f"{where} says it holds in {scope}, and {c} does not run "
+                                       f"there: say so in the cell, \"yes, but for <code>{c}</code>\""))
+                if enabled(c, globs) and c in named:
+                    out.append(Problem("enforcement", path, row.line,
+                                       f"{where} names {c} as not running in {scope}, and it runs "
+                                       "there"))
         if not says(cell) and on:
             out.append(Problem("enforcement", path, row.line,
                                f"{where} says no for {scope}, and the framework's .clang-tidy runs "
