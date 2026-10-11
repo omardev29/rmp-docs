@@ -76,6 +76,21 @@ std::optional&lt;Vector2&gt; first_open(const std::vector&lt;Door&gt; &amp;doors
 }
 </pre>
 
+<p>And what reads it asks first. <code>*</code> on an empty <code>std::optional</code> is
+undefined behaviour, not an error, so clang-tidy refuses a read that nothing before it has
+checked:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="#include &lt;optional&gt;
+std::optional&lt;Vector2&gt; first_open();" data-expect="lint" data-check="bugprone-unchecked-optional-access">
+const std::optional&lt;Vector2&gt; door = first_open();
+DrawCircleV(*door, 8, GREEN);
+</pre>
+
+<pre data-lang="cpp" data-harness="function" data-given="#include &lt;optional&gt;
+std::optional&lt;Vector2&gt; first_open();">
+if (const std::optional&lt;Vector2&gt; door = first_open()) DrawCircleV(*door, 8, GREEN);
+</pre>
+
 <h3 id="spans"><code>std::span</code>, for the caller's elements</h3>
 
 <p>A pointer and a count are two arguments that have to agree, and nothing makes them. A
@@ -317,6 +332,7 @@ rmp::ui::panel([&amp;] {
 <tbody>
 <tr><td>No raw pointer and no C string in a declaration a game can name</td><td><code>tools/pointer_check.py</code>, <code>rmp test pointers</code>, against <code>tools/pointer_ratchet.txt</code></td><td>the declarations in <code>include/rmp/</code></td></tr>
 <tr><td>No raw pointer anywhere else</td><td><code>custom-rmp-raw-pointer</code>, a query of the framework's <code>.clang-tidy</code>; <code>rmp lint</code>, against <code>tools/lint_debt.txt</code></td><td><code>src/</code>, <code>tests/</code>, <code>examples/</code>, and the bodies of the headers' inline functions</td></tr>
+<tr><td>A <code>std::optional</code> is asked before it is read</td><td><code>bugprone-unchecked-optional-access</code>; <code>rmp lint</code></td><td><code>src/</code>, <code>tests/</code>, <code>examples/</code></td></tr>
 <tr><td>No <code>new</code>, <code>delete</code>, <code>malloc</code> or <code>free</code></td><td><code>tools/ownership_check.sh</code> O1, <code>rmp test ownership</code></td><td><code>include/rmp/</code> and <code>src/rmp/</code></td></tr>
 <tr><td>The same, as clang-tidy sees it</td><td><code>cppcoreguidelines-owning-memory</code> and <code>cppcoreguidelines-no-malloc</code>; <code>rmp lint</code></td><td><code>src/</code>, <code>tests/</code>, <code>examples/</code></td></tr>
 <tr><td>raylib's <code>Load*</code> and <code>Unload*</code> only in the files that own what they make</td><td><code>tools/ownership_check.sh</code> O2, <code>rmp test ownership</code></td><td><code>include/rmp/</code>, <code>src/rmp/</code> and the examples' C++</td></tr>
