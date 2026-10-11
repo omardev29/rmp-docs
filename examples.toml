@@ -19,7 +19,9 @@
 "ui/05_inventory" = { play = true }
 "ui/06_style" = { play = true }
 "ui/07_responsive" = { play = true }
+"ui/08_overlay" = { play = true }
 "scenes/01_stack" = { play = true }
+"scenes/02_stretch" = { play = true }
 "input/01_actions" = { play = true }
 "assets/01_loading" = { play = true }
 "ads/01_interstitial" = { play = false, reason = "Ads are shown on Android only: in a browser every rmp::ads call does nothing, so there would be nothing to see." }

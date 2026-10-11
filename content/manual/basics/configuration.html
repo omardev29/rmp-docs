@@ -205,7 +205,7 @@ defaults.</p>
 <thead><tr><th>Section</th><th>What it decides</th></tr></thead>
 <tbody>
 <tr><td><a href="/reference/configuration.html#section-project"><code>[project]</code></a></td><td>The game's name: the executable, the CMake target, the Xcode scheme, the save folder on desktops and the web, and every artifact's name.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-window"><code>[window]</code></a></td><td>The title, the size the window opens at — which is also the design resolution — the phone orientation, vsync and a frame cap.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-window"><code>[window]</code></a></td><td>The title, the size the window opens at — which is also the design resolution — how the world fits a window of another size, the phone orientation, vsync and a frame cap.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-targets"><code>[targets]</code></a></td><td>Which platforms the game is built for, by group or by exact id.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-android"><code>[android]</code></a>, <a href="/reference/configuration.html#section-ios"><code>[ios]</code></a></td><td>The store identities, the oldest OS versions supported, the OpenGL ES version Android is compiled for and requires, the Play Store category. <code>[ios.settings]</code> passes raw Xcode build settings through, such as a signing team.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-android-display"><code>[android.display]</code></a>, <a href="/reference/configuration.html#section-android-permissions"><code>[android.permissions]</code></a>, <a href="/reference/configuration.html#section-android-features"><code>[android.features]</code></a></td><td>Screen behaviour on Android (keep the screen on, hide the system bars, draw behind the notch), the permissions the app asks for, and the hardware the Play Store requires.</td></tr>
@@ -241,7 +241,9 @@ the size the window opens at. Everywhere, they are the <em>design resolution</em
 <a href="ref:rmp::ui"><code>rmp::ui</code></a> lays a menu out at before scaling it to the real
 window, and the area the <a href="/manual/core/camera.html">camera</a> starts centred on. The window
 can be resized, and a phone's screen is whatever it is; the design resolution is the fixed size the
-game is written against.</p>
+game is written against, and <code>[window] stretch</code> says what the world does in a window of
+another size: letterboxed, expanded to show more of it, or left at 1:1. See
+<a href="/manual/core/app.html#a-window-of-another-size">a window of another size</a>.</p>
 
 <p><code>[window] title</code> is the title bar on a desktop and the name under the icon on Android
 and iOS. <code>orientation</code> — <code>"landscape"</code>, <code>"portrait"</code> or

@@ -62,16 +62,19 @@ For each one: the pointer, first — a click or a drag on one of its objects cal
 <code>on_click</code> or <code>on_drag</code> handler, so a handler can spawn or destroy before
 anything else looks — then its <code>_update(delta)</code>, then its objects, then the collision
 pass, then its camera, which follows where everything ended up.</li>
-<li><code>BeginDrawing()</code>, and the clear.</li>
+<li><code>BeginDrawing()</code>, and the clear — into a texture instead of the screen while an
+<a href="/manual/modules/ui.html#the-blur"><code>overlay()</code> blurs</a> what is under it.</li>
 <li>Every scene that is visible, from the bottom up: <code>BeginMode2D()</code> with its camera,
 its map, its objects, <code>EndMode2D()</code>, and then its own <code>_draw()</code> — outside the
 camera, in screen space.</li>
+<li>The <a href="/manual/modules/ui.html#notices">notices</a> of <code>rmp::ui::notify()</code>, over
+everything.</li>
 <li><code>EndDrawing()</code>.</li>
 <li>The scene changes asked for during the frame — <code>change</code>, <code>push</code>,
 <code>replace</code>, <code>pop</code> — are applied.</li>
 </ol>
 
-<p data-fw-grep="src/rmp/scene.cpp::if \(window\) BeginMode2D\(scene\.camera\.raylib\(\)\);">That
+<p data-fw-grep="src/rmp/scene.cpp::if \(window\) BeginMode2D\(camera\);\s+scene\.map\.draw\(\);\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);[\s\S]*?scene\._draw\(\);">That
 fourth step is why a HUD drawn in a scene's <code>_draw()</code> stays put while the camera moves:
 the camera is closed before <code>_draw()</code> is called, and it is the reason the
 <a href="/manual/core/scenes.html">scene</a> hooks say which space they draw in.</p>

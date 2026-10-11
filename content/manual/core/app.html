@@ -67,6 +67,8 @@ unused.</p>
 different sequence every launch;</li>
 <li>switches on <code>[dev] strict</code> when the build is a debug build and the <code>.toml</code>
 asks for it;</li>
+<li>in a debug build, has the warnings the framework says once in the log shown on screen as well,
+as <a href="/manual/modules/ui.html#the-frameworks-warnings-on-screen">notices</a>;</li>
 <li>on iOS, moves into the app bundle, where the resources are; in a release build on a desktop,
 moves into the executable's folder when there is a <code>resources/</code> folder in it (see
 <a href="#where-a-release-finds-its-files">where a release finds its files</a>);</li>
@@ -117,10 +119,11 @@ For each one: the pointer is offered to its objects (<a href="ref:rmp::Object::o
 <a href="/manual/core/objects.html#the-frame-of-an-object">objects</a> update and move, then the
 <a href="/manual/core/collision.html">collision pass</a> resolves where they ended up, and last the
 <a href="/manual/core/camera.html">camera</a> follows.</li>
-<li><strong>Draw</strong>, from the bottom upwards, for every scene that is visible. The screen is
-cleared with the background of the lowest of them; then for each scene its map and its objects are
-drawn through its camera, and its own <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a> runs
-after, in screen space.</li>
+<li data-fw-grep="src/rmp/app.cpp::ClearBackground\(rmp::scenes::detail::clear_color\(\)\);\s+rmp::scenes::detail::draw\(\);[\s\S]*?rmp::ui::detail::draw_notices\(\);"><strong>Draw</strong>,
+from the bottom upwards, for every scene that is visible. The screen is cleared with the background
+of the lowest of them; then for each scene its map and its objects are drawn through its camera, and
+its own <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a> runs after, in screen space. The
+<a href="/manual/modules/ui.html#notices">notices</a> go last, over everything.</li>
 <li><strong>Present.</strong> The frame goes to the screen and the UI ends its frame.</li>
 <li><strong>Deferred work.</strong> Objects destroyed during the frame are freed, and the scene changes
 asked for during the frame are applied, in the order they were asked for.</li>
@@ -151,6 +154,60 @@ paces the game at the display's rate. <code>[window] fps</code> caps it, for a d
 vsync. The browser and iOS pace the frame themselves and ignore <code>fps</code>; never call
 <code>SetTargetFPS()</code> in a game that builds for the web, where a wait inside the browser's frame
 would only stall it.</p>
+
+<h2 id="a-window-of-another-size">A window of another size</h2>
+
+<p><code>[window] width</code> and <code>height</code> are the <em>design</em> size: what the game is
+drawn for. The window, though, can be resized, a phone's screen is whatever it is, and a monitor may
+be 21:9. <code>[window] stretch</code> says what the world does in a window that is not the design
+size. Below, <em>s</em> is how much bigger the window is than the design —
+<code>min(window width / design width, window height / design height)</code>, the most the whole
+design fits:</p>
+
+<table>
+<thead><tr><th><code>stretch</code></th><th>The world</th></tr></thead>
+<tbody>
+<tr><td><code>"none"</code></td><td>At 1:1 around the camera: a bigger window shows more of it and a smaller one less, and nothing is scaled.</td></tr>
+<tr><td><code>"letterbox"</code></td><td>The design, scaled by <em>s</em> and centred; the rest of the window is bars of the clear colour. Every player sees the same part of the world, the interface stays inside it, and nothing is cut off: a court, a board, a single screen.</td></tr>
+<tr><td><code>"expand"</code></td><td>Scaled by <em>s</em> like <code>letterbox</code>, with no bars: more of the world shows the way the window is longer than the design — above and below on a 4:3 monitor for a 16:9 design, at the sides on a 21:9 one. For a level that scrolls anyway, where seeing further is fine.</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="raylib_multiplatform.toml::A \.toml\n# without this line gets &quot;none&quot;\.\nstretch = &quot;letterbox&quot;">The
+framework's <code>.toml</code> says <code>letterbox</code>, and so does every game
+<code>rmp new</code> makes from it. A <code>.toml</code> without the line gets <code>none</code>.</p>
+
+<pre data-lang="toml">
+[window]
+stretch = "expand"
+</pre>
+
+<p data-fw-grep="src/rmp/stretch.cpp::void set_stretch\(const Stretch mode\) \{ world\.mode = mode; \}"><a href="ref:rmp::app::stretch"><code>rmp::app::stretch()</code></a>
+is the mode in use, starting from the <code>.toml</code>'s, and
+<a href="ref:rmp::app::set_stretch"><code>rmp::app::set_stretch()</code></a> changes it from anywhere,
+at once: the next thing that asks sees the new one. The <code>.toml</code> is the place for a game's
+own mode. The framework's examples share one <code>.toml</code>, so the ones that need another set it
+in their first scene's <code>_ready()</code>:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+rmp::app::set_stretch(rmp::app::Stretch::EXPAND);
+</pre>
+
+<p>Everything that places the world follows the mode, and nothing in a scene has to ask which one is
+on: the <a href="/manual/core/camera.html#the-window-is-not-the-design-size">camera</a>, with
+<code>view()</code>, <code>to_world()</code> and the <code>raylib()</code> camera a game draws with;
+<code>rmp::input::pointer()</code> and a click on an object, which go through it; and
+<a href="/manual/modules/ui.html#scale-and-design-units">the interface</a>, which keeps inside the
+game's area. <a href="/examples/scenes/02_stretch.html">The stretch example</a> is a court in all
+three modes, with a key and a button to go round them and a window to resize.</p>
+
+<aside class="callout warning"><span class="callout-title">Android and a Linux console</span><p data-fw-grep="thirdparty/raylib/src/platforms/rcore_android.c::// Upscaling to fit display with border-bars">On
+<a href="/manual/platforms/android.html">Android</a>, and on
+<a href="/manual/platforms/linux-console.html">a Linux console</a> with no desktop, every mode is a
+letterbox. raylib keeps the
+window at the size <code>InitWindow()</code> asked for there and scales that to the display itself,
+so the framework never sees a window of another shape: <code>expand</code> shows no more of the
+world, and <code>none</code> is letterboxed too. The desktop and the web follow the mode.</p></aside>
 
 <h2>Quitting</h2>
 

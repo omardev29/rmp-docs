@@ -7,8 +7,9 @@ order: 60
 
 <p class="lede">Every scene has a <a href="ref:rmp::Scene::camera"><code>camera</code></a>, an
 <a href="ref:rmp::Camera"><code>rmp::Camera</code></a>, which decides what part of the scene's world
-is on screen. Untouched, it is the identity while the window is the design size, and on any other
-window it keeps the design area centred; a level bigger than the screen is three lines.</p>
+is on screen. Untouched, it is the identity while the window is the design size, and on a window of
+any other size it fits the world the way <code>[window] stretch</code> says; a level bigger than the
+screen is three lines.</p>
 
 <pre data-lang="cpp" data-harness="scene">
 auto &amp;player = spawn({ .position = { 400, 300 }, .size = { 16, 24 } });
@@ -47,22 +48,59 @@ world units like the object.</p>
 
 <h3>The window is not the design size</h3>
 
-<p>The window can be resized, and a phone's screen is whatever it is. The camera always fills the real
-window: what it shows, <a href="ref:rmp::Camera::view"><code>view()</code></a>, is the window's size
-divided by the zoom, centred on <code>position</code>. So at a zoom of 1 a bigger window shows more of
-the world, not a bigger picture of the same part.</p>
+<p>The window can be resized, and a phone's screen is whatever it is. How the world fits a window
+that is not the design size is <a href="/manual/core/app.html#a-window-of-another-size"><code>[window]
+stretch</code></a>'s to say, and the camera is where it happens. What the camera shows,
+<a href="ref:rmp::Camera::view"><code>view()</code></a>, is the game's area of the window divided by
+the zoom and the stretch's scale, centred on <code>position</code>:</p>
 
-<p>A game that wants the same slice of the world on every screen sets the zoom from the window, every
-frame, so a resize is followed at once:</p>
+<table>
+<thead><tr><th><code>stretch</code></th><th><code>view()</code> is</th></tr></thead>
+<tbody>
+<tr><td><code>"none"</code></td><td>The window, at 1:1: a bigger window shows more of the world, not a bigger picture of the same part.</td></tr>
+<tr><td><code>"letterbox"</code></td><td>The design, whatever the window: the same slice of the world for every player, scaled to fit, with bars around it.</td></tr>
+<tr><td><code>"expand"</code></td><td>The design and more, the way the window is longer than the design: taller on a 4:3 monitor, wider on a 21:9 one.</td></tr>
+</tbody>
+</table>
 
-<pre data-lang="cpp" data-harness="scene" data-given="constexpr float VIEW_HEIGHT = 180;">
-if (GetScreenHeight() &gt; 0) camera.zoom = static_cast&lt;float&gt;(GetScreenHeight()) / VIEW_HEIGHT;
+<p data-fw-grep="src/rmp/camera.cpp::return Camera2D\{ \.offset = Vector2\{ fit\.area\.x \+ fit\.area\.width / 2,">The
+camera puts <code>position</code> in the middle of the game's area — the window's middle, unless
+<code>letterbox</code> left bars — and <code>to_screen()</code>, <code>to_world()</code> and the
+pointer carry the stretch with them, so nothing in a scene asks which mode is on.</p>
+
+<p><code>zoom</code> goes on top of the stretch: under <code>letterbox</code> and <code>expand</code>
+the design is scaled into the window first, and a zoom of 2 is twice as big as the stretch drew it.
+So a game that wants a slice of the world of its own size — 225 world units of height, say, for pixel
+art drawn two screen pixels to a pixel of the art — sets a constant zoom once and leaves the window to
+the stretch. Under <code>expand</code> it never shows fewer than those 225 units of height, and shows
+more where the window is longer:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="constexpr float VIEW_HEIGHT = 225;">
+rmp::app::set_stretch(rmp::app::Stretch::EXPAND);
+camera.zoom = RMP_WINDOW_HEIGHT / VIEW_HEIGHT; // 225 world units of height at the design size
 </pre>
 
-<p>That keeps 180 world units of height on screen whatever the window, and lets the width follow the
-shape of the screen. <code>rmp::ui</code> scales menus from the design resolution on its own; the world
-is scaled by the zoom you choose, because only the game knows whether a wider screen should show more
-of the level.</p>
+<p data-fw-grep="examples/games/07_platformer/include/game.h::inline constexpr float ZOOM = RMP_WINDOW_HEIGHT / VIEW_HEIGHT;">That
+is <a href="/examples/games/07_platformer.html">the platformer</a>'s camera. Working the zoom out from
+the window every frame, from <code>GetScreenHeight()</code>, is the stretch's job already: under
+<code>letterbox</code> or <code>expand</code> it would be done twice, and the world drawn too big.</p>
+
+<p data-fw-grep="src/rmp/scene.cpp::if \(clip\) BeginScissorMode\(clip-&gt;x, clip-&gt;y, clip-&gt;width, clip-&gt;height\);\s+if \(window\) BeginMode2D\(camera\);\s+scene\.map\.draw\(\);\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);\s+if \(clip\) EndScissorMode\(\);">Under
+<code>letterbox</code> the map and the objects are cut to the game's area, so the bars keep the clear
+colour whatever stands past the edge of the design, and a pointer on a bar is outside the world. The
+scene's own <code>_draw()</code> is not cut: the interface lays itself out inside the area on its
+own, and something a scene draws over the whole window, a veil, covers the bars as well.</p>
+
+<aside class="callout warning"><span class="callout-title">Careful</span><p>raylib has one scissor,
+not a stack of them. An object that calls <code>BeginScissorMode()</code> and
+<code>EndScissorMode()</code> in its own <code>_draw()</code> ends the letterbox's cut with them, for
+the rest of its scene's world.</p></aside>
+
+<p><a href="/examples/scenes/02_stretch.html">The stretch example</a> is a court drawn in world units,
+in all three modes, with a key and a button to go round them; resize the window and the camera, the
+pointer and the interface follow, with nothing in the scene asking which mode is on. On Android and on
+a Linux console every mode is a letterbox: see <a href="/manual/core/app.html#a-window-of-another-size">a
+window of another size</a>.</p>
 
 <h2>Following</h2>
 
@@ -155,7 +193,7 @@ under a pause menu stands still, shake included, until the scene runs again.</p>
 <tr><td><a href="ref:rmp::Camera::to_world"><code>to_world(screen)</code></a></td><td>The world point under a point of the screen, in pixels from its top-left corner.</td></tr>
 <tr><td><a href="ref:rmp::Camera::to_screen"><code>to_screen(world)</code></a></td><td>Where a world point is on the screen.</td></tr>
 <tr><td><a href="ref:rmp::Camera::view"><code>view()</code></a></td><td>The rectangle of the world that is visible, ignoring rotation.</td></tr>
-<tr><td><a href="ref:rmp::Camera::raylib"><code>raylib()</code></a></td><td>The raylib <code>Camera2D</code> this camera is, shake included, for <code>BeginMode2D()</code>.</td></tr>
+<tr><td><a href="ref:rmp::Camera::raylib"><code>raylib()</code></a></td><td>The raylib <code>Camera2D</code> this camera is, shake and stretch included, for <code>BeginMode2D()</code>.</td></tr>
 </tbody>
 </table>
 
@@ -175,6 +213,10 @@ void _draw() override {
     DrawText("!", static_cast&lt;int&gt;(above.x), static_cast&lt;int&gt;(above.y), 20, YELLOW);
 }
 </pre>
+
+<p>A box of the interface over a point of the world — a health bar, a name, a button over a door —
+is <a href="/manual/modules/ui.html#boxes-over-the-world"><code>rmp::ui::at()</code></a>, which goes
+through the camera by itself.</p>
 
 <h3>Drawing in world units yourself</h3>
 
@@ -198,7 +240,7 @@ net this way for that reason.</p>
 
 <h2>What reads the camera</h2>
 
-<p>Besides drawing, four things in the framework take the camera into account, so they follow it
+<p>Besides drawing, five things in the framework take the camera into account, so they follow it
 without anything written:</p>
 
 <ul>
@@ -209,7 +251,8 @@ the camera's view as the edge of the world;</li>
 under the finger at any zoom;</li>
 <li><code>rmp::input::pointer()</code> answers in world units through it;</li>
 <li>the <a href="ref:rmp::behavior::Parallax"><code>Parallax</code></a> behavior scrolls each layer by
-how far the view has moved.</li>
+how far the view has moved;</li>
+<li><code>rmp::ui::at()</code> puts its boxes where the camera shows the points they follow.</li>
 </ul>
 
 <p>Each scene has a camera of its own. A pause menu pushed over a level draws through its own camera,

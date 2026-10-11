@@ -255,7 +255,7 @@ the same code works on a desktop and on a phone, with no <code>#if</code>:</p>
 <thead><tr><th>Call</th><th>Gives</th></tr></thead>
 <tbody>
 <tr><td><a href="ref:rmp::input::pointer_screen"><code>pointer_screen()</code></a></td><td>Where it is, in pixels, from the top-left of the window.</td></tr>
-<tr><td><a href="ref:rmp::input::pointer"><code>pointer()</code></a></td><td data-fw-grep="src/rmp/camera.cpp::\.offset = Vector2\{ screen\.x / 2, screen\.y / 2 \}">Where it is in the world, through the camera of the scene on top of the stack: what you compare an object's position with. With no scene on the stack, as in a game on <code>RMP_ENTRY_POINT</code> without scenes, there is no camera, and it is <code>pointer_screen()</code>. The same as <code>pointer_screen()</code> while that camera has not moved and the window is the size <code>[window] width</code> and <code>height</code> ask for. The camera puts its <a href="ref:rmp::Camera::position"><code>position</code></a>, which starts at the middle of that size, in the middle of the real window, so in a window of any other size — resized, or a phone's screen — the two differ even when the camera has not moved.</td></tr>
+<tr><td><a href="ref:rmp::input::pointer"><code>pointer()</code></a></td><td data-fw-grep="src/rmp/camera.cpp::return Camera2D\{ \.offset = Vector2\{ fit\.area\.x \+ fit\.area\.width / 2,">Where it is in the world, through the camera of the scene on top of the stack: what you compare an object's position with. With no scene on the stack, as in a game on <code>RMP_ENTRY_POINT</code> without scenes, there is no camera, and it is <code>pointer_screen()</code>. The same as <code>pointer_screen()</code> while that camera has not moved and the window is the size <code>[window] width</code> and <code>height</code> ask for. The camera puts its <a href="ref:rmp::Camera::position"><code>position</code></a>, which starts at the middle of that size, in the middle of the game's area, scaled as <a href="/manual/core/app.html#a-window-of-another-size"><code>[window] stretch</code></a> says, so in a window of any other size — resized, or a phone's screen — the two differ even when the camera has not moved. On a letterboxed window, a pointer on a bar is outside the world.</td></tr>
 <tr><td><a href="ref:rmp::input::pointer_delta"><code>pointer_delta()</code></a></td><td>How far it moved since the last frame, in pixels. Zero on the first frame.</td></tr>
 <tr><td><a href="ref:rmp::input::pointer_down"><code>pointer_down()</code></a></td><td>The left button, or a finger, is held.</td></tr>
 <tr><td><a href="ref:rmp::input::pointer_pressed"><code>pointer_pressed()</code></a></td><td>The frame it goes down.</td></tr>
@@ -347,12 +347,18 @@ anything above the caller is holding that device: a scene on top, or the interfa
 interface's own navigation is not an action. Up, Down and Tab — and the d-pad and the left stick,
 up and down — move the focus between controls, and Left and Right move a focused slider. Enter,
 Space and the bottom face button press the focused one, and Escape and the right face button back
-out of a text field or an open list. <code>wants_keyboard()</code> is only about text fields. In a scene that draws a menu
-<em>and</em> reads <code>move_up</code>, the up arrow moves both. The usual shape keeps them apart:
-the menu is its own scene, pushed on top, and the game underneath is frozen or, by the third rule,
-deaf. A HUD in
-the playing scene can have buttons too; <a href="/manual/modules/ui.html#a-button-in-the-hud">the
-interface page</a> says what to switch off while the game is being played.</p>
+out of a text field or an open list.</p>
+
+<p data-fw-grep="src/rmp/input.cpp::void note_read\(const bool touches_ui\) \{\s+if \(touches_ui\) rmp::ui::detail::note_game_keys\(\);">A
+scene that reads one of those keys through an action — <code>move_up</code>, on the up arrow — is
+taken by the interface for a game being played, and its controls for a HUD over it. They take no
+focus by themselves, and the arrows stay the game's until Tab walks into the HUD; from then the keys
+are the interface's, <code>wants_keyboard()</code> is true and the game's keyboard and gamepad
+actions read nothing, until Escape, the right face button or a click elsewhere gives them back. So the
+up arrow moves the player or the focus, never both. A menu is still best as a scene of its own,
+pushed on top, with the game underneath frozen or, by the third rule, deaf;
+<a href="/manual/modules/ui.html#a-button-in-the-hud">a button in the HUD</a> has the rest, and what
+to say when the guess is wrong.</p>
 
 <h2>A whole example</h2>
 
