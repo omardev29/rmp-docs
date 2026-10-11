@@ -220,11 +220,11 @@ it is written down, in the commit that grows it.</p>
 
 <pre data-lang="text">
 # binary               kind    unpacked    packed
-linux-x64-glibc        elf      1236560    366804  # measured at 029b2c0
-windows-x64            pe       2206720         -  # measured at 029b2c0
+linux-x64-glibc        elf      1310720    389120  # measured at 1a2b3c4
+windows-x64            pe       2293760         -  # measured at 1a2b3c4
 </pre>
 
-<p>Each line is a binary, what kind of file it is, its size unpacked, and its size packed or
+<p>That is how a game's budget reads. Each line is a binary, what kind of file it is, its size unpacked, and its size packed or
 <code>-</code> where UPX does not apply, with the commit it was measured on. Every check prints the
 line it measured in that same format, pass or fail, so one run's log is all an update needs:</p>
 

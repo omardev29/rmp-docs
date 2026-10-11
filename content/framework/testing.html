@@ -319,6 +319,12 @@ builds every target, and so can a run started by hand. The Linux jobs run inside
 pinned by digest, with every compiler and tool already in it, so a build does not depend on a
 download succeeding.</p>
 
+<p data-fw-grep=".github/workflows/ci.yml::- name: Smoke on X11 and Mesa \(xvfb\)\n        run: xvfb-run -a \./rmp test smoke">The
+sanitized debug builds CI boots are drawn by raylib's software renderer, which links no window
+system and no graphics driver — all but one. The smoke stage runs once more in the job that boots
+the examples, under a virtual X display with Mesa's software OpenGL: a sanitized debug build that
+opens a real window, where LeakSanitizer meets the system's own libraries when the game exits.</p>
+
 <p data-fw-grep=".github/workflows/_bsd.yml::if \[ ! -f build/memory/\.rmp-render-complete \]; then">The
 BSD builds run inside virtual machines, and a script that stops early can still exit 0 in one. So
 the check that ends the script writes a file once it has reached its verdict, and the step after it

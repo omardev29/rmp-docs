@@ -118,11 +118,12 @@ than leave one that does nothing.</p>
 
 <h2>The menu's test</h2>
 
-<p>The game <code>rmp new</code> made also came with a test of its menu, in
+<p data-fw-grep="tests/game/main_menu_test.cpp::CHECK\(rmp::assets::failed_loads\(\) == failed\);[\s\S]*?WARN_MESSAGE\(rmp::assets::requested_loads\(\) &gt; asked,">The
+game <code>rmp new</code> made also came with a test of its menu, in
 <code>tests/game/main_menu_test.cpp</code>. It makes the menu with no window, runs its
-<code>_ready()</code>, and checks that the menu asked for at least one file and found every file
-it asked for. Yours loads nothing yet — the rabbit comes back later — so the first half no longer
-holds. Replace the test with the half that does:</p>
+<code>_ready()</code>, and checks that every file the menu asked for was found. A menu that asks
+for none passes, with a warning that the test checked nothing — and yours loads nothing yet: the
+rabbit comes back later. Keep the check, and leave the warning out:</p>
 
 <pre data-lang="cpp" data-project="my_game" data-file="tests/game/main_menu_test.cpp">
 // The main menu finds every file it loads: a file renamed in resources/ and
