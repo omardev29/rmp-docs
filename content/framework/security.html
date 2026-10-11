@@ -544,9 +544,11 @@ with anonymous rate limits.</dd>
 action, by commit</dt>
 <dd>Every GitHub Action a workflow uses is named by the full commit it resolves to, with the tag in
 a comment beside it: a tag can be moved, a commit cannot.
-<span data-fw-grep="tests/configure_test.py::class ActionsArePinnedByShaTest\(unittest\.TestCase\):[\s\S]*?self\.assertRegex\(ref, r&quot;\^\[\\w\.-\]\+/\[\\w\./-\]\+@\[0-9a-f\]\{40\}\$&quot;">A
+<span data-fw-grep="tests/configure_test.py::class ActionsArePinnedByShaTest\(unittest\.TestCase\):[\s\S]*?if not re\.match\(r&quot;\^\[\\w\.-\]\+/\[\\w\./-\]\+@\[0-9a-f\]\{40\}\$&quot;, ref\):[\s\S]*?elif not re\.search\(r&quot;#\\s\*v\?\\d&quot;, rest\):[\s\S]*?def test_a_tag_and_a_silent_pin_are_refused\(self\):">A
 test of the framework reads every <code>uses:</code> in its workflows and fails on one that is not
-a full commit, or does not say which version that commit is.</span></dd>
+a full commit, or does not say which version that commit is — and runs the same check on a
+workflow that names a tag and one that pins a commit without its version, which it has to
+refuse.</span></dd>
 <dt data-fw-grep="tools/linux_build.sh::echo &quot;\$\{SHA\}  \$\{TMP\}/zig\.tar\.xz&quot; \| sha256sum -c -">Every
 download, by checksum</dt>
 <dd>Every file a job fetches by address — zig and UPX outside the image, Ninja and XcodeGen on
