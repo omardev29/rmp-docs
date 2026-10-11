@@ -71,7 +71,8 @@ which platforms it reaches, and where its licence text is. The main ones:</p>
 <tr><td>raylib-iOS and ANGLE</td><td>zlib; BSD-3</td><td>unmodified</td><td>iOS only</td></tr>
 <tr><td>what raylib bundles: GLFW, miniaudio, the stb libraries, the decoders and loaders</td><td>zlib, MIT, public domain and similar</td><td>unmodified</td><td>where raylib uses them</td></tr>
 <tr data-fw-grep="THIRD_PARTY_LICENSES.md::# backport of upstream's scissor fix and a texel clamp of our own, both named\n# in raylib's PATCHES\.md\), and its row says yes"><td>rlsw, raylib's software renderer</td><td>MIT</td><td>modified: a fix taken from upstream, and one of the framework's own</td><td>every platform</td></tr>
-<tr><td>doctest</td><td>MIT</td><td>unmodified</td><td>nowhere: the framework's tests only</td></tr>
+<tr data-fw-grep="THIRD_PARTY_LICENSES.md::\*\*doctest\*\* \(Viktor Kirilov, MIT\) is compiled into `unit_test` and into\n  `game_test`, a game's own tests in `tests/game/`, neither of which is ever\n  shipped"><td>doctest</td><td>MIT</td><td>unmodified</td><td>nowhere: the tests only, the framework's and a game's own</td></tr>
+<tr data-fw-grep="THIRD_PARTY_LICENSES.md::^rapidcheck +thirdparty/rapidcheck +BSD-2 +- +no +none [\s\S]*?\*\*rapidcheck\*\* \(Emil Eriksson, BSD-2-Clause\)[\s\S]*?The framework's alone: `rmp new` leaves it out of a game"><td>RapidCheck</td><td>BSD-2</td><td>unmodified</td><td>nowhere: the framework's property tests only, and left out of a game</td></tr>
 </tbody>
 </table>
 

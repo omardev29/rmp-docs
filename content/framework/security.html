@@ -22,7 +22,7 @@ measured it — and where it lives. The last section says plainly what is not do
 <tr><td><a href="#debug-checks">Library checks in debug</a></td><td>every debug build on the desktop</td><td>yes</td></tr>
 <tr><td><a href="#sanitizers">AddressSanitizer and UndefinedBehaviorSanitizer</a></td><td>every debug build of the framework on the desktop</td><td>off until <code>[dev] sanitize</code> lists them</td></tr>
 <tr><td><a href="#analysis">Static analysis</a></td><td>the framework's own code: <code>rmp lint</code>, <code>rmp test</code>, the lint and tidy jobs</td><td>no: the framework's code is checked before a game gets it</td></tr>
-<tr><td><a href="#coverage">What the tests reach</a></td><td>the framework's own code: <code>rmp test coverage</code>, the coverage job</td><td>no: it measures the framework's tests</td></tr>
+<tr><td><a href="#coverage">What the tests reach</a></td><td>the framework's own code: <code>rmp test coverage</code>, the coverage job; the deep tests, the deep job</td><td>no: it measures the framework's tests</td></tr>
 <tr><td><a href="#binaries">The shipped binary, read back</a></td><td>every release job in CI</td><td>yes: the same workflows</td></tr>
 <tr><td><a href="#supply-chain">The supply chain, pinned</a></td><td>CI</td><td>yes, at the pins the game was made with</td></tr>
 <tr><td><a href="#secrets">Secrets, signing, installing</a></td><td>the <code>.toml</code>, the Android job, the installer</td><td>yes</td></tr>
@@ -464,10 +464,18 @@ one test that drives the real desktop runner. Two lists hold what it measured, a
 way: <code>tools/coverage_floor.txt</code>, the share of each file of <code>src/rmp/</code> the
 tests run, which only rises, and <code>tools/untested_api.txt</code>, the public functions no test
 calls, which only shrinks — a new function arrives with its test.
-<span data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, tidy, examples, e2e, rmp_new, coverage, docs,">Both
+<span data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, tidy, examples, e2e, rmp_new, coverage, deep, docs,">Both
 are gates in the framework's <code>coverage</code> job, inside the build image they were measured
 in, and a release of the framework waits for it.</span>
 <a href="/framework/testing.html#coverage">Testing</a> has the detail.</p>
+
+<p data-fw-grep=".github/workflows/ci.yml::  # The deep test campaign, the short runs, on every push -- what is\n  # deterministic">Coverage
+says which lines ran, not whether a test would notice them wrong, and a test checks only the inputs
+somebody thought of. The deep tests look for the rest — fuzzing, properties checked against
+generated input, and mutation testing, which changes the code to see whether a test fails — in the
+framework's <code>deep</code> job on every push and in a longer search at night;
+<a href="/framework/testing.html#ci">Testing</a> says where each one runs, and
+<a href="#not-done">below</a> how little of the framework they reach yet.</p>
 
 <h2 id="binaries">The shipped binary, read back</h2>
 
@@ -530,11 +538,13 @@ download succeeding.</p>
 <dt data-fw-grep="tools/versions_check.sh::# Every container job must pin the same digest, and it must be the declared one\.">The
 build image, by digest</dt>
 <dd>The Linux, web and Android builds, the lint job and the framework's own jobs — clang-tidy, the
-examples and their scripts, the coverage, the new game, the documentation — run inside
-<code>ghcr.io/omardev29/raylib-build</code>, named by its
-<code>sha256</code> digest in <code>ci.yml</code>, <code>web-backends.yml</code> and
-<code>thirdparty/FROZEN_VERSIONS.md</code>; <code>tools/versions_check.sh</code> fails if any two
-disagree, or if <code>:latest</code> appears outside the canary.
+examples and their scripts, the coverage, the deep tests, the new game, the documentation — run
+inside <code>ghcr.io/omardev29/raylib-build</code>, named by its <code>sha256</code> digest in
+<code>thirdparty/FROZEN_VERSIONS.md</code> and in every workflow that runs in it —
+<code>ci.yml</code>, <code>web-backends.yml</code> and <code>deep.yml</code>;
+<span data-fw-grep="tools/versions_check.sh::WORKFLOWS=\$\(find \.github/workflows -name '\*\.yml' ! -name 'canary\.yml'\)">
+<code>tools/versions_check.sh</code> reads every workflow and fails if any two disagree</span>, or if
+<code>:latest</code> appears outside the canary.
 <span data-fw-grep="tools/versions_check.sh::IMAGE_MANIFEST=/etc/raylib-build-image\.json">Inside
 the image it also compares every pinned tool with the image's own manifest.</span> The image is
 built in <a href="https://github.com/omardev29/raylib-build-image">its own repository</a>, each
@@ -649,14 +659,21 @@ line endings each file is checked out with — which the site's own build checks
 <p>At the commit these pages document, these do not exist:</p>
 
 <ul>
-<li data-fw-grep="thirdparty/FROZEN_VERSIONS.md::# The test toolchain in the build image, for coverage, sanitizers, fuzzing and\n# mutation testing"><strong>No
-fuzzing.</strong> No fuzz target exists, so no parser of the framework — the LDtk, Tiled and Aseprite
-readers, the save reader, the resource pack — is fed generated input. The build image carries
-libFuzzer's runtime, with LLVM 18, and nothing runs it.</li>
-<li><strong>No property-based tests.</strong> Hypothesis is in the build image, and no test uses it.</li>
-<li><strong>No mutation testing.</strong> Mull and mutmut are in the build image, and neither runs on any code.
-<a href="#coverage">Coverage</a> says which lines the tests run; nothing says how many mistakes in
-those lines the tests would miss.</li>
+<li data-fw-grep="tests/deep.cmake::# What a harness needs besides librmp\.a, by its name\. tests/e2e/script\.cpp is\n# the e2e scripts' grammar, a parser of the tests' own\.\nset\(_rmp_fuzz_extra_e2e_script"><strong>No
+parser of the framework fuzzed.</strong> The one fuzz target is the grammar of the
+<a href="/framework/testing.html#e2e">scripts the examples are played from</a>, a parser of the
+tests' own. No reader of the framework — the LDtk, Tiled and Aseprite readers, the save reader,
+the resource pack — is fed generated input yet.</li>
+<li data-fw-grep="tests/property/waivers.txt::\A(?:(?:#[^\n]*)?\n)*(?:[^#\n][^\n]*\n(?:(?:#[^\n]*)?\n)*){296}\Z"><strong>No
+public function held by a property.</strong> The properties that run check the generators they are
+written with, and the scanner the text gates read C++ through. Every public function of
+<code>include/rmp/</code>, all 296, is still on <code>tests/property/waivers.txt</code>, a list
+that only shrinks.</li>
+<li data-fw-grep="tests/mutation/floors/random.txt::^floor +80$"><strong>Little mutation testing
+measured.</strong> Of the framework's C++, only <code>rmp::random</code> has a mutation score held
+to a floor; every other file of <code>src/rmp/</code> has its module and no score yet.
+<a href="#coverage">Coverage</a> says which lines the tests run; for the rest of the framework,
+nothing yet says how many mistakes in those lines the tests would miss.</li>
 <li><strong>No reading of how a Windows, macOS or BSD release was linked.</strong> The BSD releases are hardened
 like Linux's, Fortify aside, and the Windows ones by their linker's defaults, and nothing reads it
 back out of the binary: <code>binary_check.py windows</code> reads what an <code>.exe</code>

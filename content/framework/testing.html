@@ -450,10 +450,12 @@ run that way, and the boots read the report as well as the exit status. In CI th
 <code>RMP_REQUIRE_SANITIZERS=1</code>, so a runner whose compiler cannot instrument the build fails
 it instead of testing nothing in silence.</p>
 
-<p data-fw-grep="tools/sanitize_check.sh::RMP_REQUIRE_SANITIZERS=1 cmake -S \. -B &quot;\$BUILD&quot; -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \\\s+-DRMP_DEV_TOOLCHAIN=OFF -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g\+\+">That
+<p data-fw-grep="tools/sanitize_check.sh::RMP_REQUIRE_SANITIZERS=1 cmake -S \. -B &quot;\$BUILD&quot; -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \\\s+-DBUILD_UI_TESTS=ON \\\s+-DRMP_DEV_TOOLCHAIN=OFF -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g\+\+[\s\S]*?--target unit_test ui_layout_test">That
 run is clang's, the framework's development compiler. <code>rmp test sanitize</code> builds the unit
-tests again with gcc, in a build directory of their own and with warnings as errors: the second
-compiler instruments differently and warns about other things. The clang builds leave alone what
+tests and the headless layout test again with gcc, in a build directory of their own and with
+warnings as errors: the second compiler instruments differently and warns about other things.
+<span data-fw-grep=".github/workflows/ci.yml::  deep:\n    needs: config[\s\S]*?- name: Unit and layout tests under ASan and UBSan \(gcc\)[\s\S]*?bash tools/sanitize_check\.sh">In
+CI it is a step of the <code>deep</code> job, <a href="#ci">below</a>.</span> The clang builds leave alone what
 <code>cmake/sanitize_ignore.txt</code> lists, each line with its reason, and the list may only name
 vendored code, never the framework's. <code>tests/sanitize_test.cpp</code> holds the whole
 arrangement to what it promises: it runs a small program that leaks, overflows a buffer and
@@ -523,7 +525,7 @@ a mistake that could be described precisely enough for a machine to reject it:</
 <tr><td><code>config</code></td><td>the <code>.toml</code> is invalid, a pinned version disagrees with the file that controls it, or a vendored component's licence is not on record</td></tr>
 <tr><td><code>repo</code></td><td>something a build produced is tracked by git</td></tr>
 <tr><td><code>seam</code></td><td>a file of the framework reads the clock, the input devices, the screen size or raylib's random state on its own</td></tr>
-<tr><td><code>workflows</code></td><td>a reusable CI workflow asks for a permission its caller does not grant</td></tr>
+<tr data-fw-grep="tools/workflow_check.sh::# A build's errors are on its STDOUT: ninja prints the failed command and what\n# the compiler said there"><td><code>workflows</code></td><td>a reusable CI workflow asks for a permission its caller does not grant, or a step throws a build's output away, which is where the compiler's error is printed</td></tr>
 <tr><td><code>portable</code></td><td>a script uses something macOS's old bash or the BSDs do not have, or the BSD jobs' inline script is not plain ASCII</td></tr>
 <tr><td><code>shell</code></td><td>a script writes <code>A &amp;&amp; B || C</code>, which runs <code>C</code> when <code>B</code> fails</td></tr>
 <tr><td><code>naming</code></td><td>a name breaks the <a href="/guidelines/naming.html">naming rules</a> in any branch of any <code>#if</code></td></tr>
@@ -546,16 +548,35 @@ summary <code>rmp help test</code> prints for each.</p>
 <h2 id="ci">In CI</h2>
 
 <p>A push to the framework runs every stage of <code>rmp test</code> that checks something — all but
-the two that record a golden — in its <code>lint</code> job, or in a job of its own:
-<code>examples</code>, which builds and boots every example, <code>e2e</code>, which plays the
-ones with a script — the two halves of <code>rmp test examples</code> — and
-<code>coverage</code>, which measures what the tests reach.
-<span data-fw-grep="tests/rmp_test.py::    JOBS = \{\n        &quot;examples&quot;: &quot;examples&quot;,[^\n]*\n        &quot;coverage&quot;: &quot;coverage&quot;,[^\n]*\n    \}\n[\s\S]*?STEP_JOBS = \{[\s\S]*?&quot;tools/examples_build\.sh e2e&quot;: &quot;e2e&quot;,[\s\S]*?NOT_A_CHECK = \{&quot;render-update&quot;[^}]*&quot;e2e-update&quot;">A
+the two that record a golden, and the one that takes hours — in its <code>lint</code> job, or in a
+job of its own: <code>examples</code>, which builds and boots every example, <code>e2e</code>, which
+plays the ones with a script — the two halves of <code>rmp test examples</code> —
+<code>coverage</code>, which measures what the tests reach, and <code>deep</code>, the short runs
+of the deep tests:
+<span data-fw-grep="tools/rmp.py::Stage\(&quot;property&quot;, &quot;properties: RapidCheck on the C\+\+, Hypothesis on the Python&quot;,[\s\S]*?Stage\(&quot;fuzz&quot;, &quot;every fuzz target built, and every committed input replayed&quot;,">the
+properties of <code>rmp test property</code>, RapidCheck's at a fixed seed and Hypothesis's
+derandomized; <code>rmp test fuzz</code>, every input committed for a fuzz target replayed under
+the sanitizers;</span> and <code>rmp test sanitize</code>, above.
+<span data-fw-grep="tools/rmp.py::Stage\(&quot;mutation&quot;, &quot;Mull and mutmut against every floor \(build image, hours\)&quot;,">The
+one that takes hours is <code>rmp test mutation</code>, Mull over the C++ and mutmut over the
+Python, each module against a floor that only rises,</span>
+<span data-fw-grep=".github/workflows/deep.yml::#   every Sunday every mutation module, one job each: Mull over the C\+\+,\n#                mutmut over the Python, against tests/mutation/floors/\.">which
+<code>.github/workflows/deep.yml</code> runs every Sunday, a job a module.</span>
+<span data-fw-grep="tests/rmp_test.py::    JOBS = \{\n        &quot;examples&quot;: &quot;examples&quot;,[^\n]*\n        &quot;coverage&quot;: &quot;coverage&quot;,[^\n]*\n(?:        #[^\n]*\n)*        &quot;sanitize&quot;: &quot;deep&quot;,\n        &quot;property&quot;: &quot;deep&quot;,\n        &quot;fuzz&quot;: &quot;deep&quot;,\n(?:        #[^\n]*\n)*        &quot;mutation&quot;: &quot;deep\.yml/mutation&quot;,\n    \}\n[\s\S]*?STEP_JOBS = \{[\s\S]*?&quot;tools/examples_build\.sh e2e&quot;: &quot;e2e&quot;,[\s\S]*?NOT_A_CHECK = \{&quot;render-update&quot;[^}]*&quot;e2e-update&quot;">A
 test of the command checks each stage, and each half of one, against the job that runs it.</span>
 <span data-fw-grep=".github/workflows/ci.yml::  tidy:\n    needs: config\n    if: needs\.config\.outputs\.framework == 'true'[\s\S]*?- name: clang-tidy\n        run: bash tools/lint\.sh">clang-tidy,
 which is <code>rmp lint</code> and not a stage, has a job of its own too, <code>tidy</code>.</span></p>
 
-<p data-fw-grep=".github/workflows/ci.yml::#   push / pull_request  -&gt;  fast lane: Linux x64, Web, Android, Windows x64"><span data-fw-grep=".github/workflows/ci.yml::# that catch most regressions, beside the framework's own jobs \(lint, tidy,\n# examples, e2e, coverage, docs, rmp_new\), every one of them side by side">Each
+<p data-fw-grep=".github/workflows/deep.yml::#   every night  every fuzz target fuzzed for ten minutes, from the committed\n#                corpus; the properties at a random seed \(printed\) and 5000\n#                cases; Hypothesis at its `nightly` profile\.[\s\S]*?# What a job finds is an issue labelled nightly-finding, ONE per signature">What
+a push runs of the deep tests is the same on every run — the same seeds, the same inputs — so that
+a red is the commit's and never the dice's. The search is <code>deep.yml</code>'s: every night it
+fuzzes each target for ten minutes and runs the properties at a random seed, and what it finds
+becomes an issue labelled <code>nightly-finding</code>, one per signature, with the command that
+plays it again.
+<span data-fw-grep=".github/workflows/deep.yml::  plan:\n(?:    [^\n]*\n)*?    if: github\.repository == 'omardev29/raylib_multiplatform'">Like
+the canary, it runs only in the framework's own repository.</span></p>
+
+<p data-fw-grep=".github/workflows/ci.yml::#   push / pull_request  -&gt;  fast lane: Linux x64, Web, Android, Windows x64"><span data-fw-grep=".github/workflows/ci.yml::  coverage:\n    needs: config\n[\s\S]*?  deep:\n    needs: config\n[\s\S]*?  docs:\n    needs: config\n">Each
 of these starts as soon as the configuration is read, beside the others and beside the platform
 builds, so the run takes as long as its longest job rather than their sum.</span> The same push
 makes a new game with <code>rmp new</code> and runs that game's own checks, follows the recipe at
@@ -563,9 +584,10 @@ the top of <code>examples/plain_c/src/main.c</code> in a copy of that game, boot
 starts its release from the project folder and from another, checks this documentation site
 against the commit, and builds the fast lane: Linux x64, the web, Android and Windows x64. A
 release tag builds every target, and so can a run started by hand.
-<span data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, tidy, examples, e2e, rmp_new, coverage, docs,">A
+<span data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, tidy, examples, e2e, rmp_new, coverage, deep, docs,">A
 release of the framework waits for all of it: clang-tidy, the examples and their scripts, the new
-game, the coverage and the documentation as well as every platform.</span> The Linux jobs run
+game, the coverage, the short runs of the deep tests and the documentation as well as every
+platform.</span> The Linux jobs run
 inside a build image pinned by digest, with every compiler and tool already in it, so a build does
 not depend on a download succeeding.</p>
 

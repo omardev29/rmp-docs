@@ -143,11 +143,12 @@ draws a frame with raylib's software renderer, in a debug build that runs under 
 framework's tests and gates, and jobs of its own run clang-tidy over its code, build and boot
 every example, <a href="/framework/testing.html#e2e">play the examples that have a script</a>,
 measure
-<a href="/framework/testing.html#coverage">what the framework's tests reach</a>, make a game with
+<a href="/framework/testing.html#coverage">what the framework's tests reach</a>, run the
+<a href="/framework/testing.html#ci">deep tests' short runs</a>, make a game with
 <code>rmp new</code> to test it — and a copy of that game in plain C, made the way
 <code>examples/plain_c</code> says, booted and its release started from the project folder and
 from another — and check this documentation against the commit.
-<span data-fw-grep=".github/workflows/ci.yml::# tidy, examples, e2e, rmp_new, coverage and docs are the framework's own; a game skips\n  # them\.">A
+<span data-fw-grep=".github/workflows/ci.yml::# tidy, examples, e2e, rmp_new, coverage, deep and docs are the framework's own; a game\n  # skips them\.">A
 release of the framework waits for every one of those jobs; in a game they are skipped, and the
 release does not wait for them.</span></p>
 

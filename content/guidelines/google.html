@@ -280,7 +280,7 @@ review. <a href="/guidelines/macros.html">Macros</a> has the rule.</p>
 <table>
 <thead><tr><th>Google's rule</th><th>Checked by</th></tr></thead>
 <tbody>
-<tr><td>No exceptions: the framework throws none, and catches the standard library's where it can throw (<a href="/framework/why/no-exceptions.html">No exceptions</a>)</td><td>review</td></tr>
+<tr data-fw-grep="tests/campaign_test.py::class ExceptionsStayInTheTestsTest\(unittest\.TestCase\):[\s\S]*?def test_the_framework_never_throws\(self\):"><td>No exceptions: the framework throws none, and catches the standard library's where it can throw (<a href="/framework/why/no-exceptions.html">No exceptions</a>)</td><td>a <code>throw</code> under <code>src/rmp/</code> or <code>include/rmp/</code>: <code>tests/campaign_test.py</code>, in <code>rmp test property</code>; the catching: review</td></tr>
 <tr><td>C++ casts, not C's</td><td><code>modernize-avoid-c-style-cast</code>, and S1 of <code>tools/style_check.sh</code></td></tr>
 <tr><td><code>nullptr</code>, not <code>NULL</code> or <code>0</code></td><td><code>modernize-use-nullptr</code>, and S2</td></tr>
 <tr><td><code>++i</code> unless the old value is used</td><td>S6</td></tr>
@@ -305,5 +305,6 @@ review. <a href="/guidelines/macros.html">Macros</a> has the rule.</p>
 
 <p>"S1", "S2", "S5" and "S6" are rules of <code>tools/style_check.sh</code>, the <code>style</code>
 stage of <code>rmp test</code>. Every check in the table runs in the framework, and all but
-<code>modernize-use-auto</code> and O1 in the examples too; <a href="/guidelines/enforcement.html">what checks
+<code>modernize-use-auto</code>, O1 and the test that looks for a <code>throw</code> in the
+examples too; <a href="/guidelines/enforcement.html">what checks
 what</a> has each one's exact reach.</p>
