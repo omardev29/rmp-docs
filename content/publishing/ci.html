@@ -171,12 +171,12 @@ shuts down comes after it.</dd>
 crash on the way out — in the game's stop hook, or as the window closes — comes after every marker,
 and only the exit code catches it. So does a leak, which LeakSanitizer reports as a sanitized debug
 build exits. These runs read the exit code, and fail on anything but 0: the Linux x64 and ARM64
-boots and their archives started from another folder, the Windows boot, the archive started on
-Alpine, the software-rendered runs on macOS and the BSDs and in the <code>lint</code> job, and
-<code>rmp test smoke</code> and <code>rmp test render</code>. The software-rendered runs and the two
-<code>rmp test</code> stages fail on a sanitizer's report as well. The rest ignore it and pass a game that crashes after its last frame: the
-software-rendered boot on Alpine, the DRM boot, the iOS simulator, and the release started from
-another folder on macOS and the BSDs.</p>
+boots and their archives started from another folder, the Windows boot, both starts on Alpine, the
+DRM boot, the software-rendered runs on macOS and the BSDs and in the <code>lint</code> job, the
+release started from another folder on macOS and the BSDs, and <code>rmp test smoke</code> and
+<code>rmp test render</code>. The software-rendered runs and the two <code>rmp test</code> stages
+fail on a sanitizer's report as well. The iOS simulator's boot is the one that does not: the app
+is launched in the background and its log read, so a crash after its last frame passes there.</p>
 
 <p>The markers come from <code>tests/smoke_test.h</code>, which every game carries. The share of
 pixels is the gate everywhere because GPUs and software renderers disagree on the details of a

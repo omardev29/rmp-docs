@@ -29,7 +29,7 @@ it, except in the musl job's first run, a software-rendered build of the game, w
 project's own <code>resources/</code> folder next to it; its second run starts the archive's
 binary.</p>
 
-<p data-fw-grep="tools/shipped_check.sh::# First, the release where it was built, started from the project folder(?:[^\n]*\n)*?RAY_TEST_MAX_FRAMES=5 &quot;\./\$BUILD/\$NAME&quot;">Where
+<p data-fw-grep="tools/shipped_check.sh::# First, the release where it was built, started from the project folder(?:[^\n]*\n)*?if RAY_TEST_MAX_FRAMES=5 &quot;\./\$BUILD/\$NAME&quot;">Where
 the executable's folder has no <code>resources/</code>, the release stays where it was
 started and reads the working directory's, saying
 <samp>ASSETS: no … next to the executable; reading the working directory's, …</samp> — which is
