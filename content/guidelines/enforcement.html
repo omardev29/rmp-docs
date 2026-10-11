@@ -17,7 +17,7 @@ so a check that is said to run runs.</p>
 <dl>
 <dt>clang-tidy, which <code>rmp lint</code> runs</dt>
 <dd data-fw-grep="tools/lint_debt.py::&quot;--experimental-custom-checks&quot;, file\]">The
-checks of the framework's <code>.clang-tidy</code> over every file of <code>src/</code>,
+checks of the framework's <code>.clang-tidy</code> over the sources of <code>src/</code>,
 <code>tests/</code> and <code>examples/</code>, and the headers they reach, with the flags each file
 is built with. Whole families run — <code>bugprone</code>, <code>clang-analyzer</code>,
 <code>performance</code>, <code>portability</code>, <code>misc</code>, <code>modernize</code>,
@@ -51,9 +51,8 @@ stage), <code>tools/style_check.sh</code> (S1 to S6, <code>style</code>),
 <dd data-fw-grep="CMakeLists.txt::target_compile_options\(\$\{target\} PRIVATE -Wall -Wextra -Wno-missing-field-initializers\)">Every
 target built from the framework's sources and a game's is compiled with <code>-Wall
 -Wextra</code> under GCC and Clang. The framework's own checks build with <code>RMP_WERROR</code>,
-which makes a warning an error;
-a game's warnings stay warnings unless it asks for the same. Designated initialisers out of order
-are an error everywhere.</dd>
+which makes a warning an error; a game's warnings stay warnings unless it asks for the same.
+Designated initialisers out of order are an error everywhere.</dd>
 </dl>
 
 <h2 id="table">Rule by rule</h2>
