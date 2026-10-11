@@ -314,4 +314,6 @@ rmp::ui::panel([&amp;] {
 
 <p><code>custom-rmp-raw-pointer</code> runs only with clang-tidy's
 <code>--experimental-custom-checks</code>, which <code>rmp lint</code> passes. A game gets none of
-these tools: the rules are recommended to it, and nothing holds it to them.</p>
+these tools: the rules are recommended to it, and the clang-tidy checks among them hold it only if
+it <a href="/guidelines/index.html#switching-on-clang-tidy">switches the framework's clang-tidy on</a>. <a href="/guidelines/enforcement.html">What checks what</a> has every
+rule of these pages in one table.</p>
