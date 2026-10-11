@@ -189,7 +189,7 @@ library. A vendored library's own switches keep their names, in the one file tha
 it.</li>
 <li><strong>No constant is named like somebody else's macro.</strong> <code>PI</code>,
 <code>MIN</code>, <code>MAX</code>, <code>EPSILON</code>: each is a macro on some platform, and a
-constant with that name compiles everywhere except there. <a href="/framework/why/naming.html">Naming</a>
+constant with that name compiles everywhere except there. <a href="/guidelines/naming.html">Naming</a>
 lists them.</li>
 <li><strong>No retired name is left in an <code>#if</code>.</strong> When a macro is renamed, a test
 of the old name does not fail: the old name is undefined, and undefined is 0.</li>

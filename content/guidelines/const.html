@@ -1,0 +1,244 @@
+<!--
+title: const
+description: const on everything that does not change, constexpr for what is known when the code compiles, inline constexpr for a constant in a header, consteval and constinit where they fit — each with its reason, and the check that refuses the mistake.
+order: 30
+-->
+<h1><code>const</code></h1>
+
+<p class="lede">What does not change is marked as not changing: a local, a reference, a method, a
+parameter's copy, a constant. The reader learns at the declaration that the value at the bottom of
+the function is the one at the top, and the compiler holds the code to it. Where the value is known
+when the code compiles, it is <code>constexpr</code>, and the compiler works it out.</p>
+
+<p data-fw-grep=".clang-tidy::#   misc-const-correctness       const on every local that does not change,">Google's
+guide asks for <code>const</code> "whenever it makes sense". This framework makes it a rule
+without the "whenever": clang-tidy's <code>misc-const-correctness</code> runs over the framework,
+its tests and its examples, and nothing in them is left that it refuses<span data-fw-grep="src/rmp/object.cpp::// pointer to const; misc-const-correctness does not follow it there\.\n\s+// NOLINTNEXTLINE\(misc-const-correctness\)">
+but two lines that carry a <code>NOLINT</code> with the reason</span>. It is not
+about bugs, it is about the reader.</p>
+
+<h2 id="locals">A local that does not change</h2>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="misc-const-correctness">
+int score_for(const int coins, const int seconds) {
+    int bonus = seconds &lt; 60 ? 100 : 0;
+    return coins * 10 + bonus;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+int score_for(const int coins, const int seconds) {
+    const int bonus = seconds &lt; 60 ? 100 : 0;
+    return coins * 10 + bonus;
+}
+</pre>
+
+<p>The same goes for a loop's variable, which is a new local on every turn, and for a reference
+that is only read through, which is a <code>const &amp;</code>:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;vector&gt;" data-expect="lint" data-check="misc-const-correctness">
+int total(const std::vector&lt;int&gt; &amp;scores) {
+    int sum = 0;
+    for (int score : scores) sum += score;
+    return sum;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;vector&gt;">
+int total(const std::vector&lt;int&gt; &amp;scores) {
+    int sum = 0;
+    for (const int score : scores) sum += score;
+    return sum;
+}
+</pre>
+
+<h2 id="methods">A method that changes nothing</h2>
+
+<p>A method that reads the object and writes nothing is <code>const</code>, so it can be called on
+a <code>const</code> object and says at the declaration that it is safe to call anywhere.
+clang-tidy's <code>readability-make-member-function-const</code> refuses one that is not, in the
+framework and its tests; the examples leave the <code>readability</code> checks out.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="readability-make-member-function-const">
+class Wallet {
+public:
+    [[nodiscard]] bool can_pay(const int price) { return _coins &gt;= price; }
+
+private:
+    int _coins = 0;
+};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Wallet {
+public:
+    [[nodiscard]] bool can_pay(const int price) const { return _coins &gt;= price; }
+
+private:
+    int _coins = 0;
+};
+</pre>
+
+<h2 id="parameters">A parameter's copy, in the definition</h2>
+
+<p data-fw-grep=".clang-tidy::#                                by-value parameter is the same rule, in the\n#                                definition only -- clang-tidy 22 does not\n#                                look at parameters, and\n#                                readability-avoid-const-params-in-decls keeps\n#                                the const out of the declaration\.">A
+parameter taken by value is a local of the function, and the same rule holds for it: when the
+function does not change it, it is <code>const</code>. But only where the function is defined.
+In a declaration that <code>const</code> means nothing to the caller, who hands over a copy either
+way, and clang-tidy refuses it there:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="readability-avoid-const-params-in-decls">
+void heal(const int amount);
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Ship {
+public:
+    void heal(int amount);
+
+private:
+    int _hp = 3;
+};
+
+void Ship::heal(const int amount) { _hp += amount; }
+</pre>
+
+<p>The half in the definition has no check: clang-tidy does not look at parameters. It is a
+question for whoever reviews the change.</p>
+
+<p>A parameter that is expensive to copy and only read is not a copy at all: it is a
+<code>const</code> reference. clang-tidy refuses the copy, in the framework and in the
+examples:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;string&gt;
+#include &lt;vector&gt;
+struct Level { std::string name; std::vector&lt;int&gt; walls; };" data-expect="lint" data-check="performance-unnecessary-value-param">
+int count_walls(Level level) { return static_cast&lt;int&gt;(level.walls.size()); }
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;string&gt;
+#include &lt;vector&gt;
+struct Level { std::string name; std::vector&lt;int&gt; walls; };">
+int count_walls(const Level &amp;level) { return static_cast&lt;int&gt;(level.walls.size()); }
+</pre>
+
+<p>Text and sequences have a better answer than a <code>const</code> reference:
+<a href="/guidelines/strings.html">a <code>std::string_view</code></a> and
+<a href="/guidelines/pointers-and-raii.html#spans">a <code>std::span</code></a>.</p>
+
+<h2 id="constexpr"><code>constexpr</code>: known when it compiles</h2>
+
+<p>A value the code can know when it compiles is <code>constexpr</code>, and a function that can
+work one out is <code>constexpr</code> too, so it can be used for one. The name says it:
+a <code>constexpr</code> is <code>CONSTANT_CASE</code> (<a href="/guidelines/naming.html">Naming</a>).</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+constexpr float GRAVITY = 980.0f;
+constexpr int TILE_SIZE = 16;
+
+constexpr int tiles_across(const int width) { return width / TILE_SIZE; }
+
+constexpr int LEVEL_TILES = tiles_across(800);
+</pre>
+
+<p>No tool can say that a value could have been <code>constexpr</code> and is not; clang-tidy has
+no such check. It is the other question for review — except in a header, where the rule is
+stricter and is checked.</p>
+
+<h2 id="headers">In a header: <code>inline constexpr</code></h2>
+
+<p data-fw-grep=".clang-tidy::  # A constant at namespace scope in a header is `inline constexpr`: one object\n  # for the whole program instead of a copy per translation unit">A
+constant at namespace scope in a header is <code>inline constexpr</code>. A <code>const</code> or
+a <code>constexpr</code> there has internal linkage, so every file that includes the header gets a
+copy of its own; <code>inline</code> makes it one object for the whole program, and
+<code>constexpr</code> makes it known when the code compiles. The framework's
+<code>.clang-tidy</code> holds a query of its own for this, <code>custom-rmp-header-constant</code>,
+which reads every header its lint reaches — the framework's, its tests' and the examples':</p>
+
+<pre data-lang="cpp" data-harness="header" data-expect="lint" data-check="custom-rmp-header-constant">
+#pragma once
+
+namespace game {
+constexpr int START_LIVES = 3;
+} // namespace game
+</pre>
+
+<pre data-lang="cpp" data-harness="header">
+#pragma once
+
+namespace game {
+inline constexpr int START_LIVES = 3;
+} // namespace game
+</pre>
+
+<p>It runs only with clang-tidy's <code>--experimental-custom-checks</code>, which
+<code>rmp lint</code> passes; a clang-tidy started without it reads the same file and runs
+everything else, saying nothing about this one.</p>
+
+<h2 id="consteval"><code>consteval</code>: only when it compiles</h2>
+
+<p>A function that must never run while the game does is <code>consteval</code>: every call is
+worked out by the compiler, and a call it cannot work out does not compile. A collision layer is a
+bit, and the bit is known when the code is written:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+consteval unsigned layer_bit(const int index) { return 1U &lt;&lt; index; }
+
+constexpr unsigned PLAYER = layer_bit(0);
+constexpr unsigned ENEMY = layer_bit(1);
+</pre>
+
+<pre data-lang="cpp" data-harness="function" data-given="consteval unsigned layer_bit(const int index) { return 1U &lt;&lt; index; }" data-expect="error" data-error="constant expression">
+const int index = GetRandomValue(0, 3);
+const unsigned layer = layer_bit(index);
+</pre>
+
+<h2 id="constinit"><code>constinit</code>: state that starts known</h2>
+
+<p data-fw-grep="src/rmp/random.cpp::// The generator\. The dot at every use says &quot;file state&quot;\.\nconstinit struct \{">State
+at file scope that changes while the game runs, and whose first value is known when the code
+compiles, is <code>constinit</code>: it is set before any code runs, so no other file's start-up
+can read it before it is ready. The framework's random number generator is held this way, so that
+its first value is the same every time.</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+constinit struct {
+    unsigned seed = 1;
+    int draws = 0;
+} generator;
+</pre>
+
+<p>A value only the running game can produce does not compile there:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="error" data-error="constant initializer">
+constinit struct {
+    int seed = GetRandomValue(0, 100);
+} generator;
+</pre>
+
+<p data-fw-grep="tools/style_check.sh::#   S4  nothing newer than the floor compiler, NetBSD's GCC 10\.5, in the code a\n#       game compiles">Both
+are C++20, and both are in the oldest compiler a game is built with, NetBSD's GCC 10.5. What that
+compiler does not have is a <code>constexpr</code> <code>std::string</code> or
+<code>std::vector</code>: a group of file state that holds one cannot be <code>constinit</code>
+there, and is set at start-up instead.</p>
+
+<h2 id="who-checks">Who checks what</h2>
+
+<table>
+<thead><tr><th>Rule</th><th>Check</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>A local, or a reference, that does not change is <code>const</code></td><td><code>misc-const-correctness</code></td><td>the framework, its tests, the examples</td></tr>
+<tr><td>A method that changes nothing is <code>const</code></td><td><code>readability-make-member-function-const</code></td><td>the framework and its tests</td></tr>
+<tr><td>No <code>const</code> on a by-value parameter in a declaration</td><td><code>readability-avoid-const-params-in-decls</code></td><td>the framework and its tests</td></tr>
+<tr><td>A <code>const</code> by-value parameter in the definition</td><td>none: a review question</td><td></td></tr>
+<tr><td>A read-only parameter that is costly to copy is a <code>const</code> reference</td><td><code>performance-unnecessary-value-param</code></td><td>the framework, its tests, the examples</td></tr>
+<tr><td><code>constexpr</code>, <code>consteval</code>, <code>constinit</code> wherever they fit</td><td>none: a review question</td><td></td></tr>
+<tr><td>A namespace constant in a header is <code>inline constexpr</code></td><td><code>custom-rmp-header-constant</code></td><td>every header the lint reaches</td></tr>
+</tbody>
+</table>
+
+<p>Every check here is clang-tidy, with the framework's <code>.clang-tidy</code>, run by
+<code>rmp lint</code> over <code>src/</code>, <code>tests/</code> and <code>examples/</code>. A game
+does not get that file: there, these rules are a recommendation, and nothing holds a game to them
+unless it <a href="/guidelines/index.html#switching-on-clang-tidy">switches the framework's clang-tidy on</a>. <a href="/guidelines/enforcement.html">What checks what</a> has
+every rule of these pages in one table.</p>

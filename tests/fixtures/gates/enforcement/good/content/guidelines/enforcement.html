@@ -1,0 +1,20 @@
+<!--
+title: Enforcement
+description: A fixture.
+-->
+<h1>Enforcement</h1>
+<table data-enforcement>
+<thead><tr><th>Rule</th><th>Checked by</th><th>Framework</th><th>Examples</th><th>A game</th></tr></thead>
+<tbody>
+<tr><td>std::array</td><td><code>modernize-avoid-c-arrays</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td>auto where the type is written</td><td><code>modernize-use-auto</code></td><td>yes</td><td>no: modernize-* is off there</td><td>no</td></tr>
+<tr><td>Two checks, one named off in the examples</td><td><code>modernize-avoid-c-arrays</code>, <code>modernize-use-auto</code></td><td>yes</td><td>yes, but for <code>modernize-use-auto</code></td><td>no</td></tr>
+<tr><td>int and fixed widths</td><td><code>google-runtime-int</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td>No C cast, every branch</td><td><code>tools/style_check.sh</code> <code>S1</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td>No raw pointer</td><td><code>custom-rmp-raw-pointer</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td>Formatted</td><td><code>.clang-format</code></td><td>yes</td><td>yes</td><td>yes, with rmp fmt</td></tr>
+<tr><td>No shadowing</td><td><code>-Wshadow</code>, given to clang-tidy</td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td>Designators in order</td><td><code>-Werror=reorder-init-list</code></td><td>yes</td><td>yes</td><td>yes</td></tr>
+</tbody>
+</table>
+<p>Off: <code>misc-no-recursion</code>, <code>modernize-use-trailing-return-type</code>.</p>

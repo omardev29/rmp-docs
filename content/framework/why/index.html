@@ -20,9 +20,10 @@ is the measure. Every other decision on these pages is answerable to it.</p>
 <h2>How the code reads</h2>
 
 <dl>
-<dt><a href="/framework/why/naming.html">Naming</a></dt>
+<dt><a href="/guidelines/naming.html">Naming</a></dt>
 <dd>One spelling per kind of name, so a type, a value and a constant never look alike where they
-are used, and no prefix carries meaning a dot can carry better.</dd>
+are used, and no prefix carries meaning a dot can carry better. It is a rule of style, so it lives
+with the rest of the style guide, in the Guidelines.</dd>
 <dt><a href="/framework/why/the-access-rule.html">The access rule</a></dt>
 <dd><code>_name</code> is a method of yours the framework calls; <code>on_name</code> is a function
 you hand to it. Two spellings, two directions.</dd>
@@ -55,30 +56,8 @@ an option.</dd>
 <h2>Checked, not remembered</h2>
 
 <p>A rule written only in a document is kept until the day someone has not read it. So wherever a
-mistake can be described precisely, something in the framework's own test run rejects it:</p>
-
-<table>
-<thead><tr><th>Rule</th><th>What enforces it</th></tr></thead>
-<tbody>
-<tr><td>Naming, and the eight hook names</td><td><code>.clang-tidy</code>, <code>-Wshadow</code> and <code>tools/naming_check.sh</code></td></tr>
-<tr data-fw-grep=".clang-tidy::CustomChecks:"><td>The style guide: <code>const</code> on what does not change, <code>std::array</code>, <code>enum class</code>, <code>static_cast</code>, no raw pointer, a constant in a header <code>inline constexpr</code>, a macro only for what a function cannot do</td><td><code>.clang-tidy</code>, two of whose checks are queries of the framework's own and run only with <code>--experimental-custom-checks</code>; what the tree still owes it is written down in <code>tools/lint_debt.txt</code>, which only shrinks</td></tr>
-<tr><td>The style rules clang-tidy cannot see, in every branch of every <code>#if</code>: no C cast, no <code>NULL</code>, no <code>TODO</code>, nothing newer than the oldest compiler a game is built with, no user-defined literal, <code>++i</code> where the old value is not read</td><td><code>tools/style_check.sh</code></td></tr>
-<tr><td>No finding of a second analyser in <code>src/rmp</code>, and a reason beside every suppression</td><td><code>tools/cppcheck_check.sh</code></td></tr>
-<tr><td>No owning raw pointer in the framework, and no raylib <code>Load*</code> or <code>Unload*</code> outside the file that owns what it makes</td><td><code>tools/ownership_check.sh</code>, and two ownership checks of clang-tidy</td></tr>
-<tr><td>No raw pointer and no C string in a declaration a game can name</td><td><code>tools/pointer_check.py</code>, against <code>tools/pointer_ratchet.txt</code></td></tr>
-<tr><td>Every public header compiles on its own and carries the <code>.toml</code> values</td><td><code>tools/header_check.sh</code></td></tr>
-<tr><td>What each public header costs to include</td><td><code>tools/header_cost.py</code>, against <code>tools/header_budget.txt</code></td></tr>
-<tr><td>Nothing in the framework reads the clock, the input or the random state on its own</td><td><code>tools/seam_check.sh</code></td></tr>
-<tr><td>A mistake in the <code>.toml</code> stops before the build</td><td><code>tools/configure.py</code>, and <code>tests/configure_test.py</code> for each refusal</td></tr>
-<tr><td>Every vendored component has a licence the project can ship</td><td><code>tools/license_db.py</code></td></tr>
-<tr><td>No memory error and no undefined behaviour in a test run</td><td>every debug build of the framework under AddressSanitizer and UndefinedBehaviorSanitizer, from <code>cmake/sanitize.cmake</code>, and <code>tools/sanitize_check.sh</code> for a second compiler</td></tr>
-<tr><td>Every release binary stays the size it was measured at, unless the growth is written down</td><td><code>tools/size_check.py</code>, against <code>tools/size_budget.txt</code></td></tr>
-<tr><td>No file of the framework falls below the share of its lines its tests are written down to run, and no public function arrives without a test that calls it</td><td><code>tools/coverage_report.py</code>, against <code>tools/coverage_floor.txt</code> and <code>tools/untested_api.txt</code></td></tr>
-</tbody>
-</table>
-
-<p>The scripts are stages of the framework's <a href="/reference/commands.html#test"><code>rmp
-test</code></a>, clang-tidy is <a href="/reference/commands.html#lint"><code>rmp lint</code></a>,
-which fails on a warning <code>tools/lint_debt.txt</code> does not owe, and the CI runs all of them
-on every push. <a href="/framework/testing.html">Testing</a> has the
-rest.</p>
+mistake can be described precisely, something in the framework's own checks rejects it — a
+check of clang-tidy, a stage of <a href="/reference/commands.html#test"><code>rmp test</code></a>,
+clang-format or the compiler. <a href="/guidelines/index.html#checked">The Guidelines</a> list
+every one of those rules with the tool that holds it, and where: in the framework, in its examples
+and in a game.</p>

@@ -1,0 +1,346 @@
+<!--
+title: Pointers and RAII
+description: No raw pointer anywhere — what to write instead, the few places one is allowed and why — and nothing owned by hand: every resource freed by the thing that holds it. Each mistake shown with what refuses it.
+order: 40
+-->
+<h1>Pointers and RAII</h1>
+
+<p class="lede">No raw pointer: not in what the framework hands a game, not in its own sources,
+not in its tests or its examples. And nothing freed by hand: whatever is owned is owned by
+something that frees it when it goes. The two rules are one idea from two sides — every thing has
+an owner you can see, and everything that refers to it says how.</p>
+
+<h2 id="why">Why no raw pointer</h2>
+
+<p data-fw-grep=".clang-tidy::A pointer asks its reader whether it\n  # may be null, who owns it and how long it lives, and its type answers none\.">A
+pointer asks whoever reads it three questions — may it be null, who owns what it points at, how
+long does that live — and its type answers none of them. Each form below answers all three, so a
+signature written with them needs no comment to be used right.
+<a href="/guidelines/google.html#pointers">Google's guide</a> allows a pointer for an optional
+argument or a result that may be missing; this framework does not, and has a type for each of
+those cases instead.</p>
+
+<h2 id="instead">What to write instead</h2>
+
+<table>
+<thead><tr><th>What you mean</th><th>What you write</th></tr></thead>
+<tbody>
+<tr><td>a small thing, copied</td><td>the value: a <code>Vector2</code>, a <a href="ref:rmp::Shape"><code>Shape</code></a>, an options struct</td></tr>
+<tr><td>a result that may not be there</td><td><code>std::optional&lt;T&gt;</code></td></tr>
+<tr><td>an argument that may be left out</td><td>two overloads: <a href="ref:rmp::assets::load_map"><code>load_map(name)</code></a> and <code>load_map(name, level)</code></td></tr>
+<tr><td>something that is certainly there, for the length of the call</td><td><code>T &amp;</code></td></tr>
+<tr><td>the caller's elements, for the length of the call</td><td><a href="#spans"><code>std::span&lt;T&gt;</code></a></td></tr>
+<tr><td>the caller's text, for the length of the call</td><td><a href="/guidelines/strings.html"><code>std::string_view</code></a></td></tr>
+<tr><td>something that may be missing and is not yours, within the frame</td><td><a href="#ref"><code>rmp::Ref&lt;T&gt;</code></a></td></tr>
+<tr><td>an object kept from one frame to the next</td><td><a href="ref:rmp::Handle"><code>rmp::Handle&lt;T&gt;</code></a></td></tr>
+<tr><td>something that is yours alone</td><td>a value, or a <code>std::unique_ptr&lt;T&gt;</code> when it is polymorphic or large</td></tr>
+</tbody>
+</table>
+
+<h3 id="references">A reference, for what is there</h3>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="custom-rmp-raw-pointer">
+void reset(int *score) { *score = 0; }
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+void reset(int &amp;score) { score = 0; }
+</pre>
+
+<p>The framework's API reads the same way. A spawned object always has its scene, so
+<a href="ref:rmp::Object::scene"><code>scene()</code></a> is a <code>Scene &amp;</code>; a control
+that edits a value takes it by reference, as <a href="ref:rmp::ui::slider"><code>slider</code></a>
+does.</p>
+
+<h3 id="optional"><code>std::optional</code>, for an answer that may not be there</h3>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;vector&gt;
+struct Door { Vector2 position; bool locked; };" data-expect="lint" data-check="custom-rmp-raw-pointer">
+const Door *first_open(const std::vector&lt;Door&gt; &amp;doors) {
+    for (const Door &amp;door : doors) {
+        if (!door.locked) return &amp;door;
+    }
+    return nullptr;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;vector&gt;
+struct Door { Vector2 position; bool locked; };">
+#include &lt;optional&gt;
+
+std::optional&lt;Vector2&gt; first_open(const std::vector&lt;Door&gt; &amp;doors) {
+    for (const Door &amp;door : doors) {
+        if (!door.locked) return door.position;
+    }
+    return std::nullopt;
+}
+</pre>
+
+<p>And what reads it asks first. <code>*</code> on an empty <code>std::optional</code> is
+undefined behaviour, not an error, so clang-tidy refuses a read that nothing before it has
+checked:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="#include &lt;optional&gt;
+std::optional&lt;Vector2&gt; first_open();" data-expect="lint" data-check="bugprone-unchecked-optional-access">
+const std::optional&lt;Vector2&gt; door = first_open();
+DrawCircleV(*door, 8, GREEN);
+</pre>
+
+<pre data-lang="cpp" data-harness="function" data-given="#include &lt;optional&gt;
+std::optional&lt;Vector2&gt; first_open();">
+if (const std::optional&lt;Vector2&gt; door = first_open()) DrawCircleV(*door, 8, GREEN);
+</pre>
+
+<h3 id="spans"><code>std::span</code>, for the caller's elements</h3>
+
+<p>A pointer and a count are two arguments that have to agree, and nothing makes them. A
+<code>std::span</code> is the two in one, from a <code>std::array</code>, a
+<code>std::vector</code> or a list written in place.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="custom-rmp-raw-pointer">
+float average(const float *values, const int count) {
+    float sum = 0;
+    for (int i = 0; i &lt; count; ++i) sum += values[i];
+    return count &gt; 0 ? sum / static_cast&lt;float&gt;(count) : 0;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;span&gt;
+
+float average(std::span&lt;const float&gt; values) {
+    float sum = 0;
+    for (const float value : values) sum += value;
+    return values.empty() ? 0 : sum / static_cast&lt;float&gt;(values.size());
+}
+</pre>
+
+<p data-fw-grep="include/rmp/scene.h::int raycast_all\(const RayQuery &amp;query, std::span&lt;RayHit&gt; out\) const;">It
+works the other way too: <a href="ref:rmp::Scene::raycast_all"><code>raycast_all</code></a> writes
+every hit along a ray into a span of yours, as many as it holds, and says how many it wrote.</p>
+
+<pre data-lang="cpp" data-harness="scene">
+std::array&lt;rmp::RayHit, 8&gt; hits{};
+const int count = raycast_all({ .from = { 0, 200 }, .to = { 800, 200 } }, hits);
+DrawText(TextFormat("%d in the way", count), 10, 10, 20, WHITE);
+</pre>
+
+<h3 id="ref"><code>rmp::Ref</code>, for something that may be missing</h3>
+
+<p data-fw-grep="include/rmp/object.h::// An optional reference: something that may not be there, and is not yours\.">An
+<a href="ref:rmp::Ref"><code>rmp::Ref&lt;T&gt;</code></a> is empty, or refers to something; it owns
+nothing, and asking it is an <code>if</code>. It is what
+<a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a> hands back, empty when the object
+has no <code>B</code>, and what <a href="ref:rmp::Handle::get"><code>Handle::get()</code></a> hands
+back, empty once the object is gone. Keep it within the frame; across frames, keep the handle.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="custom-rmp-raw-pointer">
+rmp::behavior::Health *health_of(rmp::Object &amp;object) {
+    if (auto health = object.get&lt;rmp::behavior::Health&gt;()) return &amp;*health;
+    return nullptr;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;player = spawn({ .size = { 26, 26 } });
+player.add&lt;rmp::behavior::Health&gt;({ .hp = 3 });
+
+if (auto health = player.get&lt;rmp::behavior::Health&gt;()) health-&gt;heal(1);
+</pre>
+
+<p data-fw-grep="include/rmp/object.h::// REACHING INTO AN EMPTY ONE is a mistake in the game, and is said once, per\n// type: \* and -&gt; then reach a stand-in">Reaching
+into an empty one without asking is a mistake in the game, and the framework says so once, in the
+log; the line that forgot the <code>if</code> then writes to a stand-in made for the purpose
+instead of taking the game down. <code>[dev] strict</code> stops a debug build there instead<span data-fw-grep="include/rmp/object.h::// debug build there instead\.\) A type with no default constructor has no\n// stand-in, and that one mistake ends the program">,
+and a type with no default constructor has no stand-in: there, the one mistake ends the
+program</span>.</p>
+
+<p>It is a type of the framework's own because the standard library's spelling,
+<code>std::optional&lt;std::reference_wrapper&lt;T&gt;&gt;</code>, costs
+<code>&lt;functional&gt;</code> in every file with an object in it, and reads
+<code>health-&gt;get().hp</code>.</p>
+
+<h3 id="public-headers">In a public header</h3>
+
+<p data-fw-grep="tools/pointer_check.py::HOW\. clang reads each header on its own and dumps its declarations as JSON">Everything
+a game can name — every function, field, variable and alias in <code>include/rmp/</code> outside a
+<code>detail</code> namespace and outside a private member — is read by
+<code>tools/pointer_check.py</code>: clang dumps each header's declarations and the script refuses a
+pointer, a C string, or an alias that hides one. Reading the declarations and not the text is the
+point: a comment is not a declaration, a private member is not public, and
+<code>using SampleFn = ...</code> is seen through.</p>
+
+<pre data-lang="cpp" data-harness="header" data-expect="gate" data-gate="pointers">
+#pragma once
+
+#include &lt;string_view&gt;
+
+namespace rmp {
+class Object;
+
+Object *find(std::string_view name);
+} // namespace rmp
+</pre>
+
+<pre data-lang="cpp" data-harness="header">
+#pragma once
+
+#include &lt;string_view&gt;
+
+namespace rmp {
+class Object;
+template &lt;class T&gt; class Ref;
+
+Ref&lt;Object&gt; find(std::string_view name);
+} // namespace rmp
+</pre>
+
+<h2 id="allowed">Where a pointer is allowed</h2>
+
+<p data-fw-grep=".clang-tidy::  # Where it is allowed, and nowhere else:">Nowhere but here, and
+each place for a reason:</p>
+
+<ul>
+<li><strong>A type of a C library the framework speaks to</strong> — Clay, cJSON, cute_tiled,
+cute_aseprite, rres. Their API is pointers, and that is not a choice the framework made.</li>
+<li><strong>An <code>extern "C"</code> function</strong> and its parameters: a fuzzer's entry
+point takes its input as a pointer, because that is its C interface.</li>
+<li><strong><code>operator-&gt;</code></strong>, which the language requires to return one. It is
+how <code>health-&gt;hp</code> reads, on a <code>Ref</code> and on a <code>Handle</code>.</li>
+<li><strong>Inside <code>rmp::Ref</code></strong>: its one member is the optional reference, so
+that nothing else has to hold one.</li>
+<li data-fw-grep=".clang-tidy::unless\(isExpansionInFileMatching\(&quot;\[\.\]c\$&quot;\)\)"><strong>C</strong>:
+a <code>.c</code> file — the resource packer, the plain C example, the sanitizer hooks — is C
+because it has to be, and C has nothing else.</li>
+</ul>
+
+<p>raylib is not on the list. A raylib function that takes an address takes it in a call, and an
+address in a call is not a pointer anybody declared:</p>
+
+<pre data-lang="cpp" data-harness="function">
+Camera3D camera = { .position = { 10, 10, 10 }, .up = { 0, 1, 0 }, .fovy = 45 };
+UpdateCamera(&amp;camera, CAMERA_ORBITAL);
+</pre>
+
+<p data-fw-grep="tools/pointer_ratchet.txt::# fails on a public one, on a detail or private one that is not listed here,\n# and on a line here that matches nothing any more: this list only shrinks\.">The
+rule is newer than some of the code. In the public headers, the pointers a game cannot reach — in
+a <code>detail</code> namespace or a private member — are listed in
+<code>tools/pointer_ratchet.txt</code>, each with its reason, and the list only shrinks: a new one
+fails until it is replaced or written down, and a line that matches nothing any more fails
+too.</p>
+
+<p data-fw-grep="tools/lint_debt.txt::custom-rmp-raw-pointer\s+examples/games/01_pong/src/main\.cpp">Everywhere
+else — the framework's sources, its tests, its examples — what the code still owes the rule is
+counted, file by file, in <code>tools/lint_debt.txt</code>. <code>rmp lint</code> fails a pointer
+that is not owed there, and a count that grew; the counts only go down.</p>
+
+<h2 id="raii">RAII: the owner frees it</h2>
+
+<p data-fw-grep="tools/ownership_check.sh::#   O1  no bare new/delete, no malloc/free, under include/rmp/ or src/rmp/\.">What
+is owned is a value or a <code>std::unique_ptr</code>, and it is freed by its destructor: no
+<code>new</code>, no <code>delete</code>, no <code>malloc</code>, no <code>free</code>. A
+<code>delete</code> nobody wrote cannot be forgotten, and one nobody wrote cannot run twice. The
+order of the way out is the order the owners go, which is what makes it safe to free a texture
+before the window that its memory belongs to.</p>
+
+<p data-fw-grep="tools/ownership_check.sh::# raylib's LoadFileData contract: the buffer is RL_MALLOC'd by us and\s+# RL_FREE'd by raylib's caller\. C ABI, not ours to own\.">Two
+files of the framework allocate with the C allocator, and <code>tools/ownership_check.sh</code>
+names them with the reason: raylib's file-loading callback and the resource pack's reader hand
+raylib bytes that raylib frees itself, with <code>UnloadFileData()</code>. That is raylib's C
+interface, not an ownership the framework chose, and the list only shrinks.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="struct Enemy { int hp = 3; };" data-expect="lint" data-check="cppcoreguidelines-owning-memory">
+int wave_hp() {
+    auto *boss = new Enemy();
+    const int hp = boss-&gt;hp;
+    delete boss;
+    return hp;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="struct Enemy { int hp = 3; };">
+int wave_hp() {
+    const Enemy boss;
+    return boss.hp;
+}
+</pre>
+
+<p>When it has to be on the heap — something polymorphic, or too big to move about — it is a
+<code>std::unique_ptr</code>, made with <code>std::make_unique</code>, and the hand-over is written
+in the signature. That is how a scene is made: <a href="ref:rmp::Scene::change"><code>change()</code></a>
+makes the next one with <code>std::make_unique</code>, and the stack owns it from there.</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;memory&gt;
+
+struct State {
+    virtual ~State() = default;
+    [[nodiscard]] virtual float speed() const = 0;
+};
+
+struct Walking : State {
+    [[nodiscard]] float speed() const override { return 120.0f; }
+};
+
+std::unique_ptr&lt;State&gt; first_state() { return std::make_unique&lt;Walking&gt;(); }
+</pre>
+
+<h3 id="raylib-resources">A raylib resource has an owner too</h3>
+
+<p data-fw-grep="tools/ownership_check.sh::#   O2  no raylib Load\*/Unload\* outside the files that own what it makes,">raylib
+hands out textures, sounds and fonts that are freed by a matching <code>Unload</code>. In a
+scene, an object or an example, a forgotten one is a leak and a second one is a double free, so a
+raylib <code>Load*</code> or <code>Unload*</code> appears only in the few files of the framework
+that own what it makes. A game loads through <code>rmp::assets</code>, which hands back a handle
+that frees the resource when its last copy goes:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="gate" data-gate="ownership" data-rule="O2">
+const Texture2D rabbit = LoadTexture("rabbit.png");
+DrawTexture(rabbit, 100, 100, WHITE);
+UnloadTexture(rabbit);
+</pre>
+
+<pre data-lang="cpp" data-harness="function">
+const rmp::Texture rabbit = rmp::assets::load_texture("rabbit.png");
+DrawTexture(rabbit, 100, 100, WHITE);
+</pre>
+
+<p><a href="/framework/why/ownership.html">Ownership</a> has what owns what in the framework —
+assets, objects and their handles, scenes, globals, callbacks — and why a callback is an
+<code>rmp::Callback</code> and not a <code>std::function</code>.</p>
+
+<h3 id="closing">What you open closes itself</h3>
+
+<p data-fw-grep="include/rmp/ui.h::// Closes the element even if the body throws\.">RAII is not only
+for memory. A container of the UI is opened by the function that takes its body and closed by a
+guard in that same function. The body is a lambda, so a <code>return</code> in it ends the body and
+not the container, and the guard closes the container even if the body throws: one left open would
+spoil the whole frame.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void resume(); void quit();">
+rmp::ui::panel([&amp;] {
+    rmp::ui::text("Paused");
+    if (rmp::ui::button("Resume")) resume();
+    if (rmp::ui::button("Quit")) quit();
+});
+</pre>
+
+<h2 id="who-checks">Who checks what</h2>
+
+<table>
+<thead><tr><th>Rule</th><th>Tool</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>No raw pointer and no C string in a declaration a game can name</td><td><code>tools/pointer_check.py</code>, <code>rmp test pointers</code>, against <code>tools/pointer_ratchet.txt</code></td><td>the declarations in <code>include/rmp/</code></td></tr>
+<tr><td>No raw pointer anywhere else</td><td><code>custom-rmp-raw-pointer</code>, a query of the framework's <code>.clang-tidy</code>; <code>rmp lint</code>, against <code>tools/lint_debt.txt</code></td><td><code>src/</code>, <code>tests/</code>, <code>examples/</code>, and the bodies of the headers' inline functions</td></tr>
+<tr><td>A <code>std::optional</code> is asked before it is read</td><td><code>bugprone-unchecked-optional-access</code>; <code>rmp lint</code></td><td><code>src/</code>, <code>tests/</code>, <code>examples/</code></td></tr>
+<tr><td>No <code>new</code>, <code>delete</code>, <code>malloc</code> or <code>free</code></td><td><code>tools/ownership_check.sh</code> O1, <code>rmp test ownership</code></td><td><code>include/rmp/</code> and <code>src/rmp/</code></td></tr>
+<tr><td>The same, as clang-tidy sees it</td><td><code>cppcoreguidelines-owning-memory</code> and <code>cppcoreguidelines-no-malloc</code>; <code>rmp lint</code></td><td><code>src/</code>, <code>tests/</code>, <code>examples/</code></td></tr>
+<tr><td>raylib's <code>Load*</code> and <code>Unload*</code> only in the files that own what they make</td><td><code>tools/ownership_check.sh</code> O2, <code>rmp test ownership</code></td><td><code>include/rmp/</code>, <code>src/rmp/</code> and the examples' C++</td></tr>
+</tbody>
+</table>
+
+<p><code>custom-rmp-raw-pointer</code> runs only with clang-tidy's
+<code>--experimental-custom-checks</code>, which <code>rmp lint</code> passes. A game gets none of
+these tools: the rules are recommended to it, and the clang-tidy checks among them hold it only if
+it <a href="/guidelines/index.html#switching-on-clang-tidy">switches the framework's clang-tidy on</a>. <a href="/guidelines/enforcement.html">What checks what</a> has every
+rule of these pages in one table.</p>

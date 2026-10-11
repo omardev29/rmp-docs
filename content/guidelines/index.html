@@ -1,13 +1,14 @@
 <!--
 title: Guidelines
-description: How C++ is written in the framework and its examples: which rules decide, in what order, and how the code on these pages is checked against the tools that hold them.
+description: How C++ is written in the framework and its examples: which rules decide, in what order, every rule with the tool that holds it and where, and what a game gets of them.
 order: 1
 -->
 <h1>Guidelines</h1>
 
 <p class="lede">How C++ is written here: in the framework, in its examples, and in a game that
-wants to read like them. When a question has more than one good answer, three sources decide it,
-in this order, and a source lower down never overrules one above it.</p>
+wants to read like them. In the framework and the examples the rules on these pages are mandatory,
+and a tool holds every one a tool can tell apart from its mistake; in a game they are advice, and
+the game decides how much of the tooling it takes. When a question has more than one good answer, three sources decide it, in this order.</p>
 
 <h2 id="who-decides">Who decides</h2>
 
@@ -16,51 +17,161 @@ in this order, and a source lower down never overrules one above it.</p>
 other rule. A main menu is three functions, and a rule that would make it longer loses, whatever
 else it buys. <a href="/framework/why/the-three-function-menu.html">The three-function menu</a>
 says why.</li>
-<li><strong>The framework's own decisions</strong>, each one with its reason: the
-<a href="/framework/why/naming.html">naming table</a>,
-<a href="/framework/why/one-header-per-module.html">one header per module</a>,
-<a href="/framework/why/ownership.html">ownership, and no raw pointer in the API</a>,
-<a href="/framework/why/no-exceptions.html">no exceptions</a>,
-<a href="/framework/why/designated-initialisers.html">designated initialisers in declaration
-order</a>, and the rest of <a href="/framework/why/index.html">why it is built this way</a>.</li>
+<li><strong>The rules on these pages</strong>, each with its reason: the
+<a href="/guidelines/naming.html">naming table</a>, <a href="/guidelines/formatting.html">the
+layout</a>, <a href="/guidelines/const.html"><code>const</code></a>,
+<a href="/guidelines/pointers-and-raii.html">no raw pointer, and nothing owned by hand</a>,
+<a href="/guidelines/strings.html">text in and out</a>, <a href="/guidelines/modern-cpp.html">the
+C++ written where C would also compile</a> and <a href="/guidelines/macros.html">macros</a> — and
+the framework's own decisions in <a href="/framework/why/index.html">why it is built this way</a>,
+such as <a href="/framework/why/one-header-per-module.html">one header per module</a> and
+<a href="/framework/why/no-exceptions.html">no exceptions</a>.</li>
 <li><strong><a href="https://google.github.io/styleguide/cppguide.html">Google's C++ Style
 Guide</a></strong>, for everything the first two leave open. Where the framework has decided
-otherwise, its decision holds, and the reason is written down with it.</li>
+otherwise its decision holds, and <a href="/guidelines/google.html">Google's guide, and where this
+one differs</a> lists each place with its reason.</li>
 </ol>
 
-<h2 id="checked">Checked like the code</h2>
+<h2 id="checked">Every rule, and what holds it</h2>
 
-<p>A rule on these pages is shown in code, and the code is checked the way the framework's own is.
-A block that shows the right way is compiled against the framework's headers and has to pass
-clang-tidy, with the framework's own <code>.clang-tidy</code>, without a single warning. A block
-that shows the wrong way and still compiles says what refuses it — a check of clang-tidy, which
-<code>rmp lint</code> runs, or a gate of <code>rmp test</code> — and the build of this site runs that
-check on it and fails if it stays quiet. A block that does not compile at all is shown as not
-compiling, with the words the compiler uses. <a href="/framework/why/index.html#checked-not-remembered">Checked,
-not remembered</a> lists the rules the framework's tools hold today.</p>
+<p>A rule written only in a document is kept until the day somebody has not read it. So wherever a
+mistake can be described precisely, a tool refuses it: a check of clang-tidy, which
+<a href="/reference/commands.html#lint"><code>rmp lint</code></a> runs; a gate, which is a stage of
+<a href="/reference/commands.html#test"><code>rmp test</code></a>; clang-format; or the compiler.
+One line per page of these Guidelines, with every tool that page names and where it holds — in the
+framework (its <code>include/</code>, <code>src/</code> and <code>tests/</code>), in its examples,
+and in a game made with <code>rmp new</code>:</p>
+
+<table data-enforcement>
+<thead><tr><th>Rules</th><th>Checked by</th><th>Framework</th><th>Examples</th><th>A game</th></tr></thead>
+<tbody>
+<tr><td><a href="/guidelines/naming.html">Naming</a>: one spelling per kind, no prefix, no name hiding another, no constant named like a macro, no retired name</td><td><code>readability-identifier-naming</code>, <code>clang-diagnostic-shadow</code>; <code>tools/naming_check.sh</code>, rules R1 to R8, in every branch of every <code>#if</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/formatting.html">Formatting</a>: 4 spaces, 90 columns, no alignment, <code>char *p</code>, <code>{ 1, 2 }</code></td><td><code>.clang-format</code>; <code>rmp fmt</code> applies it, <code>rmp fmt check</code> and <code>rmp test fmt</code> refuse a file it would change</td><td>yes</td><td>yes</td><td>yes: <code>rmp fmt</code> formats and <code>rmp fmt check</code> refuses, when the game runs them</td></tr>
+<tr><td><a href="/guidelines/const.html"><code>const</code></a>: on every local and method that changes nothing, not on a parameter in a declaration, <code>inline constexpr</code> in a header</td><td><code>misc-const-correctness</code>, <code>readability-make-member-function-const</code>, <code>readability-avoid-const-params-in-decls</code>, <code>performance-unnecessary-value-param</code>, <code>custom-rmp-header-constant</code></td><td>yes</td><td>yes, but for <code>readability-make-member-function-const</code> and <code>readability-avoid-const-params-in-decls</code></td><td>no</td></tr>
+<tr><td><a href="/guidelines/pointers-and-raii.html">Pointers and RAII</a>: no raw pointer, no C string a game can name, an optional asked before it is read, nothing owned by hand, raylib's resources loaded only by their owners</td><td><code>custom-rmp-raw-pointer</code>, <code>cppcoreguidelines-owning-memory</code>, <code>cppcoreguidelines-no-malloc</code>, <code>bugprone-unchecked-optional-access</code>; <code>tools/pointer_check.py</code>; <code>tools/ownership_check.sh</code> <code>O1</code> <code>O2</code></td><td>yes, with what <code>tools/lint_debt.txt</code> and <code>tools/pointer_ratchet.txt</code> still owe, and <code>tools/ownership_check.sh</code> in <code>include/rmp/</code> and <code>src/rmp/</code> only</td><td>yes, but for <code>tools/pointer_check.py</code> and <code>O1</code>, which read only the framework's own code, and with what <code>tools/lint_debt.txt</code> still owes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/strings.html">Strings</a>: a view in, a <code>std::string</code> out, never a view's <code>data()</code> to raylib, nothing newer than the oldest compiler</td><td><code>tools/pointer_check.py</code>, <code>custom-rmp-raw-pointer</code>, <code>bugprone-dangling-handle</code>, <code>bugprone-suspicious-stringview-data-usage</code>; <code>tools/style_check.sh</code> <code>S4</code> <code>S5</code></td><td>yes, but for <code>S4</code> in <code>tests/</code>, which build only on CI's compilers</td><td>yes, but for <code>tools/pointer_check.py</code>, which reads only <code>include/rmp/</code></td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html">Modern C++</a>: <code>std::array</code>, <code>static_cast</code>, <code>enum class</code>, <code>nullptr</code>, no varargs, <code>int</code>, <code>explicit</code>, <code>++i</code>, designated initialisers in order, C++20 as GCC 10.5 has it</td><td><code>modernize-avoid-c-arrays</code>, <code>modernize-avoid-c-style-cast</code>, <code>cppcoreguidelines-use-enum-class</code>, <code>modernize-use-nullptr</code>, <code>modernize-avoid-variadic-functions</code>, <code>google-runtime-int</code>, <code>google-runtime-float</code>, <code>google-explicit-constructor</code>, <code>cppcoreguidelines-special-member-functions</code>, <code>modernize-use-auto</code>, <code>modernize-use-using</code>, <code>modernize-use-std-numbers</code>, <code>google-build-using-namespace</code>, <code>google-default-arguments</code>; <code>tools/style_check.sh</code> <code>S1</code> <code>S2</code> <code>S4</code> <code>S5</code> <code>S6</code>; <code>-Werror=reorder-init-list</code></td><td>yes, but for <code>S4</code> in <code>tests/</code></td><td>yes, but for <code>modernize-use-auto</code></td><td>only the order of designated initialisers, which the compiler refuses</td></tr>
+<tr><td><a href="/guidelines/macros.html">Macros</a>: only for what a function cannot do, named <code>RMP_</code></td><td><code>cppcoreguidelines-macro-usage</code>, <code>readability-identifier-naming</code>; <code>tools/naming_check.sh</code> <code>R5</code> <code>R6</code> <code>R7</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/google.html#agreement">Where Google's guide and these agree</a>: no unnamed namespace or global using-declaration in a header, no overloaded unary <code>&amp;</code>, no <code>TODO</code></td><td><code>google-build-namespaces</code>, <code>google-global-names-in-headers</code>, <code>google-runtime-operator</code>, <code>google-build-explicit-make-pair</code>; <code>tools/style_check.sh</code> <code>S3</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td>No finding of a second analyser, and a reason beside every suppression</td><td><code>tools/cppcheck_check.sh</code></td><td>yes: <code>src/rmp/</code></td><td>no</td><td>no</td></tr>
+<tr><td>Warnings on the code we write</td><td><code>-Wall</code> <code>-Wextra</code></td><td>yes, as errors in the framework's own checks</td><td>yes</td><td>yes, as warnings</td></tr>
+</tbody>
+</table>
+
+<p><a href="/guidelines/enforcement.html">What checks what</a> takes the same rules one by one,
+with each check's exact reach, the checks the framework switches off and why, and what the code
+still owes. The build of this site holds both tables to the framework's own configuration: a check
+said to run there runs there.</p>
+
+<p>The rest of what the framework checks is not about how the code reads, and holds it together
+instead:</p>
+
+<table data-enforcement>
+<thead><tr><th>Rule</th><th>Checked by</th><th>Framework</th><th>Examples</th><th>A game</th></tr></thead>
+<tbody>
+<tr><td>Every public header compiles on its own and carries the <code>.toml</code> values</td><td><code>tools/header_check.sh</code></td><td>yes: <code>include/rmp/</code></td><td>no</td><td>no</td></tr>
+<tr><td>What each public header costs to include</td><td><code>tools/header_cost.py</code>, against <code>tools/header_budget.txt</code></td><td>yes: <code>include/rmp/</code></td><td>no</td><td>no</td></tr>
+<tr><td>Nothing in the framework reads the clock, the input or the random state on its own</td><td><code>tools/seam_check.sh</code></td><td>yes: <code>src/rmp/</code></td><td>no</td><td>no</td></tr>
+<tr><td>A mistake in the <code>.toml</code> stops before the build</td><td><code>tools/configure.py</code>, and <code>tests/configure_test.py</code> for each refusal</td><td>yes</td><td>no: they are built with the framework's</td><td>yes</td></tr>
+<tr><td>Every vendored component has a licence the project can ship</td><td><code>tools/license_db.py</code></td><td>yes</td><td>no</td><td>yes: <code>rmp test config</code></td></tr>
+<tr><td>No memory error and no undefined behaviour in a run</td><td>AddressSanitizer and UndefinedBehaviorSanitizer in every debug build, from <code>cmake/sanitize.cmake</code>; <code>tools/sanitize_check.sh</code> for a second compiler</td><td>yes</td><td>yes</td><td>no, until its <code>[dev] sanitize</code> lists them</td></tr>
+<tr><td>Every release binary stays the size it was measured at, unless the growth is written down</td><td><code>tools/size_check.py</code>, against <code>tools/size_budget.txt</code></td><td>yes</td><td>no</td><td>yes, from the day it commits a budget of its own</td></tr>
+<tr><td>No file of the framework falls below the share of its lines its tests are written down to run, and no public function arrives without a test that calls it</td><td><code>tools/coverage_report.py</code>, against <code>tools/coverage_floor.txt</code> and <code>tools/untested_api.txt</code></td><td>yes: <code>src/rmp/</code> and <code>include/rmp/</code></td><td>no</td><td>no</td></tr>
+</tbody>
+</table>
+
+<p>Each is a stage of <code>rmp test</code> or a step of the framework's CI, and
+<a href="/framework/testing.html">Testing</a> has where and when each one runs.</p>
+
+<h2 id="shown">Shown, and checked like the code</h2>
+
+<p>Each rule is shown in code, and the code on these pages is checked the way the framework's own
+is. A block that shows the right way is compiled against the framework's headers, and passes,
+with nothing to say, clang-tidy with the framework's <code>.clang-tidy</code>, clang-format with its
+<code>.clang-format</code>, and its text gates: <code>tools/naming_check.sh</code>,
+<code>tools/style_check.sh</code>, <code>tools/ownership_check.sh</code> and, for a block that is a
+public header, <code>tools/pointer_check.py</code>. A block that shows the wrong way says what refuses
+it, and the build of this site runs that tool on it and fails if it stays quiet; what the tool
+printed is under the block, from that run, never typed. A block that does not compile at all is
+shown with what the compiler said.</p>
 
 <h2 id="in-a-game">What a game gets</h2>
 
 <p data-fw-grep="tools/rmp.py::&quot;\.clang-tidy&quot;: &quot;the framework's lint rules, run by its own tidy job&quot;">A
-game made with <code>rmp new</code> gets <code>.clang-format</code>, so <code>rmp fmt</code> formats
-it the framework's way, and the one compiler flag the framework hands every target that links it:
-under Clang, designated initialisers out of declaration order are an error, as they already are
-under GCC and MSVC. It does not get the framework's <code>.clang-tidy</code>, its style gates or its
-cppcheck: <code>rmp lint</code> is a command of the framework's own repository, and a game chooses
-its own checks.</p>
+game made with <code>rmp new</code> gets two things from these pages, and the rest is advice:</p>
 
-<p data-fw-grep="CMakeLists.txt::function\(rmp_apply_warnings target\)[\s\S]*?-Wall -Wextra -Wno-missing-field-initializers">The
-game's own code is compiled with the warnings the framework's is, <code>-Wall -Wextra</code> under
-GCC and Clang, and with <code>-Wno-missing-field-initializers</code>, because leaving fields of an
-options struct out — <code>{ .width = 8 }</code> — is how the API is written. They stay warnings: a
-newer compiler on its author's machine must not stop a game's build that was fine yesterday. The
-framework's own checks build with <code>RMP_WERROR</code>, which makes them errors; a game can
-configure with <code>-DRMP_WERROR=ON</code> for the same. The vendored libraries are included as
-system headers, so the warnings are about the game's code and not about theirs.</p>
+<ul>
+<li><strong><code>.clang-format</code></strong>, so <code>rmp fmt</code> lays out the game's code
+the framework's way, and <code>rmp fmt check</code> refuses a file that is not. Neither runs
+unless the game runs it: its <code>rmp test</code> and its CI leave the layout alone.</li>
+<li data-fw-grep="CMakeLists.txt::set\(RMP_STRICT_CXX_FLAGS -Werror=reorder-init-list\)[\s\S]*?target_compile_options\(rmp PUBLIC">
+<strong><code>-Werror=reorder-init-list</code></strong>, which the framework's library hands every
+target that links it: under Clang, designated initialisers out of declaration order are an error,
+as they already are under GCC and MSVC.</li>
+</ul>
 
-<h2 id="the-pages">The pages</h2>
+<p data-fw-grep="CMakeLists.txt::function\(rmp_apply_warnings target\)[\s\S]*?-Wall -Wextra -Wno-missing-field-initializers\)\s+if\(RMP_WERROR\)">Its
+own code is also compiled with the warnings the framework's is: <code>-Wall -Wextra</code> under
+GCC and Clang, with <code>-Wno-missing-field-initializers</code>, because leaving fields of an
+options struct out — <code>{ .width = 8 }</code> — is how the API is written. That is every build
+CMake makes, the desktop's and the web's; Android's and iOS's own projects build without them.
+They stay warnings:
+a newer compiler on its author's machine must not stop a build that was fine yesterday. A game can
+configure with <code>-DRMP_WERROR=ON</code> to make them errors, as the framework's own checks do.
+The vendored libraries are included as system headers, so the warnings are about the game's code
+and not about theirs.</p>
 
-<p>The rules themselves are being written, one page per subject: naming, formatting,
-<code>const</code>, pointers and ownership, strings, the parts of modern C++ the oldest compiler
-the framework supports can take, macros, where this framework and Google's guide part ways, and
-which tool holds which rule.</p>
+<p>It does not get the framework's <code>.clang-tidy</code>, its text gates or its cppcheck:
+<code>rmp lint</code> is a command of the framework's own repository, and in a game it says so and
+stops.</p>
+
+<h3 id="switching-on-clang-tidy">Switching on the framework's clang-tidy</h3>
+
+<p data-fw-grep="CMakePresets.json::&quot;name&quot;: &quot;lint&quot;,[\s\S]*?&quot;binaryDir&quot;: &quot;\$\{sourceDir\}/build/lint&quot;">There
+is no setting in the <code>.toml</code> for it. A game that wants the framework's checks on its
+own code copies the framework's <code>.clang-tidy</code> into its root and runs clang-tidy itself.
+The game already has what clang-tidy needs: its <code>CMakePresets.json</code> is the framework's,
+and the <code>lint</code> preset writes the compile database without building anything.</p>
+
+<pre data-lang="shell">
+cp ~/.local/share/rmp/.clang-tidy .
+cmake --preset lint
+clang-tidy -p build/lint --experimental-custom-checks --warnings-as-errors='*' \
+    --header-filter='.*/(include|src|tests)/.*' \
+    --exclude-header-filter='.*/(include/rmp|src/rmp|thirdparty|generated|build)/.*' \
+    $(find src tests -name '*.cpp' -not -path 'src/rmp/*')
+</pre>
+
+<ul>
+<li data-fw-grep="tools/install.sh::dest=\$HOME/\.local/share/rmp">The <code>.clang-tidy</code> is
+the one of the framework <code>rmp</code> runs from: the clone <code>rmp install</code> made, in
+<code>~/.local/share/rmp</code> on Linux and macOS<span data-fw-grep="tools/install.ps1::\$dest = Join-Path \$env:LOCALAPPDATA 'rmp'">
+and in <code>%LOCALAPPDATA%\rmp</code> on Windows</span>.</li>
+<li data-fw-grep="thirdparty/FROZEN_VERSIONS.md::clang_tidy\s+22\.1\.8"><code>--experimental-custom-checks</code>
+runs the two queries of the framework's own, the raw pointer and the constant in a header; without
+it clang-tidy skips them and says nothing. The framework pins clang-tidy 22.1.8, in
+<code>thirdparty/FROZEN_VERSIONS.md</code>, and its file is written for that one.</li>
+<li data-fw-grep=".clang-tidy::WarningsAsErrors: ''"><code>--warnings-as-errors='*'</code> makes a finding fail the run, which is what a check is
+for. The framework's file says <code>WarningsAsErrors: ''</code> because <code>rmp lint</code>
+counts its warnings against a list of what the framework still owes.</li>
+<li data-fw-grep=".clang-tidy::HeaderFilterRegex: '\.\*/\(include/rmp\|src/rmp\|src/scenes\|src/objects\|tests\)/\.\*'"><code>--header-filter</code>
+reports the game's own headers in <code>include/</code>, <code>src/</code> and <code>tests/</code>.
+The framework's file names the folders it reports by the framework's layout, and a header in a
+game's <code>include/</code>, where the examples keep theirs, is not among them: without the flag,
+a C cast there passes in silence.</li>
+<li data-fw-grep="tools/lint_debt.txt::custom-rmp-raw-pointer\s+include/rmp/object\.h"><code>--exclude-header-filter</code>
+keeps the framework's copy in <code>include/rmp/</code> and <code>src/rmp/</code> out of the
+report: the framework answers for those files, and its lint still owes some of them a few raw
+pointers.</li>
+<li data-fw-grep=".clang-tidy::key: readability-identifier-naming\.MacroDefinitionPrefix\n    value: 'RMP_'">The
+copy asks every macro defined to start with <code>RMP_</code>, the framework's prefix. A game whose
+own macros take the game's name instead, as <a href="/guidelines/macros.html#prefix">Macros</a>
+advises, writes that name in its copy's <code>MacroDefinitionPrefix</code>; with <code>'RMP_'</code>
+left there, clang-tidy refuses <code>#define PONG_SHOW(value)</code> in the game's code.</li>
+</ul>
+
+<p>The last line hands it every source of the game's own — <code>src/</code> and
+<code>tests/</code>, without the framework's copy in <code>src/rmp/</code>. clang-tidy then says
+nothing about the game <code>rmp new</code> writes, its test included, and refuses a C cast added
+to its main menu, or to a header of its own in <code>include/</code>, the way the framework's lint
+would.</p>

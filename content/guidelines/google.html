@@ -1,0 +1,309 @@
+<!--
+title: Google's guide, and where this one differs
+nav: Google's guide
+description: Every place the framework's rules and Google's C++ Style Guide part ways or pull against each other, with the reason the framework's rule is what it is and what holds the code to it — and where the two agree.
+order: 80
+-->
+<h1>Google's guide, and where this one differs</h1>
+
+<p class="lede"><a href="https://google.github.io/styleguide/cppguide.html">Google's C++ Style
+Guide</a> decides every question the framework's own rules leave open. Where the framework has
+decided otherwise, the decision was made for a reason, and this page lists each one: what Google
+says, what the framework does instead, why, and what holds the code to it. Where the two agree and
+a tool checks it, that is at the end.</p>
+
+<p>Above both sits the rule that outranks the others: the API is as simple as possible for whoever
+uses it, and a main menu is <a href="/framework/why/the-three-function-menu.html">three
+functions</a>. More than one difference below comes from there.</p>
+
+<h2 id="ours-wins">Where the framework's rule wins</h2>
+
+<h3 id="naming">Naming</h3>
+
+<p data-fw-grep=".clang-tidy::What it buys: at any point of use you can tell a type from a value without">Google
+spells functions <code>PascalCase</code>, constants and enumerators <code>kName</code>, and a
+class's data members with a trailing underscore, <code>table_</code>. The framework spells
+functions <code>snake_case</code>, constants and enumerators <code>CONSTANT_CASE</code>, and private
+members with a leading one, <code>_table</code>. One spelling per kind of name, so a type, a value
+and a constant never look alike where they are used — and raylib's types are
+<code>PascalCase</code> too, so the framework's sit beside <code>Texture2D</code> and
+<code>Vector2</code> without looking foreign. <a href="/guidelines/naming.html">Naming</a> has the
+whole table.</p>
+
+<p data-fw-grep="tools/naming_check.sh::R6  no constant named like somebody else's macro">Google
+moved its enumerators from <code>ENUM_NAME</code> to <code>kEnumName</code> because the
+upper-case names collided with macros. The framework keeps the upper case and answers the
+collision with a check instead: rule R6 of <code>tools/naming_check.sh</code> refuses a constant
+named like a macro of the vendored headers, or like one of the C library's and the BSDs' that are
+known to collide.</p>
+
+<p data-fw-grep=".clang-tidy::key: readability-identifier-naming\.PrivateMemberPrefix\n    value: '_'">The
+private member's underscore is at the front so that it never touches a dot or an arrow:
+<code>other._table</code> is refused (rule R4), and so is <code>table_.size()</code> (rule R3).
+Checked by <code>readability-identifier-naming</code> and <code>tools/naming_check.sh</code>,
+in the framework and the examples.</p>
+
+<h3 id="pragma-once">#pragma once</h3>
+
+<p data-fw-grep=".clang-tidy::portability-avoid-pragma-once\s+#pragma once is the repository's">Google
+asks for <code>#define</code> guards named after the file's path. A header here starts with
+<code>#pragma once</code> instead: one line that cannot be misspelt, copied into the wrong file or
+collide with another guard, and every compiler the framework builds with supports it.
+<code>portability-avoid-pragma-once</code>, which would refuse it, is switched off. Nothing checks
+that a header has it; a header without it is a question for review<span data-fw-grep="tests/smoke_test.h::#ifndef RMP_SMOKE_TEST_H\n#define RMP_SMOKE_TEST_H">,
+and the framework has one: <code>tests/smoke_test.h</code>, which the plain C example includes too,
+keeps a guard</span>.</p>
+
+<h3 id="forward-declarations">Forward declarations between the framework's own headers</h3>
+
+<p data-fw-grep="include/rmp/app.h::1\. Include none of our headers\. Forward-declare instead\.">Google:
+avoid forward declarations, include the header you need. Its decision makes one exception, for
+entities your project owns, when a forward declaration is the better way to fix a slowdown. That is
+the case here, and it is measured rather than assumed: the framework's headers forward-declare each
+other instead of including, a header that cannot — <code>rmp/scene.h</code> holds an
+<code>rmp::Tilemap</code> by value — says why at its top, and <code>tools/header_budget.txt</code>
+holds what each one costs to include. <a href="/framework/why/one-header-per-module.html">One header per module</a> has the
+numbers. A header from outside the framework — the standard library's, raylib's — is included, as
+Google says.</p>
+
+<h3 id="formatting">Formatting</h3>
+
+<p data-fw-grep=".clang-format::IndentWidth: 4[\s\S]*AccessModifierOffset: -4[\s\S]*ColumnLimit: 90[\s\S]*PointerAlignment: Right[\s\S]*Cpp11BracedListStyle: false[\s\S]*SortIncludes: Never">Google
+indents by 2 and stops at 80 columns; the framework indents by 4 and stops at 90. Google writes
+<code>char* c</code>; the framework writes <code>char *c</code>, as raylib does. Google indents
+<code>public:</code> by one space; the framework puts it at the class's own indentation. Google
+writes a braced list as <code>{1, 2}</code>; the framework as <code>{ 1, 2 }</code>, so the theme's
+colour literals keep their spaces. Google sorts includes into five groups, alphabetically; the
+framework orders them by hand, each with a comment saying what it is for. Both let a brief
+<code>if</code> go without braces; the framework writes every guard that way, <code>if (!ready)
+return;</code>, and switches off <code>readability-braces-around-statements</code>, which would
+refuse it. All of it is
+<code>.clang-format</code>, which <code>rmp fmt</code> applies; <a href="/guidelines/formatting.html">Formatting</a>
+has each setting.</p>
+
+<h3 id="file-names">.cpp</h3>
+
+<p>Google names a source file <code>.cc</code>. The framework's are <code>.cpp</code>, and so are a
+game's, from the <code>src/main.cpp</code> that <code>rmp new</code> writes.</p>
+
+<h3 id="const">const and constexpr, further than Google</h3>
+
+<p data-fw-grep=".clang-tidy::misc-const-correctness\s+const on every local that does not change">Google
+recommends <code>const</code> in APIs and says <code>const</code> on a local variable is "neither
+encouraged nor discouraged". The framework requires it on every local that does not change, so the
+value at the bottom of a function is known, at its declaration, to be the one at the top. On a
+by-value parameter the two agree that <code>const</code> stays out of the declaration, where it
+means nothing to the caller. Google's guide says nothing of the definition; the framework puts it
+there. Checked by <code>misc-const-correctness</code>, in the framework and the
+examples. <a href="/guidelines/const.html">const</a> has the rest.</p>
+
+<p data-fw-grep="CLAUDE.md::`constexpr`/`consteval`/`constinit`\s+wherever possible">Google also warns
+against making a function harder to read so that it can be <code>constexpr</code>. The framework
+asks for <code>constexpr</code>, <code>consteval</code> and <code>constinit</code> wherever they
+apply. The two pull against each other only where making a function <code>constexpr</code> would
+make it worse to read, and no tool checks either: it is a question for review.</p>
+
+<h3 id="pointers">No raw pointer, even where Google uses one</h3>
+
+<p data-fw-grep="tools/pointer_check.py::what rmp:: hands a game is values, references,\s+std::span, std::optional, rmp::Ref and rmp::Handle">Google
+uses a pointer to say "this may be absent": a <code>const T *</code> for an optional input, a
+<code>T *</code> for an optional output, a returned pointer when the result may be null. The
+framework's rule allows no raw pointer outside the few places
+<a href="/guidelines/pointers-and-raii.html#allowed">Pointers and RAII</a> names, most of them the C
+libraries it is built on: a result that may be missing is a <code>std::optional</code>,
+an optional input is a second overload, a reference that may be empty is an
+<a href="ref:rmp::Ref"><code>rmp::Ref</code></a>, and an object kept across frames is an
+<a href="ref:rmp::Handle"><code>rmp::Handle</code></a>. A pointer asks its reader whether it may be
+null, who owns it and how long it lives, and its type answers none of the three. Checked by
+<code>custom-rmp-raw-pointer</code> in the framework and the examples, and by
+<code>tools/pointer_check.py</code> on every declaration a game can name.
+<a href="/guidelines/pointers-and-raii.html">Pointers and RAII</a> has the replacements.</p>
+
+<h2 id="deviations">Deviations, recorded</h2>
+
+<p>Each of these is a rule of Google's that the framework breaks on purpose, in a known
+place.</p>
+
+<h3 id="filesystem">&lt;filesystem&gt;</h3>
+
+<p data-fw-grep="src/rmp/app.cpp::#include &lt;filesystem&gt; // the executable's folder, wide on Windows">Google
+does not allow <code>&lt;filesystem&gt;</code>. The framework uses it in two files:
+<code>src/rmp/app.cpp</code>, to find the folder the executable is in, and
+<code>src/rmp/save.cpp</code>, for the save folder and its files, and on Windows to turn the wide
+paths the system hands back into UTF-8 and back. The standard library does both on every platform
+the framework ships to, which nothing else the framework has would.</p>
+
+<p data-fw-grep="tools/configure.py::rmp::save uses std::filesystem, which Apple's C\+\+ library only has from iOS 13">It
+has one cost a game sees: Apple's C++ library has it only from iOS 13, so
+<code>tools/configure.py</code> refuses an <code>[ios] deployment_target</code> below that. No tool
+keeps it to those two files: a use anywhere else is a question for review.</p>
+
+<h3 id="gnu-extensions">-std=gnu++20</h3>
+
+<p data-fw-grep="CMakeLists.txt::set\(CMAKE_CXX_STANDARD 20\)">Google's guide asks for C++20 and
+no nonstandard extensions. The framework asks CMake for C++20 and leaves CMake's default for
+extensions alone, so GCC and Clang compile with <code>-std=gnu++20</code>. Two builds use the
+standard without GNU's extensions: the iOS project, which <code>tools/configure.py</code> writes,
+asks for <code>c++20</code>, and<span data-fw-grep=".github/workflows/_windows.yml::windows-arm64 is cross-compiled with MSVC">
+MSVC, which builds <code>windows-arm64</code>, has no GNU mode at all</span>. The code compiles
+under both.</p>
+
+<h3 id="varargs">Two variadic functions</h3>
+
+<p data-fw-grep="src/rmp/internal.h::#define RMP_PRINTF_FORMAT\(string_index, first_to_check\) \\\n    __attribute__\(\(format\(printf, string_index, first_to_check\)\)\)">The
+framework's rule is no C variadic function (<a href="/guidelines/modern-cpp.html#varargs">Modern
+C++</a>), and it has two, side by side: the functions behind its said-once warnings, which hand
+a <code>printf</code> format to raylib's <code>TraceLog()</code>, one of them with a key. Each is
+marked with a <code>format(printf)</code> attribute through a macro of the framework's internal
+header, so GCC and Clang check every format against its values, as an error. That is the form in
+which Google allows a nonstandard extension: a portability wrapper, defined once, in a header the
+framework's sources share.</p>
+
+<h3 id="statics">Statics that are not trivially destructible</h3>
+
+<p data-fw-grep="src/rmp/app.cpp::ORDER, and every step of it was paid for once">Google allows an
+object with static storage duration only when its destructor does nothing, because destructors at
+exit run in an order nobody chooses. The framework's file-scope state is a struct per concern, and
+some of those hold vectors and strings. What they hold is released before the window closes, in
+an order written down in <code>src/rmp/app.cpp</code> — scenes, then globals, then the interface's
+font, then sounds, then everything left in the resource table — rather than by destructors at
+exit.</p>
+
+<h3 id="public-data">Public data members</h3>
+
+<p data-fw-grep=".clang-tidy::the options structs and rmp::object\s+#\s+are public data BY DESIGN">Google
+makes a class's data members private, and keeps <code>struct</code> for passive data.
+<a href="ref:rmp::Object"><code>rmp::Object</code></a> is a class whose
+<a href="ref:rmp::Object::position"><code>position</code></a>,
+<a href="ref:rmp::Object::velocity"><code>velocity</code></a> and
+<a href="ref:rmp::Object::shape"><code>shape</code></a> are public fields, and every options struct
+is public data. <code>ball.position.x += 4;</code> is
+the simplest way to move a ball, and a setter would make it longer for nothing:
+<code>misc-non-private-member-variables-in-classes</code> is switched off for that reason.</p>
+
+<h3 id="implicit-conversions">Implicit conversions</h3>
+
+<p>Google requires <code>explicit</code> on every one-argument constructor and conversion operator,
+and grants a waiver for types designed to be interchangeable. The framework's API has a few such
+conversions, each because the simple call would be longer without it, and each with a
+<code>NOLINT</code> for <code>google-explicit-constructor</code> and its reason beside it:</p>
+
+<ul>
+<li data-fw-grep="include/rmp/save.h::NOLINTNEXTLINE\(google-explicit-constructor\): v\[&quot;alive&quot;\] = true; a bool is a Value">a
+<code>bool</code>, a number or a piece of text becomes an <a href="ref:rmp::Value"><code>rmp::Value</code></a>:
+<code>save["score"] = 3;</code>;</li>
+<li data-fw-grep="include/rmp/save.h::NOLINTNEXTLINE\(google-explicit-constructor\): a Ref reads as its Value">a
+<code>Value::Ref</code>, what <code>save["score"]</code> gives, reads as the
+<code>Value</code> it names;</li>
+<li data-fw-grep="include/rmp/assets.h::NOLINTNEXTLINE\(google-explicit-constructor\): a handle passes where raylib takes T">an
+asset's handle — <code>rmp::Texture</code>, <code>rmp::Font</code>, <code>rmp::Sound</code> and the
+rest — passes where raylib takes the plain struct, <code>DrawTexture(logo, 0, 0, WHITE)</code>, from
+a named handle only;</li>
+<li data-fw-grep="include/rmp/object.h::Callback\(F &amp;&amp;fn\) \{ // NOLINT\(google-explicit-constructor\)">a
+lambda becomes an <a href="ref:rmp::Callback"><code>rmp::Callback</code></a>, so it can be written
+straight into a behavior's options;</li>
+<li data-fw-grep="include/rmp/ui.h::NOLINTNEXTLINE\(google-explicit-constructor\): `\.size = 34`; a number is a size">a
+number or a <a href="ref:rmp::ui::Size"><code>rmp::ui::Size</code></a> becomes the size of a control:
+<code>.size = 34</code> and <code>.size = rmp::ui::Size::LARGE</code> both read as what they mean.</li>
+</ul>
+
+<p>A new conversion in the API is refused by <code>google-explicit-constructor</code> until it is
+given the same: a <code>NOLINT</code> and a reason someone reviewing it can accept.</p>
+
+<h3 id="todo">No TODO, with or without a name</h3>
+
+<p data-fw-grep="tools/style_check.sh::S3  no `TODO`, `FIXME` or `XXX`: a comment says what IS; a plan goes in\s+#\s+the plan">Google
+asks for <code>TODO(name)</code>, so that a TODO can be traced to someone. The framework has no
+TODO at all: a comment says what is, and what is to be done goes in the plan, where somebody reads
+it. Checked by rule S3 of <code>tools/style_check.sh</code>, which also refuses <code>FIXME</code>
+and <code>XXX</code>, in the framework and the examples.</p>
+
+<h2 id="tensions">Where the two read differently</h2>
+
+<h3 id="licence">The top of a file</h3>
+
+<p data-fw-grep="src/rmp/save.cpp::\A// -+\n// rmp::save: a Value to a file and back, and where the file goes\.">Google
+starts every file with its licence. The framework's licence is the repository's
+<code>LICENSE</code>, and the vendored libraries' are in <code>THIRD_PARTY_LICENSES.md</code>; a
+file starts with what it is for, and why it is built the way it is.</p>
+
+<h3 id="function-length">Long functions</h3>
+
+<p data-fw-grep=".clang-tidy::readability-function-cognitive-complexity  a render switch is one function">Google
+suggests thinking about splitting a function past about 40 lines, and sets no limit. The framework
+sets none either: <code>readability-function-cognitive-complexity</code> is switched off, because a
+render switch is one function on purpose.</p>
+
+<h3 id="shared-ownership">shared_ptr inside a Callback</h3>
+
+<p data-fw-grep="include/rmp/object.h::A shared_ptr&lt;void&gt; and not a unique_ptr: it carries Fn's deleter">Google
+says not to design for shared ownership without a very good reason. A
+<a href="ref:rmp::Callback"><code>rmp::Callback</code></a> keeps the lambda it was given in a
+<code>std::shared_ptr&lt;void&gt;</code>, and its ownership is still single — a
+<code>Callback</code> cannot be copied. The <code>shared_ptr</code> is there because it carries the
+lambda's deleter inside it, which erases the lambda's type with no <code>delete</code> of the
+framework's and without <code>&lt;functional&gt;</code>.
+<a href="/framework/why/ownership.html#callbacks">Ownership</a> has why not
+<code>std::function</code>.</p>
+
+<h3 id="casts">Casts</h3>
+
+<p>Google's first choice for converting one arithmetic type to another is braces,
+<code>std::int64_t{ x }</code>, which refuse to compile a conversion that loses anything; the
+framework writes <code>static_cast</code>, and braces where they apply. Google's advice for reading
+one type's bits as another is <code>std::bit_cast</code>, which the oldest compiler a game is built
+with does not have: copying the bytes with <code>std::memcpy</code> does the same, and compiles
+there.
+<a href="/guidelines/modern-cpp.html#casts">Modern C++</a> has both.</p>
+
+<h3 id="conditional-compilation">Conditional compilation</h3>
+
+<p data-fw-grep="tools/naming_check.sh::and the compiler parses ONE branch of every #if">Google's
+advice on using a macro to compile code conditionally is not to. A framework built from one source
+for every platform cannot avoid it, and it is one of the four uses of a macro the framework
+allows. What it costs is that a compiler, and clang-tidy, read only the branch of the machine they
+run on, so the framework's text gates — <code>tools/naming_check.sh</code> and
+<code>tools/style_check.sh</code> — read every branch.</p>
+
+<h3 id="macros-in-headers">A macro in a header</h3>
+
+<p data-fw-grep="include/rmp/app.h::#define RMP_GAME\(SceneType\)">Google: no macro defined in a
+header, and none used to declare a piece of an API, without a waiver. <code>rmp/app.h</code>
+defines <a href="ref:RMP_GAME"><code>RMP_GAME</code></a>, the line that starts a game, because a
+program's entry point is a different set of functions on each platform and only the preprocessor
+can choose among them. It is named, with the framework's few other macros, in
+<code>cppcoreguidelines-macro-usage</code>'s list of allowed ones, and a new one is a question for
+review. <a href="/guidelines/macros.html">Macros</a> has the rule.</p>
+
+<h2 id="agreement">Where they agree, and what checks it</h2>
+
+<table>
+<thead><tr><th>Google's rule</th><th>Checked by</th></tr></thead>
+<tbody>
+<tr><td>No exceptions: the framework throws none, and catches the standard library's where it can throw (<a href="/framework/why/no-exceptions.html">No exceptions</a>)</td><td>review</td></tr>
+<tr><td>C++ casts, not C's</td><td><code>modernize-avoid-c-style-cast</code>, and S1 of <code>tools/style_check.sh</code></td></tr>
+<tr><td><code>nullptr</code>, not <code>NULL</code> or <code>0</code></td><td><code>modernize-use-nullptr</code>, and S2</td></tr>
+<tr><td><code>++i</code> unless the old value is used</td><td>S6</td></tr>
+<tr><td>No user-defined literals</td><td>S5</td></tr>
+<tr><td><code>int</code>, and <code>&lt;cstdint&gt;</code>'s fixed widths</td><td><code>google-runtime-int</code></td></tr>
+<tr><td><code>float</code> and <code>double</code>, never <code>long double</code></td><td><code>google-runtime-float</code></td></tr>
+<tr><td><code>explicit</code> conversions</td><td><code>google-explicit-constructor</code></td></tr>
+<tr><td>No default argument on a virtual function</td><td><code>google-default-arguments</code></td></tr>
+<tr><td>No using-directive</td><td><code>google-build-using-namespace</code></td></tr>
+<tr><td>No unnamed namespace in a header</td><td><code>google-build-namespaces</code></td></tr>
+<tr><td>No using-declaration at global scope in a header</td><td><code>google-global-names-in-headers</code></td></tr>
+<tr><td>No overloaded unary <code>&amp;</code></td><td><code>google-runtime-operator</code></td></tr>
+<tr><td><code>std::make_pair</code> deduces its types</td><td><code>google-build-explicit-make-pair</code></td></tr>
+<tr><td>A namespace constant in a header has no internal linkage: it is <code>inline constexpr</code></td><td><code>custom-rmp-header-constant</code></td></tr>
+<tr><td>Single owners; <code>std::unique_ptr</code> for what moves</td><td><code>cppcoreguidelines-owning-memory</code>, <code>cppcoreguidelines-no-malloc</code>, and O1 of <code>tools/ownership_check.sh</code></td></tr>
+<tr><td>Designated initialisers only in C++20's order</td><td>the compiler, with <code>-Werror=reorder-init-list</code> under Clang</td></tr>
+<tr><td>Type deduction where it makes the code clearer</td><td><code>modernize-use-auto</code>, for a cast, in the framework; review for the rest</td></tr>
+<tr data-fw-grep="include/rmp/object.h::get\(\) is an unchecked downcast, a static_cast\. A dynamic_cast would make[\s\S]*?which nothing\s+// in it uses"><td>RTTI in tests only: nothing in the framework uses <code>dynamic_cast</code> or <code>typeid</code></td><td>review</td></tr>
+<tr><td>No modules and no coroutines</td><td>review</td></tr>
+</tbody>
+</table>
+
+<p>"S1", "S2", "S5" and "S6" are rules of <code>tools/style_check.sh</code>, the <code>style</code>
+stage of <code>rmp test</code>. Every check in the table runs in the framework, and all but
+<code>modernize-use-auto</code> and O1 in the examples too; <a href="/guidelines/enforcement.html">what checks
+what</a> has each one's exact reach.</p>

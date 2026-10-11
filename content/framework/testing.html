@@ -526,10 +526,10 @@ a mistake that could be described precisely enough for a machine to reject it:</
 <tr><td><code>workflows</code></td><td>a reusable CI workflow asks for a permission its caller does not grant</td></tr>
 <tr><td><code>portable</code></td><td>a script uses something macOS's old bash or the BSDs do not have, or the BSD jobs' inline script is not plain ASCII</td></tr>
 <tr><td><code>shell</code></td><td>a script writes <code>A &amp;&amp; B || C</code>, which runs <code>C</code> when <code>B</code> fails</td></tr>
-<tr><td><code>naming</code></td><td>a name breaks the <a href="/framework/why/naming.html">naming rules</a> in any branch of any <code>#if</code></td></tr>
+<tr><td><code>naming</code></td><td>a name breaks the <a href="/guidelines/naming.html">naming rules</a> in any branch of any <code>#if</code></td></tr>
 <tr><td><code>style</code></td><td>a rule of the style guide that clang-tidy cannot see is broken in any branch of any <code>#if</code>: a C cast, <code>NULL</code>, a <code>TODO</code>, something newer than the oldest compiler a game is built with, a user-defined literal, <code>i++</code> where <code>++i</code> says the same</td></tr>
 <tr><td><code>ownership</code></td><td>the framework allocates or frees memory by hand, or calls a raylib <code>Load*</code> or <code>Unload*</code> outside the file that owns what it makes</td></tr>
-<tr><td><code>pointers</code></td><td>a declaration a game can name has a raw pointer or a C string in it — <a href="/framework/why/ownership.html#preference">Ownership</a> says what goes there instead</td></tr>
+<tr><td><code>pointers</code></td><td>a declaration a game can name has a raw pointer or a C string in it — <a href="/guidelines/pointers-and-raii.html#instead">Pointers and RAII</a> says what goes there instead</td></tr>
 <tr><td><code>cppcheck</code></td><td>cppcheck, a second static analyser with its own reading of the code, finds anything in <code>src/rmp</code>, or a suppression of one has no reason or no longer matches anything</td></tr>
 <tr><td><code>headers</code></td><td>a public header does not compile on its own, or lacks the <code>.toml</code> values</td></tr>
 <tr><td><code>cost</code></td><td>a public header's preprocessed size moved away from its budget</td></tr>

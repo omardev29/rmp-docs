@@ -276,6 +276,7 @@ class Site:
                 continue     # generated already
             lang = pre.get("data-lang")
             include = pre.get("data-include")
+            snippet = None  # the C or C++ block the compile tier checks, when it is one
             toml_out = ""   # what configure.py said about a .toml shown as refused
             caption = pre.get("data-file", "") if not pre.get("data-project") else ""
             link = ""
@@ -320,7 +321,7 @@ class Site:
                     if lang == "toml":
                         toml_out = self._toml(page, pre, code)
                 elif lang in ("cpp", "c") and page.kind == "content":
-                    self._snippet(page, pre, lang, code)
+                    snippet = self._snippet(page, pre, lang, code)
                 elif lang == "toml" and page.kind == "content":
                     toml_out = self._toml(page, pre, code)
             if not lang:
@@ -348,9 +349,10 @@ class Site:
                 verdict = ("Compiles; <code>rmp lint</code> refuses it: "
                            f"<code>{html.escape(pre.get('data-check'))}</code>")
             elif refused == "gate" and pre.get("data-gate") in snippet_gates:
-                stage = snippet_gates[pre.get("data-gate")][1]
-                verdict = (f"Compiles; <code>rmp test {html.escape(stage)}</code> refuses it: "
-                           f"<code>{html.escape(pre.get('data-rule', ''))}</code>")
+                gate = snippet_gates[pre.get("data-gate")]
+                verdict = f"Compiles; <code>rmp test {html.escape(gate.stage)}</code> refuses it"
+                if gate.rules:
+                    verdict += f": <code>{html.escape(pre.get('data-rule', ''))}</code>"
             if verdict:
                 pre.attrs["class"] = " ".join([*pre.classes(), "expect-refused"])
                 toml_out = ""
@@ -371,6 +373,11 @@ class Site:
             if mistake and pre.get("data-error"):
                 said = ('<p class="compiler-output">The compiler refuses it, saying among other things: '
                         f'<code>{html.escape(pre.get("data-error"), quote=False)}</code></p>')
+            if snippet is not None and (mistake or verdict):
+                # The slot for what the tool says about it, in its own words:
+                # filled by show_said() once the compile tier has run it.
+                n = next(i for i, x in enumerate(self.snippets) if x is snippet)
+                said = f"<!--said:{n}-->{said}<!--/said:{n}-->"
             markup = (f'<div class="code-block{(" " + extra) if extra else ""}"{attr_text}>{head}'
                       f'<pre data-lang="{lang}"><code>{highlighted}</code></pre>{said}</div>')
             replace(pre, dom.Raw(markup, pre.line))
@@ -411,20 +418,21 @@ class Site:
                             return m.group(0)
                     child.data = re.sub(r"\{\{(count|list):([\w-]+)\}\}", value, child.data)
 
-    def _snippet(self, page: Page, pre: dom.Node, lang: str, code: str):
-        """Record a C or C++ block for the compile tier, or say why it cannot be."""
+    def _snippet(self, page: Page, pre: dom.Node, lang: str, code: str) -> Snippet | None:
+        """Record a C or C++ block for the compile tier and return it, or say
+        why it cannot be."""
         harness = pre.get("data-harness")
         if not harness:
             self.problems.append(Problem(
                 "snippets", page.source, pre.line,
                 f"a {lang} block that nothing compiles: give it data-harness (one of "
-                "file, toplevel, function, scene, object, members, c99) or quote it with "
-                "data-include from a source the framework builds"))
-            return
+                "file, toplevel, function, scene, object, members, header, c99) or quote it "
+                "with data-include from a source the framework builds"))
+            return None
         if harness_file(harness) is None:
             self.problems.append(Problem("snippets", page.source, pre.line,
                                          f"data-harness={harness!r} is not a file in snippets/harness/"))
-            return
+            return None
         expect = pre.get("data-expect", "")
         if expect not in ("", "error", "lint", "gate"):
             self.problems.append(Problem("snippets", page.source, pre.line,
@@ -437,23 +445,59 @@ class Site:
             self.problems.append(Problem("snippets", page.source, pre.line,
                                          "a block shown as refused by clang-tidy says which check: "
                                          "data-check=\"...\""))
-        if expect == "gate" and (pre.get("data-gate") not in snippet_gates or not pre.get("data-rule")):
+        gate = snippet_gates.get(pre.get("data-gate", "")) if expect == "gate" else None
+        if expect == "gate" and (gate is None or (gate.rules and not pre.get("data-rule"))):
             self.problems.append(Problem("snippets", page.source, pre.line,
                                          "a block shown as refused by a gate says which, and which rule: "
-                                         f"data-gate=\"{'|'.join(snippet_gates)}\" data-rule=\"...\""))
+                                         f"data-gate=\"{'|'.join(snippet_gates)}\" data-rule=\"...\" "
+                                         "(no rule for "
+                                         f"{', '.join(n for n, g in snippet_gates.items() if not g.rules)})"))
+        if gate is not None and not gate.rules and pre.get("data-rule"):
+            self.problems.append(Problem("snippets", page.source, pre.line,
+                                         f"data-gate={pre.get('data-gate')!r} names no rule; "
+                                         "leave data-rule out"))
         if expect in ("lint", "gate") and lang != "cpp":
             self.problems.append(Problem("snippets", page.source, pre.line,
                                          f"data-expect={expect!r} is for C++ blocks"))
         # A page of the Guidelines that shows the right way shows code the
-        # rule's own tools pass: clang-tidy, with the framework's .clang-tidy.
+        # rule's own tools pass: clang-tidy, with the framework's .clang-tidy,
+        # and the text gates that see what it cannot (snippets.CLEAN_GATES).
+        # And formatted the way the framework's code is: clang-format, with its
+        # .clang-format, leaves it as it is.
         clean = page.source.startswith("content/guidelines/") and expect == "" and lang == "cpp"
-        self.snippets.append(Snippet(page.source, pre.line, lang, code, harness,
-                                     given=pre.get("data-given", ""), expect_error=expect == "error",
-                                     error_text=pre.get("data-error", ""),
-                                     expect_lint=pre.get("data-check", "") if expect == "lint" else "",
-                                     lint_clean=clean,
-                                     expect_gate=pre.get("data-gate", "") if expect == "gate" else "",
-                                     gate_rule=pre.get("data-rule", "") if expect == "gate" else ""))
+        snippet = Snippet(page.source, pre.line, lang, code, harness,
+                          given=pre.get("data-given", ""), expect_error=expect == "error",
+                          error_text=pre.get("data-error", ""),
+                          expect_lint=pre.get("data-check", "") if expect == "lint" else "",
+                          lint_clean=clean, format_clean=clean, gates_clean=clean,
+                          expect_gate=pre.get("data-gate", "") if expect == "gate" else "",
+                          gate_rule=pre.get("data-rule", "") if expect == "gate" else "")
+        self.snippets.append(snippet)
+        return snippet
+
+    SAID = re.compile(r"<!--said:(\d+)-->(.*?)<!--/said:\1-->", re.S)
+
+    def show_said(self) -> list[Problem]:
+        """Each block shown refused gets, under it, what refused it -- the
+        compiler's, clang-tidy's or the gate's own words, which the compile
+        tier kept in the snippet's `said`. Before that tier has run, the slot
+        keeps what the page itself can say: the words a mistake is checked to
+        make the compiler print. A refused block with nothing to show after the
+        tier ran is a problem."""
+        problems = []
+
+        def fill(m):
+            s = self.snippets[int(m.group(1))]
+            if not s.said:
+                problems.append(Problem("snippets", s.page, s.line,
+                                        "is shown refused, and there is nothing the tool said to show"))
+                return m.group(2)
+            return (f'<pre class="compiler-output" data-lang="text" data-said>'
+                    f'{html.escape(s.said, quote=False)}</pre>')
+
+        for url, text in self.outputs.items():
+            self.outputs[url] = self.SAID.sub(fill, text)
+        return problems
 
     def _toml(self, page: Page, pre: dom.Node, code: str) -> str:
         """Every .toml block goes through the framework's own configure.py

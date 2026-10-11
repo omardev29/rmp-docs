@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from rmpdocs import checks, coverage, flags, truth  # noqa: E402,F401 - they register their gates
+from rmpdocs import checks, coverage, enforcement, flags, truth  # noqa: E402,F401 - they register their gates
 from rmpdocs.site import Site  # noqa: E402
 
 
@@ -40,6 +40,31 @@ def context(site: Site) -> checks.Context:
         if page.kind == "content":
             ctx.sources[page.source] = (site.docs / page.source).read_text(encoding="utf-8")
     return ctx
+
+
+def compile_tier(site: Site) -> list:
+    """Every C and C++ block compiled, linted and run through its gate; what
+    refused each block shown refused written into its page; and every block
+    and every file a tutorial writes held to the framework's style rules."""
+    from rmpdocs import snippets
+    problems = []
+    results = snippets.check(site.snippets, site.framework)
+    failed = set()
+    for s, why in results:
+        if why:
+            failed.add((s.page, s.line))
+            problems.append(checks.Problem("snippets", s.page, s.line, why))
+    print(f"compiled {len(results)} C/C++ blocks against the framework")
+    # A block that failed has said why already.
+    problems += [p for p in site.show_said() if (p.where, p.line) not in failed]
+    tutorial = [f for files in site.project_files.values() for f in files]
+    for b, line, what in snippets.style(site.snippets + tutorial, site.framework):
+        where = f" {b.path}," if getattr(b, "path", "") else ""
+        # The block's first line is the one after its <pre>.
+        problems.append(checks.Problem("snippets", b.page, b.line + line,
+                                       f"breaks the framework's style rules,{where} line {line} of "
+                                       f"the block: {what} (tools/style_check.sh)"))
+    return problems
 
 
 def main(argv):
@@ -62,25 +87,17 @@ def main(argv):
             print(f"{name:16} {says}")
         return 0
 
+    # Written once the compile tier has run, when it runs: a block shown
+    # refused carries what the tool said about it, and only that tier asks.
     site = Site(framework=args.framework, out=args.out, examples_web=args.examples_web,
-                posters=args.posters).build(write=args.command != "check")
+                posters=args.posters).build(write=False)
     for w in site.warnings:
         print(f"warning: {w}")
     problems = [p for p in site.problems if p.gate != "html"] + checks.run(context(site))
     if args.tier in ("compile", "project"):
-        from rmpdocs import snippets
-        results = snippets.check(site.snippets, site.framework)
-        for s, why in results:
-            if why:
-                problems.append(checks.Problem("snippets", s.page, s.line, why))
-        print(f"compiled {len(results)} C/C++ blocks against the framework")
-        tutorial = [f for files in site.project_files.values() for f in files]
-        for b, line, what in snippets.style(site.snippets + tutorial, site.framework):
-            where = f" {b.path}," if getattr(b, "path", "") else ""
-            # The block's first line is the one after its <pre>.
-            problems.append(checks.Problem("snippets", b.page, b.line + line,
-                                           f"breaks the framework's style rules,{where} line {line} of "
-                                           f"the block: {what} (tools/style_check.sh)"))
+        problems += compile_tier(site)
+    if args.command != "check":
+        site.write()
     if args.tier == "project":
         from rmpdocs import project
         for name, steps in site.project_steps().items():
