@@ -68,6 +68,7 @@ Every block says its language: `<pre data-lang="cpp">` — `cpp`, `c`, `toml`, `
 | `data-harness="scene"` | statements inside a method of an `rmp::Scene` subclass (`spawn`, `camera`, `map` in scope) |
 | `data-harness="object"` | statements inside a method of an `rmp::Object` subclass (`position`, `velocity`, `add<B>()` in scope) |
 | `data-harness="members"` | members of a scene class: overrides and fields |
+| `data-harness="header"` | a header of the framework's own, `include/rmp/snippet.h`, included after every other one: where the checks that look only at headers see it |
 | `data-harness="c99"` | plain C with `<raylib.h>` |
 | `data-include="examples/.../main.cpp" data-region="name"` | quoted from a real file, between `// doc-region: name` and `// doc-region-end: name` |
 
@@ -86,12 +87,24 @@ refuse:
 | `data-expect="gate" data-gate="naming" data-rule="R2"` | compiles, and the framework's `tools/naming_check.sh` reports that rule on a line of the block |
 | `data-expect="gate" data-gate="style" data-rule="S6"` | compiles, and the framework's `tools/style_check.sh` reports that rule on a line of the block |
 | `data-expect="gate" data-gate="ownership" data-rule="O2"` | compiles, and the framework's `tools/ownership_check.sh` reports that rule on a line of the block |
+| `data-expect="gate" data-gate="pointers"` | a `header` block that compiles, and the framework's `tools/pointer_check.py` refuses a pointer or a C string a game could name in it |
+| `data-expect="gate" data-gate="format"` | compiles, and clang-format, with the framework's `.clang-format`, would change it (the block alone, as a file) |
 
 Its caption says so: "Compiles; `rmp lint` refuses it: `modernize-avoid-c-style-cast`", or
-"Compiles; `rmp test naming` refuses it: `R2`". On a page under `content/guidelines/`, every other
-C++ block is the right way, and has to pass clang-tidy with the framework's `.clang-tidy` with
-nothing said about its own lines. The compile tier needs `clang-tidy` on `PATH` for these —
-the version `thirdparty/FROZEN_VERSIONS.md` pins, which the site's CI image has. It runs with
+"Compiles; `rmp test naming` refuses it: `R2`" — `pointers` and `format` name no rule. Under the
+block, the page shows what the tool said about it: the compiler's error, clang-tidy's warning, the
+gate's `FAIL` line, clang-format's — as the tool printed them about the block's own lines, the file
+called `snippet.cpp` (or `include/rmp/snippet.h`) and every line number the block's own. The
+compile tier runs the tool and the build writes its words into the page; never type them. A build
+without the compile tier shows the caption, and for a block that does not compile, the
+`data-error` words.
+
+On a page under `content/guidelines/`, every other C++ block is the right way, and has to pass
+clang-tidy with the framework's `.clang-tidy` with nothing said about its own lines, and
+clang-format with the framework's `.clang-format` with nothing to change. The compile tier needs
+`clang-tidy` and `clang-format` on `PATH` for these — the versions `thirdparty/FROZEN_VERSIONS.md`
+pins, which the site's CI image has; a clang-format of another version is refused rather than
+trusted, because it reformats code that is already right. clang-tidy runs with
 `--experimental-custom-checks`, because the framework's `.clang-tidy` has `CustomChecks` that run
 only with it; a clang-tidy without the flag is refused rather than trusted.
 

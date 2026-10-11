@@ -76,6 +76,9 @@ pre code { background: none; border: 0; padding: 0; font-size: inherit; }
   color: var(--text-muted);
   white-space: pre-wrap;
 }
+/* What a tool printed about a block: its carets are columns of the line above
+   them, so a line keeps its length and the block scrolls instead. */
+.compiler-output[data-said] { white-space: pre; }
 
 /* --- headings ------------------------------------------------------------- */
 .heading-anchor {
