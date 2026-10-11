@@ -265,8 +265,8 @@ def serialize(node, out=None) -> str:
     """The HTML of a node and everything under it. It never writes markup
     that reads back as something else: what cannot be written -- a comment
     a browser would end early, an element inside a <script>, a script that
-    says </script> -- is an HtmlError naming the line, not a page that ships
-    the browser's guess."""
+    says </script> or <!-- -- is an HtmlError naming the line, not a page
+    that ships the browser's guess."""
     top = out is None
     out = [] if top else out
     if isinstance(node, Text):
@@ -276,6 +276,13 @@ def serialize(node, out=None) -> str:
                 raise HtmlError(node.line or parent.line,
                                 f"the text of a <{parent.tag}> cannot say </{parent.tag}>: "
                                 f"it would end there")
+            if parent.tag == "script" and "<!--" in node.data:
+                # After `<!--<script` a browser reads the next </script> as
+                # script too, and the page after it -- html.parser does not.
+                # The HTML standard's own advice: write it `\x3C!--`.
+                raise HtmlError(node.line or parent.line,
+                                "the text of a <script> cannot say <!--: after <!--<script a browser "
+                                "reads past </script> (write \\x3C!-- instead)")
             out.append(node.data)
         else:
             out.append(escape(node.data))

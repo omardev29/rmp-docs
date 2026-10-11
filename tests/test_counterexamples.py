@@ -136,6 +136,19 @@ class SerializeCounterexamples(unittest.TestCase):
         self.refused(dom.el("div", None, dom.el("script", None, "x = '</SCRIPT>';")), "cannot say </script>")
         self.refused(dom.el("style", None, "a{} </style >"), "cannot say </style>")
 
+    def test_a_script_that_says_where_a_comment_starts(self):
+        # Was '<script><!--<script></script>': html.parser reads the script to
+        # its </script>, and a browser does not -- after <!--<script it reads
+        # that end tag as script too, and the rest of the page with it
+        # (parse5, the HTML standard's tokenizer: the script's text was
+        # '<!--<script></script><p id="end">end</p>'). Found by holding what
+        # serialize() writes to parse5, not to the parser it is built on.
+        for text in ("<!--<script>x", "x = '<!--<SCRIPT ';", "<!-- x"):
+            with self.subTest(text=text):
+                self.refused(dom.el("div", None, dom.el("script", None, text)), "cannot say <!--")
+        # A style has no such state: its text ends at </style> whatever is in it.
+        self.assertEqual(dom.serialize(dom.el("style", None, "<!--<style>")), "<style><!--<style></style>")
+
     def test_a_text_only_element_holding_markup(self):
         # Was '<textarea><!----></textarea>': read back as text.
         area = dom.el("textarea")

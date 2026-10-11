@@ -12,6 +12,14 @@
   escape()     text and attribute values come back exactly through the
                parser, whatever is in them.
 
+What reads the markup back here is parse(), on Python's html.parser, and not
+a browser: where the two tokenize differently -- a <script> that says
+<!--<script reads past its </script> to a browser and not to html.parser --
+the case is a named one in tests/test_counterexamples.py, found by holding
+serialize() to parse5. (A browser also repairs what html.parser takes as
+written: a <div> inside a <p>, text inside a <table>, an HTML element inside
+an <svg>. Neither parse() nor serialize() knows the content model.)
+
 Every property here was seen red: the commit that added this file says how.
 A counterexample becomes a named case in tests/test_counterexamples.py.
 """
