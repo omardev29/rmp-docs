@@ -1,0 +1,361 @@
+<!--
+title: Properties, fuzzing and mutation
+description: The deep tests, for whoever adds to them: a RapidCheck property with the shared generators and a // covers: line, Hypothesis for the Python, a fuzz target with its corpus and regressions, a counterexample made a named case, mutation floors that only rise, and the nightly and weekly runs that open a nightly-finding issue.
+order: 60
+-->
+<h1>Properties, fuzzing and mutation</h1>
+
+<p class="lede">A unit test checks the cases its author thought of. The deep tests look for the ones
+nobody did: a property is checked against hundreds of generated inputs, a fuzz target is fed bytes
+nobody would write, and mutation testing changes the framework's code on purpose to see whether any
+test notices.
+<span data-fw-grep="TECHNICAL.md::\*\*Searched, as well as run\*\* -- the deep test campaign \(phase 16\)\. A unit test checks the cases its\nauthor thought of; these look for the ones nobody did, under ASan and UBSan, every report fatal\.">The
+properties of the C++ and the fuzz targets run under AddressSanitizer and
+UndefinedBehaviorSanitizer, every report fatal.</span></p>
+
+<h2 id="when">What runs when</h2>
+
+<p data-fw-grep="CLAUDE.md::A push runs\s+the deterministic half \(`rmp test property`; the `deep` job: those gates, the\s+gcc-sanitized unit and layout tests, RapidCheck at a fixed seed, Hypothesis\s+derandomized, every committed fuzz input replayed\)">Each
+has two halves. On every push the half that gives the same answer every time runs, so that a red is
+the commit's and never the dice's; and on a schedule the half that searches:</p>
+
+<table>
+<thead><tr><th></th><th>Every push: the <code>deep</code> job</th><th>The search, <code>.github/workflows/deep.yml</code></th></tr></thead>
+<tbody>
+<tr><td>RapidCheck</td><td>a fixed seed, 200 cases a property</td><td>every night: a random seed, printed, and 5000 cases</td></tr>
+<tr><td>Hypothesis</td><td>derandomized: the same 200 cases a test on every machine</td><td>every night: 5000 random cases a test</td></tr>
+<tr><td>Fuzzing</td><td>every committed input replayed</td><td>every night: ten minutes of libFuzzer per target, from the committed corpus</td></tr>
+<tr><td>Mutation</td><td>the floor files' own checks</td><td>every Sunday: every module, a job each</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="tools/rmp.py::    Stage\(&quot;property&quot;, &quot;properties: RapidCheck on the C\+\+, Hypothesis on the Python&quot;,\s+\[\(&quot;configure&quot;, \[&quot;-DBUILD_TESTS=ON&quot;, &quot;-DRMP_WERROR=ON&quot;\]\),\s+\(&quot;run&quot;, \[&quot;\{python\}&quot;, &quot;-m&quot;, &quot;unittest&quot;, &quot;discover&quot;, &quot;-s&quot;, &quot;tests&quot;, &quot;-p&quot;,\s+&quot;campaign_test\.py&quot;\]\),"><code>rmp test property</code>
+is part of the plain <code>rmp test</code>: first the campaign's own checks —
+<code>tests/campaign_test.py</code>, which holds every rule on this page to the files — then the
+RapidCheck properties, then the Hypothesis ones. <code>rmp test fuzz</code> and
+<code>rmp test mutation</code> are asked for by name. In CI the push's half is the
+<code>deep</code> job.</p>
+
+<h2 id="rapidcheck">A RapidCheck property</h2>
+
+<p data-fw-grep="tests/deep.cmake::#   property_test        every tests/property/\*_prop\.cpp, doctest's main in\n#                        tests/property/main\.cpp, RapidCheck">A
+property of a module is <code>tests/property/&lt;module&gt;_prop.cpp</code>. Every such file is
+compiled into one program, <code>property_test</code>, with doctest's <code>main()</code> and
+RapidCheck, and a new one needs no change to CMake. It says, in its header, what must hold for every
+input, and then checks it. This is a whole one, the clock's:</p>
+
+<pre data-include="tests/property/clock_prop.cpp"></pre>
+
+<p data-fw-grep="tests/property/check.h::template &lt;class Testable&gt;\nvoid check\(const std::string &amp;description, Testable &amp;&amp;property\) \{">Each
+property is a <code>check()</code> of <code>tests/property/check.h</code>: a description,
+and a function whose <code>RC_ASSERT</code> lines must hold for whatever RapidCheck draws. It is one
+doctest check, silent when it holds and counted in doctest's summary; when it does not hold, the
+failure says the smallest input RapidCheck could shrink the counterexample to.</p>
+
+<ul>
+<li data-fw-grep="tests/campaign_test.py::            out\.append\(f&quot;\{' and '\.join\(wheres\)\} share the description \{text!r\}: a reproduce &quot;\n                       &quot;string would replay its case against both&quot;\)"><strong>The
+description is a string literal, and no two are alike.</strong> It is the key a reproduce string
+finds the property by: two properties with one description would both be replayed against one
+case.</li>
+<li data-fw-grep="tests/campaign_test.py::rc::check\(\) fails nothing -- it &quot;\n                       &quot;prints and returns a bool; rmp::test::check\(\) is a doctest check"><strong>Never
+RapidCheck's own <code>rc::check()</code>.</strong> It prints and returns a bool, so a property
+that fails through it is a line in the log and a green run.</li>
+<li data-fw-grep="tests/property/gen.h::RapidCheck's own arbitrary&lt;float&gt; almost never draws a NaN, and its\n// strings almost never hold a NUL"><strong>Draw
+what a game can hand the framework by mistake</strong>, from <code>tests/property/gen.h</code>.
+RapidCheck's own floats almost never draw a NaN, and its strings almost never hold a NUL — exactly
+the inputs the framework's rules are about. <code>hostile_float()</code> and
+<code>hostile_double()</code> draw NaN, both infinities, the largest and smallest normals,
+denormals, <code>-0</code> and values past <code>int</code>'s range half the time;
+<code>hostile_rect()</code> four of those; <code>hostile_string()</code> a NUL inside, several-byte
+UTF-8 and bytes that are not UTF-8; <code>value()</code> a <code>rmp::Value</code> tree, sometimes
+deeper than a save reads back.</li>
+<li data-fw-grep="tests/property/gen.h::// tests/property/gen_prop\.cpp holds each generator to what it says here: a\n// generator that quietly stopped drawing NaN would turn every hostile-float\n// property green by not looking\."><strong>A
+new generator is held to what it promises</strong>, in <code>tests/property/gen_prop.cpp</code>: a
+generator that quietly stopped drawing NaN would turn every property that relies on it green by not
+looking.</li>
+</ul>
+
+<p data-fw-grep="tests/property/main.cpp::    setenv\(&quot;RC_PARAMS&quot;, &quot;seed=20261010 max_success=200&quot;, 0\);">The
+program runs at a fixed seed and 200 cases a property unless the environment says otherwise, so
+<code>rmp test</code> and every push play the same cases. A seed of your own, more cases, or one
+suite:</p>
+
+<pre data-lang="shell" data-fw-grep="tests/property/main.cpp:://   cmake --build --preset debug --target property_test\n//   \./build/debug/property_test -ts=&quot;property: gen&quot;\n//   RC_PARAMS=&quot;seed=7 max_success=5000&quot; \./build/debug/property_test">
+rmp test property
+cmake --build --preset debug --target property_test
+./build/debug/property_test -ts="property: random"
+RC_PARAMS="seed=7 max_success=5000" ./build/debug/property_test
+</pre>
+
+<p data-fw-grep="tests/property/check.h::// the shrunk counterexample is the failure's message, and RapidCheck prints\n// the RC_PARAMS=&quot;reproduce=\.\.\.&quot; that plays exactly that case again when the\n// program ends\.">When
+a property fails, RapidCheck prints, as the program ends, an <code>RC_PARAMS</code> value of the form
+<code>reproduce=…</code> that plays exactly that case again. Paste it in front of the program the
+same way as the seed above.</p>
+
+<h3 id="covers">Every public function, held by a property</h3>
+
+<p data-fw-grep="tests/property/waivers.txt::# Every public function of include/rmp/ that no property holds yet to the\n# campaign's resilience rules -- no UB on any input, a documented safe value and\n# one RMP_REPORT_ONCE for a game's mistake, no NaN kept in state, no state\n# changed by a refusal\.">The
+properties hold the framework to four rules for any argument a game can pass: no undefined behaviour
+on any input; a documented safe answer, and one report, for a game's mistake; no NaN kept in the
+state; and nothing changed by a refusal. Every public function of <code>include/rmp/</code> is held
+to them, or is waived.</p>
+
+<p>A property says which functions it holds with a comment above the case, one function a line,
+spelled as the coverage report prints it — as in the
+<a href="fw:tests/property/random_prop.cpp#L102-L105">random generator's properties</a>:</p>
+
+<pre data-lang="text" data-fw-grep="tests/property/random_prop.cpp::TEST_SUITE\(&quot;property: random&quot;\) \{\n    // covers: rmp::random::seed\(uint64_t\)\n    // covers: rmp::random::value\(\)">
+TEST_SUITE("property: random") {
+    // covers: rmp::random::seed(uint64_t)
+    // covers: rmp::random::value()
+</pre>
+
+<ul>
+<li data-fw-grep="tests/campaign_test.py::            out\.append\(f&quot;\{key\} has no property and no waiver: write the property &quot;"><strong>A
+public function no property covers and <code>tests/property/waivers.txt</code> does not list
+fails.</strong> A new public function arrives with its property.</li>
+<li data-fw-grep="tests/campaign_test.py::            out\.append\(f&quot;\{key\} is held by \{covers\[key\]\} now: take its line out of waivers\.txt&quot;\)"><strong>The
+waivers only shrink.</strong> A waived function a property covers fails until its line goes, and so
+does a line for a function that is gone.</li>
+<li data-fw-grep="tests/campaign_test.py::                out\.append\(f&quot;\{path\.name\} covers \{key\}, and its code never calls \{name\}: &quot;\n                           &quot;a `// covers:` line is a property's, not a promise&quot;\)"><strong>A
+<code>covers</code> line is a property's, not a promise.</strong> It counts only in a file whose code
+calls the function, so a comment cannot take a function off the waivers with nothing behind
+it.</li>
+</ul>
+
+<p data-fw-grep="tests/campaign_test.py::class ExceptionsStayInTheTestsTest\(unittest\.TestCase\):\n    &quot;&quot;&quot;RapidCheck's RC_ASSERT throws, and Omar allowed that in the test\n    binaries and nowhere else \(2026-10-10\): the framework never throws\.">RapidCheck's
+<code>RC_ASSERT</code> throws an exception, which is allowed in the test programs that link
+RapidCheck and nowhere else: nothing under <code>src/rmp/</code> or <code>include/rmp/</code>
+throws or includes RapidCheck, and a test fails the day something does.</p>
+
+<h2 id="counterexample">A counterexample becomes a named case</h2>
+
+<p data-fw-grep="tests/property/random_prop.cpp::// What the properties found is a named case in the `random` suite of\n// tests/unit_test\.cpp, so it is checked on every `rmp test unit` and not only\n// when the seed happens to find it again\.">What
+a property finds is written down as a case of its own, in the module's unit tests, with a comment
+that says which property found it. The property finds it again only when its seed happens to; the
+named case checks it on every run. The random generator's properties found that
+<code>range()</code> on floats could land on its upper end where rounding put it there, from one
+seed; <code>tests/unit_test.cpp</code> holds that seed to it, by name:</p>
+
+<pre data-lang="text" data-fw-grep="tests/unit_test.cpp::    TEST_CASE\(&quot;range\(float\) never lands on max, even where rounding puts it there&quot;\) \{\n        // random_prop\.cpp's counterexample: the seed whose first value\(\) is">
+TEST_CASE("range(float) never lands on max, even where rounding puts it there") {
+    // random_prop.cpp's counterexample: the seed whose first value() is
+    ...
+</pre>
+
+<p>The order is the one every test follows: the named case first, seen red on the code as it was,
+then the fix, then green — <a href="/framework/contributing/tests.html#red-first">seen red
+first</a>.</p>
+
+<h2 id="hypothesis">Hypothesis, for the Python</h2>
+
+<p data-fw-grep="tests/cpp_text_property_test.py::  - the module is tests/&lt;what&gt;_property_test\.py, so `rmp test property` and the\n    CI deep job find it \(unittest discover -p '\*_property_test\.py'\);">The
+tools are Python, and their properties are Hypothesis's, in
+<code>tests/&lt;what&gt;_property_test.py</code>, which the stage finds by that name.
+<code>tests/cpp_text_property_test.py</code> is written as the one to copy:</p>
+
+<ul>
+<li data-fw-grep="tests/hypothesis_profiles.py::    import hypothesis_profiles  # first: it skips the module, or fails it"><strong><code>import
+hypothesis_profiles</code> comes first.</strong> It loads the profile every property test shares and,
+where Hypothesis is not installed, skips the module and says so.</li>
+<li data-fw-grep="tests/cpp_text_property_test.py::# By its path and as `tools\.cpp_text`, the name mutmut gives the file"><strong>The
+tool is loaded by its path, as <code>tools.&lt;name&gt;</code></strong>, the name mutation testing
+records a test's reach under.</li>
+<li data-fw-grep="tests/cpp_text_property_test.py::  - the strategies lean on the characters the code under test decides on --\n    st\.text\(\) alone almost never writes `R&quot;x\(`\."><strong>The
+strategies lean on what the code decides on.</strong> Text drawn at random almost never writes the
+start of a raw string literal; the scanner's property mixes those pieces in on purpose.</li>
+</ul>
+
+<p data-fw-grep="tests/hypothesis_profiles.py::  ci        the default -- `rmp test property` and every push\. Derandomized:[\s\S]*?  nightly   \.github/workflows/deep\.yml: 5000 examples, random, and the\n            database under build/hypothesis/">There
+are two profiles. <code>ci</code> is the default: derandomized, the same 200 cases a test on every
+run and every machine, no example database and no deadline — the sanitizers and a loaded runner make
+timings meaningless. <code>nightly</code> draws 5000 at random and keeps what it found in
+<code>build/hypothesis/</code>, where a counterexample found once is tried first next time:</p>
+
+<pre data-lang="shell">
+python3 -m unittest discover -s tests -p '*_property_test.py' -v
+RMP_HYPOTHESIS_PROFILE=nightly python3 -m unittest discover -s tests -p cpp_text_property_test.py -v
+RMP_REQUIRE_HYPOTHESIS=1 python3 -m unittest discover -s tests -p '*_property_test.py' -v
+</pre>
+
+<p data-fw-grep="tests/hypothesis_profiles.py::skipped, unless RMP_REQUIRE_HYPOTHESIS=1, which CI sets: the pinned image has\nit, and a skip there would be a green that tested nothing\.">The
+last line is how CI runs them: there, a missing Hypothesis is a failure, because the build image has
+it and a skip would be a green that tested nothing. On your machine, install the version
+<code>thirdparty/FROZEN_VERSIONS.md</code> pins. A counterexample prints the
+<code>@reproduce_failure</code> line that plays it again, and becomes a named case in the tool's own
+unit tests, like a RapidCheck one.</p>
+
+<h2 id="fuzzing">A fuzz target</h2>
+
+<p data-fw-grep="tests/fuzz/harness.h::// What every fuzz target of the framework does before its first input and at\n// the start of each one, so that a replay depends on the input and nothing\n// else">A
+fuzz target is <code>tests/fuzz/&lt;name&gt;.cpp</code>, one parser of the framework fed whatever
+bytes libFuzzer makes up. It includes <code>tests/fuzz/harness.h</code>, which makes a replay depend on
+the input and nothing else: no log, resources from an empty folder of its own instead of the game's,
+<code>[dev] strict</code> off, and the once-only reports forgotten before each input. The Tiled
+reader's is the smallest:</p>
+
+<pre data-include="tests/fuzz/tiled.cpp"></pre>
+
+<p data-fw-grep="tests/fuzz/harness.h::// The oracle: a promise that did not hold is a crash, which is what libFuzzer\n// and tools/fuzz\.sh replay report -- with this line first">Its
+oracle is everything the reader's header promises about bad input: it returns, without undefined
+behaviour, and refuses what it cannot read. A promise of its own that the sanitizers cannot see —
+a refusal leaves its output as it was, what reads back writes the same — is a
+<code>require()</code> of the harness, with the promise in words, which ends the run as a crash
+with that line first, so the nightly issue is named after it.
+<code>tests/fuzz/value_json.cpp</code> is one made of those.</p>
+
+<p data-fw-grep="tests/campaign_test.py::            out\.append\(f&quot;\{name\}: tests/fuzz/corpus/\{name\}/ has no input: seed it&quot;\)">A
+target comes with its inputs, committed:</p>
+
+<ul>
+<li><strong><code>tests/fuzz/corpus/&lt;name&gt;/</code></strong>, the inputs fuzzing found that
+add coverage, merged in; seeded at first with real files of the format;</li>
+<li><strong><code>tests/fuzz/regressions/&lt;name&gt;/</code></strong>, every input that once
+failed, or sits at the edge of what the reader takes, each named for what it is —
+<code>tests/fuzz/regressions/value_json/</code> has <code>1e400</code> and
+<code>coins_1e309</code>;</li>
+<li><strong><code>tests/fuzz/&lt;name&gt;.dict</code></strong>, if it helps: the words of the
+format, for libFuzzer to put together;</li>
+<li data-fw-grep="tests/campaign_test.py::out\.append\(f&quot;tests/fuzz/\{options\.name\}:\{number\}: \{line!r\} is not a libFuzzer flag&quot;\)"><strong><code>tests/fuzz/&lt;name&gt;.options</code></strong>,
+if it needs one: libFuzzer's flags for it, one a line, such as the longest input worth trying.</li>
+</ul>
+
+<p data-fw-grep="tests/campaign_test.py::CORPUS_LIMIT = 2 \* 1024 \* 1024">Each
+of the two folders needs at least one input, and nothing may be committed for a target that does not
+exist. Every clone carries the corpus, so all of it together stays under 2 MB.</p>
+
+<pre data-lang="shell" data-fw-grep="tools/fuzz.sh::#   bash tools/fuzz\.sh build                 every fuzz target, in build/fuzz\n#   bash tools/fuzz\.sh replay                every committed input of every target">
+rmp test fuzz
+bash tools/fuzz.sh replay value_json
+bash tools/fuzz.sh run value_json 60
+bash tools/fuzz.sh merge value_json
+</pre>
+
+<p data-fw-grep="tools/fuzz.sh::# replay: every input once, and it FAILS UNLESS EVERY FILE IT NAMED RAN"><code>rmp test fuzz</code>
+builds every target and replays every committed input, and it fails unless every file it named ran:
+a replay that stopped early, saying nothing, would look like one that passed. <code>run</code>
+fuzzes one target for that many seconds and <code>merge</code> adds what found new coverage to its
+corpus.</p>
+
+<p data-fw-grep="tools/fuzz.sh::# compiler-rt\. Without one the same targets are built with\n# tests/fuzz/replay_main\.cpp, which replays and cannot fuzz, and says so">Fuzzing
+needs libFuzzer, which is clang's and comes with its compiler-rt. The build image has it; a machine
+without it builds the same targets around <code>tests/fuzz/replay_main.cpp</code>, which replays
+every input and cannot fuzz, and says so. To fuzz there:</p>
+
+<pre data-lang="shell">
+tools/dev_shell.sh bash tools/fuzz.sh build
+tools/dev_shell.sh bash tools/fuzz.sh run value_json 60
+</pre>
+
+<p data-fw-grep="tests/tilemap_test.cpp::// What fuzz_tiled found \(tests/fuzz/regressions/tiled/ has each input\)\.">What
+a run finds is in <code>build/fuzz/crashes/&lt;name&gt;/</code>. It becomes two things: the input,
+copied into <code>regressions/&lt;name&gt;/</code> under a name that says what it is, which every
+push replays from then on; and a named case in the module's unit tests built from it, which says in
+a sentence what went wrong. <code>tests/tilemap_test.cpp</code> holds what the Tiled reader's
+target found that way, case by case, beside the inputs in <code>regressions/tiled/</code>. Then the
+fix.</p>
+
+<p data-fw-grep="tests/deep.cmake::set\(_rmp_fuzz_extra_e2e_script &quot;\$\{CMAKE_CURRENT_LIST_DIR\}/e2e/script\.cpp&quot;\)">A
+target is linked to the framework library. One whose code is not in it — the e2e scripts' reader is
+a part of the tests — names its extra source in <code>tests/deep.cmake</code>, the one line a new
+target may add to that file.</p>
+
+<h2 id="mutation">Mutation testing</h2>
+
+<p data-fw-grep="tools/mutation.sh::# Coverage says which lines ran; this says whether anything checked what they\n# did\.">Coverage
+says which lines ran; mutation testing says whether anything checked what they did. Mull, for the
+C++, and mutmut, for the Python, change one operator, constant or call at a time — a mutant — and run
+the module's tests against each. A mutant no test notices is a test nobody wrote, or a change nobody
+could see.</p>
+
+<p data-fw-grep="tools/mutation_report.py::    kind        cxx \| py\n    sources     the files mutated, repository paths">Each
+module is a floor file, <code>tests/mutation/floors/&lt;module&gt;.txt</code>: what it mutates, which
+tests must notice, the score that has to hold, and the mutants nobody can kill, each with why. The
+random generator's:</p>
+
+<pre data-include="tests/mutation/floors/random.txt" data-lang="text"></pre>
+
+<table>
+<thead><tr><th>Line</th><th>What it says</th></tr></thead>
+<tbody>
+<tr><td><code>kind</code></td><td><code>cxx</code> for Mull, <code>py</code> for mutmut</td></tr>
+<tr><td><code>sources</code></td><td>the files mutated</td></tr>
+<tr data-fw-grep="tests/campaign_test.py::TEST_PROGRAMS = \{&quot;unit_test&quot;, &quot;ui_layout_test&quot;, &quot;property_test&quot;\}"><td><code>tests</code></td><td>a test program and its doctest options, one a line, for the C++ — <code>unit_test</code>, <code>ui_layout_test</code> or <code>property_test</code>; the test files, or one class of a file, for the Python. A mutant killed by any of them is killed.</td></tr>
+<tr><td><code>select</code></td><td>for the Python only: which of mutmut's mutants count, by name</td></tr>
+<tr><td><code>floor</code></td><td>the score that has to hold, 0 to 100</td></tr>
+<tr><td><code>equivalent</code></td><td>a mutant no test can kill, and why, in words</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="tools/mutation_report.py::The score is the mutants a test detected -- killed, timed out, crashed --\nover every mutant but the equivalent ones, in percent\. A mutant no test\nreaches counts against it: it is a test nobody wrote\.">The
+score is the mutants a test detected — killed, timed out, crashed — over every mutant but the
+equivalent ones, in percent. A mutant no test reaches counts against it.</p>
+
+<ul>
+<li data-fw-grep="tools/mutation_report.py::  - A floor below the score rounded down to 5 fails too: raise it in the\n    commit that earned it \(--update writes it\)\. The floor only rises;"><strong>The
+floor only rises.</strong> Below it fails; and a floor below the score, rounded down to 5, fails too,
+until it is raised in the commit that earned it. <code>update</code> writes it. A lower floor is a
+hand edit a reviewer reads.</li>
+<li data-fw-grep="tools/mutation_report.py::  - An `equivalent` line whose mutant a test now kills, or that is gone \(the\n    code moved: Mull's ids carry the line\), fails until the line goes\."><strong>The
+equivalent mutants only shrink.</strong> One a test now kills, or one that is gone — Mull's ids carry
+the line, so moved code makes them new — fails until its line goes.</li>
+<li data-fw-grep="tests/campaign_test.py::            out\.append\(f&quot;\{source\} is in no floor file under tests/mutation/floors/: &quot;\n                       &quot;add it to its module's sources, or write the module's file&quot;\)"><strong>Every
+file of <code>src/rmp/</code> is in exactly one floor file</strong>, but the few that only compile a
+vendored library. A new file goes into its module's <code>sources</code>, or comes with its module's
+file.</li>
+<li data-fw-grep="tests/campaign_test.py::                hint = \(&quot; \(doctest reads the whole path, which starts where the checkout is: &quot;\n                        &quot;begin it with \*\)&quot;"><strong>A
+test filter has to select something.</strong> A <code>-sf</code>, <code>-ts</code> or
+<code>-tc</code> that matches nothing runs no test, passes, and lets every mutant survive, which reads
+as a module nobody tested. A source filter begins with <code>*</code>, because doctest matches the
+whole path.</li>
+</ul>
+
+<p data-fw-grep="tools/mutation.sh::# C\+\+: Mull 0\.34\.1 for LLVM 18, in the pinned build image only -- its IR\n# plugin has to match the clang that compiles, exactly\.">Mull's
+plugin has to match the clang that compiles, exactly, so the C++ modules run inside the build image,
+which has both. One module is <code>run</code>; every module, one after another, is hours, and is
+<code>rmp test mutation</code>:</p>
+
+<pre data-lang="shell">
+bash tools/mutation.sh modules
+tools/dev_shell.sh bash tools/mutation.sh run random
+tools/dev_shell.sh bash tools/mutation.sh update random
+</pre>
+
+<p data-fw-grep="tools/mutation.sh::# Python: mutmut 3, on a copy of the tree in build/mutation/py-&lt;module&gt;/ --[\s\S]*?Code a test reaches only through a\n# subprocess counts as reached by none \(mutmut follows calls in-process\), so a\n# floor file selects what its tests call directly\.">A
+Python module is mutated on a copy of the tree, under <code>build/mutation/</code>, and its tests
+read the mutated copy. mutmut follows calls inside one process: code a test reaches only by starting
+the tool as a program counts as reached by none, so a Python floor file lists the tests that call
+the tool directly, and selects the functions they reach.</p>
+
+<h2 id="nightly">The nightly and weekly runs</h2>
+
+<p data-fw-grep=".github/workflows/deep.yml::    - cron: '0 3 \* \* \*'     # nightly: fuzz and properties\n    - cron: '30 4 \* \* 0'    # weekly, Sundays: mutation"><code>.github/workflows/deep.yml</code>
+is the search: every night at 03:00 UTC, ten minutes of fuzzing per target and the properties at a
+random seed; every Sunday, every mutation module, one job each. It runs only in the framework's own
+repository: a repository made from it is a copy, not a fork, and would open issues on itself. It can
+also be started by hand, for one target or module:</p>
+
+<pre data-lang="shell">
+gh workflow run deep.yml -f mode=nightly -f only=value_json -f seconds=60
+gh workflow run deep.yml -f mode=weekly -f only=random
+</pre>
+
+<p data-fw-grep="tools/finding.py::One issue per SIGNATURE, labelled nightly-finding -- what the agents working\non this repository take first\.">What
+a job finds becomes an issue labelled <code>nightly-finding</code>, one per signature: a sanitizer's
+report by its kind and the top three of the framework's own frames, a fuzz oracle by its promise, a
+property by its case and assertion, a mutation module by falling below its floor — nothing that
+changes from one run of the same failure to the next. Found again, it is a comment on its open
+issue, never a second one. Found again after it was closed, it is a new issue that says it came
+back. Each issue carries the command that plays it again, and the run keeps the input.</p>
+
+<p data-fw-grep="CLAUDE.md::with the\s+command that replays it\. \*\*Those issues are taken first\.\*\*">Those
+issues are taken first, before other work:</p>
+
+<pre data-lang="shell">
+gh issue list --label nightly-finding
+</pre>
+
+<p>One is closed the way any bug is: played again on your machine with the command it gives, written
+down as a named case — and, for a fuzz input, a file in <code>regressions/</code> — seen red, fixed,
+and seen green. What the night's fuzzing merged into a corpus is in the run's
+<code>fuzz-&lt;target&gt;</code> artifact; committing it is a pull request, never the workflow's.</p>

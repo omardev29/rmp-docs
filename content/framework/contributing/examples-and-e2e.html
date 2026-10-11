@@ -1,0 +1,309 @@
+<!--
+title: Examples and e2e scripts
+description: An example is a test: built, booted under the software renderer, photographed, and held to no mistake the framework reports; and the games, menus, scenes and input are played from a script, frame by frame, their pictures compared exactly with goldens recorded only in the build image.
+order: 50
+-->
+<h1>Examples and e2e scripts</h1>
+
+<p class="lede">An example is what people copy, so it is held to more than compiling: CI builds
+every one, boots it with no window, takes its picture and fails it on any mistake the framework
+reports. And an example of a game, a menu, a scene or the input is played — from a script of what a
+player presses, frame by frame — and every picture the script takes has to come out exactly like the
+one recorded for it.</p>
+
+<p><a href="/framework/testing.html#examples">Testing</a> says what each step proves. This page is
+for adding an example, and for writing, playing and recording its script.</p>
+
+<h2 id="an-example">An example is a test</h2>
+
+<p data-fw-grep="CLAUDE.md::mini-project \(`src/main\.cpp`, `include/` when it has headers, `src/scenes/`\s+when it has more than one scene, `resources/` when it brings art\), built as\s+a CMake target and \*\*booted headless with a screenshot\*\*">An
+example is a small project laid out like a game: <code>examples/&lt;area&gt;/&lt;name&gt;/</code>
+with <code>src/main.cpp</code>, <code>include/</code> when it has headers, <code>src/scenes/</code>
+when it has more than one scene, and <code>resources/</code> when it brings art. Every one becomes a
+target of its own, <code>example_&lt;area&gt;_&lt;name&gt;</code>, built and booted headless with a
+screenshot. A new mechanic belongs here, in an example, and not in the framework's
+<code>src/main.cpp</code>, which stays the dozen lines of the demo game.</p>
+
+<p data-fw-grep="CLAUDE.md::\*\*A game in `examples/games/` is playable from start to finish\*\*\s+-- win,\s+lose, play again -- or it does not belong there\.">A
+game in <code>examples/games/</code> is playable from start to finish — win, lose, play again — or it
+does not belong there. A title screen that draws is not a game that plays, and the script
+<a href="#e2e">below</a> is what proves the difference.</p>
+
+<h3 id="shape">Its shape</h3>
+
+<p data-fw-grep="tools/examples_check.sh::  if grep -qE '\^\[\[:space:\]\]\*int\[\[:space:\]\]\+main\[\[:space:\]\]\*\\\(' &quot;\$f&quot;; then">Before
+anything is built, <code>tools/examples_check.sh</code> reads the shape of every file of every
+example. An example uses the framework's entry point, <code>RMP_GAME</code> or
+<code>RMP_ENTRY_POINT</code>, because that is the only loop that works on every target: the browser
+owns its frame loop and iOS never calls <code>main()</code>. So it refuses an example that
+<samp>writes its own int main().</samp>, one that <samp>drives its own frame loop with
+WindowShouldClose().</samp>, and an <code>on_frame</code> that takes no <code>delta</code>. The one
+exception is <code>examples/plain_c/src/main.c</code>, which leaves the framework on purpose and has
+to keep saying which targets that rules out.</p>
+
+<p data-fw-grep="tools/examples_check.sh::    fail &quot;examples/\$rel has no link in examples/README\.md\.&quot;">Every
+example also needs a row in <code>examples/README.md</code> that links its folder: an example
+nobody is pointed at is a file that rots unread. The check fails on an example with no link, and on
+a link to an example that is gone. The documentation site gives every example a page of its own,
+and its <code>examples.toml</code> says whether a browser plays it there; a new example is a line
+in that file the day the site moves to the commit that has it.</p>
+
+<h3 id="boot">The boot</h3>
+
+<pre data-lang="shell">
+rmp example games/01_pong
+rmp test examples
+bash tools/examples_build.sh boot
+</pre>
+
+<p data-fw-grep="tools/rmp.py::        &quot;Build and run one example from examples/, by name or by path\.&quot;,"><code>rmp example</code> builds one example and starts it in a window, to play it yourself.
+<code>rmp test examples</code> is the whole check CI runs — every example built, booted and
+played — and it compiles all of them, which is why the plain <code>rmp test</code> leaves it out.
+<code>bash tools/examples_build.sh boot</code> is its first half, everything but the scripts.</p>
+
+<p data-fw-grep="tools/examples_build.sh::  echo &quot;\$out&quot; \| grep -q &quot;RAY_TEST_BOOT_OK assets_failed=0 &quot; \|\| ok=0\n  echo &quot;\$out&quot; \| grep -q &quot;RAY_TEST_RENDER_OK&quot; \|\| ok=0\n  echo &quot;\$out&quot; \| grep -q &quot;RAY_TEST_DONE_FRAMES&quot; \|\| ok=0\n  \[ -s &quot;\$shot&quot; \] \|\| ok=0">The
+boot builds each example against raylib's software renderer — no GPU, no window, no display, the
+same pixels on every machine — and runs it for thirty frames. It passes when the example printed
+<code>RAY_TEST_BOOT_OK assets_failed=0</code>, <code>RAY_TEST_RENDER_OK</code> and
+<code>RAY_TEST_DONE_FRAMES</code>, wrote its picture, reported no mistake and exited with status 0,
+inside three minutes. The picture is the last frame, in
+<code>build/examples-check/screenshots/example_&lt;area&gt;_&lt;name&gt;.png</code>: look at it.
+Looking at the pixels is how most of what is wrong with an example is found.</p>
+
+<pre data-lang="shell" data-fw-grep="tools/examples_build.sh::FRAMES=&quot;\$\{RMP_EXAMPLE_FRAMES:-30\}&quot;">
+RMP_EXAMPLE_FRAMES=120 bash tools/examples_build.sh boot
+</pre>
+
+<p>A picture of a later frame than the thirtieth is that variable away.</p>
+
+<h3 id="reports">No mistake reported: <code>RAY_TEST_REPORTS=0</code></h3>
+
+<p data-fw-grep="src/rmp/app.cpp::    // The run's last frame: how many of the game's mistakes the framework\n    // reported \(RMP_REPORT_ONCE\), each counted once\. A correct game says 0\.">A
+mistake in the game that the framework can see — an action nobody defined, a widget outside
+<code>begin()</code> and <code>end()</code>, a number that is not one — is said once, as a warning in
+the log, and counted. On the last frame of a run with a frame budget the framework prints the count,
+<code>RAY_TEST_REPORTS=0</code> when there was none.</p>
+
+<p data-fw-grep="tools/examples_build.sh::      echo &quot;        the framework reported a mistake in it, and an example makes none:&quot;">An
+example makes none. Any other count fails its boot, and the failure prints the warnings that were
+counted, so the line to fix is in the log. The plain C example is the one exception: it has no
+framework to report anything, and prints no count.</p>
+
+<h2 id="e2e">A script: what a player presses</h2>
+
+<p data-fw-grep="tests/e2e/script.h::// An e2e script: what a player does to a game, frame by frame, and what the\n// game must show for it\. tests/e2e/&lt;area&gt;/&lt;example&gt;\.e2e, one per example\n// under examples/&lt;area&gt;/&lt;example&gt;/, played by tests/e2e/driver\.cpp\.">A
+script is <code>tests/e2e/&lt;area&gt;/&lt;name&gt;.e2e</code>, and it plays
+<code>examples/&lt;area&gt;/&lt;name&gt;</code>: what a player presses, frame by frame, what the
+screen has to show at the frames that matter, and which scene has to be on top. This is the whole of
+the menu example's:</p>
+
+<pre data-include="tests/e2e/ui/01_menu.e2e" data-lang="text"></pre>
+
+<p>Every line starts with the frame it happens on, counted from 0 at exactly a sixtieth of a second
+each, and never going back. <code>#</code> starts a comment, wherever it is.</p>
+
+<table>
+<thead><tr><th>Line</th><th>What it does</th></tr></thead>
+<tbody>
+<tr data-fw-grep="tests/e2e/script.h:://     &lt;frame&gt; press KEY_SPACE       held from this frame on\n//     &lt;frame&gt; release KEY_SPACE     up from this frame on\n//     &lt;frame&gt; tap KEY_ENTER         down for this one frame, up the next"><td><code>12 press KEY_SPACE</code></td><td>holds the key down from this frame on</td></tr>
+<tr><td><code>40 release KEY_SPACE</code></td><td>lets it go from this frame on</td></tr>
+<tr><td><code>1 tap KEY_ENTER</code></td><td>down for this one frame, up the next</td></tr>
+<tr><td><code>15 tap GAMEPAD_BUTTON_LEFT_FACE_DOWN</code></td><td>the same three, for the first gamepad's buttons, by raylib's names; its sticks stay at rest</td></tr>
+<tr data-fw-grep="tests/e2e/script.h:://     &lt;frame&gt; click 400 300         the left button, down for this one frame\n//                                   at x, y in window pixels; the pointer\n//                                   stays there"><td><code>31 click 400 269</code></td><td>the left mouse button, down for this one frame at a point of the window, in pixels; the pointer stays there</td></tr>
+<tr data-fw-grep="tests/e2e/script.h:://     &lt;frame&gt; type &quot;Ana&quot;            characters typed in this frame, into the\n//                                   text field that has the keyboard"><td><code>43 type " Onf"</code></td><td>characters typed in this frame into the text field that has the keyboard, between double quotes, so a space is one; <code>tap KEY_BACKSPACE</code> takes one off</td></tr>
+<tr><td><code>12 shot playing</code></td><td>the picture this frame drew, compared with <code>tests/e2e/golden/&lt;area&gt;/&lt;name&gt;/playing.png</code></td></tr>
+<tr data-fw-grep="tests/e2e/script.h:://                                   \(a class name, or its end: `OverScene`\n//                                   matches `\(anonymous namespace\)::OverScene`\)"><td><code>640 expect scene OverScene</code></td><td>the scene on top once this frame is over: a class name, or its end, so <code>OverScene</code> matches one in an anonymous namespace</td></tr>
+<tr><td><code>76 end</code></td><td>the last frame: the game quits after it</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="tests/e2e/script.h::// Frames count from 0, the first frame the game runs, at exactly 1/60 s\n// each, and never go backwards\.[\s\S]*?//   - no `end`, anything after it, or a script that checks nothing \(no\n//     `shot`, no `expect`\)\.">A
+script that cannot mean what it says is refused before the game starts, with the line it is on:</p>
+
+<ul>
+<li>input on frame 0: the first frame has nothing to compare a key with, so a press there is held
+and never pressed — the first input goes on frame 1;</li>
+<li>a key pressed while it is down, released while it is up or in the frame it went down, or
+pressed again in the frame it comes up or the frame after its tap: it would never come up, so the
+second press would be no press at all; and a click in the frame of another click or the
+frame after it, for the same reason;</li>
+<li>a <code>type</code> with no quotes or nothing between them, a <code>"</code> or a <code>#</code>
+inside them, a control character, a byte that is not UTF-8, more than sixteen characters, or two in
+one frame;</li>
+<li>a shot name that is not lower case, digits and <code>_</code> — it is a file name — or one used
+twice;</li>
+<li>no <code>end</code>, anything after it, or a script that checks nothing.</li>
+</ul>
+
+<p data-fw-grep="CMakeLists.txt::message\(FATAL_ERROR &quot;\$\{_orphan\} plays no example: it has to be &quot;">The
+build makes a target of every script, <code>e2e_&lt;area&gt;_&lt;name&gt;</code>: the example as it
+ships, with <code>tests/e2e/driver.cpp</code> beside it. A script whose example is not there — renamed,
+or the script put in the wrong folder — stops the configure with <samp>… plays no example: it has
+to be …</samp>, because a script nothing plays looks exactly like one that passes. A plain C
+example cannot have one: the driver plays a game through the framework's seams, and it has
+none.</p>
+
+<h3 id="driver">What the driver does to the game</h3>
+
+<p data-fw-grep="tests/e2e/driver.cpp:://   the clock   every frame is exactly 1/60 s and rmp::random starts from\n//               seed 1, so a run is the same run every time">The
+driver installs itself before <code>main()</code>, through the framework's seams, and the game does
+not know it is there. Every frame is exactly a sixtieth of a second and <code>rmp::random</code>
+starts from seed 1, so a run is the same run every time. What the script holds down reaches
+<code>rmp::input</code> and the interface's own navigation and pointer, and the input of frame N+1
+is set at the end of frame N, which is when a real keyboard changes. Saves go to a fresh folder, so
+last run's best score cannot change this one, and there is no sound device.</p>
+
+<p data-fw-grep="CLAUDE.md::\*\*A script can press only what the game reads through rmp::input or\s+rmp::ui\.\*\* Under PLATFORM=Memory raylib's own key and mouse state never\s+changes">A
+script can press only what the game reads through <code>rmp::input</code> or
+<code>rmp::ui</code>. Under the software renderer raylib's own keyboard and mouse never change, so a
+game that asks raylib about a key itself never sees it go down — and a key read that way is one no
+gamepad can press either.</p>
+
+<p data-fw-grep="CLAUDE.md::The first button of a screen is focused already: Enter alone\s+presses it\.">Two
+things about menus decide a script's first lines: the first button of a screen has the focus
+already, so Enter alone presses it;
+<span data-fw-grep="CLAUDE.md::Space and Enter press the focused control\s+of a menu on top: a script that taps a game's Space under a pause menu\s+resumes it\.">and
+Space and Enter press the focused control of a menu on top, so a script that taps a game's Space
+under a pause menu resumes the game.</span></p>
+
+<p data-fw-grep="tests/e2e/driver.cpp::void reach\(\) \{\n    for \(const std::string &amp;name : rmp::ui::detail::controls_out_of_reach\(\)\) \{">On
+every frame, whatever the script checks, the driver fails a control the example put where nobody
+can reach it: one that takes the focus, is not wholly inside the window, and is in no scroll area
+that could bring it in. <span data-fw-grep="tests/e2e/driver.cpp::// defined\) fails it too, at `end`, a line each, in the log's own words">And
+every mistake the framework reported during the run fails the script at its <code>end</code>, a line
+each, in the log's own words.</span></p>
+
+<h2 id="writing">Writing one</h2>
+
+<ol data-fw-grep="TECHNICAL.md::one per example of games/ ui/ scenes/ input/: a happy and a failure path">
+<li>Play the example yourself, with <code>rmp example</code>, and choose two paths through it: one
+that gets somewhere and one that fails. Pong is lost and then won; Breakout loses its three balls and
+then clears its wall; the menu example walks every screen with the keyboard, the gamepad and the
+mouse, then clicks a disabled button and cancels a dialog.</li>
+<li>Write the script: the input, a <code>shot</code> at each moment that proves something, an
+<code>expect scene</code> where the scene changes, and a comment above each step that says what
+it is for. The scripts in <code>tests/e2e/</code> are written that way, and they are the best guide
+to frame arithmetic: a click is down for one frame and a button fires on the way up; a screen that
+has just appeared can be clicked from its second frame.</li>
+<li>Play it, on your machine. Outside the build image a shot that has no golden yet is not a
+failure: the run writes the picture it took and says so, and you look at it.</li>
+<li>Move the frames until each picture shows what it should, and play it again.</li>
+<li>Record the goldens inside the build image, look at every one, and commit them with the
+script.</li>
+</ol>
+
+<pre data-lang="shell">
+bash tools/examples_build.sh e2e
+</pre>
+
+<p data-fw-grep="tests/e2e/driver.cpp::        e2e::write_png\(actual, run\.out / \(step\.name \+ &quot;\.actual\.png&quot;\)\);">That
+plays every script. A shot with no golden prints a line that starts <code>E2E NOTE</code> and leaves
+<code>&lt;shot&gt;.actual.png</code> in <code>build/examples-check/e2e/&lt;area&gt;/&lt;name&gt;/</code>.
+Once that run has configured the build, one script is its own program, built and played
+alone:</p>
+
+<pre data-lang="shell" data-fw-grep="tools/examples_build.sh::  \$LIMIT &quot;\$BUILD/\$t&quot; &gt; &quot;\$logs/\$t\.out&quot; 2&gt;&amp;1 &lt; /dev/null \|\| status=\$\?">
+cmake --build build/examples-check --target e2e_ui_01_menu
+./build/examples-check/e2e_ui_01_menu
+</pre>
+
+<p data-fw-grep="tests/e2e/driver.cpp::// What it prints: `E2E SHOT &lt;name&gt; &lt;w&gt;x&lt;h&gt; hash=&lt;fnv&gt;` for every shot">It
+prints a line for every shot it took, with the picture's hash; a line for every check that failed,
+<code>E2E FAIL &lt;line&gt;: &lt;reason&gt;</code>; and <code>E2E PASS</code> at <code>end</code>
+when none did.</p>
+
+<p data-fw-grep="CLAUDE.md::A script that cannot win a game\s+is news about the game: Breakout's ball outran the paddle and Invaders' last\s+alien landed before a ship could reach it, and both were fixed in the game\.">A
+script that cannot do what a player should is news about the example, and the fix goes in the
+example. Breakout's ball outran the paddle and Space Invaders' last alien landed before a ship could
+reach it: both were found by a script that could not win, and both were fixed in the game.</p>
+
+<p data-fw-grep="CLAUDE.md::A Pong point is 75\s+frames\. A script proves its paths and stops\.">Every
+frame of a script is a frame of a sanitized debug build drawn in software, and a Pong point is 75
+of them. A script proves its paths and stops; it does not play a whole match to show that scoring
+works.
+<span data-fw-grep="tools/examples_build.sh::E2E_LIMIT=&quot;timeout 600&quot;">A script
+still playing after ten minutes is stopped, and fails.</span></p>
+
+<h2 id="goldens">Goldens: exact, and only from the image</h2>
+
+<p data-fw-grep="tools/examples_build.sh::  elif \[ -r &quot;\$IMAGE_MANIFEST&quot; \]; then\n    export RMP_E2E_COMPARE=1">Every
+shot is compared with its golden, <code>tests/e2e/golden/&lt;area&gt;/&lt;name&gt;/&lt;shot&gt;.png</code>,
+pixel for pixel, with no tolerance. A fixed step, a fixed seed and the software renderer give the
+same bytes for the same script, so a tolerance would only be somewhere for a real change to hide.
+Exact also means one compiler, one maths library and one renderer: the comparison is enforced
+inside the pinned build image, where CI runs it, and anywhere else a difference is reported with a
+line that starts <code>E2E DIFF</code> and does not fail.</p>
+
+<p data-fw-grep="tests/e2e/compare.h::// A failure leaves three pictures: what was expected, what came out, and the\n// difference, the expected one darkened with every pixel that differs in red\.">A
+shot that differs fails the script with its line and says how many pixels differ and where the first
+one is. It leaves three pictures in <code>build/examples-check/e2e/&lt;area&gt;/&lt;name&gt;/</code>:
+the one expected, the one drawn, and the expected one darkened with every pixel that differs in red.
+CI's <code>e2e</code> job uploads that folder, so a red run carries its pictures.</p>
+
+<p data-fw-grep="CLAUDE.md::\(Omar, 2026-10-11: a tolerance only for a shot that proves it\s+needs one, with the reason\)">A
+tolerance is for a shot that proves it needs one, with the reason written beside it. None does.</p>
+
+<h3 id="recording">Recording them</h3>
+
+<p data-fw-grep="tools/examples_build.sh::  echo &quot;FAIL: RMP_E2E_UPDATE records the e2e goldens, and only inside the pinned build image:&quot;\n  echo &quot;      tools/dev_shell\.sh bash -c 'python3 tools/configure\.py &amp;&amp; \./rmp test e2e-update'&quot;">The
+goldens are drawn by the compiler and renderer that compare them, so they are recorded inside the
+build image and nowhere else. <code>rmp test e2e-update</code> plays every script and writes every
+shot as its golden; outside the image it refuses before building anything, saying
+<samp>RMP_E2E_UPDATE records the e2e goldens, and only inside the pinned build image:</samp> and how
+to run it there. <code>tools/dev_shell.sh</code> starts a shell in the image, with the checkout
+mounted:</p>
+
+<pre data-lang="shell">
+tools/dev_shell.sh
+</pre>
+
+<p>and in that shell:</p>
+
+<pre data-lang="shell">
+python3 tools/configure.py
+./rmp test e2e-update
+</pre>
+
+<p data-fw-grep="tools/examples_build.sh::      echo &quot;  \$BUILD was configured from \$made_in: starting it again from \$\(pwd -P\)&quot;">The
+image sees the checkout at another path than your machine does, so the next run on your machine
+finds <code>build/examples-check</code> configured from somewhere else, says so, and starts that
+folder again: a full build of the examples.</p>
+
+<p data-fw-grep="tools/examples_build.sh::    echo &quot;      look at every picture that changed before committing it&quot;">Then
+look at every picture that changed before committing it. <code>git status tests/e2e/golden/</code>
+lists them; open each one. A golden is what the script will hold the game to from then on, and a
+picture recorded without being looked at holds the game to whatever it drew that day, bug
+included.</p>
+
+<p data-fw-grep="tests/configure_test.py::    def test_every_shot_has_its_golden\(self\):[\s\S]*?    def test_no_golden_is_an_orphan\(self\):">A
+test holds the two sides together: every shot a script takes has its golden, and every golden is a
+shot some script takes. A shot renamed leaves an orphan, and the orphan fails until it is
+deleted.</p>
+
+<h2 id="played">Which examples are played</h2>
+
+<p data-fw-grep="tests/configure_test.py::    PENDING_CEILING = 0\n[\s\S]*?    PLAYED = \(&quot;games&quot;, &quot;ui&quot;, &quot;scenes&quot;, &quot;input&quot;\)">Every
+example in <code>examples/games/</code>, <code>examples/ui/</code>, <code>examples/scenes/</code> and
+<code>examples/input/</code> has a script. The test that says so reads
+<code>tests/e2e/pending.txt</code>, the examples of those areas still without one: a list that only
+gets shorter, and is empty. So a new example in those areas comes with its script, its goldens and
+nothing in that file.</p>
+
+<p data-fw-grep="tests/configure_test.py::f&quot;examples/\{area\}/ is new: play its examples from &quot;\s+&quot;tests/e2e/, or add it to NOT_PLAYED with the reason&quot;">Every
+other area of <code>examples/</code> is named in the same test with the reason it is not played: an ad
+shows only on Android; the loading example's keys only play a sound, in a run with no sound device;
+the platform examples are Android's own API, or never run; and the plain C example has none of the
+seams the driver plays a game through. A new area is one or the other, written down — a decision,
+not a gap.</p>
+
+<p data-fw-grep="tools/examples_build.sh::  slots=\$\(getconf _NPROCESSORS_ONLN 2&gt;/dev/null \|\| echo 1\)\n  case &quot;\$\{CMAKE_BUILD_PARALLEL_LEVEL:-\}&quot; in">The
+scripts are played side by side, one per processor, the longest first. Each is a sanitized program
+of a few hundred megabytes, so on a machine that is doing other things, give it fewer at once:</p>
+
+<pre data-lang="shell">
+CMAKE_BUILD_PARALLEL_LEVEL=3 bash tools/examples_build.sh e2e
+</pre>
+
+<p>Each script has its own folder and a frame is a sixtieth of a second however busy the machine
+is, so how many run at once changes how long the step waits and nothing a script draws. In CI the
+boot is the <code>examples</code> job and the scripts are the <code>e2e</code> job, side by side.</p>
