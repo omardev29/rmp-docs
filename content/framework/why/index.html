@@ -73,6 +73,7 @@ mistake can be described precisely, something in the framework's own test run re
 <tr><td>Every vendored component has a licence the project can ship</td><td><code>tools/license_db.py</code></td></tr>
 <tr><td>No memory error and no undefined behaviour in a test run</td><td>every debug build of the framework under AddressSanitizer and UndefinedBehaviorSanitizer, from <code>cmake/sanitize.cmake</code>, and <code>tools/sanitize_check.sh</code> for a second compiler</td></tr>
 <tr><td>Every release binary stays the size it was measured at, unless the growth is written down</td><td><code>tools/size_check.py</code>, against <code>tools/size_budget.txt</code></td></tr>
+<tr><td>No file of the framework falls below the share of its lines its tests are written down to run, and no public function arrives without a test that calls it</td><td><code>tools/coverage_report.py</code>, against <code>tools/coverage_floor.txt</code> and <code>tools/untested_api.txt</code></td></tr>
 </tbody>
 </table>
 
