@@ -58,12 +58,12 @@ your tests in <code>tests/game/</code> — the menu's, from <a href="/getting-st
 first scene</a> — built with the game and run with no window;</li>
 <li data-fw-grep="tools/render_check.sh::RAY_TEST_BOOT_OK assets_failed=0 "><code>render</code>:
 the game built for raylib's software renderer and booted with no window and no graphics card,
-checked to have loaded every asset it asked for, drawn a frame with something on it, and run every
-frame it was given;</li>
+checked to have loaded every asset it asked for, drawn a frame with something on it, run every
+frame it was given and exited cleanly;</li>
 <li data-fw-grep="src/rmp/assets.cpp::void decode_failed\("><code>smoke</code>: the game built
 as you run it, booted for a few frames, and checked to have drawn something with no asset failing
-to load. A file that is missing fails, and so does one that is there and does not decode: a PNG cut
-short counts the same as no file at all.</li>
+to load, and to have exited cleanly. A file that is missing fails, and so does one that is there and
+does not decode: a PNG cut short counts the same as no file at all.</li>
 </ul>
 
 <p>A boot only reaches the first scene, so <code>rmp test</code> says the game starts, loads its
