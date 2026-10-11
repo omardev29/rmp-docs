@@ -117,6 +117,104 @@ class LintTest(unittest.TestCase):
         why = self.run_one("int one() { return 1; }\n\nint half() { return (int)3.5; }", lint_clean=True)
         self.assertIn("line 3:", why)
 
+    # Refused by a query of the framework's own .clang-tidy (CustomChecks) and
+    # by nothing else clang-tidy has: the pointer is written through, so no
+    # const-correctness or readability check speaks.
+    RAW_POINTER = "void zero(int *value) { *value = 0; }"
+
+    def need_custom_checks(self):
+        if not snippets.has_custom_checks(FRAMEWORK):
+            self.skipTest("this framework's .clang-tidy has no CustomChecks")
+
+    def test_a_raw_pointer_is_refused_by_the_frameworks_own_query(self):
+        self.need_custom_checks()
+        self.assertIsNone(self.run_one(self.RAW_POINTER, expect_lint="custom-rmp-raw-pointer"))
+
+    def test_the_right_way_is_held_to_the_custom_checks(self):
+        # Seen red without --experimental-custom-checks: clang-tidy then
+        # registers no custom check, says nothing, and the block passed.
+        self.need_custom_checks()
+        why = self.run_one(self.RAW_POINTER, lint_clean=True)
+        self.assertIn("is shown as the right way", why)
+        self.assertIn("[custom-rmp-raw-pointer]", why)
+
+    def test_a_clang_tidy_that_cannot_run_them_is_refused(self):
+        self.need_custom_checks()
+        real = snippets.tidy_supports_custom
+        snippets.tidy_supports_custom = lambda binary: False
+        try:
+            for kw in ({"lint_clean": True}, {"expect_lint": "modernize-avoid-c-style-cast"}):
+                with self.subTest(**kw):
+                    why = self.run_one(self.CAST if "lint_clean" in kw else self.C_CAST, **kw)
+                    self.assertIn("has CustomChecks", why)
+                    self.assertIn("--experimental-custom-checks", why)
+        finally:
+            snippets.tidy_supports_custom = real
+
+    def test_a_query_that_does_not_parse_is_red_not_quiet(self):
+        # clang-tidy prints one "Error parsing" line, exits 0 and never runs
+        # the check: the block would pass as the right way.
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        (tmp / "include").symlink_to(FRAMEWORK / "include")
+        (tmp / ".clang-tidy").write_text(
+            "Checks: '-*,custom-*'\nCustomChecks:\n  - Name: broken\n    Query: |\n"
+            "      match varDecl(hasType(pointerType()).bind(\"p\")\n    Diagnostic:\n"
+            "      - BindName: p\n        Level: Warning\n        Message: \"p\"\n")
+        s = snippets.Snippet("content/x.html", 1, "cpp", self.RAW_POINTER, "toplevel", lint_clean=True)
+        found = snippets.lint_one(s, tmp, snippets.compile_command(FRAMEWORK), snippets.tidy())
+        self.assertEqual([name for name, _l, _w in found], ["clang-tidy"])
+        self.assertIn("did not parse", found[0][2])
+        self.assertIn("Error parsing", found[0][2])
+
+
+class StyleTest(unittest.TestCase):
+    """Every block that is not shown as a mistake, and every file a tutorial
+    writes, passes the framework's tools/style_check.sh: `++i`, no C cast, no
+    NULL. Seen red on the fifteen postfix increments the pages had."""
+
+    def setUp(self):
+        if not (FRAMEWORK / snippets.STYLE_CHECK).is_file():
+            if os.environ.get("RMP_DOCS_REQUIRE_COMPILE"):
+                raise AssertionError("the compile tier is required here and there is no style_check.sh")
+            self.skipTest("no tools/style_check.sh in the framework")
+
+    def block(self, code, lang="cpp", **kw):
+        return snippets.Snippet("content/x.html", 1, lang, code, "function", **kw)
+
+    def test_a_postfix_increment_is_red_on_its_line(self):
+        got = snippets.style([self.block("int n = 0;\nn++;")], FRAMEWORK)
+        self.assertEqual([(line, what.split()[0]) for _b, line, what in got], [(2, "S6")])
+
+    def test_the_prefix_one_and_a_used_value_pass(self):
+        self.assertEqual(snippets.style([self.block("int n = 0;\n++n;\nconst int m = n++;")], FRAMEWORK), [])
+
+    def test_c_is_c(self):
+        self.assertEqual(snippets.style([self.block("int i = 0; i++; void *p = NULL;", lang="c")],
+                                        FRAMEWORK), [])
+
+    def test_a_mistake_on_purpose_is_not_held_to_it(self):
+        for kw in ({"expect_error": True}, {"expect_lint": "modernize-avoid-c-style-cast"},
+                   {"expect_gate": "style"}):
+            with self.subTest(**kw):
+                self.assertEqual(snippets.style([self.block("int n = 0; n++;", **kw)], FRAMEWORK), [])
+
+    def test_a_tutorial_file_is_held_too(self):
+        from rmpdocs.project import ProjectFile
+        f = ProjectFile("content/getting-started/x.html", 10, "src/scenes/game.h", "void f(int &n) { n++; }",
+                        "cpp")
+        got = snippets.style([f], FRAMEWORK)
+        self.assertEqual(len(got), 1)
+        self.assertIs(got[0][0], f)
+
+    def test_a_page_can_show_it_refused(self):
+        CompileTest.setUpClass()
+        s = snippets.Snippet("content/x.html", 1, "cpp", "int count() { int n = 0; n++; return n; }",
+                             "toplevel", expect_gate="style", gate_rule="S6")
+        self.assertIsNone(snippets.check([s], FRAMEWORK, jobs=1)[0][1])
+        s.gate_rule = "S1"
+        self.assertIn("is shown as refused by S1", snippets.check([s], FRAMEWORK, jobs=1)[0][1])
+
 
 class GateExpectationTest(unittest.TestCase):
     """The wrong way that compiles and that a text gate of the framework

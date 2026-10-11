@@ -84,12 +84,19 @@ refuse:
 | --- | --- |
 | `data-expect="lint" data-check="modernize-avoid-c-style-cast"` | compiles, the framework's `.clang-tidy` enables that check, and clang-tidy says it on a line of the block |
 | `data-expect="gate" data-gate="naming" data-rule="R2"` | compiles, and the framework's `tools/naming_check.sh` reports that rule on a line of the block |
+| `data-expect="gate" data-gate="style" data-rule="S6"` | compiles, and the framework's `tools/style_check.sh` reports that rule on a line of the block |
 
 Its caption says so: "Compiles; `rmp lint` refuses it: `modernize-avoid-c-style-cast`", or
 "Compiles; `rmp test naming` refuses it: `R2`". On a page under `content/guidelines/`, every other
 C++ block is the right way, and has to pass clang-tidy with the framework's `.clang-tidy` with
 nothing said about its own lines. The compile tier needs `clang-tidy` on `PATH` for these —
-the version `thirdparty/FROZEN_VERSIONS.md` pins, which the site's CI image has.
+the version `thirdparty/FROZEN_VERSIONS.md` pins, which the site's CI image has. It runs with
+`--experimental-custom-checks`, because the framework's `.clang-tidy` has `CustomChecks` that run
+only with it; a clang-tidy without the flag is refused rather than trusted.
+
+Every block that is not shown as a mistake, on any page, and every file a tutorial writes, passes
+the framework's `tools/style_check.sh` too: `++i` where the old value is not read, no C cast, no
+`NULL`. The code on this site is held to what the framework's examples are.
 
 Quote a long piece of a real example with `data-include` rather than retyping it: the
 framework's CI builds and boots that file.
@@ -112,6 +119,12 @@ message under it — never type the error yourself. A toml block that is not
 
 **Every `rmp` command** in a shell block or in code is checked against `rmp help --json`, every
 `cmake --preset` against `CMakePresets.json`.
+
+An `RMP_` name written in code has to be a macro of the headers, a value the `.toml` sets, a
+macro the build passes (`reference.toml [build_defines]`) or a switch of the build — a CMake
+option, an environment variable (`reference.toml [build_switches]`). A path under `build/` has to
+be in a folder the framework builds into (`BUILD_DIRS` in `tools/rmp.py`): `build/debug/my_game`,
+not `build/my_game`.
 
 **A message the framework prints**, quoted, goes in `<samp>`: the `diagnostics` gate requires
 it to match a string the framework really prints (`…` for the parts you leave out).

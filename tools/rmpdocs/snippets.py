@@ -33,6 +33,18 @@ compiles. Two more expectations say what refuses it instead:
 and every other C++ block of content/guidelines/ -- the right way -- has to
 pass clang-tidy with the framework's .clang-tidy and say nothing (lint_clean):
 a page that teaches a rule cannot show code the rule's own tool refuses.
+
+clang-tidy here is the framework's own lint, and the framework's .clang-tidy
+has CustomChecks: queries that clang-tidy registers only with
+--experimental-custom-checks, and leaves out in silence without it -- as it
+does a query that does not parse, with one "Error parsing" line and exit 0.
+So a clang-tidy without the flag cannot hold a block to that file, and a
+query it could not read is a problem, not a quiet pass.
+
+And every block that is not shown as a mistake -- every page's, and every
+file a tutorial writes -- passes the framework's tools/style_check.sh: the
+style rules clang-tidy cannot see (`++i`, no C cast, no NULL), which the
+framework's examples are held to as well (style).
 """
 
 from __future__ import annotations
@@ -71,7 +83,8 @@ class Snippet:
 
 # The framework's text gates a block can be run through: the script, and the
 # `rmp test` stage it is, for the caption.
-GATES = {"naming": (["bash", "tools/naming_check.sh"], "naming")}
+GATES = {"naming": (["bash", "tools/naming_check.sh"], "naming"),
+         "style": (["bash", "tools/style_check.sh"], "style")}
 
 
 def harness_names() -> list[str]:
@@ -169,10 +182,34 @@ def tidy_supports_custom(binary: str) -> bool:
     return "--experimental-custom-checks" in got.stdout
 
 
+def has_custom_checks(framework: Path) -> bool:
+    """Whether the framework's .clang-tidy declares CustomChecks."""
+    f = framework / ".clang-tidy"
+    return f.is_file() and re.search(r"^CustomChecks:", f.read_text(encoding="utf-8"), re.M) is not None
+
+
 def tidy_flags(binary: str) -> list[str]:
-    """--experimental-custom-checks where the clang-tidy has it: the
-    framework's query-based checks are only run with it."""
+    """--experimental-custom-checks, always where the clang-tidy has it: the
+    framework's query-based checks are only run with it. A clang-tidy
+    without it is refused before it is used (custom_checks_problem)."""
     return ["--experimental-custom-checks"] if tidy_supports_custom(binary) else []
+
+
+def custom_checks_problem(framework: Path, binary: str) -> str | None:
+    """Why this clang-tidy cannot hold a block to the framework's
+    .clang-tidy, or None. Without --experimental-custom-checks it would read
+    the file, run every other check and leave the CustomChecks out without a
+    word, so a raw pointer would pass as the right way."""
+    if has_custom_checks(framework) and not tidy_supports_custom(binary):
+        return (f"the framework's .clang-tidy has CustomChecks, and {binary} has no "
+                "--experimental-custom-checks to run them: use the clang-tidy "
+                "thirdparty/FROZEN_VERSIONS.md pins")
+    return None
+
+
+# A CustomChecks query clang-tidy could not read: one line, exit 0, and the
+# check never runs.
+QUERY_ERROR = re.compile(r"^.*Error parsing .*$", re.M)
 
 
 @functools.lru_cache(maxsize=4)
@@ -210,6 +247,9 @@ def lint_one(s: Snippet, framework: Path, cxx: list[str], binary: str):
                               f"--config-file={framework / '.clang-tidy'}", str(f), "--",
                               *lint_args(cxx)], capture_output=True, text=True)
         found = []
+        for m in QUERY_ERROR.finditer(got.stdout + got.stderr):
+            found.append(("clang-tidy", 0, "a CustomChecks query of the framework's .clang-tidy "
+                          f"did not parse, so its check never ran: {m.group(0).strip()}"))
         for line in (got.stdout + got.stderr).splitlines():
             m = DIAGNOSTIC.match(line)
             if not m or Path(m.group(1)).resolve() != f.resolve():
@@ -233,7 +273,7 @@ def gate_one(s: Snippet, framework: Path) -> list[tuple[str, int, str]]:
         got = subprocess.run([*argv, str(f)], capture_output=True, text=True, cwd=framework)
         found = []
         for line in got.stdout.splitlines():
-            m = re.match(r"^\s*FAIL\s+(.*?):(\d+): (R\d+) (.*)$", line)
+            m = re.match(r"^\s*FAIL\s+(.*?):(\d+): ([A-Z]\d+) (.*)$", line)
             if m and Path(m.group(1)).resolve() == f.resolve() and first <= int(m.group(2)) <= last:
                 found.append((m.group(3), int(m.group(2)) - first + 1, m.group(4)))
         return found
@@ -263,10 +303,16 @@ def check(snippets: list[Snippet], framework: Path, jobs: int | None = None):
         if s.expect_lint or s.lint_clean:
             if binary is None:
                 return s, "is checked with clang-tidy, and there is no clang-tidy on PATH"
+            cannot = custom_checks_problem(framework, binary)
+            if cannot:
+                return s, f"is checked with clang-tidy, and {cannot}"
             if s.expect_lint and s.expect_lint not in enabled_checks(str(framework), binary):
                 return s, (f"is shown as refused by {s.expect_lint}, and the framework does not run "
                            f"{s.expect_lint}: its .clang-tidy does not enable it")
             found = lint_one(s, framework, cxx, binary)
+            unread = [w for name, _l, w in found if name == "clang-tidy"]
+            if unread:
+                return s, "is checked with clang-tidy, and " + "; ".join(unread)
             if s.expect_lint and not any(name == s.expect_lint for name, _l, _w in found):
                 if not found:
                     return s, (f"is shown as refused by {s.expect_lint}, and clang-tidy says nothing "
@@ -286,3 +332,43 @@ def check(snippets: list[Snippet], framework: Path, jobs: int | None = None):
 
     with ThreadPoolExecutor(max_workers=jobs or max(2, (os.cpu_count() or 2) - 1)) as pool:
         return list(pool.map(one, snippets))
+
+
+# --- the style rules clang-tidy cannot see ---------------------------------------
+
+STYLE_CHECK = "tools/style_check.sh"
+
+
+def style(blocks: list, framework: Path) -> list[tuple[object, int, str]]:
+    """(block, line in the block, what) for every finding of the framework's
+    tools/style_check.sh on the blocks: each a Snippet or a tutorial's file,
+    read as the code it is -- its own lines, no harness and no given. A
+    Snippet shown as a mistake is not held to it; a C file is checked as C,
+    which the script exempts from the rules C cannot follow. One run of the
+    script for all of them. Nothing when the framework has no such script."""
+    if not (framework / STYLE_CHECK).is_file():
+        return []
+    held = [b for b in blocks if b.lang in ("cpp", "c")
+            and not (getattr(b, "expect_error", False) or getattr(b, "expect_lint", "")
+                     or getattr(b, "expect_gate", ""))]
+    if not held:
+        return []
+    with tempfile.TemporaryDirectory() as tmp:
+        names = {}
+        for i, b in enumerate(held):
+            path = getattr(b, "path", "")
+            suffix = Path(path).suffix if path else (".c" if b.lang == "c" else ".cpp")
+            f = Path(tmp) / f"block{i:04d}{suffix}"
+            f.write_text(b.code + "\n", encoding="utf-8")
+            names[f.name] = b
+        got = subprocess.run(["bash", STYLE_CHECK, *sorted(str(p) for p in Path(tmp).iterdir())],
+                             capture_output=True, text=True, cwd=framework)
+        out = []
+        for line in got.stdout.splitlines():
+            m = re.match(r"^\s*FAIL\s+(.*?):(\d+): ([A-Z]\d+) (.*)$", line)
+            if m and Path(m.group(1)).name in names:
+                out.append((names[Path(m.group(1)).name], int(m.group(2)), f"{m.group(3)} {m.group(4)}"))
+        if got.returncode != 0 and not out:
+            out.append((held[0], 0, f"{STYLE_CHECK} failed and named no line:\n"
+                        + (got.stdout + got.stderr)[-600:]))
+        return out

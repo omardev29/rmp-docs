@@ -43,7 +43,8 @@ class BuildDefinesTest(unittest.TestCase):
         self.assertEqual(wrong, ["[build_defines] RMP_X: says no file that sets it (set_in)"])
 
     def test_the_real_ones_hold(self):
-        fw = DOCS.parent / "raylib_multiplatform"
+        import os
+        fw = Path(os.environ.get("RMP_FRAMEWORK", DOCS.parent / "raylib_multiplatform"))
         if not (fw / "CMakeLists.txt").is_file():
             self.skipTest("no framework next to rmp-docs")
         import tomllib
@@ -51,6 +52,65 @@ class BuildDefinesTest(unittest.TestCase):
         _table, wrong = generated.build_defines_table(fw, refconf)
         self.assertEqual(wrong, [])
         self.assertTrue(refconf["build_defines"])
+
+
+class BuildSwitchesTest(unittest.TestCase):
+    """reference.toml [build_switches]: RMP_ names the build reads that are not
+    macros -- a CMake option, an environment variable. Each is held to the
+    files it says read it, by the shape its kind has there: a comment that
+    only mentions the name is not a build that reads it."""
+
+    def framework(self, **files) -> Path:
+        tmp = Path(tempfile.mkdtemp())
+        for name, text in files.items():
+            (tmp / name.replace("__", "/")).parent.mkdir(parents=True, exist_ok=True)
+            (tmp / name.replace("__", "/")).write_text(text)
+        return tmp
+
+    def one(self, fw, name, kind, read_in):
+        return generated.build_switches_table(
+            fw, {"build_switches": {name: {"kind": kind, "read_in": read_in, "doc": "It does."}}})
+
+    def test_an_option_cmake_reads_is_documented(self):
+        fw = self.framework(**{"CMakeLists.txt": 'option(RMP_WERROR "Warnings are errors" OFF)\n'})
+        table, wrong = self.one(fw, "RMP_WERROR", "cmake option", ["CMakeLists.txt"])
+        self.assertEqual(wrong, [])
+        self.assertIn('id="RMP_WERROR"', table)
+        self.assertIn("a CMake option", table)
+
+    def test_an_environment_variable_cmake_reads_is_documented(self):
+        fw = self.framework(**{"cmake__x.cmake": 'if("$ENV{RMP_REQUIRE_X}" STREQUAL "1")\nendif()\n'})
+        _table, wrong = self.one(fw, "RMP_REQUIRE_X", "environment", ["cmake/x.cmake"])
+        self.assertEqual(wrong, [])
+
+    def test_a_name_only_mentioned_is_red(self):
+        fw = self.framework(**{"CMakeLists.txt": "# RMP_WERROR turns them into errors\n"})
+        _table, wrong = self.one(fw, "RMP_WERROR", "cmake option", ["CMakeLists.txt", "gone.cmake"])
+        self.assertEqual(wrong, ["[build_switches] RMP_WERROR: CMakeLists.txt does not read it as a CMake option",
+                                 "[build_switches] RMP_WERROR: gone.cmake does not read it as a CMake option"])
+
+    def test_the_wrong_kind_is_red(self):
+        fw = self.framework(**{"CMakeLists.txt": 'option(RMP_WERROR "x" OFF)\n'})
+        _table, wrong = self.one(fw, "RMP_WERROR", "environment", ["CMakeLists.txt"])
+        self.assertEqual(wrong, ["[build_switches] RMP_WERROR: CMakeLists.txt does not read it as an "
+                                 "environment variable"])
+        _table, wrong = self.one(fw, "RMP_WERROR", "flag", ["CMakeLists.txt"])
+        self.assertIn("kind is 'flag'", wrong[0])
+
+    def test_a_switch_that_names_no_file_is_red(self):
+        _table, wrong = self.one(self.framework(), "RMP_X", "cmake option", [])
+        self.assertEqual(wrong, ["[build_switches] RMP_X: says no file that reads it (read_in)"])
+
+    def test_the_real_ones_hold(self):
+        import os
+        import tomllib
+        fw = Path(os.environ.get("RMP_FRAMEWORK", DOCS.parent / "raylib_multiplatform"))
+        if not (fw / "CMakeLists.txt").is_file():
+            self.skipTest("no framework next to rmp-docs")
+        refconf = tomllib.loads((DOCS / "reference.toml").read_text())
+        _table, wrong = generated.build_switches_table(fw, refconf)
+        self.assertEqual(wrong, [])
+        self.assertTrue(refconf["build_switches"])
 
 
 class ConfigCommentTest(unittest.TestCase):

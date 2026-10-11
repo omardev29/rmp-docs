@@ -188,9 +188,11 @@ class Site:
         for rp in refpages:
             if rp.url == "reference/macros.html":
                 table, wrong = generated.build_defines_table(self.framework, self.refconf)
-                for w in wrong:
+                switches, wrong_switches = generated.build_switches_table(self.framework, self.refconf)
+                for w in wrong + wrong_switches:
                     self.problems.append(Problem("reference", "reference.toml", 0, w))
-                rp.body += "\n" + generated.defines_table(self.framework) + "\n" + table
+                rp.body += ("\n" + generated.defines_table(self.framework) + "\n" + table
+                            + "\n" + switches)
         wrong: list[str] = []
         pages = (generated.configuration_page(self.framework, self.refconf, wrong),
                  generated.commands_page(self.framework))

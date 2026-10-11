@@ -2,3 +2,5 @@
 has 3 lines
 no such file
 `src/objects/bat.cpp`
+`build/my_game` is not a folder the framework builds into
+`--build build` uses build/ itself

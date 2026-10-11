@@ -74,6 +74,13 @@ def main(argv):
             if why:
                 problems.append(checks.Problem("snippets", s.page, s.line, why))
         print(f"compiled {len(results)} C/C++ blocks against the framework")
+        tutorial = [f for files in site.project_files.values() for f in files]
+        for b, line, what in snippets.style(site.snippets + tutorial, site.framework):
+            where = f" {b.path}," if getattr(b, "path", "") else ""
+            # The block's first line is the one after its <pre>.
+            problems.append(checks.Problem("snippets", b.page, b.line + line,
+                                           f"breaks the framework's style rules,{where} line {line} of "
+                                           f"the block: {what} (tools/style_check.sh)"))
     if args.tier == "project":
         from rmpdocs import project
         for name, steps in site.project_steps().items():

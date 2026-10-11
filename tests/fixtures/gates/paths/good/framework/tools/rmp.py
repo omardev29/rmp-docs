@@ -1,4 +1,5 @@
 import json, sys
+BUILD_DIRS = {"debug": "rmp build", "release": "rmp build release", "web": "rmp web"}
 args = sys.argv[1:]
 if args == ["help", "--json"]:
     print(json.dumps({"commands": [

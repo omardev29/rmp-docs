@@ -204,9 +204,11 @@ def check_names(ctx: Context) -> list[Problem]:
                     out.append(Problem("names", path, node.line,
                                        f"`{cls}::{member}` is not a member of rmp's {cls}"))
             for m in re.finditer(r"\bRMP_[A-Z0-9_]+\b", t):
-                if m.group(0) not in names["macros"] and m.group(0) not in ctx.refconf.get("build_defines", {}):
+                if (m.group(0) not in names["macros"] and m.group(0) not in ctx.refconf.get("build_defines", {})
+                        and m.group(0) not in ctx.refconf.get("build_switches", {})):
                     out.append(Problem("names", path, node.line,
-                                       f"`{m.group(0)}` is not a macro of the framework or a value the .toml sets"))
+                                       f"`{m.group(0)}` is not a macro of the framework, a value the .toml "
+                                       "sets, or a switch of the build reference.toml [build_switches] lists"))
             # A raylib/rlgl/Clay-shaped call: CamelCase( or Clay_x( -- must exist.
             m = re.fullmatch(r"((?:Clay_|rl)?[A-Z][A-Za-z0-9_]*)\(.*\)", t)
             if m and names["c"] and m.group(1) not in names["c"] and not m.group(1)[0].islower():
@@ -234,14 +236,62 @@ def game_paths(framework: str) -> frozenset:
     return frozenset(got.stdout.split()) if got.returncode == 0 else frozenset()
 
 
+@functools.lru_cache(maxsize=4)
+def build_dirs(framework: str) -> frozenset | None:
+    """BUILD_DIRS of the framework's tools/rmp.py: every folder anything
+    writes under build/. None when it has no such list, and then nothing
+    holds a page's build/ paths to one."""
+    import ast
+    f = Path(framework) / "tools" / "rmp.py"
+    try:
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return None
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "BUILD_DIRS"
+                                                for t in node.targets):
+            try:
+                return frozenset(ast.literal_eval(node.value))
+            except ValueError:
+                return None
+    return None
+
+
+# build/<first folder>, at the start of a path: after a word, a dot, a slash
+# or a dash it is somebody else's (raymob/app/build/, ninja-build/).
+IN_BUILD = re.compile(r"(?<![\w./$-])(?:\./)?build/([^\s/\\\"'`)\],;:|<>]*)")
+# build/ itself handed over as a build directory: `cmake --build build`,
+# `tools/linux_build.sh build`.
+BUILD_AS_DIR = re.compile(r"(?:^|\s)(?:-B|--build|--directory|cd|\S*linux_build\.sh)\s+[\"']?(?:\./)?build/?[\"']?(?=$|[\s;)&|])")
+
+
+def build_path_problems(text: str, dirs: frozenset) -> list[str]:
+    """What is wrong with every build/ path in one piece of code: its first
+    folder is not one anything builds into, or build/ itself is used as
+    one. A path to build/ as a whole -- `rmp clean` deletes build/ -- is
+    fine."""
+    out = []
+    for m in IN_BUILD.finditer(text):
+        seg = m.group(1).rstrip(".")
+        if seg and seg not in dirs:
+            out.append(f"`build/{seg}` is not a folder the framework builds into: the builds are "
+                       f"build/{', build/'.join(sorted(dirs))} (BUILD_DIRS in tools/rmp.py)")
+    for m in BUILD_AS_DIR.finditer(text):
+        out.append(f"`{m.group(0).strip()}` uses build/ itself as a build directory, and build/ "
+                   "only holds one folder per build")
+    return out
+
+
 @gate("paths", "every path a page names in code -- src/main.cpp, examples/games/01_pong, "
                "tools/configure.py -- is a file or folder of the framework at FRAMEWORK_REF "
-               "or of a game rmp new makes; every fw: link points at a file that exists, "
-               "and at lines it has")
+               "or of a game rmp new makes, and one under build/ is in a folder the framework "
+               "builds into (BUILD_DIRS in tools/rmp.py); every fw: link points at a file that "
+               "exists, and at lines it has")
 def check_paths(ctx: Context) -> list[Problem]:
     fw = ctx.framework
     if fw is None:
         return []
+    dirs = build_dirs(str(fw))
     game = set(game_paths(str(fw)))
     # A tutorial's game grows past what rmp new makes: the files its pages
     # write (data-project + data-file) are paths of a game too.
@@ -252,14 +302,17 @@ def check_paths(ctx: Context) -> list[Problem]:
     out = []
     for path, root in _fragments(ctx):
         for node, text, kind in _code_texts(root):
+            if dirs is not None:
+                for what in build_path_problems(text, dirs):
+                    out.append(Problem("paths", path, node.line, what))
             if kind != "inline":
                 continue
             m = PATH_SHAPED.match(text.strip())
             if not m:
                 continue
             rel = m.group(1).rstrip("/")
-            if rel.startswith("build/") or rel == "build":
-                continue    # made by a build, not in any checkout
+            if rel.startswith(("build/", "raymob/app/build/")) or rel == "build":
+                continue    # made by a build, not in any checkout: ours held above, Gradle's its own
             if "*" in rel:
                 if not list(fw.glob(rel)):
                     out.append(Problem("paths", path, node.line, f"`{rel}` matches nothing in the framework"))

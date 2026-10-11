@@ -186,6 +186,46 @@ def build_defines_table(framework: Path, refconf: dict) -> tuple[str, list[str]]
             f"<tbody>{''.join(rows)}</tbody></table>"), wrong
 
 
+# What a name of [build_switches] looks like in the file that reads it.
+SWITCH_KINDS = {
+    "cmake option": ("a CMake option", lambda n: rf"\boption\(\s*{re.escape(n)}\b"),
+    "environment": ("an environment variable",
+                    lambda n: rf"\$ENV\{{{re.escape(n)}\}}|getenv\(\s*\"{re.escape(n)}\"|"
+                              rf"environ(?:\.get\(|\[)\s*[\"']{re.escape(n)}[\"']|"
+                              rf"^\s*{re.escape(n)}:\s"),
+}
+
+
+def build_switches_table(framework: Path, refconf: dict) -> tuple[str, list[str]]:
+    """reference.toml [build_switches]: RMP_ names the build reads that are not
+    macros -- a CMake option, an environment variable -- each checked against
+    the files it says read it, by the shape its kind has there. Returns the
+    table and what is wrong."""
+    rows, wrong = [], []
+    for name, spec in refconf.get("build_switches", {}).items():
+        kind = spec.get("kind", "")
+        if kind not in SWITCH_KINDS:
+            wrong.append(f"[build_switches] {name}: kind is {kind!r}, not one of "
+                         f"{', '.join(repr(k) for k in SWITCH_KINDS)}")
+            continue
+        what, shape = SWITCH_KINDS[kind]
+        if not spec.get("read_in"):
+            wrong.append(f"[build_switches] {name}: says no file that reads it (read_in)")
+        for rel in spec.get("read_in", []):
+            f = framework / rel
+            if not f.is_file() or not re.search(shape(name), f.read_text(encoding="utf-8"), re.M):
+                wrong.append(f"[build_switches] {name}: {rel} does not read it as {what}")
+        rows.append(f'<tr id="{html.escape(name)}"><td><code>{html.escape(name)}</code></td>'
+                    f"<td>{html.escape(what)}</td><td>{prose.inline(spec.get('doc', ''))}</td></tr>")
+    if not rows:
+        return "", wrong
+    return ('<h2 id="read-by-the-build">Read by the build</h2>'
+            "<p>Names that are not macros at all: switches of the build itself, given to CMake with "
+            "<code>-D</code> or set in the environment.</p>"
+            '<table class="fields"><thead><tr><th>Name</th><th>Is</th><th>What it does</th></tr>'
+            f"</thead><tbody>{''.join(rows)}</tbody></table>"), wrong
+
+
 def targets_table(framework: Path) -> str:
     rows = run_json(framework, "tools/configure.py", "--print-targets-table")
     body = "".join(
