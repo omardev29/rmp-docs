@@ -1,0 +1,636 @@
+<!--
+title: Security
+description: Every safety measure the framework takes — the release hardened flag by flag, every debug build under the sanitizers, two static analysers, the shipped binary read back, the supply chain pinned, secrets kept out of the repository — what each one protects against, what it costs, and what is not done.
+order: 65
+-->
+<h1>Security</h1>
+
+<p class="lede">A game is a program that reads files and takes input from people who did not write
+it, and the language it is written in lets a mistake in memory become a crash, or worse. The
+framework cannot make that impossible. What it can do is make a release harder to exploit, catch
+the mistakes in development where they happen instead of where they crash, keep what the build
+depends on from changing under it, and keep secrets out of the repository. This page is every
+measure it takes, what each one protects against, what it costs — measured, where the framework
+measured it — and where it lives. The last section says plainly what is not done.</p>
+
+<h2 id="at-a-glance">At a glance</h2>
+
+<table>
+<thead><tr><th>Measure</th><th>Where it applies</th><th>In a game made with <code>rmp new</code></th></tr></thead>
+<tbody>
+<tr><td><a href="#release">The release, hardened</a></td><td>every desktop release: Linux and the BSDs, macOS and Windows in part</td><td>yes: it is the same <code>CMakeLists.txt</code></td></tr>
+<tr><td><a href="#debug-checks">Library checks in debug</a></td><td>every debug build on the desktop</td><td>yes</td></tr>
+<tr><td><a href="#sanitizers">AddressSanitizer and UndefinedBehaviorSanitizer</a></td><td>every debug build of the framework on the desktop</td><td>off until <code>[dev] sanitize</code> lists them</td></tr>
+<tr><td><a href="#analysis">Static analysis</a></td><td>the framework's own code: <code>rmp lint</code>, <code>rmp test</code>, the lint job</td><td>no: the framework's code is checked before a game gets it</td></tr>
+<tr><td><a href="#binaries">The shipped binary, read back</a></td><td>every release job in CI</td><td>yes: the same workflows</td></tr>
+<tr><td><a href="#supply-chain">The supply chain, pinned</a></td><td>CI</td><td>yes, at the pins the game was made with</td></tr>
+<tr><td><a href="#secrets">Secrets, signing, installing</a></td><td>the <code>.toml</code>, the Android job, the installer</td><td>yes</td></tr>
+</tbody>
+</table>
+
+<h2 id="release">The release, hardened</h2>
+
+<p data-fw-grep="CMakeLists.txt::# --- release hardening -+\n# What the binary a player runs is compiled and linked with, so that a memory\n# bug in it is harder to turn into anything worse\. Release builds only">The
+binary a player runs is compiled and linked so that a memory bug in it is harder to turn into
+anything worse than a crash. Release builds only: a debug build has the
+<a href="#sanitizers">sanitizers</a> instead, which find the bug rather than blunt it.</p>
+
+<p data-fw-grep="CMakeLists.txt::one costing more than 3% of the stripped binary is not here -- PIE aside, by\n# Omar's decision, below">Every
+flag was measured before it went in, because a release is kept as small as it can be, and the rule
+is that a flag costing more than 3% of the stripped binary is not used. PIE is the one exception,
+taken on purpose; <a href="#pie">below</a> is why.</p>
+
+<h3 id="costs">What each flag protects against, and what it costs</h3>
+
+<p data-fw-grep="CMakeLists.txt::linux-x64-glibc as CI builds it \(tools/linux_build\.sh: zig cc, LTO, stripped;\n# 1 149 120 bytes before any of them, 352 524 after upx --best --lzma\)">Measured
+on <code>linux-x64-glibc</code> as CI builds it — zig's compiler, link-time optimisation,
+stripped — where the game is 1,149,120 bytes with none of these flags, and 352,524 after UPX
+packs it:</p>
+
+<table>
+<thead><tr><th>Flag, and what it does</th><th>Cost</th></tr></thead>
+<tbody>
+<tr data-fw-grep="CMakeLists.txt::-D_FORTIFY_SOURCE=3 +\+3\.6 KB  \(\+0\.32%\)  glibc only"><td><code>-U_FORTIFY_SOURCE</code> <code>-D_FORTIFY_SOURCE=3</code><br>The C library checks the size of the buffer that <code>memcpy</code>, <code>strcpy</code>, <code>sprintf</code> and their kind write into, wherever the compiler can work it out, and stops the program instead of writing past it.</td><td>+3.6 KB (+0.32%)</td></tr>
+<tr data-fw-grep="CMakeLists.txt::-fstack-protector-strong +\+20\.2 KB  \(\+1\.80%\)"><td><code>-fstack-protector-strong</code><br>A guard value between a function's local arrays and its return address, checked before it returns: a write past a local buffer that reaches the return address stops the program instead of sending it somewhere else.</td><td>+20.2 KB (+1.80%)</td></tr>
+<tr data-fw-grep="CMakeLists.txt::-fstack-clash-protection +\+0\.3 KB  \(\+0\.03%\)"><td><code>-fstack-clash-protection</code><br>A large allocation on the stack touches it page by page, so it cannot step over the guard page into another region of memory.</td><td>+0.3 KB (+0.03%)</td></tr>
+<tr data-fw-grep="CMakeLists.txt::-Wl,-z,relro -Wl,-z,now +\+0 KB  zig's lld writes both already"><td><code>-Wl,-z,relro</code> <code>-Wl,-z,now</code><br>Every library function is resolved when the program starts, and the table of their addresses is then made read-only, so a stray write cannot redirect a call.</td><td>nothing: zig's linker writes both already</td></tr>
+<tr data-fw-grep="CMakeLists.txt::-Wl,-z,noexecstack +\+0 KB  zig's lld writes it already"><td><code>-Wl,-z,noexecstack</code><br>The stack is not executable, so code written onto it cannot run.</td><td>nothing: zig's linker writes it already</td></tr>
+<tr data-fw-grep="CMakeLists.txt::_LIBCPP_HARDENING_MODE=FAST +\+2\.9 KB  \(\+0\.25%\)  zig's C\+\+ library is libc\+\+"><td><code>-D_GLIBCXX_ASSERTIONS</code><br><code>-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST</code><br>The C++ standard library's cheap checks: an index past the end of a container, or the first element of an empty one, stops the program instead of reading what follows. One define for libc++, one for libstdc++; each library ignores the other's.</td><td>+2.9 KB (+0.25%), with zig's libc++</td></tr>
+<tr data-fw-grep="CMakeLists.txt::all of the above together +\+22\.7 KB  \(\+2\.03%\)  1 172 400 bytes, 357 056 packed"><td>All of the above, together</td><td>+22.7 KB (+2.03%): 1,172,400 bytes, 357,056 packed</td></tr>
+<tr data-fw-grep="CMakeLists.txt::-pie +\+61\.9 KB  \(\+5\.52%\)  ADOPTED over the 3% rule"><td><code>-fPIE</code> <code>-pie</code><br>The executable is position-independent, so it is loaded at a different address on every run: <a href="#pie">PIE</a>.</td><td>+61.9 KB (+5.52%)</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="CMakeLists.txt::Level 3 where the\n# compiler has __builtin_dynamic_object_size, 2 otherwise; -U first, because\n# Ubuntu's gcc defines it already">Fortify
+is level 3 where the compiler has <code>__builtin_dynamic_object_size</code> — which lets it check
+buffers whose size is only known while the game runs — and <code>-D_FORTIFY_SOURCE=2</code> where it
+does not. <code>-U_FORTIFY_SOURCE</code> comes first because Ubuntu's gcc defines it already, and a
+second definition would be a warning. It is used only where the C library is glibc: musl ignores
+it, and the BSDs' C libraries have their own.</p>
+
+<p data-fw-grep="CMakeLists.txt::# linux-x64-musl \(zig, dynamic\): \+19\.4 KB \(\+1\.72%\) together, the same flags\n# within 0\.1% each, FORTIFY aside\. The gcc-built targets \(riscv64, the DRM\n# pair\) get them from Ubuntu's gcc already, which defaults to every one of\n# these but the C\+\+ checks: \+0 bytes each, and _GLIBCXX_ASSERTIONS \+8\.0 KB\n# \(\+0\.72%\) on gcc 13\.">On
+<code>linux-x64-musl</code> the same flags cost +19.4 KB (+1.72%) together. The releases that
+Ubuntu's gcc builds — <code>linux-riscv64-glibc</code> and the DRM pair — had every one of them
+already, since that gcc turns them on by default, except the C++ library's checks:
+<code>_GLIBCXX_ASSERTIONS</code> costs +8.0 KB (+0.72%) there.</p>
+
+<p data-fw-grep="CMakeLists.txt::message\(STATUS &quot;=== RELEASE HARDENING: \$\{_said\} ===&quot;\)">Every
+flag is first tried on the toolchain at hand, and one it does not take is left out rather than
+breaking the build. A release configure says what it got; on Linux with glibc:</p>
+
+<p><samp>=== RELEASE HARDENING: stack-protector-strong, C++ library bounds checks, FORTIFY_SOURCE=3, stack-clash-protection, -Wl,-z,relro, -Wl,-z,now, -Wl,-z,noexecstack, pie ===</samp></p>
+
+<p>What the linker made of them is not taken on trust either: CI reads it back
+<a href="#binaries">out of the binary</a>.</p>
+
+<h3 id="pie">PIE, over the rule</h3>
+
+<p data-fw-grep="CMakeLists.txt::without it the executable sits at the\n#       same address on every run, and ASLR moves everything but the code an\n#       exploit most wants to find">Without
+PIE the executable sits at the same address on every run. The system's address randomisation still
+moves the libraries, the stack and the heap, but not the game's own code, which is the code an
+exploit most wants to find. So a Linux or BSD release is linked position-independent, at +5.5%,
+and the 3% rule gives way.</p>
+
+<p data-fw-grep="CMakeLists.txt::58\.5 KB of it is \.rela\.dyn, one relocation\n#       per pointer the loader has to fix; their packed form \(DT_RELR, -z\n#       pack-relative-relocs\) needs glibc 2\.36, and \[linux\] glibc is 2\.28">Most
+of the cost is one table: 58.5 KB of the 61.9 is <code>.rela.dyn</code>, a relocation for every
+pointer the loader has to fix when it places the program. The linker can pack those
+(<code>DT_RELR</code>, <code>-z pack-relative-relocs</code>), but the packed form needs glibc 2.36,
+and the oldest glibc a release supports, <code>[linux] glibc</code>, is 2.28. So they ship
+unpacked.</p>
+
+<p data-fw-grep="CMakeLists.txt::option\(RMP_RELEASE_PIE &quot;Link a Linux or BSD release position-independent \(\+5\.5% on linux-x64-glibc\)&quot; ON\)">PIE
+is CMake's <code>POSITION_INDEPENDENT_CODE</code>, which gives gcc and clang <code>-fPIE</code> to
+compile and <code>-pie</code> to link. It is on by default, and <code>-DRMP_RELEASE_PIE=OFF</code>
+turns it off for a build directory — to measure what it costs, not to ship.</p>
+
+<h3 id="platforms">On the other platforms</h3>
+
+<p>The flags above are what a Linux or BSD release gets. Elsewhere, the platform already does part
+of it, and the rest is chosen to fit:</p>
+
+<dl>
+<dt>macOS</dt>
+<dd data-fw-grep="CMakeLists.txt::#   macOS    -fstack-protector-strong and the libc\+\+ check \(the measurement\n#            above, made with the same clang; there is no Mac here\)\. PIE and a\n#            non-executable stack are the platform's own and always on\.">The
+stack protector and the C++ library's checks. PIE and a stack that is not executable are the
+platform's own and always on. The cost was not measured on a Mac; the figures above come from the
+same compiler on Linux.</dd>
+<dt>Windows</dt>
+<dd data-fw-grep="CMakeLists.txt::#            MinGW: --dynamicbase, --nxcompat and --high-entropy-va are\n#            binutils' defaults since 2\.36, asked for anyway where the linker\n#            takes them; -fstack-protector-strong is not, because on MinGW it\n#            can mean shipping libssp-0\.dll">With
+MinGW, which builds <code>windows-x64</code> in CI: <code>-Wl,--dynamicbase</code> (the
+executable is loaded at a random address), <code>-Wl,--nxcompat</code> (data is not executable)
+and <code>-Wl,--high-entropy-va</code> (the random address is drawn from the whole 64-bit space).
+They are the linker's defaults already, and are asked for anyway where the linker takes them. The
+stack protector is not used there, because with MinGW it can mean shipping
+<code>libssp-0.dll</code> next to the game, and nothing checks for that.
+<span data-fw-grep="CMakeLists.txt::#   Windows  MSVC: /GS, /DYNAMICBASE, /NXCOMPAT and /HIGHENTROPYVA are its\n#            defaults, and /guard:cf is not here -- it could not be measured\.">With
+MSVC, which builds <code>windows-arm64</code>: its defaults, <code>/GS</code>,
+<code>/DYNAMICBASE</code>, <code>/NXCOMPAT</code> and <code>/HIGHENTROPYVA</code>, the same
+protections. Control Flow Guard, <code>/guard:cf</code>, is not used: it could not be
+measured.</span></dd>
+<dt>Web</dt>
+<dd data-fw-grep="CMakeLists.txt::#   Web      a wasm module has no executable stack and no loader to randomise\.">Nothing:
+a WebAssembly module has no executable stack and no loader to randomise. The browser runs it in
+its sandbox.</dd>
+<dt>Android</dt>
+<dd data-fw-grep="CMakeLists.txt::#   Android  the NDK compiles with -fstack-protector-strong and\n#            -D_FORTIFY_SOURCE=2 by itself \(\$ANDROID_NDK/build/cmake/flags\.cmake\), and\n#            Android has required PIE since 5\.0\.">The
+NDK compiles with <code>-fstack-protector-strong</code> and <code>-D_FORTIFY_SOURCE=2</code> by
+itself, and Android has required PIE since 5.0.</dd>
+<dt>iOS</dt>
+<dd data-fw-grep="CMakeLists.txt::#   iOS      PIE and the stack protector are Xcode's defaults\.">PIE
+and the stack protector are Xcode's defaults.</dd>
+</dl>
+
+<h3 id="sizes">What a release weighs</h3>
+
+<p data-fw-grep="tools/size_budget.txt::#   unpacked  bytes as the linker wrote it: build/release/&lt;name&gt;, the \.wasm,\n#             the \.so as it sits in the \.aab">With
+all of it in, these are the sizes of the framework's own demo game, each as its release job
+measured it: unpacked, as the linker wrote it, and packed, after UPX, for the releases that are
+packed. <code>tools/size_budget.txt</code> holds them, and every release is
+<a href="#size-budget">held to its line</a>. A game's own sizes are its own.</p>
+
+<table>
+<thead><tr><th>Binary</th><th>Unpacked, bytes</th><th>Packed, bytes</th></tr></thead>
+<tbody>
+<tr data-fw-grep="tools/size_budget.txt::^linux-x64-glibc +elf +1236560 +366804 "><td><code>linux-x64-glibc</code></td><td>1,236,560</td><td>366,804</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^linux-arm64-glibc +elf +1162896 +346808 "><td><code>linux-arm64-glibc</code></td><td>1,162,896</td><td>346,808</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^linux-riscv64-glibc +elf +962752 +- "><td><code>linux-riscv64-glibc</code></td><td>962,752</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^linux-x64-musl +elf +1232664 +365412 "><td><code>linux-x64-musl</code></td><td>1,232,664</td><td>365,412</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^linux-x64-glibc-drm +elf +754856 +312400 "><td><code>linux-x64-glibc-drm</code></td><td>754,856</td><td>312,400</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^linux-arm64-glibc-drm +elf +660552 +- "><td><code>linux-arm64-glibc-drm</code></td><td>660,552</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^windows-x64 +pe +2206720 +- "><td><code>windows-x64</code></td><td>2,206,720</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^windows-arm64 +pe +1312256 +- "><td><code>windows-arm64</code></td><td>1,312,256</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^macos +macho +1696392 +- "><td><code>macos</code></td><td>1,696,392</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^freebsd-x64 +elf +783848 +- "><td><code>freebsd-x64</code></td><td>783,848</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^freebsd-arm64 +elf +694632 +- "><td><code>freebsd-arm64</code></td><td>694,632</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^openbsd-x64 +elf +847040 +- "><td><code>openbsd-x64</code></td><td>847,040</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^openbsd-arm64 +elf +843556 +- +# estimate"><td><code>openbsd-arm64</code></td><td>843,556, an estimate</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^netbsd-x64 +elf +937744 +- "><td><code>netbsd-x64</code></td><td>937,744</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^web +wasm +477952 +- "><td><code>web</code></td><td>477,952</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^android/arm64-v8a +so +2327472 +- "><td><code>android/arm64-v8a</code></td><td>2,327,472</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^android/armeabi-v7a +so +1728772 +- "><td><code>android/armeabi-v7a</code></td><td>1,728,772</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^android/x86 +so +2609980 +- "><td><code>android/x86</code></td><td>2,609,980</td><td>—</td></tr>
+<tr data-fw-grep="tools/size_budget.txt::^android/x86_64 +so +2557152 +- "><td><code>android/x86_64</code></td><td>2,557,152</td><td>—</td></tr>
+</tbody>
+</table>
+
+<p>The OpenBSD arm64 line is worked out from an older measurement rather than read off a build, as
+its comment in the file says, and is held to the same rule until a run replaces it.</p>
+
+<h2 id="sanitizers">Every debug build, under the sanitizers</h2>
+
+<p data-fw-grep="raylib_multiplatform.toml::^sanitize = \[&quot;address&quot;, &quot;undefined&quot;\]">A
+test asserts what it can see, and a mistake in memory or in arithmetic often gives it nothing to
+see: a read one past
+the end that finds a zero, a use of freed memory that still holds the old value, a signed overflow
+that wraps to a harmless number. So every debug build of the framework on the desktop — the library,
+every example, every test — runs under AddressSanitizer and UndefinedBehaviorSanitizer, because the
+framework's own <code>.toml</code> says <code>sanitize = ["address", "undefined"]</code>. They are
+compiled in, and each report stops the program at the line that did it, with the stack that got
+there.</p>
+
+<dl>
+<dt>AddressSanitizer</dt>
+<dd>A read or a write past a buffer — on the heap, on the stack or in a global — a use after free
+or after return, a double free, and a global that reads another file's global before that one was
+initialised.</dd>
+<dt data-fw-grep="cmake/sanitizer_hooks.c::LeakSanitizer is part of ASan where the runtime turns it on by itself,\n \* which is Linux">LeakSanitizer</dt>
+<dd>Memory nobody freed, reported when the program exits. It is part of AddressSanitizer where
+the runtime turns it on by itself, which is Linux, and it is left to that; asking for it on macOS
+stops every program.</dd>
+<dt>UndefinedBehaviorSanitizer</dt>
+<dd>A signed overflow, a shift past the width of its type, a float converted to an integer it does
+not fit, a misaligned or null access, a virtual call on an object of the wrong type.</dd>
+</dl>
+
+<h3 id="sanitizer-flags">The flags</h3>
+
+<p data-fw-grep="cmake/sanitize.cmake::# float-cast-overflow by name: clang counts it in &quot;undefined&quot;, gcc does\n    # not">With
+clang, the framework's development compiler, and with gcc, which names
+<code>float-cast-overflow</code> because its <code>undefined</code> does not include it:</p>
+
+<pre data-lang="text">
+clang:
+  -fsanitize=address,undefined
+  -fno-sanitize-recover=all
+  -fno-omit-frame-pointer
+  -fsanitize-ignorelist=cmake/sanitize_ignore.txt
+gcc:
+  -fsanitize=address,undefined,float-cast-overflow
+  -fno-sanitize-recover=all
+  -fno-omit-frame-pointer
+</pre>
+
+<p><code>-fno-sanitize-recover=all</code> makes every report the end of the run, and
+<code>-fno-omit-frame-pointer</code> keeps the stack in a report readable. What was applied is
+defined, for code that has to allow for it — a timing test, say:</p>
+
+<pre data-lang="text">
+-DRMP_SANITIZE=1            any of them
+-DRMP_SANITIZE_ADDRESS=1    AddressSanitizer
+-DRMP_SANITIZE_UNDEFINED=1  UndefinedBehaviorSanitizer
+</pre>
+
+<p data-fw-grep="cmake/sanitize.cmake::# MSVC's /fsanitize takes address and nothing else \(configure\.py refuses\n    # undefined with msvc\)\. /INCREMENTAL is incompatible with it\.">With
+MSVC, which has AddressSanitizer and nothing else: <code>/fsanitize=address</code> to compile and
+<code>/INCREMENTAL:NO</code> to link, which it requires, and the run-time checks (<code>/RTC1</code>)
+taken out of the debug flags, which it cannot be combined with.</p>
+
+<p data-fw-grep="cmake/sanitizer_hooks.c::return &quot;detect_stack_use_after_return=1:check_initialization_order=1:&quot;\n           &quot;strict_init_order=1:halt_on_error=1&quot;;">The
+runtimes' own options are set in <code>cmake/sanitizer_hooks.c</code>, linked into every
+instrumented program: AddressSanitizer also checks use after return and the order globals are
+initialised in, and both sanitizers stop at the first report and print the stack. The environment
+still wins — <code>ASAN_OPTIONS</code>, <code>UBSAN_OPTIONS</code>, <code>LSAN_OPTIONS</code> —
+so one run can be changed while chasing one report.</p>
+
+<p data-fw-grep="cmake/sanitizer_hooks.c::const char \*__lsan_default_suppressions\(void\) \{\n    return &quot;&quot;;\n\}">LeakSanitizer
+can be told to ignore memory a system library keeps for the life of the process. The rule for that
+list is that a line names a system library by its file name, seen leaking in a real run, and never
+anything of the framework's or the game's; a test refuses a line that could match the framework's
+code, and a leak planted in a function of the framework's own has to be reported through the list.
+The list is empty.</p>
+
+<p data-fw-grep="cmake/sanitize_ignore.txt::^fun:\*cute_tiled_\*$">The
+clang builds also skip what <code>cmake/sanitize_ignore.txt</code> lists, each line with its
+reason, and the list may only name vendored code. It has one line: the Tiled reader finds a struct
+from a pointer to one of its members with the classic <code>OFFSET_OF</code> macro, a member
+access through a null pointer that every C compiler has always accepted.</p>
+
+<h3 id="probe">Whether they really run</h3>
+
+<p data-fw-grep="cmake/sanitize.cmake::# Whether a compiler can give them is decided by RUNNING a sanitized program,\n# not by finding a flag">A
+compiler that accepts <code>-fsanitize=address</code> is not one that can run it: Ubuntu's clang
+takes the flag and then has no runtime to link, and a runtime can link and still refuse to start.
+So <code>cmake/sanitize.cmake</code> builds a small program with the flags and runs it, in C++ and
+in C. The C++ one makes a virtual call, which is what UndefinedBehaviorSanitizer's type check needs
+from its runtime. When the build is cross-compiled, linking is the most it can know. A probe that
+ran is remembered against the compilers, the flags and the hooks it ran with; one that failed is
+never remembered, so installing the runtime is seen by the next configure.</p>
+
+<p data-fw-grep="cmake/sanitize.cmake::if\(&quot;\$ENV\{RMP_REQUIRE_SANITIZERS\}&quot; STREQUAL &quot;1&quot;\)\n      message\(FATAL_ERROR">When
+the probe cannot run them together, each that runs on its own is kept; one that does not run at
+all is a warning, and the debug build goes on without it — a condition of the machine, not a
+mistake in the <code>.toml</code>. Unless the environment requires them, as CI does wherever a
+debug build is a gate: there the configure fails, because a gate that quietly stopped
+instrumenting passes by not looking.</p>
+
+<pre data-lang="shell">
+RMP_REQUIRE_SANITIZERS=1 cmake --preset debug
+</pre>
+
+<p>A configure that got them says so:</p>
+
+<p><samp>=== SANITIZERS: address, undefined ===</samp></p>
+
+<p data-fw-grep="cmake/sanitize.cmake::option\(RMP_SANITIZE &quot;Instrument this Debug build with \[dev\] sanitize \(OFF to measure without\)&quot; ON\)">To
+measure what they cost, one build directory can go without them:
+<code>-DRMP_SANITIZE=OFF</code>.</p>
+
+<pre data-lang="shell">
+cmake --preset debug -DRMP_SANITIZE=OFF
+</pre>
+
+<p data-fw-grep="cmake/sanitize.cmake::if\(DEFINED RMP_DEV_SANITIZE AND RMP_SANITIZE AND NOT \(EMSCRIPTEN OR ANDROID OR IOS\)\)">They
+are never applied to the web, Android or iOS builds: the web build is a release, and Android and
+iOS build through their own projects, which do not read <code>[dev]</code>.</p>
+
+<h3 id="netbsd">NetBSD</h3>
+
+<p data-fw-grep="cmake/sanitize.cmake::# UBSan whose runtime has no C\+\+ half \(NetBSD 10's GCC 10\.5\): every check\n  # but vptr still runs, so it is kept without vptr rather than dropped whole\.">NetBSD's
+GCC 10.5 ships an UndefinedBehaviorSanitizer runtime without its C++ half, so the type check of
+virtual calls cannot link there. The probe sees it, and the build keeps every other check with
+<code>-fno-sanitize=vptr</code>, and says so in a warning, rather than dropping the sanitizer
+whole.</p>
+
+<p data-fw-grep="cmake/sanitize.cmake::# executable gets `paxctl \+a` after its link \(rmp_apply_debug_checks\), and the\n# probe gets it before it runs\. A NetBSD without paxctl does not get ASan\.">NetBSD
+also gives every program address randomisation unless the program's ELF note says otherwise, and
+its AddressSanitizer will not start with it. So every sanitized program there gets
+<code>paxctl +a</code> after it is linked, and the probe gets it before it runs. A NetBSD without
+<code>paxctl</code> does not get AddressSanitizer.</p>
+
+<h3 id="debug-checks">The library checks, in every debug build</h3>
+
+<p data-fw-grep="cmake/sanitize.cmake::#   HARDENING, every Debug build, framework and game\.">Independently
+of the sanitizers, every debug build on the desktop — the framework's and a game's — gets two more
+checks that need no runtime. Android's and iOS's debug builds are made by their own projects, and
+get neither.</p>
+
+<ul>
+<li><code>-D_GLIBCXX_ASSERTIONS</code> and
+<code>-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE</code>: the standard library
+checks <code>operator[]</code>, <code>front()</code> and <code>back()</code>, and in libc++ the
+extensive set, which goes further than the release's fast one.</li>
+<li data-fw-grep="cmake/sanitize.cmake::\(-ftrivial-auto-var-init=pattern, where the compiler has it: gcc 12\+,\n#   clang\)"><code>-ftrivial-auto-var-init=pattern</code>,
+where the compiler has it (gcc 12 and later, clang): a local variable nobody initialised is filled
+with a pattern that crashes when it is used, instead of a zero that happens to work.</li>
+</ul>
+
+<p data-fw-grep="cmake/sanitize.cmake::_FORTIFY_SOURCE is not here: it needs -O1, and Debug is -O0\.">Fortify
+is not among them: it needs optimisation, and a debug build has none.</p>
+
+<h3 id="sanitizer-cost">What they cost</h3>
+
+<p data-fw-grep="raylib_multiplatform.toml::-- memory nobody freed, reported at exit\. About twice as slow\n#              and three times the memory\.">The
+framework's <code>.toml</code> puts AddressSanitizer at about twice as slow and three times the
+memory, and UndefinedBehaviorSanitizer as cheap.
+<span data-fw-grep=".github/workflows/ci.yml::It took 2m22s uninstrumented; locally the\n    # instrumented `rmp test examples` takes about three times as long\.">The one
+measurement of wall time in the framework is its examples: building and booting all of them took
+2 minutes 22 seconds uninstrumented, and instrumented, <code>rmp test examples</code> takes about
+three times as long.</span> None of it reaches a release.</p>
+
+<h3 id="reports">A report fails the run</h3>
+
+<p data-fw-grep="tools/render_check.sh::if grep -qE 'ERROR: \(AddressSanitizer\|LeakSanitizer\)\|runtime error:' &quot;\$LOG&quot;; then">A
+sanitized program prints its report and exits with an error, and LeakSanitizer reports after the
+program's last line of its own, when it exits. So the checks that boot a game do not stop at the
+markers it prints: <code>rmp test smoke</code> and <code>rmp test render</code> fail on a
+sanitizer's report anywhere in the output, with the first forty lines of it, and on any exit status
+but 0 — <samp>a sanitizer reported the run above (exit …)</samp>. Every example booted by
+<code>rmp test examples</code> is held to its exit status the same way.
+<span data-fw-grep="tests/configure_test.py::def test_no_launch_throws_its_exit_status_away\(self\):">So
+is every other start of a game in the tools and the workflows — a release started from another
+folder, the musl build on Alpine, the DRM build on its virtual display — but the iOS simulator's,
+<a href="#not-done">below</a>; a test fails one that throws the status away.</span> <a href="/framework/testing.html#sanitize">Testing</a> has the runs
+these checks are part of, and the second one with gcc, <code>rmp test sanitize</code>.</p>
+
+<p data-fw-grep="tests/sanitize_test.cpp::// The sanitizers this binary was built with: what CMake says it applied, held\n// to what the compiler itself says, and each one seen catching what it is for\.">And
+the arrangement is itself tested: <code>tests/sanitize_test.cpp</code> holds the defines to what
+the compiler says it instrumented, and runs <code>tests/sanitizer_canary.cpp</code>, a program that
+leaks, overflows a buffer or overflows an integer on request, and each one has to be caught.</p>
+
+<h3 id="sanitize-in-a-game">In a game</h3>
+
+<p data-fw-grep="tools/rmp.py::\(setting_in\(&quot;dev&quot;, &quot;sanitize&quot;\), assign_raw\(&quot;\[\]&quot;\)\)">A
+game made with <code>rmp new</code> starts with <code>sanitize = []</code>: off, so that a fresh
+clone on a compiler without the runtimes builds without a warning to explain. Turn them on when you
+want your own game's mistakes found where they happen instead of where they crash:</p>
+
+<pre data-lang="toml">
+[dev]
+sanitize = ["address", "undefined"]
+</pre>
+
+<p data-fw-grep="raylib_multiplatform.toml::# thread, memory, leak, hwaddress, integer, implicit-conversion and fuzzer are\n# refused, each with its reason\.">Those
+two are the ones that work on a game as it is, with the system's own libraries left
+uninstrumented. <a href="/reference/configuration.html#dev-sanitize"><code>[dev] sanitize</code></a>
+refuses the others by name, each with its reason — <code>thread</code>, <code>memory</code>,
+<code>leak</code>, <code>hwaddress</code>, <code>integer</code>,
+<code>implicit-conversion</code> and <code>fuzzer</code>:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[dev]
+sanitize = ["address", "thread"]
+</pre>
+
+<p data-fw-grep="raylib_multiplatform.toml::MSVC\n# has address and not undefined, MinGW's GCC has neither, OpenBSD has no\n# address; configure\.py refuses those\.">It
+also refuses what a platform cannot give: <code>undefined</code> with
+<code>[dev] compiler = "msvc"</code>, any sanitizer with <code>"mingw"</code>, whose GCC ships no
+runtime, and <code>address</code> on OpenBSD, whose clang has none.</p>
+
+<h2 id="analysis">Static analysis</h2>
+
+<p>The sanitizers find what a run reaches. These read the framework's code without running it, on
+every push, and none of them costs the shipped game anything.</p>
+
+<dl>
+<dt data-fw-grep=".clang-tidy::Checks: &gt;\n  -\*,\n  bugprone-\*,\n  clang-analyzer-\*,">clang-tidy,
+with the Clang Static Analyzer</dt>
+<dd><code>rmp lint</code> runs clang-tidy with the framework's <code>.clang-tidy</code> over
+<code>src/</code>, <code>tests/</code> and <code>examples/</code>: the <code>bugprone</code>
+checks, the static analyzer's path-by-path search for null dereferences, leaks and uses of freed
+memory, the performance and portability checks, and the checks that hold
+<a href="/guidelines/index.html">the style guide</a>.
+<span data-fw-grep="tools/lint.sh::find src tests examples tools cmake -name '\*\.c' \| grep -v _impl \| grep -v generated">It
+reads the C as well: the resource packer every desktop release runs, the plain C example and the
+sanitizer hooks.</span> A file with no compile command is a failure, never a guess at its
+flags.</dd>
+<dt data-fw-grep="tools/lint_debt.txt::\A(?:#.*\n|\n)*(?:custom-rmp-raw-pointer[ \t]+\S+[ \t]+\d+\n)+\Z">The
+debt, which only shrinks</dt>
+<dd>What the code still owes the style guide is written down in <code>tools/lint_debt.txt</code>,
+a line per check and file with the number of warnings left. A warning it does not owe fails, a
+count that grows fails, and a count higher than what is left fails too, so every fix lowers it for
+good. Every line in it is one check, <code>custom-rmp-raw-pointer</code>: a raw pointer where
+the guide wants a reference, a span or a handle.</dd>
+<dt data-fw-grep="tools/cppcheck_check.sh::# The rule is zero findings in src/rmp and in the headers its files include\.">cppcheck</dt>
+<dd>A second analyser, with its own value-flow analysis rather than clang's, over
+<code>src/rmp/</code> and the headers it includes: <code>rmp test cppcheck</code>. The rule is
+zero findings. One that is not a bug is suppressed on the line before it, with the reason after a
+<code>;</code>; a suppression with no reason fails, and so does one that no longer matches
+anything, so an excuse cannot outlive what it excused. A few are suppressed in the script itself,
+by check or by file, each with its reason, and that list only shrinks.</dd>
+<dt data-fw-grep="CMakeLists.txt::target_compile_options\(\$\{target\} PRIVATE -Wall -Wextra -Wno-missing-field-initializers\)">The
+compiler's own warnings</dt>
+<dd><code>-Wall</code> and <code>-Wextra</code> on every target built from the framework's sources
+and the game's, and never on raylib or <code>thirdparty/</code>, whose headers are included as
+system headers so that their warnings do not bury ours. MSVC keeps its own default level.
+<code>-DRMP_WERROR=ON</code> makes every
+one an error: the framework's unit tests, its lint job and the gcc run pass it. A game is never
+made to, because a newer compiler on its author's machine must not stop a build that worked the
+day before.</dd>
+<dt data-fw-grep="tools/pointer_check.py::No raw pointer and no C string in a declaration a game can name\.">No
+raw pointer in the API</dt>
+<dd><code>rmp test pointers</code> has clang read every public header and fails on a raw pointer
+or a C string in any declaration a game can name: a pointer cannot say whether it may be null, who
+owns it or how long it lives. The few pointers a game cannot reach are listed in
+<code>tools/pointer_ratchet.txt</code>, each with its reason, and that list only shrinks.
+<a href="/framework/why/ownership.html">Ownership</a> says what the API hands out instead.</dd>
+<dt data-fw-grep="tools/ownership_check.sh::#   O1  no bare new/delete, no malloc/free, under include/rmp/ or src/rmp/\.">Nothing
+owned by hand</dt>
+<dd><code>rmp test ownership</code> fails on a bare <code>new</code>, <code>delete</code>,
+<code>malloc</code> or <code>free</code> in the framework, and on a raylib
+<code>Load…</code>/<code>Unload…</code> call outside the files that own what it makes, in the
+framework or in an example — the two shapes a leak and a double free take. The files that must keep
+such a call are listed with the reason, and the list only shrinks.</dd>
+</dl>
+
+<h2 id="binaries">The shipped binary, read back</h2>
+
+<p data-fw-grep="CMakeLists.txt::What the linker made of them is read\n# off the shipped binary by `tools/binary_check\.py elf` in the Linux jobs\.">A
+flag the toolchain silently ignored is a flag that was never there, and a build machine is not a
+player's machine. So CI reads what matters out of the binary it ships, with
+<code>tools/binary_check.py</code> and a few scripts beside it, which need nothing but Python's
+standard library or a shell. A game's CI runs the same steps.</p>
+
+<dl>
+<dt data-fw-grep=".github/workflows/_linux.yml::if grep -q '\^RMP_RELEASE_PIE:BOOL=ON' &quot;\$CACHE&quot;; then PIE=--pie; fi">How
+a Linux release was linked</dt>
+<dd><code>binary_check.py elf</code>, in every Linux release job, before UPX packs the binary:
+RELRO, BIND_NOW and a stack that is not executable, read from its program headers and dynamic
+section; and, given <code>--pie</code> whenever the build's cache says
+<code>-DRMP_RELEASE_PIE</code> was on, that it is position-independent.
+<span data-fw-grep="tools/binary_check.py::interpreter \(PT_INTERP\) is musl's loader for its machine,\n        /lib/ld-musl-&lt;arch&gt;\.so\.1, and every library it names \(DT_NEEDED\) is\n        musl's C library">With
+<code>--musl</code> it also reads what the musl build asks the system for: its loader has to be
+musl's and the one library it names musl's C library — or it is static and names neither.</span></dd>
+<dt data-fw-grep="tools/binary_check.py::def check_windows\(paths: list\[str\], require_icon: bool\) -&gt; int:">What
+a Windows <code>.exe</code> imports</dt>
+<dd><code>binary_check.py windows</code> reads the import table and the delay-load table, and
+fails on any DLL that is not part of every Windows 10: a compiler runtime the player would have to
+install, named with how to link it in instead. With <code>--require-icon</code> it also wants the
+icon.</dd>
+<dt data-fw-grep="tools/binary_check.py::def check_macos\(path: str, min_os: str\) -&gt; int:">Which
+macOS each slice needs</dt>
+<dd><code>binary_check.py macos</code> reads the minimum macOS out of every slice of the universal
+binary and fails on one that asks for more than the build was told.</dd>
+<dt data-fw-grep="tools/glibc_check.sh::# The binary must not need a glibc newer than \[linux\] glibc says it may\.">Which
+glibc a Linux release needs</dt>
+<dd><code>tools/glibc_check.sh</code> reads the glibc version every symbol the binary imports
+asks for, and fails on one newer than <code>[linux] glibc</code>: the failure it prevents is a game
+that runs on the machine that built it and on no older distribution. It holds the x64 and arm64
+releases to that floor and the riscv64 one to its own; the DRM pair link their distribution's
+graphics libraries directly, and their floor is reported rather than held.</dd>
+<dt data-fw-grep="tools/android_release_check.py::if &quot;-DRMP_PRODUCTION_BUILD=1&quot; not in args:">That
+an Android release is a release</dt>
+<dd><code>tools/android_release_check.py</code> reads the compile commands Gradle used for the
+release bundle and fails on a file of the game or the framework compiled at <code>-O0</code>, with
+<code>_DEBUG</code>, or without <code>RMP_PRODUCTION_BUILD</code>.</dd>
+</dl>
+
+<h3 id="size-budget">The size budget</h3>
+
+<p data-fw-grep="tools/size_check.py::WARN_AT = Fraction\(15, 1000\)\nFAIL_AT = Fraction\(10, 100\)">Every
+release job holds the binary it ships to its line in <code>tools/size_budget.txt</code>,
+unpacked and packed: within 1.5% either way it passes in silence; past that it passes with a
+warning that names the new size, on the run's summary page as well as in its log; past 10% it
+fails. A binary that grew is a growth nobody wrote down, and one that shrank leaves a line that
+would hide the next growth. Growing is allowed — it is written down, in the commit that does it.
+A game starts with no budget, and its jobs print the line to write when it wants one.</p>
+
+<h2 id="supply-chain">The supply chain, pinned</h2>
+
+<p>A green run should mean the same in six months as today, and a build should not depend on a
+download succeeding.</p>
+
+<dl>
+<dt data-fw-grep="tools/versions_check.sh::# Every container job must pin the same digest, and it must be the declared one\.">The
+build image, by digest</dt>
+<dd>The Linux, web and Android builds and the lint job run inside
+<code>ghcr.io/omardev29/raylib-build</code>, named by its
+<code>sha256</code> digest in <code>ci.yml</code>, <code>web-backends.yml</code> and
+<code>thirdparty/FROZEN_VERSIONS.md</code>; <code>tools/versions_check.sh</code> fails if any two
+disagree, or if <code>:latest</code> appears outside the canary.
+<span data-fw-grep="tools/versions_check.sh::IMAGE_MANIFEST=/etc/raylib-build-image\.json">Inside
+the image it also compares every pinned tool with the image's own manifest.</span> The image is
+built in <a href="https://github.com/omardev29/raylib-build-image">its own repository</a>, each
+architecture on a runner of that architecture, checked there inside the image it built, and
+published only then.</dd>
+<dt data-fw-grep="thirdparty/FROZEN_VERSIONS.md::^run_alpine_digest +sha256:[0-9a-f]{64}">The
+Alpine image, by digest</dt>
+<dd>The Alpine the musl build is started on is an image of the framework's own,
+<code>ghcr.io/omardev29/raylib-run-alpine</code>, pinned and checked the same way.</dd>
+<dt data-fw-grep="tests/configure_test.py::class NoDockerHubImageTest\(unittest\.TestCase\):\n    &quot;&quot;&quot;No workflow pulls an image from anywhere but ghcr\.io\.">Nothing
+from Docker Hub</dt>
+<dd>A test reads every image every workflow names and fails on one that does not come from
+<code>ghcr.io</code>. A digest makes an image look frozen; it is still a download from a registry
+with anonymous rate limits.</dd>
+<dt data-fw-grep="thirdparty/FROZEN_VERSIONS.md::\| GitHub Actions \| full commit SHAs \| Every `uses:` in `\.github/workflows/`, with the tag in a trailing comment\. \|">Every
+action, by commit</dt>
+<dd>Every GitHub Action a workflow uses is named by the full commit it resolves to, with the tag in
+a comment beside it: a tag can be moved, a commit cannot.</dd>
+<dt data-fw-grep="tools/linux_build.sh::echo &quot;\$\{SHA\}  \$\{TMP\}/zig\.tar\.xz&quot; \| sha256sum -c -">Every
+download, by checksum</dt>
+<dd>Every file a job fetches by address — zig and UPX outside the image, Ninja and XcodeGen on
+macOS, Mesa and UPX on Windows — is checked against a <code>sha256</code> kept in the repository
+before it is used. Inside the image, a script that finds its tool at the wrong version fails
+instead of fetching it. Pillow, which the Windows jobs install to make the icon, comes with
+<code>pip --require-hashes</code>, so no other file is accepted.
+There are exceptions, and <a href="/publishing/ci.html#what-is-pinned">What is pinned</a> lists
+them: the BSD jobs install from their system's package mirror, which has nothing to pin to, the
+job that boots DRM installs a kernel module from Ubuntu's archive, and the web test the libraries
+its browser needs.</dd>
+<dt data-fw-grep="thirdparty/FROZEN_VERSIONS.md::cppcheck from the same apt snapshot, and the\n# Python test tools from a hash-locked requirements file\.">The
+test tools, by hash</dt>
+<dd>The Python test tools the image carries are installed from a requirements file that pins every
+package and the hash of every file, and their versions are pinned in
+<code>thirdparty/FROZEN_VERSIONS.md</code> and compared with the image's manifest.</dd>
+<dt data-fw-grep="tools/license_db.py::And then the rules\. Copyleft \(AGPL, SSPL, GPL, LGPL, MPL, EUPL\) fails;">Every
+licence, on record</dt>
+<dd><code>rmp test config</code> fails on a vendored component whose licence is copyleft,
+non-commercial or unknown, and on one under a licence that asks for changes to be marked that is
+neither pinned unmodified by its <code>sha256</code> nor marked modified with its patches written
+down. <a href="/framework/licences.html">Licences</a> has the whole record.</dd>
+<dt data-fw-grep=".github/workflows/canary.yml::    - cron: '0 4 \* \* 1'">The
+canary</dt>
+<dd>Pinning stops the world from breaking a build, and also hides that the world moved. Every
+Monday the framework's repository runs the same workflows against the floating versions — the
+newest build image, runners, Xcode and Mesa — to find what the next bump will break before anyone
+needs it. <a href="/publishing/ci.html#the-canary">The canary</a> has the detail; a game never
+runs it.</dd>
+</dl>
+
+<h2 id="secrets">Secrets, signing, installing</h2>
+
+<h3 id="no-secrets">No secret in the repository</h3>
+
+<p data-fw-grep="raylib_multiplatform.toml::\[deploy\.itch\]\n# Leave empty to skip publishing\. The API key is a GitHub secret\n# \(BUTLER_API_KEY\), never here\.">The
+<code>.toml</code> is committed with the game, so it holds no secret: every key, password and token
+CI needs is a GitHub secret, set in the repository's settings.
+<a href="/publishing/ci.html#secrets-and-variables">Secrets and variables</a> lists them, and
+every one is optional.</p>
+
+<p>Two values in it look like keys, and neither is a secret, because each ends up inside the game
+anyone can download:</p>
+
+<ul>
+<li data-fw-grep="raylib_multiplatform.toml::# Obfuscation, not security: the password ends up inside the binary\."><a href="/reference/configuration.html#resources-rres_password"><code>[resources] rres_password</code></a>
+encrypts a release's resource pack. It keeps casual unpacking of the game's assets inconvenient,
+and nothing more.</li>
+<li data-fw-grep="raylib_multiplatform.toml::The key is derived from\n#   \[project\] name, so it lives in the binary: that stops a text editor, not a\n#   determined player,"><a href="/reference/configuration.html#save-encrypt"><code>[save] encrypt</code></a>
+seals a save with a key derived from <code>[project] name</code>. That stops a text editor, not a
+determined player.</li>
+</ul>
+
+<h3 id="android-signing">The Android release, signed</h3>
+
+<p data-fw-grep=".github/workflows/_android.yml::# Throwaway key, generated fresh every run and never reused\.">The
+Android job builds the release App Bundle on every run. With no upload key in the repository's
+secrets it signs it with a throwaway key, made fresh on every run and never reused, says so in a
+warning, and checks the bundle's signer is that key; the bundle is renamed
+<code>-NOT-FOR-PLAY.aab</code> and uploaded under a name a release never attaches.
+<span data-fw-grep=".github/workflows/_android.yml::if echo &quot;\$SIGNER&quot; \| grep -q &quot;CI THROWAWAY&quot;; then\n                echo &quot;FAIL: mode=release but the bundle is signed with the throwaway CI key&quot;">With
+the upload key, it checks the signature verifies with no signer errors, that the signer is not
+the throwaway key, and — when the repository variable <code>ANDROID_SIGNER_CN</code> names it —
+that it is that key.</span> <a href="/publishing/google-play.html#signing">Signing</a> says how to
+set it up.</p>
+
+<h3 id="installer">The installer</h3>
+
+<p data-fw-grep="tools/install.sh::It never uses sudo and never installs a\n# package">The
+one-line installer never uses <code>sudo</code> and never installs a package. On Linux, macOS and
+the BSDs it writes only in your home folder: the framework in <code>~/.local/share/rmp</code>, the
+<code>rmp</code> command in <code>~/.local/bin</code>, and a line in your shell's startup file, only
+if that folder is not on your <code>PATH</code> already.
+<span data-fw-grep="tools/install.ps1::# Windows PowerShell 5\.1 or PowerShell 7, as yourself: no administrator\.">On
+Windows it runs as yourself, with no administrator, in <code>%LOCALAPPDATA%</code> and your own
+user <code>PATH</code>.</span> What a build still needs — CMake, Ninja, a compiler — is printed
+at the end with the command for your system, for you to run.
+<a href="/getting-started/install.html#where-it-puts-things">Where it puts things</a> has the
+detail.</p>
+
+<p data-fw-grep="tools/install.sh::All of it\n# is one function, called on the last line, so a download cut short runs\n# nothing">It
+is written for <code>curl … | sh</code>, where the shell runs it as it arrives: all of it is one
+function, called on its last line, so a download cut short runs nothing. And the copy this site
+serves is the framework's, byte for byte as it is at the commit these pages document — with the
+line endings each file is checked out with — which the site's own build checks on every run.</p>
+
+<h2 id="not-done">What is not done</h2>
+
+<p>At the commit these pages document, these do not exist:</p>
+
+<ul>
+<li data-fw-grep="thirdparty/FROZEN_VERSIONS.md::# The test toolchain in the build image, for coverage, sanitizers, fuzzing and\n# mutation testing"><strong>No
+fuzzing.</strong> No fuzz target exists, so no parser of the framework — the LDtk, Tiled and Aseprite
+readers, the save reader, the resource pack — is fed generated input. The build image carries
+libFuzzer's runtime, with LLVM 18, and nothing runs it.</li>
+<li><strong>No property-based tests.</strong> Hypothesis is in the build image, and no test uses it.</li>
+<li><strong>No mutation testing.</strong> Mull and mutmut are in the build image, and neither runs on any code: no
+measure says how many mistakes in the framework its tests would miss.</li>
+<li><strong>No check that the GitHub Actions stay pinned to their commits.</strong> Every one is pinned, and nothing
+fails if a new one is not.</li>
+<li><strong>No reading of how a Windows, macOS or BSD release was linked.</strong> The BSD releases are hardened
+like Linux's, Fortify aside, and the Windows ones by their linker's defaults, and nothing reads it
+back out of the binary: <code>binary_check.py windows</code> reads what an <code>.exe</code>
+imports, not how it was linked. Control Flow Guard is not used.</li>
+<li data-fw-grep=".github/workflows/_apple.yml::wait &quot;\$LAUNCH_PID&quot; 2&gt;/dev/null \|\| true"><strong>No
+exit status from the iOS simulator.</strong> The boot there, which a repository switches on, reads the
+game's markers and not how it exited.</li>
+<li><strong>No measurement of the hardening's cost on macOS or the BSDs.</strong> The figures above are Linux's.</li>
+</ul>
