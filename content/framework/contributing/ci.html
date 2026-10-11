@@ -1,0 +1,221 @@
+<!--
+title: CI
+description: What the framework's CI runs for a push and a pull request, the debug lane and the full matrix, how to read a red run job by job, the size budget's warnings, and how to wait for a run without polling it.
+order: 90
+-->
+<h1>CI</h1>
+
+<p class="lede">The framework's CI is one workflow, <code>.github/workflows/ci.yml</code>, and the
+same file every game gets. On the framework it runs everything the ladder runs and more: the
+platforms that catch most mistakes, beside the framework's own jobs. This page is what it runs,
+how to ask it for more, how to read it when it is red, and how to wait for it.</p>
+
+<p><a href="/publishing/ci.html">Continuous integration</a>, in Publishing, is the same workflow
+seen from a game: every target's jobs, what is pinned, and what each platform's red means. This
+page adds what only the framework runs.</p>
+
+<h2 id="when-it-runs">What a push and a pull request run</h2>
+
+<p data-fw-grep=".github/workflows/ci.yml::  push:\n    branches: \[main\]\n    tags: \['v\*'\]\n    paths-ignore: \['\*\*\.md', 'LICENSE'\]\n  pull_request:">A
+push to <code>main</code> and every pull request run the fast lane. A push to any other branch runs
+nothing by itself: a branch is checked when its pull request is opened, and again on every push to
+it. On a pull request, what is checked out is the branch merged into <code>main</code>, so a green
+run says the merge works, not only the branch. A change to nothing but Markdown files or
+<code>LICENSE</code> runs nothing.</p>
+
+<p data-fw-grep=".github/workflows/ci.yml::#   push / pull_request  -&gt;  fast lane: Linux x64, Web, Android, Windows x64">The
+fast lane builds Linux x64, Windows x64, the web and Android, and starts the framework's own jobs
+beside them, all at once, so the run takes as long as its longest job:</p>
+
+<table>
+<thead><tr><th>Job</th><th>What it runs</th><th>On your machine</th></tr></thead>
+<tbody>
+<tr><td><code>config</code></td><td>reads the <code>.toml</code> and decides what the run builds</td><td><code>rmp test config</code></td></tr>
+<tr><td><code>lint</code></td><td>every stage of <code>rmp test</code> but the properties, which are the <code>deep</code> job's: actionlint over the workflows, the pins, every gate, the tests of <code>configure.py</code> and of <code>rmp</code>, the unit tests, the UI layout and render tests, a game's tests, the software-rendered frame, the formatting and cppcheck</td><td><code>rmp test</code></td></tr>
+<tr><td><code>tidy</code></td><td>clang-tidy, held to <code>tools/lint_debt.txt</code></td><td><code>rmp lint</code></td></tr>
+<tr><td><code>examples</code></td><td>every example built, booted and seen to draw; the platformer played by its bot; the smoke boot on a virtual display</td><td><code>rmp test examples</code>, its first half</td></tr>
+<tr><td><code>e2e</code></td><td>every e2e script played, each shot compared with its golden exactly</td><td><code>rmp test examples</code>, its second half, in the image</td></tr>
+<tr><td><code>coverage</code></td><td>what the tests run of <code>src/rmp/</code>, against its floors</td><td><code>rmp test coverage</code>, in the image</td></tr>
+<tr><td><code>deep</code></td><td>the unit and layout tests under GCC's sanitizers, the properties at their fixed seeds, every committed fuzz input replayed</td><td><code>rmp test sanitize</code>, <code>rmp test property</code>, <code>rmp test fuzz</code></td></tr>
+<tr><td><code>docs</code></td><td>this site's <code>main</code>, checked against the commit</td><td><a href="/framework/contributing/docs.html">Keeping the docs true</a></td></tr>
+<tr><td><code>rmp_new</code></td><td>a game made with <code>rmp new</code> from the commit, and that game's own checks</td><td><code>./rmp new</code>, then <code>rmp test</code> in the game</td></tr>
+<tr><td><code>linux</code>, <code>windows</code>, <code>web</code>, <code>android</code></td><td>the fast lane's platforms: built, packaged, started where a runner can start them, and held to their size budget</td><td><code>rmp build release</code>, <code>rmp web</code>, <code>rmp android</code></td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep=".github/workflows/ci.yml::  release:\n    needs: \[config, lint, tidy, examples, e2e, rmp_new, coverage, deep, docs,">A
+release of the framework waits for every one of them. In a game the same file skips the framework's
+own jobs, which test files a game does not have.</p>
+
+<h2 id="more">Asking for more: the debug lane and the full matrix</h2>
+
+<p data-fw-grep="CLAUDE.md::\*\*One fast lane per TWO stages; a debug lane when it is red; the full\s+matrix once, at the very end of the plan\*\*">The
+framework is checked in three sizes of run, and the rule is to use the smallest that answers the
+question. The fast lane, above, on every push to <code>main</code> and every pull request. When it
+is red, the fix is checked
+on a <strong>debug lane</strong>: a run started by hand that builds exactly the platforms involved,
+with every framework job beside them. Linux, Windows and macOS by default; Android or iOS only when
+the bug is there:</p>
+
+<pre data-lang="shell">
+gh workflow run ci.yml -f targets=linux-x64-glibc,windows-x64,macos
+gh workflow run ci.yml --ref my-branch -f targets=linux-x64-glibc,windows-x64,macos,android
+</pre>
+
+<p data-fw-grep="tools/configure.py::f&quot;--only \{value!r\}: item \{position\} of \{len\(items\)\} is empty -- a comma too &quot;"><code>targets</code>
+takes targets and groups, separated by commas, and builds what they come to. A name that is not
+one, a group the <code>.toml</code> switched off, a name given twice or an empty item between two
+commas stops the run in its first job, naming the item and its position. <code>--ref</code> runs
+the workflow on a branch instead of <code>main</code>.</p>
+
+<p>The <strong>full matrix</strong> builds all {{count:targets}} targets, in about twenty minutes,
+and runs on every release tag and once when a larger piece of work is done. Its targets are
+{{list:targets}}.</p>
+
+<pre data-lang="shell">
+gh workflow run ci.yml -f full=true
+</pre>
+
+<p>macOS, iOS and the BSDs build only there, or on a debug lane that names them, and the BSDs
+build inside virtual machines, on their best effort. A failure on one of them after a green fast
+lane is a bug of that platform: it is fixed on its own, on a debug lane with that one target, and
+once fixed such a bug does not tend to come back.</p>
+
+<h2 id="red">Reading a red run</h2>
+
+<p>Start from the first job that failed: what fails after it may only be its consequence. The
+<code>gh</code> commands that take you there, with <code>RUN</code> the run's number from the
+list:</p>
+
+<pre data-lang="shell">
+gh run list --workflow ci.yml --limit 5
+RUN=12345678
+gh run view "$RUN"
+gh run view "$RUN" --log-failed
+</pre>
+
+<p><code>--log-failed</code> prints the log of the failed steps only, which is where the
+<code>FAIL</code> line is: almost every check here ends its failure with one that says what it
+found. Then reproduce it on your machine with the command in the table above. A job that fails in
+CI and passes on the laptop is the case for <a href="/framework/contributing/setup.html#the-image">the
+image</a>, which is what CI ran it in.</p>
+
+<table>
+<thead><tr><th>Red</th><th>Where to look</th></tr></thead>
+<tbody>
+<tr><td><code>lint</code></td><td>The failing step's name is the gate or the test that refused; each stage of <code>rmp test</code> it runs is a step there, running the same command.</td></tr>
+<tr><td><code>tidy</code></td><td>The warnings, by file and line, that <code>tools/lint_debt.txt</code> does not owe.</td></tr>
+<tr><td><code>examples</code></td><td>The example that did not build, boot or draw. Its screenshots are the run's <code>example-screenshots</code> artifact.</td></tr>
+<tr><td><code>e2e</code></td><td>A line <code>E2E FAIL</code>, the script's line number and the reason. The run's <code>e2e-pictures</code> artifact holds, for each shot that differed, the golden, what was drawn and their difference.</td></tr>
+<tr><td><code>coverage</code></td><td>A file below its floor, or far enough above it that the floor should rise, or a public function no test calls. The report is the <code>coverage</code> artifact.</td></tr>
+<tr><td><code>deep</code></td><td>A sanitizer's report under GCC; a property that failed, with the seed that replays it; or a committed fuzz input that failed again.</td></tr>
+<tr><td><code>docs</code></td><td>Not red: on anything but a tag it warns, and only a tag fails on it. The step says which page and why.</td></tr>
+<tr><td><code>rmp_new</code></td><td>What a game made from this commit fails: for instance a file the game needs that the manifest leaves out.</td></tr>
+<tr><td>A platform</td><td><a href="/publishing/ci.html#reading-a-red-run">Reading a red run</a>, in Publishing, goes through every platform's checks.</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="shell">
+gh run download "$RUN" -n e2e-pictures
+gh run rerun "$RUN" --failed
+</pre>
+
+<p>The first fetches an artifact to look at. The second runs the failed jobs again; that is for a
+failure that was not the code's — a runner that died, a service that was down — and never a way
+to make a flaky test pass.</p>
+
+<h3 id="size-warnings">The size budget's warnings</h3>
+
+<p data-fw-grep="tools/size_check.py::print\(f&quot;::warning title=Size budget::\{w\}&quot;\)">A
+release binary within 1.5 % of its line in <code>tools/size_budget.txt</code> passes in silence.
+Between 1.5 % and 10 % it passes with a warning, which appears on the run's summary page, where a
+green job's log is never read; past 10 % its job fails. Either way the check printed the line it
+measured, in the file's own format, and one run's log rewrites every line it measured:</p>
+
+<pre data-lang="shell">
+gh run view "$RUN" --log | python3 tools/size_check.py --update -
+</pre>
+
+<p>Commit that with the change that moved the size, and say in the message why it grew. A warning
+nobody acts on becomes the failure of whoever is next.</p>
+
+<h2 id="pushing">Pushing without killing a run</h2>
+
+<p data-fw-grep=".github/workflows/ci.yml::concurrency:\n  group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\n  cancel-in-progress: \$\{\{ github\.ref_type != 'tag' \}\}">A
+new run of a branch or a pull request cancels the run of the same branch or pull request still in
+progress; a tag's run is never cancelled. That saves minutes on a commit nobody wants any more, and
+it is how a full matrix of <code>main</code> started by hand dies twenty minutes in when someone
+pushes to <code>main</code>.</p>
+
+<p data-fw-grep="tools/rmp.py::got = ctx\.run\(\[&quot;gh&quot;, &quot;run&quot;, &quot;list&quot;, &quot;--workflow&quot;, &quot;ci\.yml&quot;, &quot;--limit&quot;, &quot;20&quot;,"><code>rmp push</code>
+is <code>git push</code> with a question first: it asks <code>gh</code> for the last twenty runs of
+<code>ci.yml</code>, on any branch, and while one has not finished it refuses and names it. The
+first push of a branch also sets its upstream.</p>
+
+<pre data-lang="shell">
+rmp push
+rmp push force
+</pre>
+
+<p><code>rmp push force</code> pushes anyway. On <code>main</code>, use it only when killing the run
+it named is what you meant. On a branch of your own, a push can only cancel your own pull
+request's earlier run; the runs <code>rmp push</code> names there may be other people's, which the
+push does not touch, and <code>force</code> is the right answer.</p>
+
+<h2 id="waiting">Waiting for a run: never poll it</h2>
+
+<p>A fast lane takes minutes and a full matrix about twenty. Do not sit refreshing it, and do not
+ask somebody else to come back and say whether it finished. A person can hand the waiting to
+<code>gh</code>, which follows the run in the terminal and ends with its result:</p>
+
+<pre data-lang="shell">
+gh run watch "$RUN" --exit-status
+</pre>
+
+<p data-fw-grep="CLAUDE.md::### Never wait on CI by polling\. Put a monitor on it\.">An agent
+starts a monitor in the background instead and keeps working: a loop that asks every 45 seconds,
+prints each job that ends other than green the moment it does, and stops with a summary when the
+run completes.</p>
+
+<pre data-lang="shell">
+prev=""
+while true; do
+  s=$(gh run view "$RUN" --json jobs \
+        --jq '.jobs[] | select(.conclusion != null and .conclusion != "") | "\(.conclusion)\t\(.name)"' 2&gt;/dev/null || true)
+  cur=$(printf '%s\n' "$s" | grep -v '^success' | sort || true)
+  comm -13 &lt;(printf '%s\n' "$prev") &lt;(printf '%s\n' "$cur") 2&gt;/dev/null || true
+  prev=$cur
+  st=$(gh run view "$RUN" --json status --jq .status 2&gt;/dev/null || echo unknown)
+  if [ "$st" = "completed" ]; then
+    gh run view "$RUN" --json jobs \
+      --jq '[.jobs[].conclusion] | group_by(.) | map("\(.[0])=\(length)") | join(" ")'
+    break
+  fi
+  sleep 45
+done
+</pre>
+
+<p>Each part is there for a reason. It prints every ending that is not a success — failed,
+cancelled, skipped, timed out — because a monitor that only waits for good news is silent through a
+crash, and silence looks like still running. <code>comm -13</code> prints each job once instead of
+every 45 seconds. It ends by itself. A <code>gh</code> call that fails does not end the watch. And 45 seconds is often enough for jobs that take minutes, and polite to an API
+with rate limits.</p>
+
+<h2 id="the-other-workflows">The workflows that run on their own</h2>
+
+<dl>
+<dt data-fw-grep=".github/workflows/deep.yml::# What a job finds is an issue labelled nightly-finding, ONE per signature"><code>deep.yml</code></dt>
+<dd>Every night it fuzzes every target for ten minutes and runs the properties at a random seed;
+every Sunday it runs mutation testing, a job per module. What it finds becomes an issue labelled
+<code>nightly-finding</code>, one per signature, with the command that replays it. Those issues are
+taken before anything else: <a href="/framework/contributing/pull-requests.html#nightly-findings">Pull
+requests</a> says how.</dd>
+<dt><code>canary.yml</code></dt>
+<dd>Every week, the same build against the versions the framework is not pinned to — the newest
+image, Xcode, Mesa — to learn what is about to break before a pin has to move. Its failure blocks
+nothing.</dd>
+</dl>
+
+<p>Both run only in the framework's own repository, never in a game.</p>
+
+<p>Next: <a href="/framework/contributing/pull-requests.html">pull requests</a>.</p>

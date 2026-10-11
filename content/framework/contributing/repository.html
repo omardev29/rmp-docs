@@ -1,0 +1,126 @@
+<!--
+title: The repository
+description: What lives where in the framework's repository, the repositories beside it, what rmp new copies into a game and why that list is explicit, and what a new file needs before the checks accept it.
+order: 20
+-->
+<h1>The repository</h1>
+
+<p class="lede">The framework is one repository,
+<a href="https://github.com/omardev29/raylib_multiplatform">omardev29/raylib_multiplatform</a>. It
+is also the template every game is made from, so it holds two kinds of thing side by side: what a
+game gets, and what only the framework needs to check itself. Knowing which is which is most of
+knowing where a change goes.</p>
+
+<h2 id="beside-it">The repositories beside it</h2>
+
+<dl>
+<dt><a href="https://github.com/omardev29/raylib_multiplatform">raylib_multiplatform</a></dt>
+<dd>The framework: the library, its tests, its examples, its tools and its CI. Every code change
+goes here.</dd>
+<dt><a href="https://github.com/omardev29/rmp-docs">rmp-docs</a></dt>
+<dd>This site, checked against one commit of the framework. <a href="/framework/contributing/docs.html">Keeping
+the docs true</a> is about it.</dd>
+<dt><a href="https://github.com/omardev29/raylib-build-image">raylib-build-image</a></dt>
+<dd>The build image every Linux job runs in, and the Alpine image the musl build is started on. A
+new tool for CI is a new image, and a new digest in the framework.</dd>
+</dl>
+
+<p data-fw-grep="CLAUDE.md::It is usually\s+checked out inside `project_raylib/`, the repository of plans and docs">The
+framework's <code>CLAUDE.md</code> also names files beside the checkout: the maintainer keeps it
+inside a folder of plans and progress notes. That folder is not part of the framework. No build,
+test or workflow of the framework reads it, and a change to the framework never needs it.</p>
+
+<h2 id="layout">What lives where</h2>
+
+<table>
+<thead><tr><th>Path</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><code>include/rmp/</code></td><td>The public headers, one per module, and nothing else: no umbrella header, so a game includes the modules it uses. <code>include/rmp/generated/</code> is written from the <code>.toml</code> and never committed.</td></tr>
+<tr><td><code>src/rmp/</code></td><td>The library's implementation, compiled once into <code>rmp</code>, which the game and every example link. <code>src/rmp/ui/</code> is the UI, the one place Clay is allowed; <code>src/rmp/internal.h</code> holds the seams — the clock, the reports, the resources root.</td></tr>
+<tr><td><code>src/main.cpp</code>, <code>src/scenes/</code></td><td>The demo game: what every new game starts as. It stays small; a new mechanic goes to <code>examples/</code>.</td></tr>
+<tr><td><code>examples/</code></td><td>One mini-project per example, by area — <code>scenes/</code>, <code>input/</code>, <code>ui/</code>, <code>assets/</code>, <code>ads/</code>, <code>platform/</code>, <code>games/</code> and <code>plain_c/</code>. Each is built and booted by CI; most are played by a script.</td></tr>
+<tr><td><code>tests/</code></td><td>The unit tests (<code>tests/*_test.cpp</code>, doctest, no window), the UI layout and render tests, the e2e scripts and their goldens (<code>tests/e2e/</code>), the properties, fuzz targets and mutation floors, the Python tests of the tools, and <code>tests/game/</code>, the tests every game is given.</td></tr>
+<tr><td><code>tools/</code></td><td><code>tools/rmp.py</code>, which is <code>rmp</code>; <code>tools/configure.py</code>, which turns the <code>.toml</code> into every build system's input; the gates, mostly <code>tools/*_check.sh</code>; and the lists the gates hold the tree to.</td></tr>
+<tr><td><code>cmake/</code></td><td>What <code>CMakeLists.txt</code> includes: the sanitizers, the game's tests, the web build's helpers. <code>cmake/generated/</code> is written from the <code>.toml</code>.</td></tr>
+<tr><td><code>thirdparty/</code></td><td>Every vendored library, each with its licence row in <code>THIRD_PARTY_LICENSES.md</code> and, where altered, a <code>PATCHES.md</code>; and <code>thirdparty/FROZEN_VERSIONS.md</code>, every pinned version and digest, read by the checks.</td></tr>
+<tr><td><code>.github/workflows/</code></td><td><code>ci.yml</code>, which runs on every push to <code>main</code> and every pull request, and the reusable <code>_*.yml</code> per platform it calls; <code>deep.yml</code>, the nightly and weekly search; <code>canary.yml</code>, a weekly build against the versions the framework is not pinned to; <code>autofix.yml</code>; and <code>web-backends.yml</code>.</td></tr>
+<tr><td><code>raymob/</code>, <code>ios/</code></td><td>The Android and iOS projects, partly generated from the <code>.toml</code>.</td></tr>
+<tr><td><code>resources/</code>, <code>branding/</code></td><td>The demo game's assets and its icon.</td></tr>
+<tr><td>The root</td><td><code>raylib_multiplatform.toml</code>, <code>CMakeLists.txt</code>, <code>CMakePresets.json</code>, the launchers <code>rmp</code>, <code>rmp.ps1</code> and <code>rmp.cmd</code>; <code>README.md</code> and <code>TECHNICAL.md</code>, the framework's own notes; <code>CLAUDE.md</code> and <code>.claude/</code>, the same rules for an agent; <code>.clang-format</code> and <code>.clang-tidy</code>.</td></tr>
+</tbody>
+</table>
+
+<p><code>TECHNICAL.md</code> has the whole tree, file by file, and a test fails when it names a file
+that is gone or misses a public header or a source of <code>src/rmp/</code>.
+<a href="/framework/architecture.html">Architecture</a> has how the modules depend on one
+another.</p>
+
+<h3 id="build">build/</h3>
+
+<p data-fw-grep="tools/rmp.py::BUILD_DIRS = \{\n    &quot;debug&quot;: &quot;the debug preset: rmp build, rmp run, rmp test&quot;,">Every
+build goes into a folder of its own under <code>build/</code>: <code>build/debug</code> for
+<code>rmp test</code> and <code>rmp run</code>, <code>build/release</code>, <code>build/lint</code>
+for the compile database clang-tidy reads, <code>build/examples-check</code> for the examples and
+their scripts, <code>build/coverage</code>, <code>build/fuzz</code>, and the rest that
+<code>BUILD_DIRS</code> in <code>tools/rmp.py</code> lists with what writes each one.
+<code>build/</code> itself is never a build: CMake refuses to configure there, and a workflow, a
+tool or a page that names a folder of <code>build/</code> that list does not have fails a test. A
+new folder is a new line in that list.</p>
+
+<pre data-lang="shell">
+rmp clean
+</pre>
+
+<p>deletes every build and everything generated from the <code>.toml</code>; the next command that
+needs them makes them again.</p>
+
+<h2 id="what-a-game-gets">What a game gets: the manifest</h2>
+
+<p data-fw-grep="tools/rmp.py::# The copy is an explicit list of what a game needs, not &quot;everything except&quot;\.">A
+game made with <code>rmp new</code> is a copy of the framework, made from an explicit list in
+<code>tools/rmp.py</code>: <code>INCLUDE</code> names what a game needs, and
+<code>FRAMEWORK_ONLY</code> names what it does not, each entry with the reason. The longest pattern
+that matches a path decides. It is a list of what goes in, not of what stays out, because an
+exclude list fails in silence: the next gate or fixture added to the framework would ride along
+into every game, and nothing would say so.</p>
+
+<p data-fw-grep="tests/rmp_test.py::def test_every_tracked_path_is_classified\(self\):">So
+every file the framework tracks has to be in one list or the other. A new file that is in neither
+fails <code>rmp test rmp</code>, and the question it forces is the right one: does a game need
+this? A game needs it when its build, its tests or its CI use it; otherwise it goes in
+<code>FRAMEWORK_ONLY</code>, with a reason a reader will understand.</p>
+
+<pre data-lang="shell">
+rmp new --list
+</pre>
+
+<p>prints what a new game gets, without making one.</p>
+
+<p data-fw-grep=".github/workflows/ci.yml::      # 'true' in the framework's own repository, 'false' in a game made with\n      # `rmp new`\. This file is the same in both, byte for byte">Some
+files are the same in both and behave differently. <code>.github/workflows/ci.yml</code> is copied
+byte for byte, but for the block of triggers <code>[ci] on_push</code> writes; the framework's own
+jobs — its tests, its examples, its lint gates — are skipped in a game by a condition the first job
+computes, never cut out of the copy. A step that names a file a game does not get must be one of
+those skipped in a game. And every commit of the framework is proved to make a working game: the
+<code>rmp_new</code> job makes one and runs that game's own checks on it.</p>
+
+<h2 id="a-new-file">What a new file needs</h2>
+
+<p>The checks hold the tree to a few lists, so a new file is not finished until it is on the ones
+that concern it. Each line below is a test that fails without it.</p>
+
+<table>
+<thead><tr><th>A new…</th><th>Needs</th></tr></thead>
+<tbody>
+<tr><td>file of any kind</td><td>its entry in <code>INCLUDE</code> or <code>FRAMEWORK_ONLY</code> in <code>tools/rmp.py</code>, as above</td></tr>
+<tr><td>source in <code>src/rmp/</code></td><td>its line in <code>TECHNICAL.md</code>'s tree; its line in <code>tools/coverage_floor.txt</code>, in the same commit; and its place in exactly one of the mutation floor files under <code>tests/mutation/floors/</code></td></tr>
+<tr><td>public header in <code>include/rmp/</code></td><td>to be a module a game can choose to use, with a name; its line in <code>README.md</code> and in <code>TECHNICAL.md</code>'s tree; its line in <code>tools/header_budget.txt</code>, measured in the build image; to include <code>rmp/config.h</code> and compile on its own; and for each public function, a test that calls it, and a property that holds it or, written by hand for a reviewer to read, a line in <code>tests/property/waivers.txt</code></td></tr>
+<tr><td>unit test, <code>tests/*_test.cpp</code></td><td>nothing: every file of that name but the two UI tests, which are programs of their own, is built into <code>unit_test</code></td></tr>
+<tr><td>example</td><td>a folder <code>examples/&lt;area&gt;/&lt;name&gt;/</code> with <code>src/main.cpp</code>, which makes it a target of its own; in <code>games/</code>, <code>ui/</code>, <code>scenes/</code> and <code>input/</code>, a script under <code>tests/e2e/</code> that plays it</td></tr>
+<tr><td>vendored library</td><td>a licence decision first: its row in <code>THIRD_PARTY_LICENSES.md</code>, its pin by sha256 or its <code>PATCHES.md</code>, and its include folder on all four include lists — <a href="/framework/contributing/rules.html#dependencies">the rules</a> say why</td></tr>
+<tr><td>gate</td><td>a stage of <code>rmp test</code>, a step in CI, and a planted mistake it is seen to refuse — <a href="/framework/contributing/coverage-and-gates.html">Coverage and gates</a></td></tr>
+<tr><td>folder under <code>build/</code></td><td>its line in <code>BUILD_DIRS</code></td></tr>
+</tbody>
+</table>
+
+<p>Next: <a href="/framework/contributing/rules.html">the rules</a>.</p>

@@ -1,0 +1,96 @@
+<!--
+title: Contributing
+description: How to work on the framework itself: setting up a machine, the repository, the rules, writing tests, the verification ladder, CI, pull requests and keeping the docs true.
+order: 80
+-->
+<h1>Contributing</h1>
+
+<p class="lede">These pages are for whoever changes the framework itself: Omar, a teammate, and
+the agents that work on it, on a laptop or in the cloud. They say what to install, where things
+are, which rules hold and why, how a change is proved, and how it reaches <code>main</code>. To
+make a game with the framework you need none of this: <a href="/getting-started/index.html">Getting
+started</a> is for that.</p>
+
+<p>They are written for a person first and an agent second. An agent working in the repository
+reads the framework's <code>CLAUDE.md</code>, which holds the same rules in fewer words; these
+pages give the reason beside each one and every command in full, ready to paste. Like the rest of
+this site they are checked against the framework: every <code>rmp</code> command on them is one
+<code>rmp help</code> lists, every path exists, and the sentences about how the framework works
+are pinned to its source.</p>
+
+<h2 id="the-rule">The rule that outranks the others</h2>
+
+<p data-fw-grep="CLAUDE.md::\*\*The API has to be as simple as possible for the user\.\*\* Complexity is allowed">Before
+any of the rest: the API has to be as simple as possible for the person making the game.
+Complexity may exist for the advanced case; it may not stand in the way of the simple one. The
+measure is a main menu, and it is three calls:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void play();">
+rmp::ui::begin();
+if (rmp::ui::button("Play")) play();
+if (rmp::ui::button("Quit")) rmp::app::quit();
+rmp::ui::end();
+</pre>
+
+<p data-fw-grep="CLAUDE.md::1\. Is there a real game that needs it\? &quot;Someone might want it&quot; is a no\.">A change
+that makes those lines longer is wrong, whatever else it buys. A feature gets in by answering three
+questions, in this order: is there a real game that needs it; can it be made from what already
+exists, in which case it is an example and not new API; and does it make the menu longer, in which
+case it is redesigned until it does not. <a href="/framework/why/the-three-function-menu.html">The
+three-function menu</a> has the whole argument.</p>
+
+<h2 id="the-order">The order to read them in</h2>
+
+<p>Top to bottom is the order a change goes through, from an empty machine to a merged pull
+request:</p>
+
+<ol>
+<li><a href="/framework/contributing/setup.html">Setting up</a>: <code>rmp</code>, a clone, the
+pinned clang tools, Python, and the build image CI uses.</li>
+<li><a href="/framework/contributing/repository.html">The repository</a>: what lives where, what
+<code>rmp new</code> copies into a game, and what a new file needs before it is accepted.</li>
+<li><a href="/framework/contributing/rules.html">The rules</a>: the framework's rules for its
+own code, each with the reason it exists.</li>
+<li>Writing tests: <a href="/framework/contributing/tests.html">unit tests, the headless UI, render
+and smoke</a>; <a href="/framework/contributing/examples-and-e2e.html">examples as tests, and the
+scripts that play them</a>; <a href="/framework/contributing/properties-fuzzing-mutation.html">properties,
+fuzzing and mutation</a>; <a href="/framework/contributing/coverage-and-gates.html">coverage, and the
+gates</a>.</li>
+<li><a href="/framework/contributing/ladder.html">The verification ladder</a>: what to run before a
+change leaves your machine, in order, and when the slow stages are worth their time.</li>
+<li><a href="/framework/contributing/ci.html">CI</a>: what a push and a pull request run, the debug
+lane, the full matrix, and how to read a red run.</li>
+<li><a href="/framework/contributing/pull-requests.html">Pull requests</a>: the branch, the template,
+the checks <code>main</code> requires, the API-change approval, and the commits.</li>
+<li><a href="/framework/contributing/docs.html">Keeping the docs true</a>: this site, the commit it
+documents, and the check that says when a change broke a page.</li>
+</ol>
+
+<h2 id="in-short">A change, in short</h2>
+
+<ol>
+<li>A branch of its own, from an up-to-date <code>main</code>. If an issue labelled
+<code>nightly-finding</code> is open, it comes first.</li>
+<li>The change, and a test that fails without it. Every test and every gate is seen red on the
+mistake it exists for before it is trusted green.</li>
+<li><code>rmp fmt</code>, <code>rmp lint</code> and <code>rmp test</code> on your machine, and the
+slower stages the change calls for: <code>rmp test examples</code>, <code>rmp test sanitize</code>,
+<code>rmp test fuzz</code>, <code>rmp test coverage</code>.</li>
+<li>Where it matters, the same in the build image, which is what CI runs.</li>
+<li>A pull request that fills in the template: what changed and why, what ran where, what was seen
+red, and what is not verified.</li>
+<li>Every required check green, and Omar's approval when the change touches the public API or
+the <code>.toml</code>.</li>
+<li>The pages of this site that the change makes untrue, fixed in the same stretch of work.</li>
+</ol>
+
+<h2 id="agents">For an agent</h2>
+
+<p data-fw-grep="tools/rmp.py::&quot;CLAUDE\.md&quot;: &quot;the framework's instructions for an agent working on it&quot;,\s+&quot;\.claude/&quot;: &quot;the framework's agent skills&quot;">The
+framework's <code>CLAUDE.md</code> is loaded by Claude Code in every session in the repository, and
+<code>.claude/skills/</code> holds the detail it loads on demand: the code style, API design, the
+verified facts about Clay, and the verification ladder. Neither is copied into a game.
+<code>CLAUDE.md</code> also keeps the list of mistakes that have already cost time once, each with
+how it was found; read the entry for an area before changing it. Everything on these pages applies
+to an agent the same way: the ladder before a pull request, the template filled in honestly, and
+<code>nightly-finding</code> issues first.</p>

@@ -1,0 +1,217 @@
+<!--
+title: Setting up
+description: What a machine needs to work on the framework: rmp, a clone, the pinned clang-format and clang-tidy, Python with Hypothesis, and the pinned build image CI runs in, with podman or Docker.
+order: 10
+-->
+<h1>Setting up</h1>
+
+<p class="lede">Working on the framework needs what making a game needs, plus three things: the
+exact clang-format and clang-tidy the framework pins, Hypothesis for the Python property tests, and
+the build image CI runs in. The first two go on your laptop; the image is how your laptop sees
+what CI sees.</p>
+
+<p>The commands below are for Linux, which is what the image and every Linux job of CI are. On a
+Mac or on Windows the image is the way to the same results.</p>
+
+<h2 id="what-a-laptop-needs">What a laptop needs</h2>
+
+<ul>
+<li><strong>git</strong>, and <strong>Python 3.11</strong> or newer: <code>rmp</code> is written in
+it.</li>
+<li data-fw-grep="CMakeLists.txt::cmake_minimum_required\(VERSION 3\.30\)"><strong>CMake 3.30</strong>
+or newer, <strong>Ninja</strong>, and a C++20 compiler: GCC or Clang.</li>
+<li>On Linux, the X11 development headers, or on a console with no desktop the DRM/KMS ones.
+<a href="/getting-started/install.html#what-it-needs">Install rmp</a> says how the installer lists
+what is missing, with the command for your system.</li>
+<li data-fw-grep="cmake/sanitize.cmake::install &quot;\s+&quot;compiler-rt \(libclang-rt-&lt;N&gt;-dev on Debian and Ubuntu, compiler-rt on Arch and &quot;\s+&quot;Fedora\), or use \[dev\] compiler = \\&quot;gcc\\&quot;"><strong>The
+sanitizer runtimes.</strong> Every debug build of the framework runs under AddressSanitizer and
+UndefinedBehaviorSanitizer. GCC's come with most distributions; Clang's are compiler-rt, a package
+of its own. Without them a debug build goes on unsanitized and says so in a CMake warning, which
+on the framework is a reason to stop, not to read past.</li>
+<li><strong>clang-format and clang-tidy 22.1.8</strong>, exactly: <a href="#clang-tools">below</a>.</li>
+<li><strong>Hypothesis</strong>, for the Python property tests: <a href="#clang-tools">below</a>,
+in the same place.</li>
+<li><strong>gh</strong>, GitHub's command line, signed in: <code>rmp push</code> asks it whether a
+CI run is in flight, and every command on <a href="/framework/contributing/ci.html">CI</a> uses
+it.</li>
+<li><strong>podman</strong> or <strong>Docker</strong>, for <a href="#the-image">the image</a>.</li>
+</ul>
+
+<p data-fw-grep="tools/cppcheck_check.sh::echo &quot;  skip  cppcheck is not installed \(the build image has it;&quot;">cppcheck
+is optional on a laptop: <code>rmp test</code> skips its stage with a message when it is not
+installed, and CI, which has it, fails instead of skipping. The same is true of Hypothesis, and of
+the locales the unit tests build with glibc's <code>localedef</code>. A skip is a stage that did
+not run, so say so when you report what you ran.</p>
+
+<h2 id="rmp-and-a-clone">rmp, and a clone to work in</h2>
+
+<p>Install <code>rmp</code> the way a game maker does, with the one line on
+<a href="/getting-started/install.html">Install rmp</a>. Then clone the framework somewhere of your
+own to work in:</p>
+
+<pre data-lang="shell">
+git clone https://github.com/omardev29/raylib_multiplatform ~/raylib_multiplatform
+cd ~/raylib_multiplatform
+rmp help
+</pre>
+
+<p data-fw-grep="tools/rmp.py::def delegate\(root: Path, argv: list\[str\]\) -&gt; int \| None:\n    &quot;&quot;&quot;Run the project's own tools/rmp\.py when it is not this file\.&quot;&quot;&quot;">Inside
+the clone, the <code>rmp</code> on your PATH hands every command to the clone's own
+<code>tools/rmp.py</code>, so <code>rmp test</code> there is your working copy's
+<code>rmp test</code>, whichever framework the installer put on your PATH.
+<code>rmp help</code> run inside it lists the two commands only the framework has,
+<code>rmp lint</code> and <code>rmp example</code>.</p>
+
+<p data-fw-grep="tools/rmp.py::GLOBAL_COMMANDS = \(&quot;new&quot;, &quot;install&quot;, &quot;update&quot;\)">Three
+commands are the exception: <code>rmp new</code>, <code>rmp install</code> and
+<code>rmp update</code> act on the framework the <code>rmp</code> you typed belongs to, wherever you
+type them. To make a game from your working copy — to try what a change does to a new game — run
+the clone's own launcher by its path:</p>
+
+<pre data-lang="shell">
+./rmp new ~/games/try_it
+</pre>
+
+<p data-fw-grep="tools/rmp.py::raise Refused\(f&quot;\{framework\} is on \{branch or 'a detached HEAD'\}, and rmp update only &quot;">Keep
+the clone up to date with git, not with <code>rmp update</code>: <code>rmp update</code> only moves
+a clone that sits on <code>main</code> with nothing of its own, and refuses one on a branch or with
+local commits, which is what a working copy is.</p>
+
+<pre data-lang="shell">
+git switch main
+git pull --ff-only
+</pre>
+
+<h2 id="clang-tools">clang-format, clang-tidy and Hypothesis</h2>
+
+<p data-fw-grep="thirdparty/FROZEN_VERSIONS.md::clang_format              22\.1\.8\nclang_tidy                22\.1\.8">The
+framework pins clang-format and clang-tidy to 22.1.8 in <code>thirdparty/FROZEN_VERSIONS.md</code>.
+The version matters: a clang-format one minor version away reformats files that were already
+right, and every diff becomes noise; a clang-tidy of another version reports other things. The
+build image installs both from PyPI, and a laptop can do the same, in a virtual environment of its
+own, together with the Hypothesis the image carries:</p>
+
+<pre data-lang="shell">
+python3 -m venv ~/.venvs/rmp-dev
+~/.venvs/rmp-dev/bin/pip install clang-format==22.1.8 clang-tidy==22.1.8 hypothesis==6.168.5
+export PATH="$HOME/.venvs/rmp-dev/bin:$PATH"
+</pre>
+
+<p>Put the <code>export</code> line in your shell's startup file so every terminal has it. With
+that folder first on your PATH, its <code>python3</code> is the one the <code>rmp</code> launcher
+finds first, so the Python tests import Hypothesis, and its <code>clang-format</code> and
+<code>clang-tidy</code> are the ones <code>rmp fmt</code> and <code>rmp lint</code> run.</p>
+
+<p data-fw-grep="tools/versions_check.sh::printf '  DRIFT %-26s declared=%s  actual=%s\\n'">Check
+it with the configuration stage, which compares the tools on your PATH with the pin:</p>
+
+<pre data-lang="shell">
+rmp test config
+</pre>
+
+<p>A clang-format or clang-tidy of another version is a <code>DRIFT</code> line naming the version
+it found, and a failed stage, before it has reformatted anything.</p>
+
+<h2 id="the-image">The build image</h2>
+
+<p data-fw-grep="thirdparty/FROZEN_VERSIONS.md::build_image_digest        sha256:[0-9a-f]{64}">Every
+Linux job of CI runs inside one image, <code>ghcr.io/omardev29/raylib-build</code>, pinned by its
+digest in <code>thirdparty/FROZEN_VERSIONS.md</code>. It carries every compiler and tool those jobs
+use, so a job downloads nothing, and it is the one place where a few checks are exact: the e2e
+shots compared pixel for pixel, the coverage floors, the cost of each header, the versions against
+the image's own manifest, and mutation testing, whose tools only it has. Running a check in it on
+your machine gives the answer CI will give.</p>
+
+<p>The image is public. Read its digest from the file, so it is always the pinned one, and pull
+it:</p>
+
+<pre data-lang="shell">
+IMAGE=ghcr.io/omardev29/raylib-build@$(sed -nE 's/^build_image_digest +//p' thirdparty/FROZEN_VERSIONS.md)
+podman pull "$IMAGE"
+</pre>
+
+<h3 id="a-checkout-for-the-image">A checkout of its own</h3>
+
+<p>Run the image on a second checkout, not on the one you build in. CMake remembers the folder a
+build directory was configured in: inside the container your checkout is <code>/work</code>, and a
+<code>build/debug</code> configured on your laptop at another path is refused there, and the other
+way round. A git worktree is a second checkout of the same repository, sharing its branches:</p>
+
+<pre data-lang="shell">
+git worktree add --detach ../raylib_multiplatform-image main
+cd ../raylib_multiplatform-image
+</pre>
+
+<p>Before each run, move it to the commit you want checked, detached, because a branch can be
+checked out in one worktree at a time and yours is in the first:</p>
+
+<pre data-lang="shell">
+git switch --detach my-branch
+</pre>
+
+<p>A worktree keeps its git data in the first checkout's <code>.git</code>, so the container needs
+that folder too, read-only, at the same path:</p>
+
+<pre data-lang="shell">
+IMAGE=ghcr.io/omardev29/raylib-build@$(sed -nE 's/^build_image_digest +//p' thirdparty/FROZEN_VERSIONS.md)
+repo_git=$(git rev-parse --path-format=absolute --git-common-dir)
+podman run --rm --init --network=none \
+    -v "$PWD":/work -v "$repo_git":"$repo_git":ro -w /work "$IMAGE" \
+    bash -c 'python3 tools/configure.py &gt;/dev/null &amp;&amp; xvfb-run -a ./rmp test'
+</pre>
+
+<p>Every option there has a reason:</p>
+
+<ul>
+<li data-fw-grep="CLAUDE.md::\*\*`xvfb-run` must not be a container's PID 1\.\*\*"><code>--init</code>
+puts an init process first in the container. Without it, <code>bash -c '… &amp;&amp; xvfb-run …'</code>
+hands its last command the place of process 1, and <code>xvfb-run</code> there waits for a signal
+that never comes: the run hangs instead of failing, and a timeout cannot end it. Any container that
+starts a game needs it.</li>
+<li><code>--network=none</code> proves the run downloads nothing, which is the rule for every Linux
+job.</li>
+<li><code>xvfb-run -a</code> gives the stages that open a window — the UI on a real GPU, and the
+smoke boot — a display, which the image does not have.</li>
+<li>Rootless podman maps your user to root inside the container, so what it writes in the
+checkout is yours. On a system with SELinux, add <code>:Z</code> to the first <code>-v</code>.</li>
+</ul>
+
+<p>A plain clone instead of a worktree works the same, without the second <code>-v</code>.</p>
+
+<p data-fw-grep="tools/dev_shell.sh::exec docker run --rm -it \\\n    --user &quot;\$\(id -u\):\$\(id -g\)&quot;">With
+Docker, <code>tools/dev_shell.sh</code> runs a command in the pinned image, read from the same file,
+as your user rather than as root, and with no command it opens a shell there. It runs
+<code>docker</code> without <code>--init</code>, so it is for commands that start no game. For
+<code>rmp test</code> and anything else that opens a window, use the command above with
+<code>docker</code> in place of <code>podman</code>, and the two options the script adds so that
+what the container writes is yours: <code>--user "$(id -u):$(id -g)"</code> and
+<code>-e HOME=/tmp</code>.</p>
+
+<pre data-lang="shell">
+tools/dev_shell.sh bash tools/versions_check.sh
+tools/dev_shell.sh
+</pre>
+
+<h2 id="only-the-image">What only the image has</h2>
+
+<p>Most of the ladder runs on a laptop. What needs the image, and what each one does outside
+it:</p>
+
+<table>
+<thead><tr><th>Check</th><th>In the image</th><th>Elsewhere</th></tr></thead>
+<tbody>
+<tr><td>The e2e shots, <code>rmp test examples</code></td><td>compared with the goldens exactly</td><td>played, and the differences reported, not failed</td></tr>
+<tr><td>Recording the e2e goldens, <code>rmp test e2e-update</code></td><td>records them</td><td>refused</td></tr>
+<tr><td>Coverage, <code>rmp test coverage</code></td><td>held to <code>tools/coverage_floor.txt</code> and <code>tools/untested_api.txt</code></td><td>measured and printed, with a Clang that has compiler-rt and the llvm tools of its own release; without them it fails rather than measure nothing</td></tr>
+<tr><td>The cost of each public header, <code>rmp test cost</code></td><td>held to <code>tools/header_budget.txt</code></td><td>a header with no line, or a line for a header that is gone, fails; the sizes are only reported</td></tr>
+<tr><td>Mutation testing, <code>rmp test mutation</code></td><td>Mull and mutmut, against every floor</td><td>fails: Mull, built for the image's LLVM, and mutmut are only there</td></tr>
+<tr><td>Fuzzing, <code>rmp test fuzz</code></td><td>libFuzzer</td><td>libFuzzer where Clang has compiler-rt; otherwise every input replayed, without fuzzing</td></tr>
+<tr><td>The pinned versions, <code>rmp test config</code></td><td>also against the image's own manifest</td><td>against the files that use them</td></tr>
+</tbody>
+</table>
+
+<p>The image's compilers are not your laptop's either, and two versions of GCC do not refuse the
+same code. A change to C++ that has only been built on the laptop has not been built where CI
+builds it.</p>
+
+<p>Next: <a href="/framework/contributing/repository.html">the repository</a>.</p>

@@ -1,0 +1,198 @@
+<!--
+title: The verification ladder
+description: What to run before a change leaves your machine, in order: rmp fmt, rmp lint, every stage of rmp test, the slower stages and when each is worth its time, the same run inside the build image, and the seen-red-first protocol.
+order: 80
+-->
+<h1>The verification ladder</h1>
+
+<p class="lede">A change is proved by running it, not by reading it: almost every bug this
+framework has had was found by looking at pixels, dumping a file or writing an assert. The ladder
+is what to run before a change leaves your machine, cheapest first, so that CI confirms what you
+already know instead of telling you something new twenty minutes later.</p>
+
+<h2 id="every-time">Every time</h2>
+
+<pre data-lang="shell">
+rmp fmt
+rmp lint
+rmp test
+</pre>
+
+<p>All three run on your laptop, and all three have to end clean. Not mostly clean: a warning left
+for later is the one the next change hides behind.</p>
+
+<h3 id="fmt">rmp fmt</h3>
+
+<p data-fw-grep="tools/rmp.py::FMT_ROOTS = \{&quot;framework&quot;: \(&quot;include&quot;, &quot;src&quot;, &quot;tests&quot;, &quot;examples&quot;\),">Formats
+every C and C++ file under <code>include/</code>, <code>src/</code>, <code>tests/</code> and
+<code>examples/</code> with the clang-format the framework pins. <code>rmp fmt check</code> only
+reports the files it would change, which is what <code>rmp test</code> and CI do. Do not format by
+hand, and do not reformat a file you are not otherwise changing.</p>
+
+<h3 id="lint">rmp lint</h3>
+
+<p data-fw-grep="tools/lint.sh::# What the tree still owes the style guide is tools/lint_debt\.txt, and\n# tools/lint_debt\.py holds every run to it: a warning not owed there fails, and\n# so does a line that owes more than is left -- the list only shrinks\.">Runs
+clang-tidy over <code>src/</code>, <code>tests/</code> and <code>examples/</code>, and over the C
+the tools and the build compile, with the framework's <code>.clang-tidy</code>. What the tree
+still owes the style guide is written down in <code>tools/lint_debt.txt</code>, a count per check
+and file, and the run is held to it: a warning nobody owes fails, and so does a count that grew.
+After a change that pays some of it off, lower the file to what is left:</p>
+
+<pre data-lang="shell">
+bash tools/lint.sh debt
+</pre>
+
+<p>Nothing is ever added to it. A new warning is fixed, or silenced on its line with
+<code>// NOLINT(check)</code> and the reason beside it. <code>rmp lint fix</code> applies what
+clang-tidy is sure of and formats the result; read every change it makes, because some of its
+fixes are wrong. <a href="/guidelines/enforcement.html">What checks what</a> lists every check and
+where it holds.</p>
+
+<p data-fw-grep="CLAUDE.md::two of them `CustomChecks`, which run only with\s+`--experimental-custom-checks`">Two
+of the checks are the framework's own, and clang-tidy runs them only with
+<code>--experimental-custom-checks</code>; <code>rmp lint</code> passes it. A clang-tidy run by hand
+without the flag registers neither and says nothing about it.</p>
+
+<h3 id="test">rmp test</h3>
+
+<p data-fw-grep="tools/rmp.py::STAGES = \[\n    Stage\(&quot;fmt&quot;, &quot;every file is clang-format clean&quot;, \[\(&quot;fmt-check&quot;,\)\]\),">Runs
+every stage below in this order and stops at the first that fails. Name a stage to run only that
+one; the first failure is usually all you need to run again.</p>
+
+<table>
+<thead><tr><th>Stage</th><th>What it checks</th></tr></thead>
+<tbody>
+<tr><td><code>rmp test fmt</code></td><td>every file is clang-format clean</td></tr>
+<tr><td><code>rmp test config</code></td><td>the <code>.toml</code>, the pinned versions — your clang tools among them — and every licence</td></tr>
+<tr><td><code>rmp test repo</code></td><td>git tracks sources, not build output</td></tr>
+<tr><td><code>rmp test seam</code></td><td>nothing in <code>src/rmp</code> reads the clock, the input or the random state by itself</td></tr>
+<tr><td><code>rmp test workflows</code></td><td>every reusable workflow gets what it asks for</td></tr>
+<tr><td><code>rmp test portable</code></td><td>the scripts run on macOS's bash 3.2 and on the BSDs</td></tr>
+<tr><td><code>rmp test shell</code></td><td>no <code>A &amp;&amp; B || C</code> in a script</td></tr>
+<tr><td><code>rmp test naming</code></td><td>the names, in every branch of every <code>#if</code></td></tr>
+<tr><td><code>rmp test style</code></td><td>the rules of the style guide clang-tidy cannot see, in every branch</td></tr>
+<tr><td><code>rmp test ownership</code></td><td>nothing allocated or freed by hand, raylib's loads only in their owners</td></tr>
+<tr><td><code>rmp test pointers</code></td><td>no raw pointer and no C string a game can name</td></tr>
+<tr><td><code>rmp test cppcheck</code></td><td>cppcheck finds nothing in <code>src/rmp</code>, and each suppression says why</td></tr>
+<tr><td><code>rmp test headers</code></td><td>every public header compiles on its own</td></tr>
+<tr><td><code>rmp test cost</code></td><td>what each public header costs to include</td></tr>
+<tr><td><code>rmp test gates</code></td><td>each gate above, seen red on a mistake planted in a copy of the tree</td></tr>
+<tr><td><code>rmp test configure</code></td><td><code>tools/configure.py</code>, every refusal</td></tr>
+<tr><td><code>rmp test rmp</code></td><td>the <code>rmp</code> command itself, and <code>rmp new</code>'s manifest</td></tr>
+<tr><td><code>rmp test binaries</code></td><td>the readers that judge a shipped <code>.exe</code> and Mac binary</td></tr>
+<tr><td><code>rmp test size</code></td><td>every shipped binary has a size budget, and its reader works</td></tr>
+<tr><td><code>rmp test unit</code></td><td>the unit tests, in order and then shuffled, and <code>tests/game/</code></td></tr>
+<tr><td><code>rmp test layout</code></td><td>the UI laid out at four resolutions, with no window</td></tr>
+<tr><td><code>rmp test property</code></td><td>the test campaign's own checks, RapidCheck at its fixed seed, Hypothesis derandomized</td></tr>
+<tr><td><code>rmp test ui-render</code></td><td>the UI on a real GPU: a hidden window, read back</td></tr>
+<tr><td><code>rmp test render</code></td><td>a frame drawn in software, checked and hashed</td></tr>
+<tr><td><code>rmp test smoke</code></td><td>the game built, booted and seen to draw, with no mistake reported</td></tr>
+</tbody>
+</table>
+
+<p><a href="/reference/commands.html#test">Commands</a> has the list as <code>rmp help test</code>
+prints it, and <a href="/framework/testing.html">Testing</a> what each stage does in detail. Every
+stage is also a step of CI, in the <code>lint</code> job or in a job of its own, and a test holds
+the two lists to each other.</p>
+
+<h2 id="by-name">When the change calls for more</h2>
+
+<p data-fw-grep="tools/rmp.py::Stage\(&quot;examples&quot;, &quot;boot every example, play the platformer and the e2e scripts&quot;,[\s\S]*?in_all=False\)">Some
+stages are left out of <code>rmp test</code> because they take minutes or hours, and run only when
+named. The examples are the clearest case: building all of them on every check would keep a laptop
+compiling a folder that only grows. Run each of these when the change is the kind it is for:</p>
+
+<table>
+<thead><tr><th>Run</th><th>When the change touches</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>rmp test examples</code></td><td>the public API, objects, collision, maps, scenes, input, the UI, or an example</td><td>builds every example for the software renderer, boots each one and saves a screenshot, plays the platformer to the flag at 60 and 240 Hz, and plays every e2e script</td></tr>
+<tr><td><code>rmp test sanitize</code></td><td>anything that parses, casts, indexes or frees</td><td>the unit and layout tests again, built by GCC under its AddressSanitizer and UndefinedBehaviorSanitizer, every warning an error: a second compiler finds what the first passed over</td></tr>
+<tr><td><code>rmp test fuzz</code></td><td>a reader of files: saves, <code>rmp::Value</code>, LDtk, Tiled, Aseprite, the resource pack, the loader</td><td>every fuzz target built in <code>build/fuzz</code>, and every committed input replayed under the sanitizers; it fails unless every file ran</td></tr>
+<tr><td><code>rmp test coverage</code></td><td>any code in <code>src/rmp/</code>, and any test of it</td><td>the tests built with Clang's coverage, every file held to its floor and every public function to having a test that calls it — a gate in the build image only</td></tr>
+<tr><td><code>rmp test mutation</code></td><td>rarely by hand: it takes hours, in the build image</td><td>Mull and mutmut over every module, each against its floor; <code>bash tools/mutation.sh run MODULE</code> does one</td></tr>
+<tr><td><code>rmp test render-update</code></td><td>the demo's frame, on purpose</td><td>records the frame's hash as the new golden</td></tr>
+<tr><td><code>rmp test e2e-update</code></td><td>an e2e shot, on purpose</td><td>records every shot as its golden, inside the build image only</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="tools/examples_build.sh::echo &quot;  outside the pinned build image: a difference is reported, not enforced&quot;">Outside
+the image, <code>rmp test examples</code> plays every script and reports a shot that differs from
+its golden without failing: <samp>outside the pinned build image: a difference is reported, not
+enforced</samp>. The goldens are drawn by the image's compiler and renderer, and a pixel of
+difference anywhere else proves nothing either way. A golden recorded on purpose is looked at,
+picture by picture, before it is committed.</p>
+
+<p>The <a href="/framework/contributing/tests.html">tests</a>,
+<a href="/framework/contributing/examples-and-e2e.html">examples and e2e</a>,
+<a href="/framework/contributing/properties-fuzzing-mutation.html">properties, fuzzing and
+mutation</a> and <a href="/framework/contributing/coverage-and-gates.html">coverage and gates</a>
+pages say how to write what each of these runs, and how to update a floor that a change has
+earned.</p>
+
+<h2 id="in-the-image">The same, inside the image</h2>
+
+<p data-fw-grep="CLAUDE.md::In the image, run\s+`xvfb-run -a \./rmp test` as CI's lint job does">Your
+laptop is not CI. Before a pull request that changes C++, the build, or anything the image-only
+checks hold, run the ladder again in the pinned build image, on a checkout of its own, as
+<a href="/framework/contributing/setup.html#the-image">Setting up</a> shows:</p>
+
+<pre data-lang="shell">
+IMAGE=ghcr.io/omardev29/raylib-build@$(sed -nE 's/^build_image_digest +//p' thirdparty/FROZEN_VERSIONS.md)
+repo_git=$(git rev-parse --path-format=absolute --git-common-dir)
+podman run --rm --init --network=none \
+    -v "$PWD":/work -v "$repo_git":"$repo_git":ro -w /work "$IMAGE" \
+    bash -c 'python3 tools/configure.py &gt;/dev/null &amp;&amp; xvfb-run -a ./rmp test'
+</pre>
+
+<p>Replace <code>./rmp test</code> with <code>./rmp test examples</code> or
+<code>./rmp test coverage</code> for the stages that are exact only there. The display
+<code>xvfb-run</code> provides is what the UI render test and the smoke boot open their window on;
+without one, the boot fails inside raylib's window code under the sanitizers instead of saying
+what is wrong.</p>
+
+<h2 id="seen-red">Seen red first</h2>
+
+<p data-fw-grep="tests/gates_red_test.py::&quot;A test you have not seen go red is not a test, it is a hope with a name&quot;">A
+test you have not seen fail is a hope with a name. Every test and every gate is seen red on the
+mistake it exists for before its green counts:</p>
+
+<ol>
+<li>Write the test, or the gate.</li>
+<li>Put the mistake back: revert the fix, or plant the error by hand. Check that the text you
+changed was found exactly once, because a plant that did not apply proves nothing.</li>
+<li>Run it. It has to fail, and its message has to name the mistake: a <code>FAIL</code> line that
+says what it found, not a crash somewhere near it.</li>
+<li>Take the mistake out again, and see it pass.</li>
+<li>Write down what you saw: the command, and the line it failed with. It goes in the commit
+message and in the pull request.</li>
+</ol>
+
+<p><code>rmp test gates</code> does this for every <code>tools/*_check.sh</code> on every run: each
+gate is copied with what it reads into a scratch tree, a mistake of its kind is planted, and the
+gate has to say <code>FAIL</code> and name it. A new gate fails that stage until it has a planted
+mistake of its own.</p>
+
+<h2 id="look">When the change is visual, look at it</h2>
+
+<p>An assert proves the boxes are where you said; it does not prove the screen looks right.
+<code>rmp test examples</code> leaves a screenshot of every example in
+<code>build/examples-check/screenshots/</code>, and, for every e2e shot that differs, the expected
+picture, the actual one and their difference in <code>build/examples-check/e2e/</code>. Open
+them.</p>
+
+<pre data-lang="shell">
+rmp example 01_pong
+</pre>
+
+<p>builds one example and runs it in a window, by name or by its path under
+<code>examples/</code>; <code>rmp example</code> alone lists them.</p>
+
+<h2 id="say-what-ran">Say what ran</h2>
+
+<p>Report what actually happened: which stages ran, where — the laptop or the image — and what was
+skipped and why. A stage that skipped for a missing tool did not pass. For CI, name the run:
+a run number and its result is a fact, "CI passes" is a claim. The pull request template asks for
+exactly this, and <a href="/framework/contributing/pull-requests.html">Pull requests</a> says how
+it is filled in.</p>
+
+<p>Next: <a href="/framework/contributing/ci.html">CI</a>.</p>

@@ -1,0 +1,115 @@
+<!--
+title: Keeping the docs true
+description: This site documents one commit of the framework, FRAMEWORK_REF, and is checked against it: how to tell when a framework change made a page untrue, fix the page, move the commit, and run the same checks the site's CI runs.
+order: 110
+-->
+<h1>Keeping the docs true</h1>
+
+<p class="lede">This site is its own repository, <a href="https://github.com/omardev29/rmp-docs">omardev29/rmp-docs</a>,
+and it documents one commit of the framework: the one written in its file
+<code>FRAMEWORK_REF</code>. Every page is checked against that commit, so the site cannot drift
+from the code by accident. It can only be behind it, and moving it forward is part of the work
+that changed the code.</p>
+
+<h2 id="what-is-checked">What the site checks</h2>
+
+<p>A page is an HTML fragment under <code>content/</code>, and the rules for writing one are in
+<a href="https://github.com/omardev29/rmp-docs/blob/main/AUTHORING.md">AUTHORING.md</a>. The first
+of them outranks the rest: a page may not say anything that is not true of the framework at
+<code>FRAMEWORK_REF</code>. Whatever a machine can check about that, the build checks:</p>
+
+<ul>
+<li>every <code>rmp</code> command a page shows exists and takes the argument it is given, read
+from <code>rmp help --json</code>;</li>
+<li>every name written in code — <code>rmp::</code>, an <code>RMP_</code> macro, a raylib function
+— is one the headers declare, and every path is a file of the framework or of a new game;</li>
+<li>every C and C++ block compiles against the framework's headers, and every <code>.toml</code>
+block goes through its <code>configure.py</code>;</li>
+<li>every sentence pinned to the source still holds, and every message quoted is one the framework
+prints;</li>
+<li>no count the framework can change is typed: the number of targets, examples or headers comes
+from the framework when the site is built.</li>
+</ul>
+
+<p>A sentence about how the framework works inside is pinned to the code that makes it true, with
+<code>data-fw-grep</code> on its element, a file and a regular expression that has to match there:</p>
+
+<pre data-lang="text">
+&lt;p data-fw-grep="tools/rmp.py::GLOBAL_COMMANDS = \(&amp;quot;new&amp;quot;, &amp;quot;install&amp;quot;, &amp;quot;update&amp;quot;\)"&gt;Three
+commands act on the framework the rmp you typed belongs to …&lt;/p&gt;
+</pre>
+
+<p>The day that line changes, the check fails and says which sentence to read again. A regular
+expression that spans from the function's head to the line meant, rather than matching the line
+alone, also fails when the line moves to another function.</p>
+
+<h2 id="running-the-checks">Running the checks</h2>
+
+<p>Clone the site next to the framework: it looks for the framework in
+<code>../raylib_multiplatform</code>, or wherever the environment variable RMP_FRAMEWORK or the
+option <code>--framework</code> says. The compile checks read the framework's compile commands, so
+configure them once:</p>
+
+<pre data-lang="shell">
+git clone https://github.com/omardev29/rmp-docs ~/rmp-docs
+(cd ~/raylib_multiplatform &amp;&amp; python3 tools/configure.py &amp;&amp; cmake --preset lint)
+cd ~/rmp-docs
+python3 tools/build.py check
+python3 tools/build.py check --tier compile
+python3 -m unittest discover -s tests
+</pre>
+
+<p>The first is every gate, in under a minute; <code>python3 tools/build.py gates</code> lists them
+with what each one says. The second adds every C and C++ block compiled against the framework, a
+block shown as a mistake run through the tool that has to refuse it, and every block held to the
+framework's style rules. The third is the site's own tests. <code>--tier project</code> also makes each tutorial's game with
+<code>rmp new</code> and builds and boots it after every page, which is what the site's CI runs,
+and takes minutes. <code>python3 tools/build.py serve</code> builds the site and serves it on
+<code>localhost:8040</code> to look at.</p>
+
+<p>The framework checkout should be at <code>FRAMEWORK_REF</code>; the build says so when it is
+not, and when the framework has uncommitted changes.</p>
+
+<h2 id="when-the-framework-changes">When a framework change makes a page untrue</h2>
+
+<p data-fw-grep=".github/workflows/ci.yml::- name: Say so when they do not pass\n        if: steps\.docs\.outcome == 'failure'">The
+framework's <code>docs</code> job checks this site's <code>main</code> against every push and every
+pull request, with every block compiled. When the change breaks a page, the job says which page and
+why, as a warning: the framework is not held up by its documentation. A release tag is: on a tag,
+that job fails, and nothing is released while the site does not pass.</p>
+
+<p>So a change to the public API, a command, an option or a message is followed by the pages it
+makes untrue, as part of the same piece of work:</p>
+
+<ol>
+<li>Merge the framework's pull request. The site documents commits that are on the framework's
+<code>main</code>: its own CI fetches <code>FRAMEWORK_REF</code> from GitHub.</li>
+<li>On a branch of the site, fix every page the warning named, and any page that says something the
+change made untrue that no check could see. Search the site for the name you changed.</li>
+<li>Move <code>FRAMEWORK_REF</code> to the framework's commit, with the framework checked out at it:
+<pre data-lang="shell">
+git -C ../raylib_multiplatform fetch origin
+git -C ../raylib_multiplatform switch --detach origin/main
+git -C ../raylib_multiplatform rev-parse HEAD &gt; FRAMEWORK_REF
+</pre>
+</li>
+<li>Run the checks above until they pass, and look at the pages you changed with
+<code>serve</code>.</li>
+<li>Open the site's pull request. Its CI builds the framework's examples at that commit, runs every
+check with <code>--tier project</code>, looks at the built site in a browser, and on
+<code>main</code> deploys it.</li>
+</ol>
+
+<p>The template of the framework's pull request has a box for this: the docs updated, and
+<code>FRAMEWORK_REF</code> moved, when a page changes.</p>
+
+<h2 id="drift">How far behind the site is</h2>
+
+<p>Every day, a workflow of the site checks its <code>main</code> against the framework's
+<code>main</code>, not against <code>FRAMEWORK_REF</code>, with every block compiled and every
+tutorial built. When that fails it opens one issue on the site's repository, <em>The docs do not
+pass against the framework's main</em>, comments on it every day it still fails, and closes it when
+they pass again. An open one means the next bump of <code>FRAMEWORK_REF</code> has pages to fix,
+and the issue's run says which.</p>
+
+<p>Back to <a href="/framework/contributing/index.html">Contributing</a>.</p>

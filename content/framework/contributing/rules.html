@@ -1,0 +1,238 @@
+<!--
+title: The rules
+description: The framework's rules for its own code, written for a person: where a change goes, names, headers, ownership, how the framework tells a game it made a mistake, the .toml, dependencies, sanitizers, the size budget, the image, and testing to the point of paranoia.
+order: 30
+-->
+<h1>The rules</h1>
+
+<p class="lede">The framework's <code>CLAUDE.md</code> is its rulebook, written short for an agent
+that reads it every session. This page is the same rules for a person, each with the reason it
+exists. Most of them are held by a tool, so breaking one is a red check rather than a review
+comment; where a <a href="/guidelines/index.html">Guidelines</a> page has the detail, this page
+links it instead of repeating it.</p>
+
+<h2 id="the-rule">The rule that outranks the others</h2>
+
+<p>The API has to be as simple as possible for the person making the game, and a main menu is three
+calls: <code>rmp::ui::begin()</code>, a <code>rmp::ui::button()</code> per choice,
+<code>rmp::ui::end()</code>. A feature that makes that longer is redesigned until it does not. The
+<a href="/framework/contributing/index.html#the-rule">overview</a> has the three questions every
+feature answers, and <a href="/framework/why/the-three-function-menu.html">the three-function
+menu</a> the whole argument. Every other rule here gives way to this one.</p>
+
+<h2 id="where-a-change-goes">Where a change goes</h2>
+
+<p data-fw-grep="src/main.cpp::^RMP_GAME\(MainMenuScene\);$"><code>src/main.cpp</code> is a dozen
+lines and ends at <code>RMP_GAME(MainMenuScene);</code>, and stays that way. It is the first file a
+new game's author opens, and what it shows them is how little a game needs. The demo game lives in
+<code>src/scenes/</code>, and it is not where a new mechanic goes: that is an example.</p>
+
+<p data-fw-grep="CLAUDE.md::\*\*`examples/` is where to go big\.\*\* They double as tests\.">Examples
+are where to go big. Each is a small project of its own, built as its own target and booted by CI
+with a screenshot, and the ones in <code>games/</code>, <code>ui/</code>, <code>scenes/</code> and
+<code>input/</code> are played by a script whose frames are compared exactly. So an example is
+documentation that cannot rot: the day it stops working, CI says so.</p>
+
+<p data-fw-grep="CLAUDE.md::\*\*A game in `examples/games/` is playable from start to finish\*\*">A
+game in <code>examples/games/</code> is playable from start to finish — win, lose, play again — or
+it does not belong there. A script that cannot win a game is news about the game, and the fix goes
+into the game, not into the script.</p>
+
+<h2 id="names">Names</h2>
+
+<p>One spelling per kind of name, with no prefixes: types in <code>PascalCase</code>, constants
+and enum members in <code>CONSTANT_CASE</code>, everything else in <code>snake_case</code>, a
+private member with a leading underscore, and a leading underscore on a method only for the hooks
+the framework calls. A constant is never named like somebody else's macro, and a macro starts with
+<code>RMP_</code>. <a href="/guidelines/naming.html">Naming</a> has the table and the reason for
+each line. clang-tidy, <code>-Wshadow</code> and <code>tools/naming_check.sh</code> check it, the
+last in every branch of every <code>#if</code>, including the ones your platform does not
+compile.</p>
+
+<h2 id="headers">Headers</h2>
+
+<ul>
+<li data-fw-grep="CLAUDE.md::\*\*A new header has to be a part of the framework you can name\.\*\*"><strong>A
+new header is a module a game can choose.</strong> <code>rmp/ui.h</code>, <code>rmp/assets.h</code>,
+<code>rmp/input.h</code>: each is a part of the framework you can name and decide to use or not.
+Anything else goes into a header that already exists. Splitting for tidiness taxes the user,
+because every header is one more thing they have to know exists.
+<a href="/framework/why/one-header-per-module.html">One header per module</a> says more.</li>
+<li data-fw-grep="tests/configure_test.py::class OwnHeaderIncludeTest\(unittest\.TestCase\):"><strong>The
+framework's headers do not include each other.</strong> A header under <code>include/rmp/</code>
+forward-declares instead; where a type held by value makes that impossible, it includes the other
+and says at its top why. That keeps one header from dragging the rest of the framework into every
+file that includes it. The rule is about our headers only: the standard library, raylib and
+raymath are used as the job needs, and what each costs to include is measured, not forbidden.</li>
+<li data-fw-grep="tools/header_check.sh::RMP_WINDOW_WIDTH"><strong><code>rmp/config.h</code> is in
+every public header</strong>, and a game never types it: it brings in the values the
+<code>.toml</code> hands the code, from a generated file that includes nothing else, so it costs
+next to nothing. <code>tools/header_check.sh</code> compiles each public
+header on its own, so one that forgets it fails there.</li>
+<li><strong>What a header costs is written down.</strong> <code>tools/header_budget.txt</code> holds
+the preprocessed size of each public header, measured in the build image. In the image a header
+that grows past its line fails; anywhere, a header without a line fails.</li>
+</ul>
+
+<h2 id="ownership">Ownership and pointers</h2>
+
+<p data-fw-grep="CLAUDE.md::\*\*Ownership is RAII, everywhere, public headers included\.\*\* No owning raw">Whatever
+the framework allocates, opens or loads has an owner whose destructor gives it back. There is no
+bare <code>new</code>, <code>delete</code>, <code>malloc</code> or <code>free</code> under
+<code>include/rmp/</code> or <code>src/rmp/</code>, and a raylib <code>Load*</code> or
+<code>Unload*</code> appears only in the file that owns what it makes;
+<code>tools/ownership_check.sh</code> refuses the rest, and its list of exceptions only shrinks. A
+game never has anything of the framework's to free, so it can never free it twice.</p>
+
+<p data-fw-grep="include/rmp/object.h::template &lt;class T&gt; class Ref \{">No declaration a game
+can name has a raw pointer or a C string in it. In its place: a value, a reference, a
+<code>std::span</code>, a <code>std::optional</code>, two overloads, or <code>rmp::Ref</code> for
+something that may be missing; <code>std::string_view</code> in and <code>std::string</code> out;
+and <code>rmp::Handle</code> for an object kept from one frame to the next.
+<code>tools/pointer_check.py</code> reads the headers' syntax tree and fails a public one; a pointer
+in <code>detail::</code> or in a private member is allowed only with its line and its reason in
+<code>tools/pointer_ratchet.txt</code>, which only shrinks.</p>
+
+<p data-fw-grep="include/rmp/object.h::// There is no &lt;functional&gt;: Callback below does the part of std::function that\n// is needed, and also takes a move-only lambda, which std::function cannot\.">A
+callback is the framework's own <code>Callback</code>, not <code>std::function</code>, on purpose:
+<code>std::function</code> needs a callable it can copy, so a lambda that captures a
+<code>std::unique_ptr</code> would stop compiling.</p>
+
+<p><a href="/guidelines/pointers-and-raii.html">Pointers and RAII</a> shows each replacement in
+code, and <a href="/framework/why/ownership.html">Ownership</a> explains handles.</p>
+
+<h2 id="no-exceptions">Nothing throws</h2>
+
+<p data-fw-grep="tests/campaign_test.py::  - nothing under src/rmp/ or include/rmp/ throws or includes RapidCheck:">There
+is no <code>throw</code> under <code>src/rmp/</code> or <code>include/rmp/</code>, and a test of
+the test campaign fails one. A mistake in the game gets a safe value and a report instead, below.
+The one place exceptions exist is the property tests' own program, because RapidCheck's assertions
+throw. <a href="/framework/why/no-exceptions.html">No exceptions</a> has the reasons.</p>
+
+<h2 id="reporting">Telling the game it made a mistake</h2>
+
+<p data-fw-grep="src/rmp/internal.h::#define RMP_REPORT_ONCE\(\.\.\.\)">A mistake the game can make
+every frame — an input action nobody defined, a <code>pop()</code> with no scene under it — is
+reported once, through RMP_REPORT_ONCE in <code>src/rmp/internal.h</code>, keyed by the place in
+the code that says it (and with RMP_REPORT_ONCE_KEYED, by a value too), never through a
+<code>warned</code> flag of its own. Sixty identical warnings a second would bury the one that
+matters. With <code>[dev] strict = true</code> the first one aborts a debug build, at the line that
+made it. A debug build also shows each one on screen, and a boot that reported one fails
+<code>rmp test smoke</code>.</p>
+
+<p data-fw-grep="src/rmp/audio.cpp::// A plain log and not RMP_REPORT_ONCE: that one is for mistakes in the\n        // game, and \[dev\] strict makes it abort a debug build\.">That
+is for mistakes in the game, and only those. A condition of the machine — no sound device, a folder
+it cannot write — is a plain <code>TraceLog()</code>, said once by the state that remembers it,
+with a comment beside it saying why it is not a report: strict mode would abort a correct game on a
+CI runner or a player's locked-down computer. Turning one of those into a report breaks strict
+mode. And reading something never reports at all: reading <code>rmp::Value</code> through a path
+that is not there creates nothing and says nothing.</p>
+
+<h2 id="the-toml">The .toml</h2>
+
+<p data-fw-grep="CLAUDE.md::\*\*An invalid `\.toml` has to fail in `configure\.py`, in second one, and say">A
+<code>.toml</code> that cannot work fails in <code>tools/configure.py</code>, in its first second,
+naming the exact line, what is wrong and what to write instead — not at
+<code>cmake --preset</code>, and not on a runner twenty minutes later. Every combination that
+cannot work is a refusal with a reason, and every refusal has a test in
+<code>tests/configure_test.py</code>. A mistake in the configuration that reaches the compiler is a
+bug in <code>configure.py</code>. <a href="/framework/config-pipeline.html">The config pipeline</a>
+explains why.</p>
+
+<p data-fw-grep="CLAUDE.md::\*\*Never put secrets in the TOML\*\*">Nothing secret goes in it: no
+keystore, token or password. Values yes, secrets no; a secret lives in the repository's GitHub
+secrets.</p>
+
+<h2 id="dependencies">A new dependency is a licence decision</h2>
+
+<p data-fw-grep="tools/license_db.py::And then the rules\. Copyleft \(AGPL, SSPL, GPL, LGPL, MPL, EUPL\) fails; LGPL">Every
+vendored component has a row in <code>THIRD_PARTY_LICENSES.md</code>, and
+<code>tools/license_db.py --check</code>, in <code>rmp test config</code>, fails one without it.
+Copyleft fails, LGPL included, because neither iOS nor a static musl build can link dynamically;
+non-commercial and unknown licences fail. A component under a licence that asks for changes to be
+marked is either pinned unmodified by sha256 in <code>thirdparty/FROZEN_VERSIONS.md</code> or marked
+modified with a <code>PATCHES.md</code> beside it. The raylib the framework ships is modified, so no
+page may call it unchanged. <a href="/framework/licences.html">Licences</a> has the whole list.</p>
+
+<p data-fw-grep="tests/configure_test.py::class VendoredHeaderPathsTest\(unittest\.TestCase\):">A
+vendored header goes on four include lists, not one: the <code>rmp</code> target in
+<code>CMakeLists.txt</code>, Android's own <code>CMakeLists.txt</code> under <code>raymob/</code>,
+the iOS project <code>tools/configure.py</code> generates, and the Windows job's pass over the
+examples. Getting all but one of them right looks exactly like getting them all, until a platform
+you did not build says <em>file not found</em>, so a test holds every folder under <code>thirdparty/</code> with
+a header to all four.</p>
+
+<h2 id="builds">Debug is sanitized, release is hardened</h2>
+
+<p data-fw-grep="raylib_multiplatform.toml::^sanitize = \[&quot;address&quot;, &quot;undefined&quot;\]">Every
+debug build of the framework — the library, the examples, every test program — runs under
+AddressSanitizer and UndefinedBehaviorSanitizer, because the framework's own <code>[dev]
+sanitize</code> lists both. CI sets <code>RMP_REQUIRE_SANITIZERS</code>, so a machine that cannot
+run them fails at configure instead of testing nothing in silence. A check that measures time
+allows for the slowdown when <code>RMP_SANITIZE</code> is defined. Every target built from our
+sources is compiled with <code>-Wall -Wextra</code>, and the framework's own checks with
+<code>RMP_WERROR</code>, which makes a warning an error.</p>
+
+<p data-fw-grep="CLAUDE.md::Release flags are adopted only\s+when they cost 3 % or less of the unpacked binary">A
+release flag goes in only when it costs 3 % or less of the unpacked binary, measured on the build
+that ships; position-independent executables are the one exception, on by Omar's decision, because
+without them address randomisation moves everything but the program itself.
+<a href="/framework/security.html">Security</a> has every flag with what it protects against and
+what it costs.</p>
+
+<h2 id="size">Every shipped binary has a size budget</h2>
+
+<p data-fw-grep="tools/size_check.py::WARN_AT = Fraction\(15, 1000\)\nFAIL_AT = Fraction\(10, 100\)"><code>tools/size_budget.txt</code>
+holds the size of every binary a release ships, and a step of every release job holds it there:
+within 1.5 % of its line it passes in silence, up to 10 % it passes with a warning that names the
+new size, and past 10 % it fails — growing or shrinking. Growth is allowed; it is a decision, and
+the commit that grows a binary writes the new line.
+<a href="/publishing/ci.html#size-budget">The size budget</a> shows the file and how one run's log
+updates it.</p>
+
+<h2 id="the-image">A Linux job downloads nothing</h2>
+
+<p data-fw-grep="CLAUDE.md::\*\*A Linux job downloads nothing\. That is what the image is for\.\*\*">Every
+compiler, tool and library the Linux jobs use is in the build image, pinned by digest. A download
+during a job is a single point of failure that no pinning fixes: the checksum can be right and the
+network still be down, and twenty minutes of jobs fail for a reason that has nothing to do with the
+code. A new tool is a new image and a new digest, in <code>thirdparty/FROZEN_VERSIONS.md</code> and
+in every workflow that names the image; <code>tools/versions_check.sh</code> fails when any two
+disagree.</p>
+
+<h2 id="tests">Tested to the point of paranoia</h2>
+
+<p data-fw-grep="CLAUDE.md::\*\*Test exhaustively, to the point of paranoia\. Assume nothing\.\*\*">Anything
+that can be tested is tested, and a test asserts what actually happened, not that a command exited
+0: a job can go green having run none of its script, and a suite can pass having run a part of its
+tests. For an option, that means every valid value, every invalid one, the wrong type, the empty
+value and the combinations that cannot work.</p>
+
+<p>And a test you have not seen fail is not a test yet. Every test and every gate is seen red on
+the mistake it exists for — planted by hand, and found exactly once — before its green is trusted;
+the pull request says what was seen red.</p>
+
+<p data-fw-grep="CLAUDE.md::\*\*Every deterministic mistake must be catchable by a gate, not by memory\.\*\*">When
+a mistake can be described precisely, a machine rejects it: a clang-tidy check, a refusal in
+<code>configure.py</code>, a test, a gate. A rule that lives only in a document is kept until the
+day somebody has not read it. The pages on
+<a href="/framework/contributing/tests.html">tests</a>,
+<a href="/framework/contributing/examples-and-e2e.html">examples and e2e</a>,
+<a href="/framework/contributing/properties-fuzzing-mutation.html">properties, fuzzing and
+mutation</a> and <a href="/framework/contributing/coverage-and-gates.html">coverage and gates</a>
+are how.</p>
+
+<h2 id="what-has-cost-time">What has already cost time</h2>
+
+<p>The second half of <a href="fw:CLAUDE.md">the framework's <code>CLAUDE.md</code></a> is a list of
+mistakes that each cost a run, a day or a release once, every one found by reproducing it rather
+than by reading code: that riscv64 runs under an emulator, that macOS ships bash 3.2, that a BSD
+job's script can exit 0 having run half of itself, that pushing cancels a CI run, and more. Read the
+entry for an area before you change it. It is cheaper than finding it again.</p>
+
+<h2 id="language">Language</h2>
+
+<p>Code, comments, documentation and commit messages are in English. A name in a comment is
+spelled exactly as in the code, so a rename renames the comments too.</p>
+
+<p>Next: <a href="/framework/contributing/tests.html">writing tests</a>.</p>

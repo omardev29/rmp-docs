@@ -1,0 +1,195 @@
+<!--
+title: Pull requests
+description: How a change reaches the framework's main: a branch, the ladder, the pull request template, the checks main requires, Omar's approval for a change to the public API or the .toml, nightly-finding issues first, and plain commits.
+order: 100
+-->
+<h1>Pull requests</h1>
+
+<p class="lede"><code>main</code> is changed only by pull request. Every change, from a person or
+from an agent, goes up on a branch of its own, is checked by CI there, and is merged when every
+check <code>main</code> requires is green — and, when it changes the public API or the
+<code>.toml</code>, when Omar has approved it.</p>
+
+<h2 id="the-flow">From a branch to main</h2>
+
+<ol>
+<li>Start from an up-to-date <code>main</code>, on a branch named for the change:
+<pre data-lang="shell">
+git switch main
+git pull --ff-only
+git switch -c save-reads-any-locale
+</pre>
+An agent works in a git worktree of its own as well, so that two tasks on one machine never share
+a checkout.</li>
+<li>Make the change, with its test seen red first, and run
+<a href="/framework/contributing/ladder.html">the ladder</a>.</li>
+<li>Push the branch. The first push sets its upstream:
+<pre data-lang="shell">
+rmp push
+</pre>
+</li>
+<li>Open the pull request, on GitHub or with <code>gh</code>. Its description starts from the
+template, below; fill it in.
+<pre data-lang="shell">
+gh pr create --base main --template .github/pull_request_template.md
+</pre>
+</li>
+<li>CI runs the fast lane on the branch merged into <code>main</code>, and again on every push to
+the branch. A red check is fixed on the branch, with the debug lane when a platform is involved:
+<a href="/framework/contributing/ci.html">CI</a>.</li>
+<li>When every required check is green, and the approval is there if the change needs one, it is
+merged.</li>
+</ol>
+
+<h2 id="agents-in-the-cloud">Agents in the cloud</h2>
+
+<p>Much of the work is done by Claude Code in the cloud: many agents at once, at any hour, each on
+a branch of its own, each opening a pull request like anybody else. They reach GitHub through
+Claude's own GitHub connection, not through a token from somebody's machine. They follow the same
+process to the letter — the ladder, the template, <code>nightly-finding</code> issues first — and
+what one could not run where it ran, it says under <em>Not verified</em> instead of leaving it
+out.</p>
+
+<h2 id="the-template">The template</h2>
+
+<p><code>.github/pull_request_template.md</code> is the description every pull request starts
+with. It asks for what a reviewer needs to trust the change without running it again:</p>
+
+<dl>
+<dt>What changed, and why</dt>
+<dd>The change in a few sentences, and the reason for it: the bug and how it showed, or the game
+that needs the feature. For a feature, how it answers the three questions of
+<a href="/framework/why/the-three-function-menu.html#admission">the three-function menu</a>.</dd>
+<dt>The ladder</dt>
+<dd>Which stages ran, and where: on the laptop, and in the pinned build image. Name a stage that
+skipped, and why.</dd>
+<dt>Seen red first</dt>
+<dd>For each new test and gate, the mistake it was seen to fail on, and the line it failed with.</dd>
+<dt>Not verified</dt>
+<dd>What the change could affect that nothing here ran: a platform only the full matrix builds, a
+check only the image has. An honest list is worth more than a green one; it says where the next
+person should look.</dd>
+<dt>The checklist</dt>
+<dd>Each box is ticked, or says why it does not apply:
+<ul>
+<li><code>rmp fmt check</code>, <code>rmp lint</code> and <code>rmp test</code> pass;</li>
+<li><code>rmp test examples</code>, when the public API or an example changed;</li>
+<li><code>rmp test sanitize</code>, when the change parses, casts or frees;</li>
+<li><code>rmp test fuzz</code>, when a parser changed;</li>
+<li><code>rmp test coverage</code> in the build image, when <code>src/rmp/</code> changed;</li>
+<li>the docs updated, and <code>FRAMEWORK_REF</code> bumped, when a page of this site is no longer
+true: a pull request of the site's own, whose <code>FRAMEWORK_REF</code> moves to this change once
+it is merged — <a href="/framework/contributing/docs.html">Keeping the docs true</a>;</li>
+<li>no secret anywhere in the change;</li>
+<li>the commits plain, below.</li>
+</ul></dd>
+</dl>
+
+<h2 id="required-checks">The checks main requires</h2>
+
+<p>A pull request merges only with these checks green. They are the fast lane's jobs, by the names
+GitHub shows them under:</p>
+
+<p><code>config</code>, <code>lint</code>, <code>tidy</code>, <code>examples</code>,
+<code>e2e</code>, <code>coverage</code>, <code>deep</code>, <code>docs</code>,
+<code>rmp_new</code>, <code>linux / x64</code>, <code>windows / x64</code>,
+<code>web / build</code>, <code>android / build</code> and <code>api</code>.</p>
+
+<p data-fw-grep=".github/workflows/ci.yml::continue-on-error: \$\{\{ github\.ref_type != 'tag' \}\}\n        run: python3 rmp-docs/tools/build\.py check --framework &quot;\$GITHUB_WORKSPACE&quot; --tier compile"><code>docs</code>
+is green even when this site no longer passes against the change: it warns there, so that the
+framework is not held up by its documentation, and a release tag is what it blocks. The warning is
+still a job to do, on <a href="/framework/contributing/docs.html">the docs</a>, before the next
+release. The full matrix is not required on a pull request; it runs at the end of a larger piece of
+work and on every tag.</p>
+
+<h2 id="api-change">A change to the API needs Omar's approval</h2>
+
+<p>The API is what the rule above every other protects: every public header is something a game's
+author has to know exists, every function in it is one more thing to read, and every key of the
+<code>.toml</code> is a promise to every game made from the framework. So a change to either is
+Omar's decision, made on the pull request.</p>
+
+<p>The <code>api</code> job of <code>.github/workflows/ci.yml</code> holds it. It runs on pull
+requests only — on a push, a tag or a run started by hand it does nothing and passes — and it looks
+at what the pull request changes:</p>
+
+<ul>
+<li>any public header, <code>include/rmp/*.h</code>, in any way, a comment included: a comment in
+a public header is the reference a game's author reads;</li>
+<li>a key of the <code>.toml</code> — one of <code>DEFAULTS</code> in
+<code>tools/configure.py</code>, or of <code>raylib_multiplatform.toml</code> — added, removed or
+renamed.</li>
+</ul>
+
+<p>When it finds one, it puts the label <code>api-change</code> on the pull request and fails, with
+a message that says what changed and who approves it, unless the pull request also carries the
+label <code>api-approved</code>. Only Omar adds that label. Once he has, the <code>api</code> job is
+run again — the next push to the branch runs it, or the failed jobs are re-run — and it passes:</p>
+
+<pre data-lang="shell">
+gh run rerun "$RUN" --failed
+</pre>
+
+<p>Make the decision easy: say in the description what a game's code looks like before and after,
+and how the change answers the three questions. A change that makes the three-function menu longer
+will not be approved however it is argued.</p>
+
+<h2 id="nightly-findings">nightly-finding issues first</h2>
+
+<p data-fw-grep="tools/finding.py::LABEL = &quot;nightly-finding&quot;">Every night the deep campaign
+fuzzes every fuzz target and runs the properties at a random seed, and every Sunday it runs mutation
+testing. What it finds is an issue labelled <code>nightly-finding</code>: one per signature — the
+same crash found again is a comment on its issue, not a second one — with the one command that
+plays it again and a link to the run that keeps the input. A bug found that way is real and has
+not been fixed yet, so those issues are taken before any other work:</p>
+
+<pre data-lang="shell">
+gh issue list --label nightly-finding
+</pre>
+
+<p>Taking one is the seen-red protocol with the evidence handed to you:</p>
+
+<ol>
+<li>Play it again with the command in the issue, in the build image, and see it fail.</li>
+<li>Make it a case that runs on every push: a fuzz input goes into
+<code>tests/fuzz/regressions/&lt;target&gt;/</code> under a name that says what it is; a property's
+counterexample becomes a named doctest case in the module's own tests; a Hypothesis failure becomes
+an explicit example.</li>
+<li>Fix it, and see that case pass.</li>
+<li>Open the pull request with <code>Fixes #</code> and the issue's number in its description, so
+merging it closes the issue. If the same signature is found after it was closed, a new issue says
+it came back.</li>
+</ol>
+
+<p><a href="/framework/contributing/properties-fuzzing-mutation.html">Properties, fuzzing and
+mutation</a> has each kind in detail.</p>
+
+<h2 id="commits">Commits</h2>
+
+<p data-fw-grep="CLAUDE.md::\*\*Commits are plain and in Omar's name\.\*\* No `Co-Authored-By`, no extra">A
+commit message is plain text in English: no <code>Co-Authored-By</code> line, and no trailer of any
+other kind. An agent working for Omar commits in his name, which is the git identity his machines
+already have.</p>
+
+<p>The subject says what is true after the commit, and the reason when it fits, rather than
+naming a kind of change — not <em>fix: save</em> but something of the shape <em>a save reads 0.5
+back under a German locale: every number is converted in the C locale</em>. A body, when there
+is one, says what was seen red and how. Where a change moves a number that is written down — a coverage floor, a size budget, a
+header's cost, the lint debt — the new line goes in the same commit as the change that earned it,
+so the history says why every number is what it is.</p>
+
+<h2 id="needs-a-person">What needs a person</h2>
+
+<p data-fw-grep="CLAUDE.md::\*\*Only interrupt him\*\* for a serious problem, an architectural decision, or">Everything
+else is done without asking. Omar is asked for:</p>
+
+<ul>
+<li>a change to the public API or to a key of the <code>.toml</code>, through
+<code>api-approved</code>, above;</li>
+<li>an architectural decision: what the framework is, rather than how one piece of it works;</li>
+<li>a serious problem;</li>
+<li>anything on GitHub itself: its settings, labels, branch protection and secrets, and anything
+wrong with it.</li>
+</ul>
+
+<p>Next: <a href="/framework/contributing/docs.html">keeping the docs true</a>.</p>
