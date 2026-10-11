@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from rmpdocs import checks, coverage, flags, truth  # noqa: E402,F401 - they register their gates
+from rmpdocs import checks, coverage, enforcement, flags, truth  # noqa: E402,F401 - they register their gates
 from rmpdocs.site import Site  # noqa: E402
 
 
@@ -62,14 +62,23 @@ def main(argv):
             print(f"{name:16} {says}")
         return 0
 
+    # The compile tier runs before the pages are written, so that a block
+    # shown as refused is printed with what the tool said about it.
+    results = []
+
+    def compile_tier(s: Site):
+        from rmpdocs import snippets
+        results.extend(snippets.check(s.snippets, s.framework))
+
     site = Site(framework=args.framework, out=args.out, examples_web=args.examples_web,
-                posters=args.posters).build(write=args.command != "check")
+                posters=args.posters).build(
+        write=args.command != "check",
+        compile_tier=compile_tier if args.tier in ("compile", "project") else None)
     for w in site.warnings:
         print(f"warning: {w}")
     problems = [p for p in site.problems if p.gate != "html"] + checks.run(context(site))
     if args.tier in ("compile", "project"):
         from rmpdocs import snippets
-        results = snippets.check(site.snippets, site.framework)
         for s, why in results:
             if why:
                 problems.append(checks.Problem("snippets", s.page, s.line, why))

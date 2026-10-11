@@ -303,7 +303,7 @@ class StaticRuleTest(unittest.TestCase):
                       self.build_with('<pre data-lang="cpp" data-harness="toplevel" '
                                       'data-expect="warning">int x;</pre>')[0])
 
-    def site_with(self, files: dict):
+    def site_with(self, files: dict, compile_tier=None):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
         root = Path(tmp)
@@ -313,7 +313,34 @@ class StaticRuleTest(unittest.TestCase):
         for rel, body in files.items():
             (root / rel).parent.mkdir(parents=True, exist_ok=True)
             (root / rel).write_text(f"<!--\ntitle: T\ndescription: A page.\n-->\n<h1>T</h1>\n{body}\n")
-        return Site(framework=FRAMEWORK, docs=root).build(write=False)
+        return Site(framework=FRAMEWORK, docs=root).build(write=False, compile_tier=compile_tier)
+
+    REFUSED = ('<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" '
+               'data-check="modernize-avoid-c-style-cast">int y = (int)1.5;</pre>\n'
+               '<pre data-lang="cpp" data-harness="function" data-expect="error" '
+               'data-error="no matching function">rmp::ui::button(42);</pre>\n'
+               '<pre data-lang="cpp" data-harness="function">int fine = 0;</pre>')
+
+    def test_what_the_tool_said_is_printed_under_its_block(self):
+        def tier(site):
+            for s in site.snippets:
+                if s.expect_lint:
+                    s.said, s.said_by = "snippet.cpp:1:9: warning: a < b [x]", "clang-tidy"
+                if s.expect_error:
+                    s.said, s.said_by = "snippet.cpp:1:1: error: no matching function", "clang++"
+        out = self.site_with({"content/index.html": self.REFUSED}, compile_tier=tier).outputs["index.html"]
+        self.assertEqual(out.count('class="tool-said"'), 2)
+        self.assertIn("<pre data-lang=\"text\">snippet.cpp:1:9: warning: a &lt; b [x]</pre>", out)
+        self.assertIn("<p><code>clang++</code> refuses it:</p>", out)
+        # The static caption gives way to the compiler's own words.
+        self.assertNotIn("saying among other things", out)
+        self.assertNotIn("rmp-said", out)
+
+    def test_without_the_compile_tier_the_static_caption_stays(self):
+        out = self.site_with({"content/index.html": self.REFUSED}).outputs["index.html"]
+        self.assertNotIn("tool-said", out)
+        self.assertNotIn("rmp-said", out)
+        self.assertEqual(out.count("saying among other things: <code>no matching function</code>"), 1)
 
     def test_the_right_way_on_a_guidelines_page_is_held_clean(self):
         block = '<pre data-lang="cpp" data-harness="toplevel">int x = 0;</pre>'
@@ -357,8 +384,65 @@ class StaticRuleTest(unittest.TestCase):
         self.assertIn("saying among other things: <code>no matching function</code>", body)
 
 
-if __name__ == "__main__":
-    unittest.main()
+
+class SaidTest(unittest.TestCase):
+    """A block shown as refused is printed with what refused it, in the
+    tool's own words: the compiler's, clang-tidy's or the gate's lines about
+    the block, never words typed for it. Seen red before `said` existed: the
+    page printed the check's name and nothing the tool had said."""
+
+    @classmethod
+    def setUpClass(cls):
+        LintTest.setUpClass()
+
+    def run_one(self, code, harness="toplevel", **kw):
+        s = snippets.Snippet("content/x.html", 1, "cpp", code, harness, **kw)
+        why = snippets.check([s], FRAMEWORK, jobs=1)[0][1]
+        self.assertIsNone(why)
+        return s
+
+    def test_an_error_keeps_the_compilers_lines_on_the_block(self):
+        s = self.run_one("int fine = 0;\nrmp::ui::button(42);", harness="function",
+                         expect_error=True, error_text="no matching function")
+        self.assertRegex(s.said, r"^snippet\.cpp:2:\d+: error: no matching function")
+        self.assertNotIn("/tmp", s.said)
+        self.assertNotIn(str(FRAMEWORK), s.said)
+        self.assertEqual(s.said_by, Path(snippets.compile_command(FRAMEWORK)[0]).name)
+
+    def test_a_lint_refusal_keeps_clang_tidys_line(self):
+        s = self.run_one("int one() { return 1; }\nint half() { return (int)3.5; }",
+                         expect_lint="modernize-avoid-c-style-cast")
+        self.assertEqual(s.said_by, "clang-tidy")
+        self.assertRegex(s.said, r"^snippet\.cpp:2:\d+: warning: C-style casts are discouraged; "
+                                 r"use static_cast \[modernize-avoid-c-style-cast\]$")
+
+    def test_the_check_the_page_names_comes_first(self):
+        # clang-tidy names the case first and the macro second; the page
+        # shows the one it is about first.
+        s = self.run_one("#define LIVES 3", expect_lint="cppcoreguidelines-macro-usage")
+        lines = s.said.splitlines()
+        self.assertEqual(len(lines), 2, s.said)
+        self.assertTrue(lines[0].endswith("[cppcoreguidelines-macro-usage]"), s.said)
+        self.assertTrue(lines[1].endswith("[readability-identifier-naming]"), s.said)
+
+    def test_a_gate_refusal_keeps_the_scripts_line(self):
+        s = self.run_one("int count() {\n    int n = 0;\n    n++;\n    return n;\n}",
+                         expect_gate="style", gate_rule="S6")
+        self.assertEqual(s.said_by, "tools/style_check.sh")
+        self.assertEqual(s.said, "FAIL  snippet.cpp:3: S6 n++ -- postfix ++/-- whose value is not "
+                                 "used: ++i")
+
+    def test_the_built_page_prints_it_under_the_block(self):
+        site = StaticRuleTest.site_with(self, {"content/index.html":
+            '<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" '
+            'data-check="modernize-avoid-c-style-cast">int half() { return (int)3.5; }</pre>'},
+            compile_tier=lambda s: snippets.check(s.snippets, FRAMEWORK, jobs=1))
+        out = site.outputs["index.html"]
+        self.assertIn('<div class="tool-said"><p><code>clang-tidy</code>, with the framework\'s '
+                      '<code>.clang-tidy</code>, says:</p>', out)
+        self.assertIn("C-style casts are discouraged; use static_cast "
+                      "[modernize-avoid-c-style-cast]</pre>", out)
+        self.assertNotIn("rmp-said", out)
 
 
 class TomlTest(unittest.TestCase):
@@ -418,3 +502,7 @@ class TomlTest(unittest.TestCase):
         problems, _ = self.build_with(
             '<pre data-lang="toml" data-config="no" data-reason="site.toml">[x]\ny = 1\n</pre>')
         self.assertEqual(problems, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

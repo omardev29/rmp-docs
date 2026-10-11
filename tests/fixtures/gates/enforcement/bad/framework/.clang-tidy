@@ -1,0 +1,23 @@
+# A fixture: the families, the style guide's checks by name, two exclusions.
+Checks: >
+  -*,
+  misc-*,
+  modernize-*,
+  google-runtime-int,
+  custom-*,
+
+  -misc-no-recursion,
+  -modernize-use-trailing-return-type,
+
+# The comment that ends the block.
+CustomChecks:
+  - Name: rmp-raw-pointer
+    Query: |
+      match varDecl(hasType(pointerType())).bind("p")
+    Diagnostic:
+      - BindName: p
+        Level: Warning
+        Message: "a raw pointer"
+CheckOptions:
+  - key: x
+    value: y

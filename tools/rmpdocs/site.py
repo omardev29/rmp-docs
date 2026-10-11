@@ -274,6 +274,7 @@ class Site:
             if pre.parent is not None and pre.parent.tag == "div" and \
                     "code-block" in pre.parent.classes():
                 continue     # generated already
+            recorded = False   # a block of the compile tier: self.snippets[-1]
             lang = pre.get("data-lang")
             include = pre.get("data-include")
             toml_out = ""   # what configure.py said about a .toml shown as refused
@@ -320,7 +321,9 @@ class Site:
                     if lang == "toml":
                         toml_out = self._toml(page, pre, code)
                 elif lang in ("cpp", "c") and page.kind == "content":
+                    before = len(self.snippets)
                     self._snippet(page, pre, lang, code)
+                    recorded = len(self.snippets) > before
                 elif lang == "toml" and page.kind == "content":
                     toml_out = self._toml(page, pre, code)
             if not lang:
@@ -371,6 +374,11 @@ class Site:
             if mistake and pre.get("data-error"):
                 said = ('<p class="compiler-output">The compiler refuses it, saying among other things: '
                         f'<code>{html.escape(pre.get("data-error"), quote=False)}</code></p>')
+            if (mistake or verdict) and recorded:
+                # What refused it, in the tool's own words, once the compile
+                # tier has run it (render() puts it here); until then, what
+                # the static build knows.
+                said = f"<!--rmp-said:{len(self.snippets) - 1}-->{said}<!--/rmp-said-->"
             markup = (f'<div class="code-block{(" " + extra) if extra else ""}"{attr_text}>{head}'
                       f'<pre data-lang="{lang}"><code>{highlighted}</code></pre>{said}</div>')
             replace(pre, dom.Raw(markup, pre.line))
@@ -712,7 +720,7 @@ class Site:
             "breadcrumbs": crumbs,
             "toc": toc,
             "toc_top": toc_top,
-            "content": page.body,
+            "content": self.said(page.body),
             "pager": pager,
             "framework_url": self.config["site"]["framework_repo"],
             "docs_url": self.config["site"]["docs_repo"],
@@ -724,6 +732,25 @@ class Site:
         out = re.sub(r"\{\{(\w+)\}\}", lambda m: values[m.group(1)], layout)
         return out
 
+    SAID = re.compile(r"<!--rmp-said:(\d+)-->(.*?)<!--/rmp-said-->", re.S)
+
+    def said(self, body: str) -> str:
+        """Each block shown as refused, followed by what refused it: the
+        compiler's, clang-tidy's or the gate's own lines about the block, when
+        the compile tier ran it before the page was written. Without that
+        tier, the caption the static build wrote, and nothing more."""
+        def one(m):
+            s = self.snippets[int(m.group(1))]
+            if not s.said:
+                return m.group(2)
+            who = html.escape(s.said_by)
+            head = (f"<code>{who}</code> refuses it:" if s.expect_error else
+                    f"<code>{who}</code>, with the framework's <code>.clang-tidy</code>, says:"
+                    if s.expect_lint else f"<code>{who}</code> says:")
+            return (f'<div class="tool-said"><p>{head}</p>'
+                    f'<pre data-lang="text">{html.escape(s.said, quote=False)}</pre></div>')
+        return self.SAID.sub(one, body)
+
     def serve_framework_files(self):
         """site.toml [served]: framework files the site serves at its root,
         as the checkout has them with the line endings its .gitattributes
@@ -734,7 +761,11 @@ class Site:
 
     # -- the whole thing ---------------------------------------------------------
 
-    def build(self, write: bool = True) -> "Site":
+    def build(self, write: bool = True, compile_tier=None) -> "Site":
+        """Read, transform, render, and write when asked. `compile_tier`,
+        when given, runs on the site after the pages are read and before they
+        are rendered: it compiles the blocks, and what it hears about the ones
+        shown as refused is printed under them."""
         head = self.framework_head()
         if head and head != self.ref:
             self.warnings.append(f"documenting the framework's working tree at {head[:8]}, "
@@ -747,6 +778,8 @@ class Site:
         self.serve_framework_files()
         for page in self.pages:
             self.transform(page)
+        if compile_tier is not None:
+            compile_tier(self)
         layout = (self.docs / "templates" / "layout.html").read_text(encoding="utf-8")
         for page in self.pages:
             self.outputs[page.url] = self.render(page, layout)

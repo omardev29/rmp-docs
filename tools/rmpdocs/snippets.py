@@ -45,6 +45,13 @@ And every block that is not shown as a mistake -- every page's, and every
 file a tutorial writes -- passes the framework's tools/style_check.sh: the
 style rules clang-tidy cannot see (`++i`, no C cast, no NULL), which the
 framework's examples are held to as well (style).
+
+A block shown as a mistake keeps what refused it: `said` is the compiler's,
+clang-tidy's or the gate's own lines about the block -- the file called
+snippet.cpp and every line number counted from the block's first line, so
+the reader sees the words the tool prints and never words typed for it. The
+compile tier fills it before the pages are written, and the page prints it
+under the block.
 """
 
 from __future__ import annotations
@@ -79,6 +86,8 @@ class Snippet:
     lint_clean: bool = False   # clang-tidy has to say nothing about it
     expect_gate: str = ""      # a gate of the framework's (GATES) that has to refuse it
     gate_rule: str = ""        # and the rule it has to name
+    said: str = ""             # what refused it, the tool's lines about the block (compile tier)
+    said_by: str = ""          # and which tool that was: "clang++", "clang-tidy", a script
 
 
 # The framework's text gates a block can be run through: the script, and the
@@ -168,6 +177,27 @@ def compile_one(s: Snippet, framework: Path, cxx: list[str]) -> tuple[bool, str]
         return got.returncode == 0, said
 
 
+# A compiler's diagnostic, as GCC and Clang both print it.
+COMPILER_LINE = re.compile(r"^(snippet\.(?:cpp|c)):(\d+):(\d+): (error|warning|note): (.*)$")
+
+
+def compiler_said(s: Snippet, framework: Path, output: str, most: int = 4) -> str:
+    """The compiler's errors on the block's own lines, as it printed them,
+    with the line counted from the block's first line. An error the block
+    causes somewhere else -- inside a header it called into -- is said where
+    the compiler said it, the framework's path made relative to it."""
+    _source, _suffix, first = assemble_at(s, framework)
+    last = first + s.code.count("\n")
+    own, elsewhere = [], []
+    for line in output.splitlines():
+        m = COMPILER_LINE.match(line)
+        if m and m.group(4) == "error" and first <= int(m.group(2)) <= last:
+            own.append(f"{m.group(1)}:{int(m.group(2)) - first + 1}:{m.group(3)}: error: {m.group(5)}")
+        elif ": error: " in line and not m:
+            elsewhere.append(line.replace(str(framework) + "/", ""))
+    return "\n".join((own or elsewhere)[:most])
+
+
 # --- clang-tidy -----------------------------------------------------------------
 
 DIAGNOSTIC = re.compile(r"^(.*?):(\d+):(\d+): (warning|error): (.*?) \[([\w.,-]+)\]$")
@@ -239,6 +269,12 @@ def lint_one(s: Snippet, framework: Path, cxx: list[str], binary: str):
     """(check, line in the snippet, message) for every diagnostic clang-tidy
     gives on the snippet's own lines, with the framework's .clang-tidy. The
     harness, the given and the headers are not the block's to answer for."""
+    return lint_run(s, framework, cxx, binary)[0]
+
+
+def lint_run(s: Snippet, framework: Path, cxx: list[str], binary: str):
+    """lint_one's findings, and clang-tidy's own lines for them: the
+    diagnostic as it printed it, on snippet.cpp at the block's line."""
     source, suffix, first = assemble_at(s, framework)
     last = first + s.code.count("\n")
     with tempfile.TemporaryDirectory() as tmp:
@@ -247,7 +283,7 @@ def lint_one(s: Snippet, framework: Path, cxx: list[str], binary: str):
         got = subprocess.run([binary, "--quiet", *tidy_flags(binary),
                               f"--config-file={framework / '.clang-tidy'}", str(f), "--",
                               *lint_args(cxx)], capture_output=True, text=True)
-        found = []
+        found, lines = [], []
         for m in QUERY_ERROR.finditer(got.stdout + got.stderr):
             found.append(("clang-tidy", 0, "a CustomChecks query of the framework's .clang-tidy "
                           f"did not parse, so its check never ran: {m.group(0).strip()}"))
@@ -257,14 +293,25 @@ def lint_one(s: Snippet, framework: Path, cxx: list[str], binary: str):
                 continue
             at = int(m.group(2))
             if first <= at <= last:
-                for check in m.group(6).split(","):
+                checks = m.group(6).split(",")
+                for check in checks:
                     found.append((check, at - first + 1, m.group(5)))
-        return found
+                lines.append((s.expect_lint not in checks, at,
+                              f"snippet{suffix}:{at - first + 1}:{m.group(3)}: {m.group(4)}: "
+                              f"{m.group(5)} [{m.group(6)}]"))
+        # The check the page names first, then the rest, each in line order.
+        return found, [text for _other, _at, text in sorted(lines)]
 
 
 def gate_one(s: Snippet, framework: Path) -> list[tuple[str, int, str]]:
     """(rule, line in the snippet, what) for every finding the gate makes on
     the snippet's own lines."""
+    return gate_run(s, framework)[0]
+
+
+def gate_run(s: Snippet, framework: Path):
+    """gate_one's findings, and the gate's own lines for them, as the script
+    printed them, on snippet.cpp at the block's line."""
     argv, _stage = GATES[s.expect_gate]
     source, suffix, first = assemble_at(s, framework)
     last = first + s.code.count("\n")
@@ -272,12 +319,15 @@ def gate_one(s: Snippet, framework: Path) -> list[tuple[str, int, str]]:
         f = Path(tmp) / f"snippet{suffix}"
         f.write_text(source, encoding="utf-8")
         got = subprocess.run([*argv, str(f)], capture_output=True, text=True, cwd=framework)
-        found = []
+        found, lines = [], []
         for line in got.stdout.splitlines():
             m = re.match(r"^\s*FAIL\s+(.*?):(\d+): ([A-Z]\d+) (.*)$", line)
             if m and Path(m.group(1)).resolve() == f.resolve() and first <= int(m.group(2)) <= last:
-                found.append((m.group(3), int(m.group(2)) - first + 1, m.group(4)))
-        return found
+                at = int(m.group(2)) - first + 1
+                found.append((m.group(3), at, m.group(4)))
+                lines.append((m.group(3) != s.gate_rule, at,
+                              f"FAIL  snippet{suffix}:{at}: {m.group(3)} {m.group(4)}"))
+        return found, [text for _other, _at, text in sorted(lines)]
 
 
 def said(found) -> str:
@@ -293,6 +343,8 @@ def check(snippets: list[Snippet], framework: Path, jobs: int | None = None):
         ok, said_by_compiler = compile_one(s, framework, cxx)
         if s.expect_error:
             s.output = said_by_compiler
+            s.said = compiler_said(s, framework, said_by_compiler)
+            s.said_by = Path(cxx[0]).name
             if ok:
                 return s, "is shown as a mistake (data-expect=\"error\") and compiles"
             if s.error_text and s.error_text not in said_by_compiler:
@@ -310,7 +362,9 @@ def check(snippets: list[Snippet], framework: Path, jobs: int | None = None):
             if s.expect_lint and s.expect_lint not in enabled_checks(str(framework), binary):
                 return s, (f"is shown as refused by {s.expect_lint}, and the framework does not run "
                            f"{s.expect_lint}: its .clang-tidy does not enable it")
-            found = lint_one(s, framework, cxx, binary)
+            found, lines = lint_run(s, framework, cxx, binary)
+            if s.expect_lint:
+                s.said, s.said_by = "\n".join(lines[:6]), "clang-tidy"
             unread = [w for name, _l, w in found if name == "clang-tidy"]
             if unread:
                 return s, "is checked with clang-tidy, and " + "; ".join(unread)
@@ -324,7 +378,8 @@ def check(snippets: list[Snippet], framework: Path, jobs: int | None = None):
                 return s, ("is shown as the right way, and clang-tidy, with the framework's "
                            f".clang-tidy, has something to say about it:\n{said(found)}")
         if s.expect_gate:
-            found = gate_one(s, framework)
+            found, lines = gate_run(s, framework)
+            s.said, s.said_by = "\n".join(lines[:6]), " ".join(GATES[s.expect_gate][0][1:])
             if not any(rule == s.gate_rule for rule, _l, _w in found):
                 script = " ".join(GATES[s.expect_gate][0][1:])
                 return s, (f"is shown as refused by {s.gate_rule} of {script}, and it does not "
