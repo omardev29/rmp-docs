@@ -39,8 +39,8 @@ the line.</dd>
 <dt>The text gates, stages of <code>rmp test</code></dt>
 <dd>What clang-tidy cannot see, because it parses one branch of every <code>#if</code> or because no
 check of its says it: <code>tools/naming_check.sh</code> (rules R1 to R8, the <code>naming</code>
-stage), <code>tools/style_check.sh</code> (S1 to S8, <code>style</code>),
-<code>tools/ownership_check.sh</code> (O1 and O2, <code>ownership</code>),
+stage), <code>tools/style_check.sh</code> (S1 to S9, <code>style</code>),
+<code>tools/ownership_check.sh</code> (O1 to O3, <code>ownership</code>),
 <code>tools/pointer_check.py</code>, which reads the public headers' declarations
 (<code>pointers</code>), and <code>tools/cppcheck_check.sh</code>, a second analyser over
 <code>src/rmp</code> (<code>cppcheck</code>).</dd>
@@ -104,6 +104,8 @@ commands of the framework's own repository, and a game chooses its own checks.</
 <tr><td><a href="/guidelines/modern-cpp.html#literals">No user-defined literal</a></td><td><code>tools/style_check.sh</code> <code>S5</code></td><td>yes</td><td>yes</td><td>no</td></tr>
 <tr><td><a href="/guidelines/modern-cpp.html#floor">Nothing newer than the oldest compiler a game is built with</a></td><td><code>tools/style_check.sh</code> <code>S4</code></td><td>yes, but not in <code>tests/</code>, which build only on CI's compilers</td><td>yes</td><td>no</td></tr>
 <tr><td>No iostreams in the library: a file is read through C's <code>stdio</code> or raylib</td><td><code>tools/style_check.sh</code> <code>S8</code>; one <code>std::ifstream</code> made every release a fifth bigger</td><td>yes: <code>src/rmp/</code> and <code>include/rmp/</code></td><td>no</td><td>no</td></tr>
+<tr><td>No <code>//</code> comment that ends in a backslash: it takes the next line with it</td><td><code>tools/style_check.sh</code> <code>S9</code>; GCC says <code>-Wcomment</code>, Clang and clang-tidy never do</td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td>cute_aseprite reads only what the framework walked first</td><td><code>tools/ownership_check.sh</code> <code>O3</code>: its two loads only in <code>src/rmp/animation.cpp</code></td><td>yes</td><td>yes</td><td>no</td></tr>
 <tr><td><a href="/guidelines/google.html#todo">No <code>TODO</code>, <code>FIXME</code> or <code>XXX</code></a></td><td><code>tools/style_check.sh</code> <code>S3</code></td><td>yes</td><td>yes</td><td>no</td></tr>
 <tr><td><a href="/guidelines/modern-cpp.html#designated">Designated initialisers in declaration order</a></td><td><code>-Werror=reorder-init-list</code> under Clang; GCC and MSVC refuse them anyway</td><td>yes</td><td>yes</td><td>yes</td></tr>
 <tr><td><a href="/guidelines/macros.html">A macro only for what a function cannot do</a></td><td><code>cppcoreguidelines-macro-usage</code>, told the framework's own by name</td><td>yes</td><td>yes</td><td>no</td></tr>

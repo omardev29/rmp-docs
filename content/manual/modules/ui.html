@@ -550,6 +550,12 @@ progress bar in it a width to fill. Without scenes there is no camera, and the w
 screen. <a href="/examples/games/04_top_down.html">The top-down game</a> puts a bar over every enemy
 this way.</p>
 
+<p data-fw-grep="src/rmp/ui/at.cpp::const bool hidden = boxes\.hidden &gt; 0 \|\| !on_screen\(at\);">A box
+goes with its point. While the point is off the screen the box is not drawn at all, not even the
+part that would still show, and nothing in it takes the pointer, the focus or the keys: a button
+over a character who has walked away is not a button anyone can press. Back on the screen it is a
+control again, and the e2e driver holds it to the window like any other.</p>
+
 <h2>Tooltips</h2>
 
 <p><a href="ref:rmp::ui::tooltip"><code>rmp::ui::tooltip()</code></a> is a line about the control

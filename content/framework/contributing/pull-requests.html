@@ -114,20 +114,31 @@ requests only — on a push, a tag or a run started by hand it does nothing and 
 at what the pull request changes:</p>
 
 <ul>
-<li>any public header, <code>include/rmp/*.h</code>, in any way, a comment included: a comment in
-a public header is the reference a game's author reads;</li>
-<li>a key of the <code>.toml</code> — one of <code>DEFAULTS</code> in
-<code>tools/configure.py</code>, or of <code>raylib_multiplatform.toml</code> — added, removed or
-renamed.</li>
+<li>any file under <code>include/</code> — today, the public headers <code>include/rmp/*.h</code> —
+in any way, a comment included: a comment in a public header is the reference a game's author
+reads;</li>
+<li>a key of the <code>.toml</code>: one of <code>DEFAULTS</code> in <code>tools/configure.py</code>
+added, removed or renamed, or its default changed — a default is what every game that does not set
+the key gets — or a key of the framework's own <code>raylib_multiplatform.toml</code>.</li>
 </ul>
 
 <p>When it finds one, it puts the label <code>api-change</code> on the pull request and fails, with
 a message that says what changed and who approves it, unless the pull request also carries the
-label <code>api-approved</code>. Only Omar adds that label. Once he has, the <code>api</code> job is
+label <code>api-approved</code>. Only Omar adds that label: the job reads the pull request's events
+to see who added it, and refuses it from anybody but the repository's owner. It is judged by the
+base branch's own copy of <code>tools/api_change.py</code>, so a pull request cannot change the
+judge it is judged by. Once he has, the <code>api</code> job is
 run again — the next push to the branch runs it, or the failed jobs are re-run — and it passes:</p>
 
 <pre data-lang="shell">
 gh run rerun "$RUN" --failed
+</pre>
+
+<p>Before you open one, the same script says what your branch would be labelled, against
+<code>origin/main</code>, and changes nothing:</p>
+
+<pre data-lang="shell">
+python3 tools/api_change.py
 </pre>
 
 <p>Make the decision easy: say in the description what a game's code looks like before and after,
