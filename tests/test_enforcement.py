@@ -46,6 +46,18 @@ class ReadingTest(unittest.TestCase):
         said = [str(p) for p in enforcement.check_enforcement(ctx)]
         self.assertTrue(any("no Guidelines page has the table" in s for s in said), said)
 
+    def test_a_framework_rmp_new_cannot_list_is_said_once_not_row_by_row(self):
+        import shutil
+        import tempfile
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        shutil.copytree(DOCS / "tests" / "fixtures" / "gates" / "enforcement" / "good", tmp / "good")
+        # A fresh folder: game_paths() caches by path, and this one is new.
+        (tmp / "good" / "framework" / "tools" / "rmp.py").write_text("import sys\nsys.exit(1)\n")
+        said = [str(p) for p in enforcement.check_enforcement(checks.Context.from_folder(tmp / "good"))]
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("rmp.py new --list` said nothing", said[0])
+
 
 class AgreesWithClangTidyTest(unittest.TestCase):
     @classmethod

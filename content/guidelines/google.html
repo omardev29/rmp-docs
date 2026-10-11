@@ -38,8 +38,8 @@ named like any macro the vendored headers or the C library define.</p>
 
 <p data-fw-grep=".clang-tidy::key: readability-identifier-naming\.PrivateMemberPrefix\n    value: '_'">The
 private member's underscore is at the front so that it never touches a dot or an arrow:
-<code>other._table</code> is refused (rule R4), and <code>table_.size()</code> cannot be written at
-all. Checked by <code>readability-identifier-naming</code> and <code>tools/naming_check.sh</code>,
+<code>other._table</code> is refused (rule R4), and so is <code>table_.size()</code> (rule R3).
+Checked by <code>readability-identifier-naming</code> and <code>tools/naming_check.sh</code>,
 in the framework and the examples.</p>
 
 <h3 id="pragma-once">#pragma once</h3>
@@ -56,9 +56,10 @@ that a header has it; a header without it is a question for review.</p>
 <p data-fw-grep="include/rmp/app.h::1\. Include none of our headers\. Forward-declare instead\.">Google:
 avoid forward declarations, include the header you need. Its decision makes one exception, for
 entities your project owns, when a forward declaration is the better way to fix a slowdown. That is
-the case here, and it is measured rather than assumed: the framework's headers include none of each
-other, forward-declare instead, and <code>tools/header_budget.txt</code> holds what each one costs to
-include. <a href="/framework/why/one-header-per-module.html">One header per module</a> has the
+the case here, and it is measured rather than assumed: the framework's headers forward-declare each
+other instead of including, a header that cannot — <code>rmp/scene.h</code> holds an
+<code>rmp::Tilemap</code> by value — says why at its top, and <code>tools/header_budget.txt</code>
+holds what each one costs to include. <a href="/framework/why/one-header-per-module.html">One header per module</a> has the
 numbers. A header from outside the framework — the standard library's, raylib's — is included, as
 Google says.</p>
 
@@ -70,9 +71,10 @@ indents by 2 and stops at 80 columns; the framework indents by 4 and stops at 90
 <code>public:</code> by one space; the framework puts it at the class's own indentation. Google
 writes a braced list as <code>{1, 2}</code>; the framework as <code>{ 1, 2 }</code>, so the theme's
 colour literals keep their spaces. Google sorts includes into five groups, alphabetically; the
-framework orders them by hand, each with a comment saying what it is for. Google lets a brief
-<code>if</code> drop its braces; the framework keeps a guard on one line, <code>if (!ready)
-return;</code>, and switches <code>readability-braces-around-statements</code> off. All of it is
+framework orders them by hand, each with a comment saying what it is for. Both let a brief
+<code>if</code> go without braces; the framework writes every guard that way, <code>if (!ready)
+return;</code>, and switches off <code>readability-braces-around-statements</code>, which would
+refuse it. All of it is
 <code>.clang-format</code>, which <code>rmp fmt</code> applies; <a href="/guidelines/formatting.html">Formatting</a>
 has each setting.</p>
 
@@ -114,8 +116,8 @@ null, who owns it and how long it lives, and its type answers none of the three.
 
 <h2 id="deviations">Deviations, recorded</h2>
 
-<p>Each of these is a rule of Google's that the framework breaks on purpose, in a known place, for
-a reason written beside it.</p>
+<p>Each of these is a rule of Google's that the framework breaks on purpose, in a known
+place.</p>
 
 <h3 id="filesystem">&lt;filesystem&gt;</h3>
 
@@ -154,9 +156,10 @@ nonstandard extension in: a portability wrapper, from a header the whole project
 <p data-fw-grep="src/rmp/app.cpp::ORDER, and every step of it was paid for once">Google allows an
 object with static storage duration only when its destructor does nothing, because destructors at
 exit run in an order nobody chooses. The framework's file-scope state is a struct per concern, and
-some of those hold vectors and strings. What they hold is released before the window closes, in an order written down in <code>src/rmp/app.cpp</code> — scenes, then globals, then the
-interface's font, then sounds, then everything left in the resource table — rather than by
-destructors at exit.</p>
+some of those hold vectors and strings. What they hold is released before the window closes, in
+an order written down in <code>src/rmp/app.cpp</code> — scenes, then globals, then the interface's
+font, then sounds, then everything left in the resource table — rather than by destructors at
+exit.</p>
 
 <h3 id="public-data">Public data members</h3>
 
@@ -182,9 +185,10 @@ it:</p>
 <li data-fw-grep="include/rmp/save.h::NOLINTNEXTLINE\(google-explicit-constructor\): a Ref reads as its Value">a
 <code>Value::Ref</code>, what <code>save["score"]</code> gives, reads as the
 <code>Value</code> it names;</li>
-<li data-fw-grep="include/rmp/assets.h::NOLINTNEXTLINE\(google-explicit-constructor\): a handle passes where raylib takes T">a
-texture, font or sound handle passes where raylib takes the plain struct:
-<code>DrawTexture(logo, 0, 0, WHITE)</code>, from a named handle only;</li>
+<li data-fw-grep="include/rmp/assets.h::NOLINTNEXTLINE\(google-explicit-constructor\): a handle passes where raylib takes T">an
+asset's handle — <code>rmp::Texture</code>, <code>rmp::Font</code>, <code>rmp::Sound</code> and the
+rest — passes where raylib takes the plain struct, <code>DrawTexture(logo, 0, 0, WHITE)</code>, from
+a named handle only;</li>
 <li data-fw-grep="include/rmp/object.h::Callback\(F &amp;&amp;fn\) \{ // NOLINT\(google-explicit-constructor\)">a
 lambda becomes an <a href="ref:rmp::Callback"><code>rmp::Callback</code></a>, so it can be written
 straight into a behavior's options;</li>
@@ -285,7 +289,7 @@ review. <a href="/guidelines/macros.html">Macros</a> has the rule.</p>
 <tr><td>Designated initialisers only in C++20's order</td><td>the compiler, with <code>-Werror=reorder-init-list</code> under Clang</td></tr>
 <tr><td>Type deduction where it makes the code clearer</td><td><code>modernize-use-auto</code>, for a cast, in the framework; review for the rest</td></tr>
 <tr data-fw-grep="include/rmp/object.h::get\(\) is an unchecked downcast, a static_cast\. A dynamic_cast would make[\s\S]*?which nothing\s+// in it uses"><td>RTTI in tests only: nothing in the framework uses <code>dynamic_cast</code> or <code>typeid</code></td><td>review</td></tr>
-<tr><td>No modules of C++20's, and no coroutines</td><td>review</td></tr>
+<tr><td>No modules and no coroutines</td><td>review</td></tr>
 </tbody>
 </table>
 

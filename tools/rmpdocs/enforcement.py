@@ -149,6 +149,12 @@ def check_enforcement(ctx: Context) -> list[Problem]:
     game = game_paths(str(fw))
     flags_text = cmake_flags(fw)
     out = []
+    if not game:
+        # Not a pass by default: with no list, every "no" for a game would
+        # hold and every "yes" would fail, for a reason that is not the page's.
+        out.append(Problem("enforcement", "content/guidelines/", 0,
+                           "`tools/rmp.py new --list` said nothing, so what a game gets cannot be "
+                           "read: the framework has to be a checkout rmp new can list"))
     tables = 0
     said = set()   # every <code> on a Guidelines page
     for path, root in _fragments(ctx):
@@ -232,6 +238,8 @@ def _row(path, row, fw, conf, game, flags_text) -> list[Problem]:
     reaching = [f for f in files if f in game] + built
     if ".clang-tidy" in game:
         reaching += checks + tidy_flags
+    if not game:
+        return out
     if says(cells[4]) and not reaching:
         out.append(Problem("enforcement", path, row.line,
                            f"{where} says a game gets it, and rmp new copies none of "
