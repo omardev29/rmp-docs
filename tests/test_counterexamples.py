@@ -75,6 +75,25 @@ class ReadHeaderCounterexamples(unittest.TestCase):
         self.assertIn("cannot read the head of this scope", caught.exception.message)
         self.assertEqual(caught.exception.line, 3)
 
+    def test_a_value_with_a_shift_keeps_its_spaces(self):
+        # Was '(1 <<2)': collapse() took the second < for a template's.
+        root = cxx.read_header("include/rmp/x.h", "namespace rmp {\ninline constexpr int K = (1 << 2);\n"
+                                                  "using M = std::map<\n    int, float>;\n}")
+        values = {e.name: (e.value, e.signature) for e in root.walk()}
+        self.assertEqual(values["K"], ("(1 << 2)", "inline constexpr int K"))
+        self.assertEqual(values["M"][1], "using M = std::map<int, float>")
+
+    def test_a_banner_inside_a_class_opens_no_group_after_it(self):
+        # Was 'Also inside': rmp::RayQuery and rmp::RayHit stood under "Identity
+        # and life", a banner inside class Object, on the reference page of
+        # the rmp namespace -- and rmp::save under Value's "Structure".
+        root = cxx.read_header("include/rmp/x.h", "\n".join([
+            "namespace rmp {", "// ----------", "// Outside.", "// ----------", "int a;", "",
+            "// A class.", "class C {", "public:", "    // ----------", "    // Inside.", "    // ----------",
+            "    int b;", "    // --- also inside ---", "    int c;", "};", "", "// After.", "int d;", "}"]))
+        groups = {e.name: e.group for e in root.walk()}
+        self.assertEqual([groups[n] for n in "abcd"], ["Outside", "Inside", "Also inside", "Outside"])
+
     def test_scopes_nested_past_the_limit(self):
         # Was RecursionError, a thousand frames down.
         deep = "namespace a {\n" * 2000 + "int x;\n" + "}\n" * 2000

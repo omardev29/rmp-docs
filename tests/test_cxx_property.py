@@ -126,7 +126,8 @@ class MaskTest(unittest.TestCase):
 
 class SplitCommentTest(unittest.TestCase):
 
-    @given(st.lists(st.one_of(CODE.filter(lambda c: "\n" not in c), STRING, CHARACTER), max_size=6),
+    @given(st.lists(st.one_of(CODE.filter(lambda c: "\n" not in c), STRING, CHARACTER,
+                              st.sampled_from(["1'000", "0x1'F'u", "a'b"])), max_size=6),
            st.one_of(st.none(), st.text(alphabet=st.characters(exclude_characters="\n"), max_size=20)))
     def test_the_comment_is_what_follows_the_first_slashes_outside_a_literal(self, parts, comment):
         code = ",".join(parts).replace("\\\n", "\\n")
@@ -183,67 +184,179 @@ DOC = st.lists(st.text(alphabet=st.sampled_from("abc xyz,.;:()"), min_size=1, ma
     str.strip).filter(bool), max_size=2)
 
 
+WORD = st.text(alphabet=st.sampled_from("abcxyz"), min_size=1, max_size=6)
+BANNER = st.lists(st.text(alphabet=st.sampled_from("abc xyz,."), min_size=1, max_size=16).map(
+    str.strip).filter(lambda t: t and t[0] != "-"), min_size=1, max_size=2)
+
+
 @st.composite
-def declarations(draw, depth=0, in_struct=False):
-    """[(kind, name, doc, lines, children)]: a scope's declarations, each
-    separated by a blank line, so none is a run of the one above."""
+def declarations(draw, depth=0, in_struct=False, internal=False):
+    """[(kind, name, above, lines, children, expect)]: a scope's
+    declarations, each after a blank line and the `//` lines `above` it.
+    `expect` is what read_header must say of it -- the doc, the group, what
+    covers it, and any other field of the Entity by name. Three keys are the
+    model's own: `at`, the declaration's line counted from its first;
+    `glued`, no blank line above (a run); `members`, an enum's."""
     out = []
     names = set()
-    for _ in range(draw(st.integers(0, 4))):
+    group = ""
+    kinds = ["function", "template", "field", "array", "constant", "enum", "alias", "run",
+             "banner", "marker", "detail_fn"]
+    kinds += ["static", "deleted", "private"] if in_struct else ["macro", "conditional"]
+    kinds += ["struct", "class"] if depth < 2 else []
+    kinds += ["namespace", "detail"] if depth < 2 and not in_struct else []
+    for _ in range(draw(st.integers(0, 5))):
         name = draw(NAME)
-        if name in names:
+        if name in names or f"{name}_b" in names:
             continue
-        names.add(name)
+        names.update((name, f"{name}_b"))
         doc = draw(DOC)
-        kind = draw(st.sampled_from(["function", "field", "constant", "enum", "alias"]
-                                    + (["struct"] if depth < 2 else [])
-                                    + (["namespace"] if depth < 2 and not in_struct else [])))
+        above = [f"// {d}" for d in doc]
+        expect = {"doc": "\n".join(doc), "internal": internal}
+        kind = draw(st.sampled_from(kinds))
+        trailing = draw(st.one_of(st.none(), WORD))
+        tail = f" // says {trailing}" if trailing else ""
         children = []
-        if kind == "function":
-            lines = [f"float {name}(int x, const char *y = \"a;b{{\");"]
+        if kind in ("banner", "marker"):
+            # A banner opens a group, and the declaration right under it --
+            # no doc of its own -- is covered by it; a `// --- title ---`
+            # line opens one too, with no text. Both last to the scope's end.
+            said = draw(BANNER)
+            if kind == "banner":
+                above = ["// ----------"] + [f"// {t}" for t in said] + ["// ----------"]
+                group = said[0].rstrip(".")
+                expect.update(doc="", group_doc="\n".join(said), covered=True)
+            else:
+                above = [f"// --- {said[0]} ---"]
+                group = said[0][0].upper() + said[0][1:]
+                expect.update(doc="", covered=False)
+            kind = "field"
+            lines = [f"int {name} = 1;"]
+        elif kind == "function":
+            lines = [f'float {name}(int x, const char *y = "a;b{{");' + tail]
+            expect.update(signature=f'float {name}(int x, const char *y = "a;b{{")', trailing=tail[4:])
+        elif kind == "detail_fn":
+            name, kind = f"detail_{name}", "function"
+            lines = [f"int {name}();"]
+            expect.update(internal=True)
+        elif kind == "template":
+            lines = ["template <class T, int N = (1>2)>",
+                     f"std::vector<std::pair<T, int>> {name}(T value, int (&out)[N]);"]
+            kind = "function"
+            expect.update(template="template <class T, int N = (1>2)>",
+                          signature=f"std::vector<std::pair<T, int>> {name}(T value, int (&out)[N])")
+        elif kind == "static":
+            lines = [f"static int {name}() noexcept;"]
+            kind = "function"
+            expect.update(static=True, signature=f"static int {name}() noexcept")
+        elif kind == "deleted":
+            lines = [f"void {name}(int) = delete;"]
+            kind = "function"
+            expect.update(deleted=True)
         elif kind == "field":
-            lines = [f"int {name} = 3;"]
+            lines = [f"int {name} = 3;" + tail]
+            expect.update(value="3", signature=f"int {name}", trailing=tail[4:])
+        elif kind == "run":
+            # Two declarations with nothing between them: the doc above the
+            # first is the run's, and covers the second -- its trailing
+            # comment does not.
+            lines = [f"int {name} = 1;" + tail]
+            expect.update(trailing=tail[4:])
+            out.append(("field", name, above, lines, [], dict(expect, group=group,
+                                                               covered=bool(doc or trailing))))
+            kind, name, above = "field", f"{name}_b", []
+            lines = [f"int {name} = 2;"]
+            expect = {"doc": "", "internal": internal, "run_doc": "\n".join(doc), "glued": True,
+                      "covered": bool(doc)}
+        elif kind == "array":
+            lines = [f"std::array<int, 3> {name} = {{1, 2, 3}};"]
+            kind = "field"
+            expect.update(value="{1, 2, 3}", signature=f"std::array<int, 3> {name}")
         elif kind == "constant":
-            lines = [f"{'static' if in_struct else 'inline'} constexpr int {name.upper()}_K = (1 << 2);"]
             name = f"{name.upper()}_K"
+            lines = [f"{'static' if in_struct else 'inline'} constexpr int {name} = (1 << 2);"]
+            expect.update(value="(1 << 2)", static=in_struct)
         elif kind == "alias":
-            lines = [f"using {name} = int;"]
+            lines = [f"using {name} = std::map<int, float>;"]
+            expect.update(signature=f"using {name} = std::map<int, float>")
+        elif kind == "macro":
+            name = f"{name.upper()}_M"
+            lines = [f"#define {name}(a, b) ((a) + (b))"]
+            expect.update(signature=f"#define {name}(a, b)", branches=[("", "((a) + (b))")], group="",
+                          internal=False, covered=bool(doc))
+        elif kind == "conditional":
+            # The doc of a macro defined twice is the one directly above its
+            # first #define: inside the #if, not above it.
+            name, kind, above = f"{name.upper()}_M", "macro", []
+            lines = ["#if RMP_X"] + [f"// {d}" for d in doc] + [f"#define {name} 1", "#else",
+                                                               f"#define {name} 2", "#endif"]
+            expect.update(at=1 + len(doc), signature=f"#define {name}", group="", internal=False,
+                          branches=[("#if RMP_X", "1"), ("#else", "2")], covered=bool(doc))
+        elif kind == "private":
+            # What follows private: is not API: no entity at all.
+            out.append(("private", "", [], ["private:", "    int hidden_ = 0;", "public:"], [], {}))
+            continue
         elif kind == "enum":
-            members = draw(st.lists(NAME.map(str.upper), min_size=1, max_size=3, unique=True))
-            lines = [f"enum class {name} {{"] + [f"    {m}," for m in members] + ["};"]
-            children = [("member", m, [], [], []) for m in members]
+            lines = [f"enum class {name} : int {{"]
+            for member in draw(st.lists(NAME.map(str.upper), min_size=1, max_size=3, unique=True)):
+                said = draw(DOC)
+                value = draw(st.sampled_from(["", "2", "(1 << 3)"]))
+                note = draw(st.one_of(st.none(), WORD))
+                lines += [f"    // {d}" for d in said]
+                lines.append(f"    {member}{' = ' + value if value else ''},{' // ' + note if note else ''}")
+                children.append(("member", member, [], [], [], {
+                    "doc": "\n".join(said), "value": value, "trailing": note or "", "group": "",
+                    "covered": bool(said or note), "internal": internal, "at": len(lines) - 1}))
+            lines.append("};")
+            expect.update(signature=f"enum class {name} : int")
         else:
-            children = draw(declarations(depth + 1, in_struct or kind == "struct"))
+            inside = kind in ("struct", "class")
+            children = draw(declarations(depth + 1, in_struct or inside, internal or kind == "detail"))
             body = [line for child in children for line in child_lines(child)]
-            opener = f"struct {name} {{" if kind == "struct" else f"namespace {name} {{"
-            lines = [opener] + ["    " + line if line else "" for line in body] + \
-                    (["};"] if kind == "struct" else ["}"])
-        out.append((kind, name, doc, lines, children))
+            if kind == "detail":
+                name, kind = "detail", "namespace"
+                expect.update(internal=True)
+            opener = {"struct": [f"struct {name} {{"], "class": [f"class {name} {{", "public:"]}.get(
+                kind, [f"namespace {name} {{"])
+            lines = opener + ["    " + line if line else "" for line in body] + (["};"] if inside else ["}"])
+            expect.update(at=0)
+        expect.setdefault("group", group)
+        if "covered" not in expect:
+            expect["covered"] = bool(doc or expect.get("trailing") or kind == "namespace")
+        out.append((kind, name, above, lines, children, expect))
     return out
 
 
 def child_lines(declaration) -> list[str]:
-    _kind, _name, doc, lines, _children = declaration
-    return [""] + [f"// {d}" for d in doc] + lines
+    _kind, _name, above, lines, _children, expect = declaration
+    return ([] if expect.get("glued") else [""]) + above + lines
 
 
-def header_of(model) -> str:
+FILE_BLOCK = st.one_of(st.just([]), BANNER)
+
+
+def header_of(model, file_doc) -> str:
+    block = ["// ----------"] + [f"// {t}" for t in file_doc] + ["// ----------", ""] if file_doc else []
     body = [line for d in model for line in child_lines(d)]
-    return "\n".join(["#pragma once", "", "namespace rmp {"] + body + ["}", ""])
+    return "\n".join(["#pragma once", ""] + block + ["namespace rmp {"] + body + ["}", ""])
 
 
 def expected(model, prefix="rmp", first=4):
-    """[(kind, qualname, line, doc)] in the order read_header meets them."""
+    """[(kind, qualname, line, expect)] in the order read_header meets them;
+    `first` is the line after the scope's opener."""
     out = []
     line = first
-    for kind, name, doc, lines, children in model:
-        line += 1 + len(doc)
-        q = f"{prefix}::{name}"
-        out.append((kind, q, line, "\n".join(doc)))
-        if kind in ("struct", "namespace"):
-            out += expected(children, q, line + 1)
+    for kind, name, above, lines, children, expect in model:
+        line += (0 if expect.get("glued") else 1) + len(above)
+        if kind != "private":
+            q = name if kind == "macro" else f"{prefix}::{name}"
+            fields = {k: v for k, v in expect.items() if k not in ("at", "glued")}
+            out.append((kind, q, line + expect.get("at", 0), fields))
+        if kind in ("struct", "class", "namespace"):
+            out += expected(children, q, line + (2 if kind == "class" else 1))
         elif kind == "enum":
-            out += [("member", f"{q}::{m}", line + 1 + i, "") for i, (_k, m, *_r) in enumerate(children)]
+            out += [("member", f"{q}::{m}", line + e["at"], {k: v for k, v in e.items() if k != "at"})
+                    for _k, m, _a, _l, _c, e in children]
         line += len(lines)
     return out
 
@@ -265,12 +378,19 @@ class ReadHeaderTest(unittest.TestCase):
         except ParseError:
             pass
 
-    @given(declarations())
-    def test_a_header_in_the_grammar_reads_back_as_written(self, model):
-        root = cxx.read_header("include/rmp/x.h", header_of(model))
-        got = [(e.kind, e.qualname, e.line, e.doc) for e in root.walk()
-               if e.kind not in ("file",) and e.qualname != "rmp"]
-        self.assertEqual(got, expected(model))
+    @given(declarations(), FILE_BLOCK)
+    def test_a_header_in_the_grammar_reads_back_as_written(self, model, file_doc):
+        text = header_of(model, file_doc)
+        root = cxx.read_header("include/rmp/x.h", text)
+        self.assertEqual(root.doc, "\n".join(file_doc))
+        want = expected(model, first=4 + (len(file_doc) + 3 if file_doc else 0))
+        public = [e for e in root.walk() if not e.internal and not e.deleted and e.kind != "file"]
+        self.assertTrue(all(c in public for e in root.walk() for c in e.public_children()))
+        got = [(e.kind, e.qualname, e.line, {k: getattr(e, k) for k in fields})
+               for e, (_k, _q, _l, fields) in zip(
+                   [e for e in root.walk() if e.kind != "file" and e.qualname != "rmp"], want)]
+        self.assertEqual(len([e for e in root.walk()]) - 2, len(want), text)
+        self.assertEqual(got, want, text)
 
 
 if __name__ == "__main__":

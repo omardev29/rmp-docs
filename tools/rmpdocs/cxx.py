@@ -198,7 +198,9 @@ def collapse(s: str) -> str:
     s = re.sub(r"\(\s+", "(", s)
     s = re.sub(r"\s+\)", ")", s)
     s = re.sub(r"\s+,", ",", s)
-    s = re.sub(r"<\s+", "<", s)
+    # `std::map<\n int, float>`, after a name: a shift (`1 << 2`) and a
+    # comparison (`a < b`) keep their spaces.
+    s = re.sub(r"(?<=[\w:])<\s+", "<", s)
     return s
 
 
@@ -337,6 +339,9 @@ class HeaderReader:
         run_doc = ""
         run_cover = False
         conditions: list[str] = []
+        # The lines of the scopes declared in this one: their banners and
+        # titles open groups inside them, never out here after them.
+        nested: list[tuple[int, int]] = []
         pos = start
         m = self.masked
         while pos < end:
@@ -350,14 +355,16 @@ class HeaderReader:
 
             # The current group: the last banner above this point, inside this scope.
             for idx, (first, last, text) in enumerate(self.banners):
-                if first > floor_line and last < line and (group_banner is None or idx > group_banner):
+                if first > floor_line and last < line and (group_banner is None or idx > group_banner) \
+                        and not any(a <= first <= b for a, b in nested):
                     group_banner = idx
                     group = text.split("\n", 1)[0].strip().rstrip(".")
                     group_doc = text
                     group_from = last
             # ...or a `// ---- title ----` line, when that is nearer.
             for mline, title in self.markers:
-                if floor_line < mline < line and mline > group_from:
+                if floor_line < mline < line and mline > group_from \
+                        and not any(a <= mline <= b for a, b in nested):
                     group, group_doc, group_from = title[0].upper() + title[1:], "", mline
 
             if raw_line.lstrip().startswith("#"):
@@ -411,6 +418,8 @@ class HeaderReader:
                 elif run_cover:
                     ent.covered = True
                 prev_entity = ent
+            if scope_body is not None:
+                nested.append((first_line, last_line))
             prev_end_line = last_line
             pos = stmt_end
 
