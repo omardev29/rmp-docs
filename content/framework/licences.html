@@ -40,10 +40,13 @@ says in its first line that the copy is modified, and lists every change by file
 reason: build-system and platform-selection changes, so the windowing backend can be chosen from
 the <code>.toml</code>; two lines that make the Win32 and DRM backends obey
 <code>SetExitKey()</code>; one that makes Android's EGL ask for the OpenGL ES version raylib was
-compiled for; and fixes taken from upstream, three frees in <code>raudio.c</code> and the scissor
-of the software renderer in <code>thirdparty/raylib/src/external/rlsw.h</code>. Each change is
-also commented at its site, and no document of the framework may describe its raylib as
-unchanged.</p>
+compiled for; fixes taken from upstream, three frees in <code>raudio.c</code> and the scissor
+of the software renderer in <code>thirdparty/raylib/src/external/rlsw.h</code>;
+<span data-fw-grep="thirdparty/raylib/PATCHES.md::`sw_texture_sample_nearest` clamps the texel it reads to the texture: u or v of exactly 1 is the edge texel, not one past it\. Our own fix: upstream master samples the same way">and
+one fix of the framework's own, which upstream does not have: the same renderer's nearest-texel
+lookup is clamped to the texture, so the far edge of a texture reads its last texel and not the
+one past it.</span> Each change is also commented at its site, and no document of the framework
+may describe its raylib as unchanged.</p>
 
 <h2 id="components">Everything it carries</h2>
 
@@ -67,7 +70,7 @@ which platforms it reaches, and where its licence text is. The main ones:</p>
 <tr><td>raymob, the Android glue</td><td>MIT</td><td>modified</td><td>Android only</td></tr>
 <tr><td>raylib-iOS and ANGLE</td><td>zlib; BSD-3</td><td>unmodified</td><td>iOS only</td></tr>
 <tr><td>what raylib bundles: GLFW, miniaudio, the stb libraries, the decoders and loaders</td><td>zlib, MIT, public domain and similar</td><td>unmodified</td><td>where raylib uses them</td></tr>
-<tr><td>rlsw, raylib's software renderer</td><td>MIT</td><td>modified: a fix taken from upstream</td><td>every platform</td></tr>
+<tr data-fw-grep="THIRD_PARTY_LICENSES.md::# backport of upstream's scissor fix and a texel clamp of our own, both named\n# in raylib's PATCHES\.md\), and its row says yes"><td>rlsw, raylib's software renderer</td><td>MIT</td><td>modified: a fix taken from upstream, and one of the framework's own</td><td>every platform</td></tr>
 <tr><td>doctest</td><td>MIT</td><td>unmodified</td><td>nowhere: the framework's tests only</td></tr>
 </tbody>
 </table>

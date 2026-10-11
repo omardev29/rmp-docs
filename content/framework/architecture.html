@@ -587,10 +587,14 @@ altered copy to be plainly marked, and <a href="fw:thirdparty/raylib/PATCHES.md"
 <code>PATCHES.md</code></a> lists every change. Most are build-system and platform-selection
 patches, so the windowing backend can be chosen from the <code>.toml</code>. Two lines make the
 Win32 and DRM backends obey <code>SetExitKey()</code>, so that Escape stays the game's key on
-every backend; one makes Android's EGL ask for the OpenGL ES version raylib was compiled for. The
-rest are fixes backported from upstream: three frees in <code>raudio.c</code>, and the scissor of
-the software renderer, <code>thirdparty/raylib/src/external/rlsw.h</code> — the one change
-among the libraries raylib bundles.
+every backend; one makes Android's EGL ask for the OpenGL ES version raylib was compiled for.
+Three frees in <code>raudio.c</code> and the scissor of the software renderer,
+<code>thirdparty/raylib/src/external/rlsw.h</code>, are fixes backported from upstream.
+<span data-fw-grep="thirdparty/raylib/PATCHES.md::Under `src/external/` --\nthe libraries raylib bundles -- there are two changes, both to its software\nrenderer: such a backport, and that fix of our own\.">One
+more is the framework's own, in the same renderer, which upstream does not have: its
+nearest-texel lookup is clamped to the texture, so the far edge of a texture reads its last texel
+and not the one past it. Those two are the only changes among the libraries raylib
+bundles.</span>
 <a href="/framework/licences.html">Licences</a> has the rest.</p>
 
 <p data-fw-grep="tools/configure.py::- framework: \.\./thirdparty/raylib-ios/raylib\.xcframework">The
