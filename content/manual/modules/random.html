@@ -72,7 +72,7 @@ started on the same frame does not fire as one gun.</p>
 
 <h2>The seed</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::rmp::random::seed\(static_cast<uint64_t>\(">The framework seeds the generator once, when the game starts, from the clock, so a game that
+<p data-fw-grep="src/rmp/app.cpp::rmp::random::seed\(test_seed\(\)\.value_or\(static_cast<uint64_t>\(\s+std::chrono::system_clock::now\(\)">The framework seeds the generator once, when the game starts, from the clock, so a game that
 never mentions seeds plays differently each time it is launched.
 <a href="ref:rmp::random::current_seed"><code>current_seed()</code></a> is the seed the sequence
 running now started from — the number to print in a bug report or show on a roguelike's pause
@@ -116,10 +116,17 @@ happens, is what makes a seeded level the same level every time.</p>
 
 <h3>Tests are reproducible on their own</h3>
 
-<p>The seed from the clock is set by the entry point, and a test does not go through the entry
-point. So a test of anything that varies — a spawner's jitter, a wander, a shake — starts from the
-same default seed every time it runs and gives the same answer, without seeding anything. A test
+<p>The seed from the clock is set by the entry point, and a unit test does not go through the
+entry point. So a test of anything that varies — a spawner's jitter, a wander, a shake — starts from
+the same default seed every time it runs and gives the same answer, without seeding anything. A test
 that fails one time in twenty teaches everyone to ignore a red test.</p>
+
+<p data-fw-grep="src/rmp/app.cpp::A test\n    // that does come through it -- tests/e2e/driver.cpp, which plays a game --\n    // names its seed with set_test_seed\(\)">A
+test that plays a whole game does go through the entry point, and names the seed it starts from
+instead of the clock: that is how the framework's own tests
+<a href="/framework/testing.html#e2e">play an example from a script</a>, and why the falling-block
+game deals the same pieces every time they do. The seed is named through a seam inside the
+framework, not through <code>rmp::random</code>.</p>
 
 <h2>Why not rand()</h2>
 

@@ -32,9 +32,10 @@ read it.</p>
 
 <h2 id="where">Where the clock is read</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::float step_delta\(\) \{\s+const float raw = GetFrameTime\(\);">Once
-a frame, in one function of <code>src/rmp/app.cpp</code>, which asks raylib for the frame time,
-corrects it, and hands it to the frame. Every entry point — the desktop loop, the browser's
+<p data-fw-grep="src/rmp/clock.cpp::float step_delta\(\) \{\s+const float raw = timing\.fixed &gt; 0 \? timing\.fixed : GetFrameTime\(\);">Once
+a frame, in one function of <code>src/rmp/clock.cpp</code>, which asks raylib for the frame time,
+corrects it, remembers it, and hands it to the frame. It is the one call to
+<code>GetFrameTime()</code> in the framework. Every entry point — the desktop loop, the browser's
 callback, iOS's — goes through that function, so the correction applies to all of them, and to a
 game that writes its own frame as much as to one that uses scenes.</p>
 
@@ -66,17 +67,28 @@ the fixed default and gets the same sequence every time, while a shipped game is
 wall clock when it starts, and <a href="ref:rmp::random::current_seed"><code>current_seed()</code></a>
 tells you which run you are in.</p>
 
-<p data-fw-grep="src/rmp/ui/context.cpp::float frame_time\(\) \{ return test_mode\(\) \? 0\.0f : GetFrameTime\(\); \}">The
-UI is the one part that keeps a clock of its own, for its transitions, its scrolling and a held
-arrow key. It reads raylib's frame time for those through one function of its own,
-<code>frame_time()</code>, which is the other clock seam <code>tools/seam_check.sh</code> allows.
-The layout tests run the UI in a mode where that time is 0, so a layout comes out the same on every
-run.</p>
+<p data-fw-grep="src/rmp/ui/context.cpp::float frame_time\(\) \{ return test_mode\(\) \? 0\.0f : rmp::app::detail::frame_delta\(\); \}">The
+UI has no clock of its own either. Its transitions, its scrolling and the repeat of a held arrow key
+take their time from <code>frame_time()</code>, which is the <code>delta</code> the frame was
+handed: the number <code>step_delta()</code> remembered. A menu and the game under it cannot
+disagree about how long a frame took. The layout tests run the UI in a mode where that time is 0, so
+a layout comes out the same on every run.</p>
 
 <p data-fw-grep="src/rmp/ui/controls.cpp::const bool caret_on =\s+typing &amp;&amp; \(static_cast&lt;int&gt;\(GetTime\(\) \* 2\.0\) % 2\) == 0;">The
 exception is the text field, the debt on that list. It blinks its caret from
 <code>GetTime()</code> and reads the typed characters and Backspace straight from raylib, so test
 mode does not stop the caret blinking, and no seam lets a test type into it.</p>
+
+<p data-fw-grep="src/rmp/clock.cpp::void set_fixed_delta\(float seconds\) \{ timing\.fixed = seconds &gt; 0 \? seconds : 0; \}">One
+clock is also what lets a whole game be played the same way twice. A test can fix the step, so that
+every frame is exactly as long as it says whatever the machine took — still clamped by
+<code>[app] max_delta</code> — and name the seed the run starts from. That is how the framework's tests
+<a href="/framework/testing.html#e2e">play an example game from a script</a> and compare what it
+draws, pixel for pixel. A game that reads <code>GetTime()</code> or <code>GetFrameTime()</code>
+itself steps outside that: what it draws depends on how fast the machine was.
+<span data-fw-grep="examples/games/07_platformer/src/objects/things.cpp::void Goal::_update\(float delta\) \{ _waving \+= delta; \}">The
+platformer's flag waves on the time its <code>_update()</code> adds up, and not on
+<code>GetTime()</code>, for that reason.</span></p>
 
 <h3>So it plays the same at any frame rate</h3>
 
@@ -107,7 +119,7 @@ to the flag at 60 frames a second and again at 240, and jumps from its moving pl
 and the next frame time comes back as half a second. A bullet at 900 units a second then moves 450
 units in one step — through the wall and out the other side, without ever overlapping it.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::return raw &gt; RMP_MAX_DELTA \? RMP_MAX_DELTA : raw;">So the
+<p data-fw-grep="src/rmp/clock.cpp::\} else if \(RMP_MAX_DELTA &gt; 0 &amp;&amp; raw &gt; RMP_MAX_DELTA\) \{\s+step = RMP_MAX_DELTA;">So the
 <code>delta</code> the game is handed is clamped to
 <a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a>, a
 twentieth of a second unless you change it. A frame that really took longer arrives as a twentieth

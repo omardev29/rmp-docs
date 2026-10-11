@@ -160,14 +160,16 @@ never called.</p>
 
 <h3 id="delta">The delta</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::if \(raw &lt; 0\) return 0;\s+if \(RMP_MAX_DELTA &lt;= 0\) return raw;\s+return raw &gt; RMP_MAX_DELTA \? RMP_MAX_DELTA : raw;">The
+<p data-fw-grep="src/rmp/clock.cpp::if \(raw &lt; 0\) \{\s+step = 0;\s+\} else if \(RMP_MAX_DELTA &gt; 0 &amp;&amp; raw &gt; RMP_MAX_DELTA\) \{\s+step = RMP_MAX_DELTA;\s+\}\s+timing\.last = step;">The
 <code>delta</code> every hook receives is raylib's <code>GetFrameTime()</code> with two corrections:
 a negative reading becomes 0, and a reading longer than
 <a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a> — a
 twentieth of a second unless you change it — is cut down to it. A frame that stalled for half a
 second, because the window was dragged or the debugger stopped, becomes a moment of slow motion
-instead of a jump that carries a bullet through a wall. That is the one place the game's clock is
-read; <a href="/framework/why/delta-and-time.html">Time is a parameter</a> says why.</p>
+instead of a jump that carries a bullet through a wall. That is the one place the framework reads
+the clock, in <code>src/rmp/clock.cpp</code>, and the number it hands out is remembered for the
+rest of the frame: the UI animates by it too.
+<a href="/framework/why/delta-and-time.html">Time is a parameter</a> says why.</p>
 
 <h2 id="input">1. Input, once</h2>
 
@@ -193,7 +195,8 @@ not just pressed, and does not fire whatever it is bound to.</p>
 <p id="ui-frame" data-fw-grep="src/rmp/app.cpp::void frame\(float delta\) \{[\s\S]*?ui::detail::begin_frame\(\)[\s\S]*?scenes::detail::update\(delta\)[\s\S]*?BeginDrawing\(\)[\s\S]*?ClearBackground\(rmp::scenes::detail::clear_color\(\)\)[\s\S]*?scenes::detail::draw\(\)[\s\S]*?SmokeTest_CaptureFrame\(\)[\s\S]*?EndDrawing\(\)[\s\S]*?ui::detail::end_frame\(\)[\s\S]*?scenes::detail::apply_pending\(\)">The
 frame proper is <code>frame(float delta)</code> in <code>src/rmp/app.cpp</code>, the function
 <code>RMP_GAME</code>'s frame hook calls, and the first thing it does is open the UI's frame, which
-advances the UI's clock and its scroll once, however many scenes draw a menu.</p>
+advances the UI's animations by this frame's <code>delta</code>, and its scroll, once, however many
+scenes draw a menu.</p>
 
 <h2 id="update">2. Update</h2>
 
@@ -389,18 +392,20 @@ everything else in the frame, has finished.</p>
 
 <h2 id="after">After the frame</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::SmokeTest_CaptureFrameIfMissed\(\);\s+SmokeTest_Tick\(\);[\s\S]*?rmp::audio::detail::update\(\);">Back
+<p data-fw-grep="src/rmp/app.cpp::SmokeTest_CaptureFrameIfMissed\(\);\s+SmokeTest_Tick\(\);[\s\S]*?rmp::audio::detail::update\(\);[\s\S]*?frame_ended\(\);\n\}">Back
 in the loop, outside <code>frame()</code>, two last things happen on every platform. The CI frame
 budget advances, and the music stream is fed. Feeding the music here, and not in the scene
 stack, keeps it playing under a pause menu that freezes the game, and in a game that does not use
-scenes at all.</p>
+scenes at all. After both, the end of the frame is reported to whoever is watching: nobody, unless
+a test that <a href="/framework/testing.html#e2e">plays the game from a script</a> is, and then it
+sees the frame drawn and its scene changes applied.</p>
 
 <h2 id="start-and-stop">Before the first frame, and after the last</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::set_resources_root\(RMP_RESOURCES_PATH\);[\s\S]*?rmp::random::seed\([\s\S]*?set_strict\(true\);[\s\S]*?SmokeTest_Begin\(\);[\s\S]*?ChangeDirectory\(GetApplicationDirectory\(\)\);[\s\S]*?rmp::assets::init\(\);">Before
+<p data-fw-grep="src/rmp/app.cpp::set_resources_root\(RMP_RESOURCES_PATH\);[\s\S]*?rmp::random::seed\(test_seed\(\)\.value_or\([\s\S]*?set_strict\(true\);[\s\S]*?SmokeTest_Begin\(\);[\s\S]*?ChangeDirectory\(GetApplicationDirectory\(\)\);[\s\S]*?rmp::assets::init\(\);">Before
 the first frame the entry point prepares the run: it tells the asset layer where this
 executable's <code>resources/</code> are, seeds <a href="ref:rmp::random"><code>rmp::random</code></a>
-from the wall clock, turns on <a href="/reference/configuration.html#dev-strict"><code>[dev]
+from the wall clock — or from the seed a test that plays the game names — turns on <a href="/reference/configuration.html#dev-strict"><code>[dev]
 strict</code></a> in a debug build that asks for it, reads the CI frame budget, moves into the app
 bundle on iOS or next to the executable in a desktop release, and opens the resource pack if there
 is one.</p>
