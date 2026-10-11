@@ -1,0 +1,9 @@
+# tools/rmpdocs: the hand-written readers the site is built on -- the header
+# reader, the HTML tree, the highlighter, the search index -- and the tests
+# that hold them: the property tests, the counterexamples they found, and
+# the older unit tests of the same modules (bash tests/mutation/run.sh makes
+# them count; see there). Not measured yet.
+kind     py
+sources  tools/rmpdocs/cxx.py tools/rmpdocs/dom.py tools/rmpdocs/highlight.py tools/rmpdocs/search.py
+tests    tests/test_cxx_property.py tests/test_dom_property.py tests/test_highlight_property.py tests/test_search_property.py tests/test_counterexamples.py tests/test_cxx.py tests/test_highlight.py tests/test_search.py
+floor    -
