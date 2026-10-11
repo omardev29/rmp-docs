@@ -1,0 +1,10 @@
+`-fcf-protection` is a flag CMakeLists.txt can give a build (line 11
+`-Wl,-z,now` is a flag CMakeLists.txt can give a build
+`-pie` is a flag CMakeLists.txt can give a build (line 9
+`-D_FORTIFY_SOURCE=` with `2` (the block's `-D_FORTIFY_SOURCE=${_level}` can hold it)
+`-fsanitize=` with `float-cast-overflow` (the block's `-fsanitize=${_joined}` can hold it)
+`-fsanitize-ignorelist=…` (the block's `-fsanitize-ignorelist=${SOMEWHERE}`) is a flag
+`RMP_RELEASE_SOMETHING_NEW` is an option CMakeLists.txt declares
+[flags] cmake/sanitize.cmake (framework): has no `# BEGIN flags documented on rmp-docs framework/security.html`
+[flags] cmake/doubled.cmake (framework):1: has 2 BEGIN and 2 END marker(s)
+[flags] cmake/reversed.cmake (framework):1: END (line 1) comes before BEGIN (line 3)

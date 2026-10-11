@@ -1,0 +1,11 @@
+<!--
+title: Security
+description: A fixture page that has fallen behind the block.
+-->
+<h1>Security</h1>
+<p>The release: <code>-fstack-protector-strong</code>, <code>-D_FORTIFY_SOURCE=3</code>,
+<code>-Wl,-z,relro</code>, and CMake's <code>-fPIE</code> under <code>RMP_RELEASE_PIE</code>.
+The stack-clash and CET protections are described in words, -fcf-protection, which is not code.</p>
+<pre data-lang="text">
+-fsanitize=address,undefined
+</pre>

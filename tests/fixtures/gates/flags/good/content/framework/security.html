@@ -1,0 +1,18 @@
+<!--
+title: Security
+description: A fixture page that lists every flag between the markers.
+-->
+<h1>Security</h1>
+<p>The release: <code>-fstack-protector-strong</code>, <code>_GLIBCXX_ASSERTIONS</code> with or
+without its <code>-D</code>, <code>-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST</code>,
+<code>-U_FORTIFY_SOURCE</code> then <code>-D_FORTIFY_SOURCE=3</code> or
+<code>_FORTIFY_SOURCE=2</code>, and <code>-Wl,-z,relro</code> <code>-Wl,-z,now</code>.</p>
+<p>PIE, which <code>-DRMP_RELEASE_PIE=OFF</code> turns off, is CMake's <code>-fPIE</code> and
+<code>-pie</code>.</p>
+<pre data-lang="text">
+-fsanitize=address,undefined,float-cast-overflow -fno-omit-frame-pointer
+-fsanitize-ignorelist=cmake/sanitize_ignore.txt
+/fsanitize=address /INCREMENTAL:NO
+-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE -ftrivial-auto-var-init=pattern
+-DRMP_SANITIZE=1
+</pre>
