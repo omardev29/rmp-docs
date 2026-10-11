@@ -255,7 +255,11 @@ whatever it collides with, and keeps its pace: every frame its velocity is set b
 push — only its direction survives — and what makes <code>velocity = {}</code> a stable stop between
 points. Where it hits a paddle tilts the bounce, up to <code>max_bounce_deg</code> at the very end,
 which is half of why Pong feels like Pong. <code>speed_up</code> multiplies the speed on every bounce
-off something solid. It sets the object to bounce at its edges and to be not solid itself, so it
+off something solid, and it compounds:
+<span data-fw-grep="examples/games/02_breakout/src/main.cpp::at 1 %\n\s+// the ball is about twice its serve by the last of fifty\. At 3 % it was\n\s+// four times its serve by the thirtieth brick[\s\S]*?\.speed_up = 1\.01f">Breakout's
+is 1.01, which makes the ball about twice its serve by the last of its fifty bricks; 1.03 makes it
+four times its serve by the thirtieth, faster than the paddle can follow.</span> It sets the
+object to bounce at its edges and to be not solid itself, so it
 never pushes a paddle out of the way. <a href="/examples/games/01_pong.html">Pong</a> and
 <a href="/examples/games/02_breakout.html">Breakout</a> are both a <code>Ball</code>.</p>
 
