@@ -460,7 +460,8 @@ class Site:
             self.problems.append(Problem("snippets", page.source, pre.line,
                                          f"data-expect={expect!r} is for C++ blocks"))
         # A page of the Guidelines that shows the right way shows code the
-        # rule's own tools pass: clang-tidy, with the framework's .clang-tidy.
+        # rule's own tools pass: clang-tidy, with the framework's .clang-tidy,
+        # and the text gates that see what it cannot (snippets.CLEAN_GATES).
         # And formatted the way the framework's code is: clang-format, with its
         # .clang-format, leaves it as it is.
         clean = page.source.startswith("content/guidelines/") and expect == "" and lang == "cpp"
@@ -468,7 +469,7 @@ class Site:
                           given=pre.get("data-given", ""), expect_error=expect == "error",
                           error_text=pre.get("data-error", ""),
                           expect_lint=pre.get("data-check", "") if expect == "lint" else "",
-                          lint_clean=clean, format_clean=clean,
+                          lint_clean=clean, format_clean=clean, gates_clean=clean,
                           expect_gate=pre.get("data-gate", "") if expect == "gate" else "",
                           gate_rule=pre.get("data-rule", "") if expect == "gate" else "")
         self.snippets.append(snippet)

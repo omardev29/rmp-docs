@@ -266,6 +266,65 @@ class GateExpectationTest(unittest.TestCase):
         self.assertIn("it says nothing", why)
 
 
+class RightWayGatesTest(unittest.TestCase):
+    """The right way on a Guidelines page passes the framework's text gates
+    too: what clang-tidy cannot see -- `other._x`, a g_ name, a constant named
+    like a macro, a raylib Load* outside its owner -- and, for a block that is a
+    public header, a pointer a game could name. Each refusal seen."""
+
+    @classmethod
+    def setUpClass(cls):
+        CompileTest.setUpClass()
+        for script in ("naming_check.sh", "ownership_check.sh", "pointer_check.py"):
+            if not (FRAMEWORK / "tools" / script).is_file():
+                raise unittest.SkipTest(f"no tools/{script} in the framework")
+
+    def run_one(self, code, harness="toplevel"):
+        s = snippets.Snippet("content/guidelines/x.html", 1, "cpp", code, harness, gates_clean=True)
+        return snippets.check([s], FRAMEWORK, jobs=1)[0][1]
+
+    def test_a_clean_block_passes(self):
+        self.assertIsNone(self.run_one("constexpr int MAX_LIVES = 3;\nint score = 0;"))
+
+    def test_a_name_only_the_naming_gate_sees_is_refused(self):
+        # clang-tidy's readability-identifier-naming passes both: g_score is
+        # lower_case, and it does not look at a member reached through a dot.
+        for code, rule in (("int g_score = 0;", "R1"),
+                           ("class Wallet {\npublic:\n    [[nodiscard]] bool richer(const Wallet &other) const {\n"
+                            "        return _coins > other._coins;\n    }\n\nprivate:\n    int _coins = 0;\n};",
+                            "R4"),
+                           ("constexpr int MAX = 10;", "R6")):
+            with self.subTest(rule=rule):
+                why = self.run_one(code)
+                self.assertIn("is shown as the right way, and tools/naming_check.sh refuses it", why)
+                self.assertIn(f": {rule} ", why)
+
+    def test_a_raylib_resource_made_outside_its_owner_is_refused(self):
+        why = self.run_one('const Texture2D rabbit = LoadTexture("rabbit.png");\n'
+                           "UnloadTexture(rabbit);", harness="function")
+        self.assertIn("is shown as the right way, and tools/ownership_check.sh refuses it", why)
+        self.assertIn("O2 LoadTexture", why)
+
+    def test_a_public_header_with_a_pointer_is_refused(self):
+        if shutil.which("clang++") is None:
+            self.skipTest("tools/pointer_check.py reads the headers with clang++")
+        code = ("#pragma once\n\n#include <string_view>\n\nnamespace rmp {\nclass Object;\n\n"
+                "Object *find(std::string_view name);\n} // namespace rmp")
+        why = self.run_one(code, harness=snippets.HEADER)
+        self.assertIn("is shown as the right way, and tools/pointer_check.py refuses it", why)
+        self.assertIn("rmp::find -- returns `Object *`", why)
+        # The same header with what the page says instead passes.
+        self.assertIsNone(self.run_one(code.replace("class Object;", "class Object;\n"
+                                                    "template <class T> class Ref;")
+                                       .replace("Object *find", "Ref<Object> find"),
+                                       harness=snippets.HEADER))
+
+    def test_a_pointer_outside_a_header_is_not_the_pointer_gates(self):
+        # tools/pointer_check.py reads public headers; a .cpp block's pointer
+        # is clang-tidy's business (custom-rmp-raw-pointer), not this gate's.
+        self.assertIsNone(self.run_one("void zero(int &value) { value = 0; }"))
+
+
 class StaticRuleTest(unittest.TestCase):
     """A block nothing compiles is refused at build time, before any compiler."""
 
@@ -332,10 +391,12 @@ class StaticRuleTest(unittest.TestCase):
                                "content/guidelines/index.html": block + "\n" +
                                '<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" '
                                'data-check="modernize-avoid-c-style-cast">int y = (int)1.5;</pre>'})
-        by_page = {(s.page, s.expect_lint): s.lint_clean for s in site.snippets}
-        self.assertEqual(by_page, {("content/index.html", ""): False,
-                                   ("content/guidelines/index.html", ""): True,
-                                   ("content/guidelines/index.html", "modernize-avoid-c-style-cast"): False})
+        by_page = {(s.page, s.expect_lint): (s.lint_clean, s.format_clean, s.gates_clean)
+                   for s in site.snippets}
+        self.assertEqual(by_page, {("content/index.html", ""): (False, False, False),
+                                   ("content/guidelines/index.html", ""): (True, True, True),
+                                   ("content/guidelines/index.html", "modernize-avoid-c-style-cast"):
+                                   (False, False, False)})
 
     def test_a_refused_block_says_so_in_its_caption(self):
         site = self.site_with({"content/index.html":

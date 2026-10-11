@@ -100,8 +100,10 @@ without the compile tier shows the caption, and for a block that does not compil
 `data-error` words.
 
 On a page under `content/guidelines/`, every other C++ block is the right way, and has to pass
-clang-tidy with the framework's `.clang-tidy` with nothing said about its own lines, and
-clang-format with the framework's `.clang-format` with nothing to change. The compile tier needs
+clang-tidy with the framework's `.clang-tidy` with nothing said about its own lines,
+clang-format with the framework's `.clang-format` with nothing to change, and the framework's
+text gates that see what clang-tidy cannot: `tools/naming_check.sh` and `tools/ownership_check.sh`,
+and `tools/pointer_check.py` for a `header` block. The compile tier needs
 `clang-tidy` and `clang-format` on `PATH` for these — the versions `thirdparty/FROZEN_VERSIONS.md`
 pins, which the site's CI image has; a clang-format of another version is refused rather than
 trusted, because it reformats code that is already right. clang-tidy runs with

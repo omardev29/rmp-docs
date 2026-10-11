@@ -86,9 +86,11 @@ instead:</p>
 <h2 id="shown">Shown, and checked like the code</h2>
 
 <p>Each rule is shown in code, and the code on these pages is checked the way the framework's own
-is. A block that shows the right way is compiled against the framework's headers, and passes
-clang-tidy with the framework's <code>.clang-tidy</code> and clang-format with its
-<code>.clang-format</code>, with nothing to say. A block that shows the wrong way says what refuses
+is. A block that shows the right way is compiled against the framework's headers, and passes,
+with nothing to say, clang-tidy with the framework's <code>.clang-tidy</code>, clang-format with its
+<code>.clang-format</code>, and its text gates: <code>tools/naming_check.sh</code>,
+<code>tools/style_check.sh</code>, <code>tools/ownership_check.sh</code> and, for a block that is a
+public header, <code>tools/pointer_check.py</code>. A block that shows the wrong way says what refuses
 it, and the build of this site runs that tool on it and fails if it stays quiet; what the tool
 printed is under the block, from that run, never typed. A block that does not compile at all is
 shown with what the compiler said.</p>

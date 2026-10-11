@@ -105,6 +105,7 @@ class Snippet:
     expect_gate: str = ""      # a gate of the framework's (GATES) that has to refuse it
     gate_rule: str = ""        # and the rule it has to name, for a gate that has rules
     format_clean: bool = False  # clang-format has to leave it as it is
+    gates_clean: bool = False  # the text gates (CLEAN_GATES) have to say nothing about it
     said: str = ""     # what refused it, as the page shows it (shown())
 
 
@@ -138,6 +139,15 @@ GATES = {"naming": Gate(["bash", "tools/naming_check.sh"], "naming", True),
          "ownership": Gate(["bash", "tools/ownership_check.sh"], "ownership", True),
          "pointers": Gate(["python3", "tools/pointer_check.py"], "pointers", False),
          "format": Gate(["clang-format"], "fmt", False)}
+
+
+# The gates the right way on a Guidelines page is held to, besides clang-tidy,
+# clang-format and the style gate every block passes: what clang-tidy cannot
+# see -- a name in every #if branch, `other._x`, a constant named like a macro,
+# a raylib Load* outside its owner -- and, for a block that is a public header,
+# a pointer a game could name. A page that shows a rule cannot show, as the
+# right way, code another of the framework's gates refuses.
+CLEAN_GATES = ("naming", "ownership")
 
 
 def harness_names() -> list[str]:
@@ -534,11 +544,16 @@ def gate_unit(s: Snippet, u: Unit, framework: Path):
     """(found, shown, printed): (rule, line in the block, what) for every
     finding of the block's gate on the block's own lines, those findings as
     the gate printed them, and all it printed."""
-    gate = GATES[s.expect_gate]
-    if s.expect_gate == "format":
+    return run_gate(s.expect_gate, s, u, framework)
+
+
+def run_gate(name: str, s: Snippet, u: Unit, framework: Path):
+    """gate_unit, for the gate called `name`."""
+    gate = GATES[name]
+    if name == "format":
         found, text = format_unit(u, framework, s.code)
         return found, text, text
-    if s.expect_gate == "pointers":
+    if name == "pointers":
         ratchet = u.unit.parent / "no-ratchet.txt"
         ratchet.write_text("")
         got = subprocess.run([sys.executable, "tools/pointer_check.py", "--include",
@@ -643,6 +658,16 @@ def check(snippets: list[Snippet], framework: Path, jobs: int | None = None):
             if found:
                 return ("is shown as the right way, and clang-format, with the framework's "
                         f".clang-format, would change it:\n{out[:600]}")
+        if s.gates_clean:
+            names = [*CLEAN_GATES, *(["pointers"] if s.harness == HEADER else [])]
+            for name in names:
+                script = GATES[name].argv[-1]
+                if not (framework / script).is_file():
+                    continue
+                found, text, _printed = run_gate(name, s, u, framework)
+                if found:
+                    return (f"is shown as the right way, and {script} refuses it:\n"
+                            + (text or said([(r or name, at, w) for r, at, w in found])))
         if (s.expect_error or s.expect_lint or s.expect_gate) and not s.said:
             return "is shown as refused, and nothing the tool said about its lines could be shown"
         return None
