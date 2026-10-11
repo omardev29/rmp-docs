@@ -186,7 +186,7 @@ DOC = st.lists(st.text(alphabet=st.sampled_from("abc xyz,.;:()"), min_size=1, ma
 
 WORD = st.text(alphabet=st.sampled_from("abcxyz"), min_size=1, max_size=6)
 BANNER = st.lists(st.text(alphabet=st.sampled_from("abc xyz,."), min_size=1, max_size=16).map(
-    str.strip).filter(lambda t: t and t[0] != "-"), min_size=1, max_size=2)
+    str.strip).filter(lambda t: t and t[0] != "-"), min_size=1, max_size=3)
 
 
 @st.composite
@@ -196,7 +196,8 @@ def declarations(draw, depth=0, in_struct=False, internal=False):
     `expect` is what read_header must say of it -- the doc, the group, what
     covers it, and any other field of the Entity by name. Three keys are the
     model's own: `at`, the declaration's line counted from its first;
-    `glued`, no blank line above (a run); `members`, an enum's."""
+    `end_at`, its last line counted the same way (its last line of all when
+    not said); `glued`, no blank line above (a run)."""
     out = []
     names = set()
     group = ""
@@ -240,10 +241,12 @@ def declarations(draw, depth=0, in_struct=False, internal=False):
             lines = [f"int {name}();"]
             expect.update(internal=True)
         elif kind == "template":
-            lines = ["template <class T, int N = (1>2)>",
+            # Brackets inside the brackets: a template argument's own, and a
+            # comparison inside parentheses, which closes nothing.
+            lines = ["template <class T = std::less<int>, int N = (1>(2))>",
                      f"std::vector<std::pair<T, int>> {name}(T value, int (&out)[N]);"]
             kind = "function"
-            expect.update(template="template <class T, int N = (1>2)>",
+            expect.update(template="template <class T = std::less<int>, int N = (1>(2))>",
                           signature=f"std::vector<std::pair<T, int>> {name}(T value, int (&out)[N])")
         elif kind == "static":
             lines = [f"static int {name}() noexcept;"]
@@ -290,8 +293,8 @@ def declarations(draw, depth=0, in_struct=False, internal=False):
             name, kind, above = f"{name.upper()}_M", "macro", []
             lines = ["#if RMP_X"] + [f"// {d}" for d in doc] + [f"#define {name} 1", "#else",
                                                                f"#define {name} 2", "#endif"]
-            expect.update(at=1 + len(doc), signature=f"#define {name}", group="", internal=False,
-                          branches=[("#if RMP_X", "1"), ("#else", "2")], covered=bool(doc))
+            expect.update(at=1 + len(doc), end_at=3 + len(doc), signature=f"#define {name}", group="",
+                          internal=False, branches=[("#if RMP_X", "1"), ("#else", "2")], covered=bool(doc))
         elif kind == "private":
             # What follows private: is not API: no entity at all.
             out.append(("private", "", [], ["private:", "    int hidden_ = 0;", "public:"], [], {}))
@@ -316,7 +319,10 @@ def declarations(draw, depth=0, in_struct=False, internal=False):
             if kind == "detail":
                 name, kind = "detail", "namespace"
                 expect.update(internal=True)
-            opener = {"struct": [f"struct {name} {{"], "class": [f"class {name} {{", "public:"]}.get(
+            # A class starts private: what it declares before `public:` is
+            # not API, and no entity.
+            opener = {"struct": [f"struct {name} {{"],
+                      "class": [f"class {name} {{", "    int hidden_ = 0;", "public:"]}.get(
                 kind, [f"namespace {name} {{"])
             lines = opener + ["    " + line if line else "" for line in body] + (["};"] if inside else ["}"])
             expect.update(at=0)
@@ -350,12 +356,14 @@ def expected(model, prefix="rmp", first=4):
         line += (0 if expect.get("glued") else 1) + len(above)
         if kind != "private":
             q = name if kind == "macro" else f"{prefix}::{name}"
-            fields = {k: v for k, v in expect.items() if k not in ("at", "glued")}
+            fields = {k: v for k, v in expect.items() if k not in ("at", "end_at", "glued")}
+            fields["end_line"] = line + expect.get("end_at", len(lines) - 1)
             out.append((kind, q, line + expect.get("at", 0), fields))
         if kind in ("struct", "class", "namespace"):
-            out += expected(children, q, line + (2 if kind == "class" else 1))
+            out += expected(children, q, line + (3 if kind == "class" else 1))
         elif kind == "enum":
-            out += [("member", f"{q}::{m}", line + e["at"], {k: v for k, v in e.items() if k != "at"})
+            out += [("member", f"{q}::{m}", line + e["at"],
+                     {**{k: v for k, v in e.items() if k != "at"}, "end_line": line + e["at"]})
                     for _k, m, _a, _l, _c, e in children]
         line += len(lines)
     return out
