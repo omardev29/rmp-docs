@@ -127,20 +127,93 @@ def key_label(k: str) -> str:
     return k
 
 
-def keys_of(files) -> list:
-    """(action, [keys]) for every rmp::input::action() the code defines, and
-    ("", [keys]) for the keys it asks raylib about directly."""
+def uncomment(text: str) -> str:
+    """The code without its comments, string and character literals kept: a
+    comment that names IsKeyPressed(KEY_ESCAPE) to say the code does NOT call
+    it is not a key the example reads."""
+    out = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if text.startswith("//", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        elif text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            out.append(" ")
+            i = n if j < 0 else j + 2
+        elif c == '"' or (c == "'" and not (i > 0 and text[i - 1].isalnum()
+                                             and i + 1 < n and text[i + 1].isalnum())):
+            j = i + 1
+            while j < n and text[j] != c and text[j] != "\n":
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+KEY_RE = r"\b((?:KEY|GAMEPAD_BUTTON|MOUSE_BUTTON)_[A-Z0-9_]+)\b"
+ACTION_RE = r"action\(\s*\"([^\"]+)\"\s*,([^;]*?)\)\s*;"
+
+
+def factory_actions(framework: Path) -> dict | None:
+    """{name: [keys]} for the actions that come defined, read from the
+    framework's install_factory_actions(); None when it is not there."""
+    src = framework / "src" / "rmp" / "input.cpp"
+    if not src.is_file():
+        return None
+    code = uncomment(src.read_text(encoding="utf-8"))
+    m = re.search(r"void install_factory_actions\(\) \{(.*?)\n\}", code, re.S)
+    if not m:
+        return None
+    return {a.group(1): re.findall(KEY_RE, a.group(2))
+            for a in re.finditer(r"\b" + ACTION_RE, m.group(1), re.S)}
+
+
+def actions_read(code: str) -> list:
+    """The action names the code reads, in the order it first reads them."""
+    names = []
+    q = r"\s*\"([^\"]+)\"\s*"
+    for m in re.finditer(r"\brmp::input::(?:(?:pressed|just_pressed|just_released)\(" + q + r"\)"
+                         r"|axis\(" + q + "," + q + r"\)"
+                         r"|vector\(" + q + "," + q + "," + q + "," + q + r"\)"
+                         r"|(axis)\(\s*\)|(vector)\(\s*\))", code):
+        if m.group(8):
+            got = ["move_left", "move_right"]
+        elif m.group(9):
+            got = ["move_left", "move_right", "move_up", "move_down"]
+        else:
+            got = [g for g in m.groups()[:7] if g]
+        names += [g for g in got if g not in names]
+    return names
+
+
+def keys_of(files, factory: dict | None = None) -> list:
+    """(action, [keys]) for every rmp::input::action() the code defines, then
+    for every action that comes defined (`factory`) the code reads by name
+    without defining it, and ("", [keys]) for the keys it asks raylib about
+    directly. Comments are not code: none of it is read from them."""
     actions = []
+    read = []
     direct = []
     for _path, text in files:
-        for m in re.finditer(r"rmp::input::action\(\s*\"([^\"]+)\"\s*,([^;]*?)\)\s*;", text, re.S):
-            keys = re.findall(r"\b((?:KEY|GAMEPAD_BUTTON|MOUSE_BUTTON)_[A-Z0-9_]+)\b", m.group(2))
+        code = uncomment(text)
+        for m in re.finditer(r"\brmp::input::" + ACTION_RE, code, re.S):
+            keys = re.findall(KEY_RE, m.group(2))
             if keys:
                 actions.append((m.group(1), keys))
+        read += [a for a in actions_read(code) if a not in read]
         for m in re.finditer(r"\bIs(?:Key|MouseButton|GamepadButton)(?:Pressed|Down|Released)\([^)]*?\b"
-                             r"((?:KEY|MOUSE_BUTTON|GAMEPAD_BUTTON)_[A-Z0-9_]+)\)", text):
+                             r"((?:KEY|MOUSE_BUTTON|GAMEPAD_BUTTON)_[A-Z0-9_]+)\)", code):
             if m.group(1) not in direct:
                 direct.append(m.group(1))
+    defined = {a for a, _ in actions}
+    for name in read:
+        if name not in defined and (factory or {}).get(name):
+            actions.append((name, factory[name]))
     if direct:
         actions.append(("", direct))
     return actions
@@ -150,6 +223,10 @@ def load(framework: Path, config: dict) -> tuple[list[Example], list[str]]:
     """The examples, and every disagreement between examples.toml and the tree."""
     problems = []
     rows = readme_rows(framework)
+    factory = factory_actions(framework)
+    if factory is None:
+        problems.append("src/rmp/input.cpp has no install_factory_actions(): the actions that come "
+                        "defined, which an example may read by name, cannot be read")
     entries = config.get("examples", {})
     found = find(framework)
     out = []
@@ -168,7 +245,7 @@ def load(framework: Path, config: dict) -> tuple[list[Example], list[str]]:
                 files.append((f.relative_to(folder).as_posix(), f.read_text(encoding="utf-8")))
         files.sort(key=lambda x: (x[0] not in ("src/main.cpp", "src/main.c"), x[0]))
         ex = Example(path, title_of(path), summary=rows.get(path, ""), play=bool(spec.get("play")),
-                     reason=str(spec.get("reason", "")), files=files, keys=keys_of(files))
+                     reason=str(spec.get("reason", "")), files=files, keys=keys_of(files, factory))
         if not ex.summary:
             problems.append(f"examples/{path} has no row in examples/README.md to describe it")
         out.append(ex)
@@ -213,7 +290,8 @@ def page_body(ex: Example, framework_repo: str, ref: str, built: dict, posters: 
             f"<td>{', '.join('<kbd>' + html.escape(key_label(k)) + '</kbd>' for k in ks)}</td></tr>"
             for a, ks in ex.keys)
         out.append('<h2 id="keys">Keys</h2><p>Read from the code below: the actions it defines with '
-                   "<code>rmp::input::action</code>, and the keys it asks raylib about directly.</p>"
+                   "<code>rmp::input::action</code>, the ones that come defined that it reads by name, "
+                   "and the keys it asks raylib about directly.</p>"
                    f'<table class="fields"><thead><tr><th>Action</th><th>Keys</th></tr></thead>'
                    f"<tbody>{rows}</tbody></table>")
     out.append(f'<h2 id="code">The code</h2><p>Every file of <code>examples/{html.escape(ex.path)}</code>, '
