@@ -492,17 +492,18 @@ test reaches is in the report at 0% instead of missing from it.</span></p>
 <p>Two lists hold the result, and each moves one way only:</p>
 
 <dl>
-<dt data-fw-grep="tools/coverage_floor.txt::^src/rmp/ads\.cpp +0$">A floor per file, which only rises</dt>
+<dt data-fw-grep="tools/coverage_floor.txt::^src/rmp/ui/render\.cpp +39$">A floor per file, which only rises</dt>
 <dd><code>tools/coverage_floor.txt</code> has the share of each file's lines the tests run,
 rounded down. A file below its line fails. A file two points or more above it fails too, until the
 line is raised in the commit that earned it: a ratchet nobody has to remember to turn is one that
 does not stall. A file of <code>src/rmp/</code> with no line fails, and so does a source file the
-report does not hold, unless it has no code of its own. The floors run from 0 — <code>src/rmp/ads.cpp</code>, which does something
-only on Android — to 100.</dd>
-<dt data-fw-grep="tools/untested_api.txt::\A(?:#[^\n]*\n)+(?:[^#\n][^\n]*\n){14}\Z">The
+report does not hold, unless it has no code of its own. The floors run from 39 —
+<code>src/rmp/ui/render.cpp</code>, which draws through raylib, where the headless tests do not
+look — to 100.</dd>
+<dt data-fw-grep="tools/untested_api.txt::\A(?:#[^\n]*\n)+(?:[^#\n][^\n]*\n){1}\Z">The
 public functions no test calls, a list that only shrinks</dt>
 <dd><code>tools/untested_api.txt</code> names every function of <code>include/rmp/</code> a game
-can call and no test does — 14 of them. clang reads the headers to find them, and a template counts
+can call and no test does — one, <code>rmp::Object::_draw()</code>. clang reads the headers to find them, and a template counts
 as called when any instance of it runs. A new public function no test calls fails: write the test.
 A listed one a test calls, or one that is gone, fails until its line is removed.</dd>
 </dl>

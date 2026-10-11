@@ -655,22 +655,22 @@ line endings each file is checked out with — which the site's own build checks
 <p>At the commit these pages document, these do not exist:</p>
 
 <ul>
-<li data-fw-grep="tests/fuzz/tiled.cpp::// The Tiled reader \(src/rmp/tilemap\.cpp over thirdparty/cute_tiled\), fuzzed\."><strong>Not
-every reader fuzzed.</strong> The LDtk and Tiled readers and the save file's reader — its header,
-its JSON, and a sealed save somebody changed — are fed generated input, each from a corpus
-committed in <code>tests/fuzz/</code>. The Aseprite reader and the resource pack are not yet.</li>
-<li data-fw-grep="tests/property/waivers.txt::\A(?:(?:#[^\n]*)?\n)*(?:[^#\n][^\n]*\n(?:(?:#[^\n]*)?\n)*){235}\Z"><strong>Most
-public functions not held by a property.</strong> Properties hold the functions of
-<a href="ref:rmp::Value"><code>rmp::Value</code></a>, <a href="ref:rmp::save"><code>rmp::save</code></a>
-and <a href="ref:rmp::Tilemap"><code>rmp::Tilemap</code></a>, and loading a map, to the deep tests'
-rules, on generated input. The other 235 public functions of <code>include/rmp/</code> are on
-<code>tests/property/waivers.txt</code>, a list that only shrinks.</li>
-<li data-fw-grep="tests/mutation/floors/save.txt::^floor +95$"><strong>Mutation testing on part of
-the framework.</strong> Of the framework's C++, <code>rmp::random</code>, <code>rmp::save</code>,
-<code>rmp::Value</code>, the LDtk reader and the tilemap have a mutation score held to a floor;
-every other file of <code>src/rmp/</code> has its module and no score yet.
-<a href="#coverage">Coverage</a> says which lines the tests run; for the rest of the framework,
-nothing yet says how many mistakes in those lines the tests would miss.</li>
+<li data-fw-grep="tests/property/waivers.txt::\A(?:(?:#[^\n]*)?\n)*(?:[^#\n][^\n]*\n(?:(?:#[^\n]*)?\n)*){2}\Z"><strong>Two
+public functions not held by a property.</strong> Every public function of <code>include/rmp/</code>
+is held to the deep tests' rules on generated input but two:
+<a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> and
+<a href="ref:rmp::app::quit_requested"><code>rmp::app::quit_requested()</code></a>, which live in
+the one file the property tests cannot link, the runner's. They are on
+<code>tests/property/waivers.txt</code>, a list that only shrinks. Every reader is fuzzed: the
+save file, the LDtk and Tiled maps, Aseprite sheets, the resource pack and the names the loaders
+are given.</li>
+<li data-fw-grep="tests/mutation/floors/pack.txt::^floor +85$"><strong>Mutation testing on part of
+the framework.</strong> Of the framework's C++, the save file and <code>rmp::Value</code>,
+<code>rmp::random</code>, the maps, collision, objects, and the whole of loading — the pack, the
+loaders, the resource table — have a mutation score held to a floor. The scene stack, input,
+behaviours, audio, the camera, sprites and the interface have their module and no score yet: their
+floors are measured once by the weekly run. <a href="#coverage">Coverage</a> says which lines the
+tests run; for those, nothing yet says how many mistakes in those lines the tests would miss.</li>
 <li><strong>No reading of how a Windows, macOS or BSD release was linked.</strong> The BSD releases are hardened
 like Linux's, Fortify aside, and the Windows ones by their linker's defaults, and nothing reads it
 back out of the binary: <code>binary_check.py windows</code> reads what an <code>.exe</code>
