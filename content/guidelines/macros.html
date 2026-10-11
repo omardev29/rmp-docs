@@ -1,0 +1,195 @@
+<!--
+title: Macros
+description: A macro only for what a function, a constant or a template cannot do — the call site, code generated at file scope, conditional compilation, a value from the .toml — always named RMP_, and the checks that hold both halves.
+order: 70
+-->
+<h1>Macros</h1>
+
+<p class="lede">The preprocessor runs before the compiler knows what a type, a scope or a namespace
+is: a macro is text pasted into every line after it, in every file that includes it, raylib's and
+the C library's included. So the rule is short. A macro is for what nothing else in the language can
+do, and everything else is a <code>constexpr</code> constant, a function or a template. Every macro
+that is written is named <code>RMP_</code>.</p>
+
+<p>This page is the rule as it applies to any code written here. The framework's own macros — the
+entry point, the values of the <code>.toml</code>, the said-once warning — are explained one by one
+in <a href="/framework/why/macros.html">why the framework has the macros it has</a>.</p>
+
+<h2 id="constants">A constant is constexpr</h2>
+
+<p>A constant made with <code>#define</code> has no type, so <code>3</code> is whatever the
+expression around it makes of it, and no scope, so it replaces that word everywhere after it — in
+your files and in every header included after it. A <code>constexpr</code> constant has both, and is
+just as known when the program compiles:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="cppcoreguidelines-macro-usage">
+#define RMP_LIVES 3
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+constexpr int LIVES = 3;
+</pre>
+
+<p>In a header, a constant at namespace scope is <code>inline constexpr</code>, one object for the
+whole program; <a href="/guidelines/const.html">const</a> has why.</p>
+
+<h2 id="functions">A function is a function</h2>
+
+<p>A function-like macro pastes its arguments in as text: the one below, handed
+<code>i++</code>, increments twice; an argument of the wrong type is an error inside the expansion;
+and a debugger cannot step into it. A <code>constexpr</code> function does the same work at compile time when it can, and is a
+function the rest of the time:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="cppcoreguidelines-macro-usage">
+#define RMP_SQUARE(x) ((x) * (x))
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+template &lt;class T&gt; constexpr T square(const T x) { return x * x; }
+
+static_assert(square(3) == 9);
+</pre>
+
+<h2 id="when">When a macro is the right tool</h2>
+
+<p data-fw-grep=".clang-tidy::a macro only for what a function cannot do: the\s+#\s+call site, code generated at file scope, `#if`,\s+#\s+a value from the \.toml">Four
+things no function can do, and they are the four the framework's own macros do.</p>
+
+<p><strong>Code at file scope.</strong> A program's entry point is a <code>main()</code> on a
+desktop, a function handed to the browser on the web and three <code>extern "C"</code> functions on
+iOS. No function can define a function, so the entry point is a macro, and a game writes it once:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="struct MainMenuScene : rmp::Scene {};">
+RMP_GAME(MainMenuScene);
+</pre>
+
+<p><strong>The call site.</strong> A function receives a value; it cannot see how the call was
+spelt, and it cannot give each place that calls it a variable of its own. A macro can do both. This
+one prints the expression it was handed as well as its value, through the <code>#</code> operator,
+which turns an argument into a string:</p>
+
+<pre data-lang="cpp" data-harness="function">
+#define RMP_SHOW(value) TraceLog(LOG_INFO, "%s = %d", #value, value)
+const int lives = 3;
+RMP_SHOW(lives);
+</pre>
+
+<p data-fw-grep="src/rmp/internal.h::#define RMP_REPORT_ONCE\(\.\.\.\)\s+\\\s+do \{\s+\\\s+static const char rmp_report_once_site = 0;">The
+framework's said-once warning is the other half of the same case: every place RMP_REPORT_ONCE is
+written gets a <code>static</code> variable of its own, whose address is the key that makes it say
+its line once, and only a macro can declare one there.</p>
+
+<p><strong>Conditional compilation.</strong> The same source is built for every target, and some of
+it only makes sense on one of them. That is an <code>#if</code> on a macro the platform defines:</p>
+
+<pre data-lang="cpp" data-harness="function">
+#if defined(PLATFORM_WEB)
+const int touch_target = 44;
+#else
+const int touch_target = 32;
+#endif
+DrawRectangle(0, 0, touch_target, touch_target, RED);
+</pre>
+
+<p><strong>A value from the <code>.toml</code>.</strong> What
+<code>raylib_multiplatform.toml</code> says reaches the code as macros, <code>RMP_WINDOW_WIDTH</code>
+and the rest, because a game in plain C reads them too and because <code>#if</code> can test them.
+The <code>.toml</code> writes them; a game only reads them:</p>
+
+<pre data-lang="cpp" data-harness="function">
+const Vector2 centre{ RMP_WINDOW_WIDTH / 2.0f, RMP_WINDOW_HEIGHT / 2.0f };
+DrawCircleV(centre, 8, RED);
+</pre>
+
+<p data-fw-grep=".clang-tidy::key: cppcoreguidelines-macro-usage\.AllowedRegexp">Checked by
+<code>cppcoreguidelines-macro-usage</code>, in the framework and in the examples. It refuses a macro
+that could be a constant or a function, and lets through one that uses <code>#</code> or
+<code>##</code>, which nothing else can do. The framework's own macros are named to it one by one, in
+its <code>AllowedRegexp</code>, so a new macro in the framework is a question for whoever reviews
+it, not something that slips past. clang-tidy's suggestion to turn the <code>.toml</code>'s values
+into an enum, <code>modernize-macro-to-enum</code>, is switched off for them: the C entry point
+reads them too.</p>
+
+<h2 id="prefix">Every macro starts with RMP_</h2>
+
+<p>The preprocessor has one namespace, shared by raylib, the C library, every vendored library and
+the game, and two macros of the same name are one silently replacing the other. So every macro
+written here starts with <code>RMP_</code>; names that start with two underscores, or with one and
+a capital letter, belong to the compiler and the C library:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="naming" data-rule="R5">
+#define NAME_OF(x) #x
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#define RMP_NAME_OF(x) #x
+</pre>
+
+<p data-fw-grep="tools/naming_check.sh::R5  every #define we write starts with RMP_">Checked by
+<code>readability-identifier-naming</code>, which is given <code>RMP_</code> as the macros' prefix, in
+the framework and in the examples, and by rule R5 of <code>tools/naming_check.sh</code> in every
+branch of every <code>#if</code>. A vendored library's own switches keep their names, in the one file
+of the framework that configures it, and the script lists each of those by file.</p>
+
+<h2 id="retired">A name that no longer exists is 0</h2>
+
+<p>An <code>#if</code> on a macro nobody defines is not an error: the name is 0. When a macro is
+renamed, every test of the old name keeps compiling and quietly takes the other branch. The CMake
+option is <code>PRODUCTION_BUILD</code>, and what the code sees is RMP_PRODUCTION_BUILD; written the
+CMake way, this draws the frame rate in every build, a release included:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="gate" data-gate="naming" data-rule="R7">
+#if !PRODUCTION_BUILD
+DrawFPS(10, 10);
+#endif
+</pre>
+
+<pre data-lang="cpp" data-harness="function">
+#if !RMP_PRODUCTION_BUILD
+DrawFPS(10, 10);
+#endif
+</pre>
+
+<p data-fw-grep="tools/naming_check.sh::R7  no retired name: `#if APP_SAVE_PORTABLE` after the rename is not an\s+#\s+error, it is 0">Checked
+by rule R7 of <code>tools/naming_check.sh</code>, which keeps the list of retired names, in every
+branch of the framework and the examples. For RMP_PRODUCTION_BUILD the framework goes further:
+every build system defines it, and <code>src/rmp/app.cpp</code> refuses to compile if one
+forgets.</p>
+
+<h2 id="names">A constant is never named like a macro</h2>
+
+<p>The other direction of the same collision: a constant called <code>PI</code> compiles until the
+file includes <code>raylib.h</code>, which defines <code>PI</code> as a number, and then the
+declaration is a number followed by an equals sign:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="error" data-error="expected unqualified-id">
+constexpr float PI = 3.14159265f;
+</pre>
+
+<p>Here the error is immediate. With a macro that only some platforms define — <code>MIN</code> and
+<code>MAX</code> on the BSDs, <code>DEBUG</code> in Android's debug build — it compiles everywhere
+except there. <a href="/guidelines/naming.html">Naming</a> has the rule and the list; rule R6 of
+<code>tools/naming_check.sh</code> refuses a constant named like any macro the vendored headers or
+the C library define.</p>
+
+<h2 id="headers">No header makes you write one</h2>
+
+<p>Outside the entry point, nothing in the API asks for a macro. <code>rmp::ui</code> sits on Clay,
+whose API is macros, and hands a game functions that take a lambda instead;
+<a href="/framework/why/macros.html#the-rule">the rule</a> has how. A game that wants Clay's macros
+can include Clay and use them.</p>
+
+<h2 id="checked">What checks it</h2>
+
+<table>
+<thead><tr><th>Rule</th><th>Checked by</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>A macro only for what nothing else can do</td><td><code>cppcoreguidelines-macro-usage</code></td><td>the framework and the examples</td></tr>
+<tr><td>Every macro starts with <code>RMP_</code></td><td><code>readability-identifier-naming</code>, and R5 of <code>tools/naming_check.sh</code> in every branch</td><td>the framework and the examples</td></tr>
+<tr><td>No retired name in an <code>#if</code></td><td>R7 of <code>tools/naming_check.sh</code></td><td>the framework and the examples</td></tr>
+<tr><td>No constant named like a macro</td><td>R6 of <code>tools/naming_check.sh</code></td><td>the framework and the examples</td></tr>
+</tbody>
+</table>
+
+<p>A game gets none of these checks. The rules are the same advice for its code, and
+<a href="/guidelines/enforcement.html">what checks what</a> has the whole list.</p>

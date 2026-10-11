@@ -78,7 +78,12 @@ pre code { background: none; border: 0; padding: 0; font-size: inherit; }
 }
 /* What refused a block, in the tool's words: the compile tier's run of it. */
 .tool-said { border-top: 1px dashed var(--border-strong); }
-.tool-said p { margin: 0; padding: 0.6rem 1rem 0; font-size: 0.78rem; color: var(--text-muted); }
+.tool-said p {
+  margin: 0;
+  padding: 0.6rem 1rem 0;
+  font: 0.78rem var(--font-ui);
+  color: var(--text-muted);
+}
 .tool-said pre {
   padding: 0.3rem 1rem 0.6rem;
   font-size: 0.78rem;
@@ -115,6 +120,11 @@ h2:hover .heading-anchor, h3:hover .heading-anchor, h4:hover .heading-anchor,
 }
 .callout.warning { border-left-color: var(--warn-edge); background: var(--warn); }
 .callout.danger { border-left-color: var(--danger-edge); background: var(--danger); }
+
+/* The Guidelines' table of what checks what: the rule and its tool get the
+   width, the three columns of where it holds only what a short answer needs. */
+table[data-enforcement] td:nth-child(1) { width: 32%; }
+table[data-enforcement] td:nth-child(2) { width: 32%; }
 
 /* --- tables that may be wider than the column ----------------------------- */
 .table-wrap { overflow-x: auto; margin: 0 0 1.2em; }

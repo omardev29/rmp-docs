@@ -18,6 +18,7 @@ CustomChecks:
       - BindName: p
         Level: Warning
         Message: "a raw pointer"
+ExtraArgs: ['-Wshadow']
 CheckOptions:
   - key: x
     value: y

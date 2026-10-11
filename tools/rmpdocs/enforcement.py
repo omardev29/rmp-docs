@@ -13,7 +13,9 @@ second cell names in <code> is read as:
                                  the examples -- and in none it says no to
     tools/style_check.sh S6      a gate of the framework's, and a rule of it:
                                  the rule has to be one the script defines
-    -Werror=reorder-init-list    a compiler flag: CMakeLists.txt has to pass it
+    -Werror=reorder-init-list    a compiler flag: CMakeLists.txt has to pass it,
+                                 or .clang-tidy's ExtraArgs, and then it reaches
+                                 only where clang-tidy runs
     .clang-format                a file of the framework's
 
 and a game is said to get a tool only when `rmp new` copies it into one (a
@@ -103,7 +105,9 @@ def configuration(framework: str) -> dict | None:
         examples = (root if inherit else []) + ex_globs
     named = {g.lstrip("-") for g in root + ex_globs if "*" not in g}
     customs = custom_names(root_text)
-    return {"root": root, "examples": examples, "named": named | set(customs)}
+    m = re.search(r"^ExtraArgs:\s*\[(.*?)\]", root_text, re.M)
+    extra = [a.strip().strip("'\"") for a in m.group(1).split(",")] if m else []
+    return {"root": root, "examples": examples, "named": named | set(customs), "extra_args": extra}
 
 
 def script_rules(fw: Path, script: str) -> set[str] | None:
@@ -200,10 +204,12 @@ def _row(path, row, fw, conf, game, flags_text) -> list[Problem]:
         if not (enabled(c, conf["root"]) or enabled(c, conf["examples"])):
             out.append(Problem("enforcement", path, row.line,
                                f"{where}: the framework's .clang-tidy does not run {c}, anywhere"))
+    built = [f for f in flags if f in flags_text]
+    tidy_flags = [f for f in flags if f in conf["extra_args"]]
     for f in flags:
-        if f not in flags_text:
+        if f not in built and f not in tidy_flags:
             out.append(Problem("enforcement", path, row.line,
-                               f"{where}: CMakeLists.txt does not pass {f}"))
+                               f"{where}: neither CMakeLists.txt nor .clang-tidy's ExtraArgs pass {f}"))
 
     def says(cell) -> bool:
         return not cell.text().strip().lower().startswith("no")
@@ -213,8 +219,8 @@ def _row(path, row, fw, conf, game, flags_text) -> list[Problem]:
     # word there; it never makes a "no" wrong.
     for cell, scope, globs in ((cells[2], "the framework", conf["root"]),
                                (cells[3], "the examples", conf["examples"])):
-        on = [c for c in checks if enabled(c, globs)]
-        if says(cell) and not (on or files or flags):
+        on = [c for c in checks if enabled(c, globs)] + tidy_flags
+        if says(cell) and not (on or files or built):
             out.append(Problem("enforcement", path, row.line,
                                f"{where} says it holds in {scope}, and none of "
                                f"{', '.join(checks) or 'its tools'} runs there"))
@@ -223,9 +229,9 @@ def _row(path, row, fw, conf, game, flags_text) -> list[Problem]:
                                f"{where} says no for {scope}, and the framework's .clang-tidy runs "
                                f"{', '.join(on)} there"))
     # A game: what rmp new copies, and what CMakeLists.txt hands its target.
-    reaching = [f for f in files if f in game] + [f for f in flags if f in flags_text]
+    reaching = [f for f in files if f in game] + built
     if ".clang-tidy" in game:
-        reaching += checks
+        reaching += checks + tidy_flags
     if says(cells[4]) and not reaching:
         out.append(Problem("enforcement", path, row.line,
                            f"{where} says a game gets it, and rmp new copies none of "

@@ -95,6 +95,22 @@ the version `thirdparty/FROZEN_VERSIONS.md` pins, which the site's CI image has.
 `--experimental-custom-checks`, because the framework's `.clang-tidy` has `CustomChecks` that run
 only with it; a clang-tidy without the flag is refused rather than trusted.
 
+Under every block shown as refused — `error`, `lint` or `gate` — a build with `--tier compile` or
+`--tier project` prints what refused it, in the tool's own words: the compiler's errors, clang-tidy's
+warnings (the check the page names first) or the gate's `FAIL` lines, on the block's own lines, the
+file called `snippet.cpp` and every line counted from the block's first. The compile tier runs
+before the pages are written, so the site CI deploys carries them. Never type a message for a
+block; the build that compiled it has it. A static build, which compiles nothing, shows the
+caption alone.
+
+A page of the Guidelines that says which tool checks a rule says it in the table of
+`content/guidelines/enforcement.html`, `<table data-enforcement>`: per row the rule, what checks it
+in `<code>` (a clang-tidy check, `tools/<script>` with its rules — `tools/style_check.sh` `S6` —, a
+flag, `.clang-format`), and "yes" or "no" for the framework, the examples and a game. The
+`enforcement` gate holds each row to the framework's `.clang-tidy` and `examples/.clang-tidy`, to the
+scripts' rules and to what `rmp new` copies, both ways; and every check the framework's
+`.clang-tidy` files name, on or off, has to appear on a Guidelines page.
+
 Every block that is not shown as a mistake, on any page, and every file a tutorial writes, passes
 the framework's `tools/style_check.sh` too: `++i` where the old value is not read, no C cast, no
 `NULL`. The code on this site is held to what the framework's examples are.
