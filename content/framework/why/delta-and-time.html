@@ -68,16 +68,20 @@ wall clock when it starts, and <a href="ref:rmp::random::current_seed"><code>cur
 tells you which run you are in.</p>
 
 <p data-fw-grep="src/rmp/ui/context.cpp::float frame_time\(\) \{ return test_mode\(\) \? 0\.0f : rmp::app::detail::frame_delta\(\); \}">The
-UI has no clock of its own either. Its transitions, its scrolling and the repeat of a held arrow key
-take their time from <code>frame_time()</code>, which is the <code>delta</code> the frame was
-handed: the number <code>step_delta()</code> remembered. A menu and the game under it cannot
-disagree about how long a frame took. The layout tests run the UI in a mode where that time is 0, so
-a layout comes out the same on every run.</p>
+UI has no clock of its own either. Its transitions, its scrolling, the repeat of a held arrow key
+and the blink of a text field's caret take their time from <code>frame_time()</code>, which is the
+<code>delta</code> the frame was handed: the number <code>step_delta()</code> remembered. A menu
+and the game under it cannot disagree about how long a frame took. The layout tests run the UI in a
+mode where that time is 0, so a layout comes out the same on every run.</p>
 
-<p data-fw-grep="src/rmp/ui/controls.cpp::const bool caret_on =\s+typing &amp;&amp; \(static_cast&lt;int&gt;\(GetTime\(\) \* 2\.0\) % 2\) == 0;">The
-exception is the text field, the debt on that list. It blinks its caret from
-<code>GetTime()</code> and reads the typed characters and Backspace straight from raylib, so test
-mode does not stop the caret blinking, and no seam lets a test type into it.</p>
+<p data-fw-grep="src/rmp/ui/controls.cpp::caret\.f \+= detail::frame_time\(\);[\s\S]*?while \(\(c = GetCharPressed\(\)\) != 0\)[\s\S]*?if \(IsKeyPressed\(KEY_BACKSPACE\)[\s\S]*?const bool caret_on = typing &amp;&amp; std::fmod\(caret\.f, 1\.0f\) &lt; 0\.5f;">The
+text field is the debt on that list, and only for what is typed: it reads the typed characters and
+Backspace straight from raylib, so no seam lets a test type into it. Its caret is not: it blinks
+on <code>frame_time()</code> like everything else in the UI, shown the moment the field takes the
+keyboard and then for the first half of every second it types —
+<span data-fw-grep="tools/seam_check.sh::DEBT_CALLS=\(\n  &quot;src/rmp/ui/controls\.cpp=GetCharPressed\|IsKeyPressed&quot;">and
+the check holds the file to the two calls it is in debt for, so a <code>GetTime()</code> there
+fails it.</span></p>
 
 <p data-fw-grep="src/rmp/clock.cpp::void set_fixed_delta\(float seconds\) \{ timing\.fixed = seconds &gt; 0 \? seconds : 0; \}">One
 clock is also what lets a whole game be played the same way twice. A test can fix the step, so that
