@@ -267,7 +267,12 @@ class Site:
         self._headings(page, root)
         self._links(page, root)
         self._tables(root)
-        page.body = dom.serialize(root)
+        try:
+            page.body = dom.serialize(root)
+        except dom.HtmlError as e:
+            # Markup that would read back as something else: said, never shipped.
+            self.problems.append(Problem("html", page.source, e.line, e.message))
+            page.body = ""
 
     def _code_blocks(self, page: Page, root: dom.Node):
         for pre in [n for n in root.walk() if n.tag == "pre"]:
