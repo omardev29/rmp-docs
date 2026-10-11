@@ -1,0 +1,338 @@
+<!--
+title: Coverage and the gates
+description: What the tests reach, measured in the build image and held per file to a floor that only rises; every tools/*_check.sh and what it refuses; how each gate is seen red on a planted mistake, how to add one, and the files of the repository that only ever move one way.
+order: 70
+-->
+<h1>Coverage and the gates</h1>
+
+<p class="lede">Two kinds of check hold the framework to what it says about itself. Coverage measures
+what the tests reach, and does not let it fall. The gates read the repository for mistakes that
+have happened once and can be described precisely enough for a machine to refuse — a rule written
+in a script cannot be forgotten the way a rule in a note is.</p>
+
+<h2 id="coverage">Coverage, measured in the image</h2>
+
+<p data-fw-grep="tools/coverage_check.sh::# Builds the unit tests, the headless UI layout test and tests/input_play\.cpp\n# \(the one program that drives src/rmp/app\.cpp, through the real runner\) with\n# -fprofile-instr-generate -fcoverage-mapping">A
+test that never runs a line cannot find what is wrong with it. <code>rmp test coverage</code> builds
+the unit tests, the headless layout test and <code>tests/input_play.cpp</code> — the one program
+that drives the real desktop runner — with clang's source-based coverage, runs them, and reads which
+lines of <code>src/rmp/</code> ran.
+<span data-fw-grep="tools/coverage_check.sh::# -fprofile-instr-generate -fcoverage-mapping -- RMP_COVERAGE in\n# CMakeLists\.txt, which also links librmp\.a WHOLE, so a file no test reaches is\n# in the report at 0% instead of missing from it\.">The
+tests link the whole framework library for it, so a file no test reaches is in the report at 0%
+instead of missing from it.</span>
+<span data-fw-grep="tools/coverage_check.sh::# Its own build directory, so it never disturbs build/debug; a Debug build\n# without the sanitizers">It
+is a debug build of its own, without the sanitizers, which say nothing about which lines ran and
+make the run several times slower.</span></p>
+
+<p data-fw-grep="tools/coverage_report.py::WHERE IT GATES\. Which lines a compiler maps, and which tests a machine can run\n\(the audio device, the test locales\), differ between machines, and the numbers\nwere written inside the pinned image\.">Which
+lines a compiler counts, and which tests a machine can run — the sound device, the test locales —
+differ between machines, and the numbers were measured inside the pinned build image. So the floors
+are a gate there, and anywhere else the run prints them. The coverage CI job runs it in the image,
+and that is the run to believe; on your machine, run it there too:</p>
+
+<pre data-lang="shell" data-fw-grep="tools/coverage_check.sh::  echo &quot;        tools/dev_shell\.sh bash tools/coverage_check\.sh&quot;">
+rmp test coverage
+tools/dev_shell.sh bash tools/coverage_check.sh
+tools/dev_shell.sh bash tools/coverage_check.sh --update
+</pre>
+
+<aside class="callout warning"><span class="callout-title">Careful</span><p data-fw-grep="tools/examples_build.sh::  # A build directory configured from somewhere else cannot be configured\n  # here: CMake refuses a cache made in another source directory\.">The
+image sees the checkout at another path than your machine does, and CMake refuses to configure a
+build folder again from another source directory. A folder the image configured —
+<code>build/coverage</code>, <code>build/fuzz</code> — is removed before the same script runs on your
+machine, and the other way round: <code>rm -rf build/coverage</code>.</p></aside>
+
+<p data-fw-grep="tools/coverage_check.sh::# Writes build/coverage/: coverage\.lcov \(what the report reads\),\n# coverage\.json, summary\.md, untested_api\.txt \(this run's list\) and html/,\n# llvm-cov's annotated sources\.">The
+run writes <code>build/coverage/</code>: the report it read, a summary, this run's list of untested
+functions, and <code>build/coverage/html/</code>, every source file with the count of each line
+beside it — where to look for the lines a new test should reach.</p>
+
+<p data-fw-grep="tools/coverage_check.sh::# Never a skip: a coverage run that quietly measured nothing would print the\n# floors as notes and pass\.">Before
+anything else the script builds, runs and reads back a program of two functions, one called and one
+not, and fails — never skips — when clang's profile runtime is missing or its tools are of another
+release of LLVM: a coverage run that measured nothing would print every floor as a note and pass.</p>
+
+<h3 id="floors">A floor per file, which only rises</h3>
+
+<p data-fw-grep="tools/coverage_report.py::LINES, per file of src/rmp/, against tools/coverage_floor\.txt: `path percent`,\nthe line coverage measured inside the pinned build image, rounded down\. The\nfloor only rises\.">
+<code>tools/coverage_floor.txt</code> has one line per file of <code>src/rmp/</code>: its path and
+the share of its lines the tests run, in percent, rounded down.</p>
+
+<ul>
+<li data-fw-grep="tools/coverage_report.py::STALE = 2  # points over the floor that make it stale"><strong>A
+file below its line fails.</strong> And a file two points or more above it fails too, until the line
+is raised in the commit that earned it: a ratchet nobody has to remember to turn is one that does
+not stall. <code>--update</code>, in the image, raises the lines to what the run measured.</li>
+<li data-fw-grep="CLAUDE.md::A new `src/rmp` file needs its floor line in the same commit\."><strong>A
+new file of <code>src/rmp/</code> comes with its line</strong>, in the same commit. A file with lines
+and no floor fails, and so does a floor for a file that is gone.</li>
+<li data-fw-grep="tools/coverage_report.py::from the list what is called now or gone\. It never lowers a floor and never\nadds a function: a floor that has to come down, or a function that may stay\nuntested, is a line somebody writes by hand and a reviewer reads\."><strong>Nothing
+lowers a floor but a hand.</strong> <code>--update</code> never does; a floor that has to come down is
+an edit somebody writes and a reviewer reads, with the reason in the commit.</li>
+</ul>
+
+<p data-fw-grep="CLAUDE.md::\*\*llvm-cov has two line counts\.\*\* `llvm-cov report` and the html index count\s+a line once per function that maps it">The
+floors are the per-line export's: each line of a file counted once. The html index and
+<code>llvm-cov report</code> count a line once for every function that maps it — a lambda's lines
+twice — so their percentages are not the floor's, and the floor is what fails.</p>
+
+<h3 id="untested-api">The public functions no test calls, which only shrink</h3>
+
+<p data-fw-grep="tools/coverage_report.py::FUNCTIONS: every public function of include/rmp/ -- in namespace rmp, outside\nevery `detail`, not private or protected, not implicit, defaulted or deleted --\nthat no test calls, against tools/untested_api\.txt, which only shrinks\.">
+<code>tools/untested_api.txt</code> names every public function of <code>include/rmp/</code> — in
+<code>rmp</code>, outside every <code>detail</code>, public, not implicit, defaulted or deleted —
+that no test calls. clang reads the headers to find them, and a template counts as called when any
+instance of it runs. A new public function no test calls fails: write the test. A listed one a test
+calls now, or one that is gone, fails until its line goes, which <code>--update</code> does.</p>
+
+<h3 id="coverage-off">Lines no test can run</h3>
+
+<p data-fw-grep="tools/coverage_report.py::MARKER_OFF = re\.compile\(r&quot;\^\\s\*//\\s\*RMP_COVERAGE_OFF\\\(\(\.\*\)\\\)\\s\*\$&quot;\)">Some
+lines cannot run under a test: a GPU call in a program with no window, a file of two gigabytes.
+They go between two comment lines, each on a line of its own, and are counted apart instead of
+against the file. The first says why:</p>
+
+<pre data-lang="text">
+// RMP_COVERAGE_OFF(&lt;why&gt;)
+...
+// RMP_COVERAGE_ON
+</pre>
+
+<p data-fw-grep="src/rmp/aseprite.cpp::        // RMP_COVERAGE_OFF\(two gigabytes: no test allocates a file past int's range\)">The
+Aseprite reader's refusal of a file past <code>int</code>'s range is
+<a href="fw:src/rmp/aseprite.cpp#L417-L420">one</a>. A marker with no reason fails, and so does an
+OFF with no ON. The markers are for lines that cannot run, not for lines nobody has written a test
+for yet: those are what the floor is for.</p>
+
+<h2 id="gates">The gates</h2>
+
+<p data-fw-grep="CLAUDE.md::\*\*Every deterministic mistake must be catchable by a gate, not by memory\.\*\* This\s+is Omar's rule and it is the one that compounds\.">The
+framework's rule is that every deterministic mistake must be catchable by a gate, not by memory. If
+a kind of bug can be described precisely, something automated rejects it — a clang-tidy check, a
+rejection in <code>tools/configure.py</code>, a test, or a script. The scripts are
+<code>tools/*_check.sh</code>, and each one reads the repository for one kind of mistake:</p>
+
+<table>
+<thead><tr><th>Script</th><th>Refuses</th><th>Run by</th></tr></thead>
+<tbody>
+<tr data-fw-grep="tools/repo_check.sh::# The repository tracks sources, not what a build produces\."><td><code>tools/repo_check.sh</code></td><td>a file a build produces tracked by git — a CMake cache, an object file, a log — and a tracked file the <code>.gitignore</code> ignores</td><td><code>rmp test repo</code></td></tr>
+<tr data-fw-grep="tools/seam_check.sh::# It also checks a SECOND rule, added after it cost a link error: inside rmp::,\n# a raylib type whose name we have taken must be written with a leading `::`\."><td><code>tools/seam_check.sh</code></td><td>a file of the framework that reads the clock, the devices, the screen or the random state outside the seams; inside <code>rmp</code>, a raylib type whose name the framework has taken written without its leading <code>::</code></td><td><code>rmp test seam</code></td></tr>
+<tr data-fw-grep="tools/workflow_check.sh::print\(f&quot;  ok    \{checked\} reusable-workflow call\(s\): permissions, inputs and secrets agree&quot;\)"><td><code>tools/workflow_check.sh</code></td><td>a reusable workflow that asks for a permission, an input or a secret its caller does not give it, which GitHub answers with a run of no jobs and no logs; a step that throws a build's output away</td><td><code>rmp test workflows</code></td></tr>
+<tr data-fw-grep="tools/portable_check.sh::# The one that was actually in the tree: `mapfile`\. It is bash 4, and macOS\n# ships bash 3\.2 and always will"><td><code>tools/portable_check.sh</code></td><td>in <code>tools/</code> and the <code>rmp</code> launcher, what macOS's bash 3.2 or the BSDs do not have — <code>mapfile</code>, <code>readlink -f</code>, <code>sed -i</code> without an argument and the rest; a byte that is not ASCII in the BSD jobs' inline script</td><td><code>rmp test portable</code></td></tr>
+<tr data-fw-grep="tools/shell_pattern_check.sh::# Fail if a line of our shell uses `A &amp;&amp; B \|\| C` as if it were if/then/else\."><td><code>tools/shell_pattern_check.sh</code></td><td><code>A &amp;&amp; B || C</code> in a script, the launcher or a workflow's <code>run:</code> block, a line continued with <code>\</code> read as one: when <code>B</code> fails, <code>C</code> runs too</td><td><code>rmp test shell</code></td></tr>
+<tr data-fw-grep="tools/naming_check.sh::#   R1  no `g_` names            file state is a struct per concern: `frame\.open`"><td><code>tools/naming_check.sh</code></td><td>the naming rules clang-tidy cannot see, in every branch of every <code>#if</code>: R1 to R8 — <a href="/guidelines/naming.html">Naming</a></td><td><code>rmp test naming</code></td></tr>
+<tr data-fw-grep="tools/style_check.sh::#   S1  no C cast to an arithmetic type:"><td><code>tools/style_check.sh</code></td><td>the style rules clang-tidy cannot see, in every branch of every <code>#if</code>: S1 to S8 — a C cast, <code>NULL</code>, a <code>TODO</code>, something newer than the oldest compiler a game is built with, a user-defined literal, <code>i++</code> where <code>++i</code> says the same, a silent interface call outside a frame, iostreams in the library</td><td><code>rmp test style</code></td></tr>
+<tr data-fw-grep="tools/ownership_check.sh::#   O1  no bare new/delete, no malloc/free, under include/rmp/ or src/rmp/\."><td><code>tools/ownership_check.sh</code></td><td>O1, memory owned by hand in the framework; O2, a raylib <code>Load*</code> or <code>Unload*</code> outside the file that owns what it makes — <a href="/guidelines/pointers-and-raii.html">Pointers and RAII</a></td><td><code>rmp test ownership</code></td></tr>
+<tr data-fw-grep="tools/cppcheck_check.sh::# A suppression with no reason fails here, and so does one that no longer\n# matches anything"><td><code>tools/cppcheck_check.sh</code></td><td>a cppcheck finding in <code>src/rmp</code>; a suppression with no reason, or one that matches nothing any more</td><td><code>rmp test cppcheck</code></td></tr>
+<tr data-fw-grep="tools/header_check.sh::# TWO PROMISES, ONE CHECK\. For each include/rmp/\*\.h this compiles a translation\n# unit that includes ONLY that header and then uses RMP_WINDOW_WIDTH:"><td><code>tools/header_check.sh</code></td><td>a public header that does not compile on its own, or does not carry the <code>.toml</code>'s values</td><td><code>rmp test headers</code></td></tr>
+<tr data-fw-grep="tools/header_cost_check.sh::# Fail if a public header has grown past its budget\."><td><code>tools/header_cost_check.sh</code></td><td>a public header whose preprocessed size moved off its line in <code>tools/header_budget.txt</code>, either way; a header with no line</td><td><code>rmp test cost</code></td></tr>
+<tr data-fw-grep="tools/versions_check.sh::# Fail if the pinned versions have drifted apart\."><td><code>tools/versions_check.sh</code></td><td>a pin in <code>thirdparty/FROZEN_VERSIONS.md</code> that disagrees with the file that controls it, or, inside the image, with the image's own manifest</td><td><code>rmp test config</code></td></tr>
+<tr data-fw-grep="tools/examples_check.sh::# examples/ is documentation with code in it, and -fsyntax-only cannot read it\."><td><code>tools/examples_check.sh</code></td><td>an example with its own <code>main()</code> or its own loop; one with no link in <code>examples/README.md</code></td><td><code>rmp test examples</code></td></tr>
+<tr data-fw-grep="tools/render_check.sh::# Build with raylib's software renderer and prove the game runs\."><td><code>tools/render_check.sh</code></td><td>a game that does not boot, draw and exit cleanly under the software renderer; in the framework, a frame that does not hash to <code>tests/fixtures/render_hash.txt</code></td><td><code>rmp test render</code>; the macOS and BSD jobs</td></tr>
+<tr data-fw-grep="tools/sanitize_check.sh::# The unit tests and the headless UI layout test again, under AddressSanitizer\n# and UndefinedBehaviorSanitizer, built by GCC\."><td><code>tools/sanitize_check.sh</code></td><td>the unit and layout tests failing, or a sanitizer report, built with gcc and warnings as errors</td><td><code>rmp test sanitize</code>; the <code>deep</code> job</td></tr>
+<tr data-fw-grep="tools/coverage_check.sh::# What the tests run of the framework: clang's source-based coverage of\n# src/rmp/, held by two ratchets\."><td><code>tools/coverage_check.sh</code></td><td>a file below its floor or above it, an untested public function — <a href="#coverage">above</a></td><td><code>rmp test coverage</code>; the <code>coverage</code> job</td></tr>
+<tr data-fw-grep="tools/shipped_check.sh::# A release, laid out the way the archive ships it, started from SOMEWHERE ELSE\."><td><code>tools/shipped_check.sh</code></td><td>a release that does not find its files when it is started from another folder</td><td>the macOS and BSD jobs, and the plain C one</td></tr>
+<tr data-fw-grep="tools/glibc_check.sh::# The binary must not need a glibc newer than \[linux\] glibc says it may\."><td><code>tools/glibc_check.sh</code></td><td>a Linux release that needs a newer glibc than <code>[linux] glibc</code> allows</td><td>the Linux release jobs</td></tr>
+</tbody>
+</table>
+
+<p>A few gates are Python, because what they read is easier read that way:</p>
+
+<ul>
+<li data-fw-grep="tools/pointer_check.py::&quot;&quot;&quot;No raw pointer and no C string in a declaration a game can name\."><code>tools/pointer_check.py</code>,
+<code>rmp test pointers</code>: a raw pointer or a C string in a declaration a game can name, read
+from the headers' syntax tree.</li>
+<li data-fw-grep="tools/rmp.py::           \(&quot;run&quot;, \[&quot;\{python\}&quot;, &quot;tools/license_db\.py&quot;, &quot;--check&quot;\]\)\], scope=&quot;both&quot;\),"><code>tools/license_db.py --check</code> and <code>tools/configure.py --check</code>, both in
+<code>rmp test config</code>: a vendored component with no licence row, and a <code>.toml</code> that
+cannot work.</li>
+<li data-fw-grep="tools/rmp.py::    Stage\(&quot;size&quot;, &quot;every shipped binary has a size budget, and its reader works&quot;,"><code>tools/size_check.py</code>, <code>rmp test size</code> and every release job: a shipped
+binary off its size budget.</li>
+<li data-fw-grep="tools/lint_debt.py::&quot;&quot;&quot;clang-tidy over the files tools/lint\.sh lists, held to tools/lint_debt\.txt\."><code>tools/lint_debt.py</code>,
+behind <code>rmp lint</code>: clang-tidy, held to what the tree still owes — <a href="#lint-debt">below</a>.</li>
+</ul>
+
+<p><a href="/framework/testing.html#gates">Testing</a> lists every stage of <code>rmp test</code>
+with what it fails on, and <a href="/guidelines/enforcement.html">Enforcement</a> says which rule
+of the style guide each check holds.</p>
+
+<h2 id="gates-red">Every gate, seen red</h2>
+
+<p data-fw-grep="tests/gates_red_test.py::&quot;&quot;&quot;Every tools/\*_check\.sh, seen red on the mistake it exists for and green on\nthe tree as it is\.">A
+gate is a test, and a test nobody has seen fail is a hope with a name. <code>rmp test gates</code>
+runs <code>tests/gates_red_test.py</code>, which runs each script the way <code>rmp test</code> and CI
+run it — on a scratch tree: the script and what it reads, copied from the repository's tracked files
+into a temporary folder. Then it plants a mistake in the scratch, and the script has to say FAIL and
+name it; and on the tree as it is, it has to pass.</p>
+
+<pre data-lang="text" data-fw-grep="tests/gates_red_test.py::class SeamCheckTest\(GateTest\):\n    SCRIPT = &quot;seam_check\.sh&quot;\n    PATHS = \(&quot;src/rmp&quot;, &quot;include/rmp&quot;\)\n\n    def test_the_tree_as_it_is_passes\(self\):\n        self\.assert_green\(\)\n\n    def test_planted_a_clock_read_in_a_new_file\(self\):\n        self\.tree\.plant\(&quot;src/rmp/later\.cpp&quot;,\n                        &quot;#include &lt;raylib\.h&gt;\\nnamespace rmp \{\\n&quot;\n                        &quot;float later\(\) \{ return GetFrameTime\(\); \}\\n\}\\n&quot;\)\n        self\.assert_red\(&quot;src/rmp/later\.cpp reads time, input, randomness or the screen directly&quot;,\n                        &quot;3:float later\(\) \{ return GetFrameTime\(\); \}&quot;\)">
+class SeamCheckTest(GateTest):
+    SCRIPT = "seam_check.sh"
+    PATHS = ("src/rmp", "include/rmp")
+
+    def test_the_tree_as_it_is_passes(self):
+        self.assert_green()
+
+    def test_planted_a_clock_read_in_a_new_file(self):
+        self.tree.plant("src/rmp/later.cpp",
+                        "#include &lt;raylib.h&gt;\nnamespace rmp {\n"
+                        "float later() { return GetFrameTime(); }\n}\n")
+        self.assert_red("src/rmp/later.cpp reads time, input, randomness or the screen directly",
+                        "3:float later() { return GetFrameTime(); }")
+</pre>
+
+<p data-fw-grep="tests/gates_red_test.py::    def test_here_means_a_class_with_both_runs\(self\):[\s\S]*?self\.assertIn\(&quot;test_the_tree_as_it_is_passes&quot;, tests\)[\s\S]*?any\(n\.startswith\(&quot;test_planted_&quot;\) for n in tests\)">Every
+script of <code>tools/*_check.sh</code> is in the file's <code>GATES</code> list, and a test holds
+the list to the folder: a new script fails until it has its line. The line says
+<code>here</code> — a class in this file, with a test of the tree as it is and at least one
+<code>test_planted_</code> — or names the class elsewhere that plants it red, and why there.
+<span data-fw-grep="tests/gates_red_test.py::    &quot;render_check\.sh&quot;: &quot;configure_test\.py::RenderCheckReadsTheExitTest: a stand-in cmake &quot;\n                       &quot;and game,">The
+render check, for one, is planted in <code>tests/configure_test.py</code>, with a stand-in for CMake
+and for the game.</span></p>
+
+<p data-fw-grep="tests/gates_red_test.py::Planting found holes, each fixed with its case here \(the commit says how\):\nrepo_check\.sh passed a tracked object file with a name git quotes; seam_check\.sh\nread a `//` inside a string as a comment and missed the call after it;\nglibc_check\.sh said &quot;ok, static\?&quot; of a file that is no ELF at all;">Planting
+is not a formality. It found holes in gates that were passing: the repository check let
+through an object file whose name git quotes, the seam check read a <code>//</code> inside a string
+as a comment and missed the call after it, and the glibc check called a file that is no ELF at all
+static. Each hole has its planted case in the file.</p>
+
+<pre data-lang="shell">
+rmp test gates
+python3 -m unittest discover -s tests -p gates_red_test.py -k SeamCheckTest -v
+</pre>
+
+<h2 id="adding">Adding a gate</h2>
+
+<p>Start from the mistake, written as one sentence a machine could check. Then pick the instrument
+that understands the most of it:</p>
+
+<ul>
+<li>a clang-tidy check, or a query of the framework's own in <code>.clang-tidy</code>, for what the
+compiler parses — one branch of every <code>#if</code>;</li>
+<li>a rejection in <code>tools/configure.py</code>, with its case in
+<code>tests/configure_test.py</code>, for a <code>.toml</code> that cannot work;</li>
+<li>a unit test, for a behaviour;</li>
+<li>a script in <code>tools/</code>, for what none of those see: every branch of every
+<code>#if</code>, the shell, the workflows, the repository itself.</li>
+</ul>
+
+<p data-fw-grep="CLAUDE.md::\*\*A CustomChecks query fails in silence\.\*\* Its regex takes no C escapes --\s+`&quot;\\\\\.h\$&quot;` matches nothing, write `\[\.\]`">A
+query of the framework's own in <code>.clang-tidy</code> has one trap: it fails in silence. Its
+regular expression takes no C escapes — <code>"\\.h$"</code> matches nothing; write <code>[.]</code> for a dot — and a query
+that does not parse is one warning line and exit 0, after which the check never runs.
+<code>tools/lint_debt.py</code> fails on that line, and a test in
+<code>tests/configure_test.py</code> shows each check of the style guide firing on a probe of the
+wrong way and staying quiet on the right one: a new query gets its probe there.</p>
+
+<p>A script is wired in five places, and tests of the command and of the gates hold the last
+three:</p>
+
+<ol>
+<li><strong>The script</strong>, <code>tools/&lt;what&gt;_check.sh</code>. Its header says what it
+refuses and why — the mistake that happened, so nobody "fixes" the rule back — and how to run it.
+It prints a <code>FAIL</code> line that names the file and line of every finding, and exits 1. It
+runs on macOS's bash 3.2 and on the BSDs, and never writes <code>A &amp;&amp; B || C</code>:
+<code>rmp test portable</code> and <code>rmp test shell</code> read every script in
+<code>tools/</code>. One that reads C or C++ blanks the comments and strings first, through
+<code>tools/cpp_text.py</code>, so a comment may name what is forbidden.</li>
+<li data-fw-grep="tools/rmp.py::    Stage\(&quot;seam&quot;, &quot;nothing in src/rmp reads the clock, input or rand\(\) itself&quot;,\n          \[\(&quot;run&quot;, \[&quot;bash&quot;, &quot;tools/seam_check\.sh&quot;\]\)\]\),"><strong>A
+stage</strong> of <code>rmp test</code>, in <code>STAGES</code> in <code>tools/rmp.py</code>: a name, the
+summary <code>rmp help test</code> prints, and the command.</li>
+<li data-fw-grep=".github/workflows/ci.yml::      - name: The seam holds\n        if: needs\.config\.outputs\.framework == 'true'\n        run: bash tools/seam_check\.sh"><strong>A
+step in CI</strong>, in the <code>lint</code> job of <code>.github/workflows/ci.yml</code>, or in the
+job of its own the test of the command names for it: every stage runs in CI, and a test of
+<code>rmp</code> holds each to its job. A gate a game does not have is a step gated on the framework,
+as the seam's is.</li>
+<li><strong>Seen red</strong>: its line in <code>GATES</code> and its class in
+<code>tests/gates_red_test.py</code>, as <a href="#gates-red">above</a>.</li>
+<li data-fw-grep="tools/rmp.py::    &quot;tools/&quot;: &quot;the framework's gates and generators&quot;,"><strong>Whether
+a game gets it.</strong> <code>rmp new</code> copies a list of files, and everything in
+<code>tools/</code> is the framework's unless that list names it. A gate a game's own CI runs is
+named there, or a test of <code>rmp new</code> fails on the game that lacks it.</li>
+</ol>
+
+<p>The documentation site says what each stage refuses, so a new stage is a line on
+<a href="/framework/testing.html#gates">Testing</a>, and a new rule of the style guide a row of
+<a href="/guidelines/enforcement.html#table">Enforcement</a>, the day the site moves to the commit
+that has it.</p>
+
+<h2 id="ratchets">Files that only move one way</h2>
+
+<p>A rule the tree does not yet keep everywhere cannot be switched on as a gate, and leaving it off
+lets it slip further. So what is still owed is written down, and the gate holds the list: it may get
+shorter, and it may not get longer. Every one of them fails both ways — a new debt, and a debt that
+was paid and is still listed — so the list is always exactly what is left. None is ever made longer
+by a tool: that is an edit by hand, with its reason, for a reviewer to read.</p>
+
+<table>
+<thead><tr><th>The file</th><th>Moves</th><th>Fails on</th></tr></thead>
+<tbody>
+<tr><td><code>tools/coverage_floor.txt</code></td><td>up</td><td>a file under its line, or two points over it; a file with no line — <a href="#floors">above</a></td></tr>
+<tr><td><code>tools/untested_api.txt</code></td><td>shorter</td><td>a public function no test calls that is not listed; a listed one that is called, or gone</td></tr>
+<tr data-fw-grep="tests/property/waivers.txt::# This list ONLY SHRINKS: a function a property covers fails until its line goes,"><td><code>tests/property/waivers.txt</code></td><td>shorter</td><td>a public function no property covers that is not listed; a listed one a property covers, or that is gone — <a href="/framework/contributing/properties-fuzzing-mutation.html#covers">Properties</a></td></tr>
+<tr><td>the <code>floor</code> of <code>tests/mutation/floors/&lt;module&gt;.txt</code></td><td>up</td><td>a score under it; a floor under the score rounded down to 5 — <a href="/framework/contributing/properties-fuzzing-mutation.html#mutation">Mutation</a></td></tr>
+<tr><td>its <code>equivalent</code> lines</td><td>shorter</td><td>a listed mutant a test kills, or one that is gone</td></tr>
+<tr data-fw-grep="tests/e2e/pending.txt::# there -- which only goes down\."><td><code>tests/e2e/pending.txt</code></td><td>shorter, and empty</td><td>an example of a played area with no script and no line; a line for one that has a script — <a href="/framework/contributing/examples-and-e2e.html#played">Examples</a></td></tr>
+<tr data-fw-grep="tools/lint_debt.txt::# What clang-tidy still finds in src/, tests/ and examples/, written down so\n# that it can only shrink"><td><code>tools/lint_debt.txt</code></td><td>down</td><td>a warning not owed; a count that grew; a count above what is left — <a href="#lint-debt">below</a></td></tr>
+<tr data-fw-grep="tools/pointer_ratchet.txt::# fails on a public one, on a detail or private one that is not listed here,\n# and on a line here that matches nothing any more: this list only shrinks\."><td><code>tools/pointer_ratchet.txt</code></td><td>shorter</td><td>a pointer in a <code>detail</code> namespace or a private member that is not listed; a line that matches nothing any more</td></tr>
+<tr data-fw-grep="tools/seam_check.sh::    echo &quot;  FAIL  \$ok is on the allowlist but no longer needs to be\. Remove the entry —&quot;\n    echo &quot;        the list may only get shorter\.&quot;"><td>the allowlist in <code>tools/seam_check.sh</code></td><td>shorter</td><td>another file reading the clock, the devices or the screen; a listed file that no longer does</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="CLAUDE.md::Within 1\.5 % of its line,\s+either way, passes in silence; past that it passes with a warning -- in the\s+log and on the run's summary page -- that names the new number; past 10 % it\s+fails">Two
+more files are budgets rather than ratchets, and are held both ways because a number nobody
+updated hides the next change as surely as a growth nobody wrote down.
+<code>tools/size_budget.txt</code> is the size of every binary a release ships: within 1.5 % of its
+line it passes in silence, past that with a warning that names the new number, and past 10 % it
+fails.
+<span data-fw-grep="tools/header_cost.py::--check fails when a header\nis more than BUDGET_TOLERANCE over its budget \(it grew\), and also when it is\nmore than that UNDER it">
+<code>tools/header_budget.txt</code> is what each public header costs to include, measured and held
+in the image; it fails a header that grew past its line and a line the header is well under.</span></p>
+
+<h2 id="lint-debt"><code>tools/lint_debt.txt</code></h2>
+
+<p data-fw-grep="tools/lint.sh::# clang-tidy over src/, tests/ and examples/ -- the same run on a laptop and in\n# the CI tidy job, which both call this\."><code>rmp lint</code>
+is clang-tidy over <code>src/</code>, <code>tests/</code> and <code>examples/</code>, with the
+framework's <code>.clang-tidy</code>: the same run on your machine and in CI's <code>tidy</code>
+job. It reads the compile database of the <code>lint</code> preset, which it configures, and a file
+with no entry there is a failure rather than a guess at its flags.</p>
+
+<p data-fw-grep="tools/lint_debt.py::    misc-const-correctness  src/rmp/ldtk\.cpp  3">What
+the tree still owes the style guide is <code>tools/lint_debt.txt</code>, one line per check and
+file — the check, the file, and how many warnings it owes:</p>
+
+<pre data-lang="text" data-fw-grep="tools/lint_debt.txt::^custom-rmp-raw-pointer  src/rmp/input\.cpp +4$">
+custom-rmp-raw-pointer  src/rmp/input.cpp  4
+</pre>
+
+<ul>
+<li data-fw-grep="tools/lint_debt.py::  - a warning in a file and check with no line fails;"><strong>A
+warning nobody owes fails.</strong> A new warning is fixed, or carries
+a <code>NOLINT</code> naming the check, with its reason, on the line it is about. Nothing is ever added to the
+file.</li>
+<li data-fw-grep="tools/lint_debt.py::  - more warnings than a line owes fails \(the new one cannot be told from the\n    old ones, so all of them are printed\);"><strong>More
+than a line owes fails</strong>, and every warning of that check and file is printed, because the new
+one cannot be told from the old ones.</li>
+<li data-fw-grep="tools/lint_debt.py::  - FEWER than a line owes fails too: the debt was paid, and the line must come\n    down to what is left so that the next one is caught\."><strong>Fewer
+than a line owes fails too</strong>: the debt was paid, and the line comes down to what is left, so
+the next warning is caught.</li>
+</ul>
+
+<pre data-lang="shell" data-fw-grep="tools/lint.sh::#   check   the gate: nothing that tools/lint_debt\.txt does not owe\n#   fix     apply what clang-tidy is sure of, one file at a time\n#   debt    the gate, and tools/lint_debt\.txt lowered to what is left">
+rmp lint
+bash tools/lint.sh debt
+rmp lint fix
+</pre>
+
+<p><code>bash tools/lint.sh debt</code> runs the same check and writes the lines down to what is
+left: run it after paying a debt, and commit the file with the fix.
+<span data-fw-grep="CLAUDE.md::\*\*`misc-const-correctness --fix` writes `T const`, and is sometimes wrong\.\*\*">
+<code>rmp lint fix</code> applies what clang-tidy is sure of, one file at a time, and then formats.
+Read every change it makes: <code>misc-const-correctness</code>'s fix has written
+<code>const char const *</code>, and made const a buffer a test writes into.</span></p>
+
+<p data-fw-grep="tools/lint_debt.py::Every file runs in its own clang-tidy process, its output kept whole, as\nmany at once as there are processors, the costliest first \(schedule\(\)\), with\n--experimental-custom-checks: without that flag the CustomChecks in\n\.clang-tidy are not registered, and clang-tidy does not say so\.">The
+clang-tidy has to be the one <code>thirdparty/FROZEN_VERSIONS.md</code> pins, and is run with
+<code>--experimental-custom-checks</code>: without that flag the framework's own checks in
+<code>.clang-tidy</code> are not registered, and clang-tidy does not say so.
+<a href="/guidelines/enforcement.html#debt">Enforcement</a> has what the tree still owes, check by
+check.</p>

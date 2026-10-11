@@ -1,0 +1,453 @@
+<!--
+title: Writing a unit test
+description: Where a new test of the framework goes, the shape of a test file, the seams through which a test sets the clock, the input and the interface, the interface laid out with no window, a test seen red before it is trusted, and the tests a game keeps in tests/game/.
+order: 40
+-->
+<h1>Writing a unit test</h1>
+
+<p class="lede">The framework's tests run with no window, no GPU and no display, in milliseconds,
+under the sanitizers. They can, because everything that changes between two runs — the clock, the
+input devices, the size of the screen, the seed — enters the framework through a seam a test
+replaces. This page is how to write one: where the file goes, what it looks like, which seams there
+are, and how to see it fail before you trust it to pass.</p>
+
+<p><a href="/framework/testing.html">Testing</a> describes what the tests are and what each stage of
+<code>rmp test</code> runs. This page is for adding to them.</p>
+
+<h2 id="where">Where a test goes</h2>
+
+<p>A test goes in the file of the program that can run it. Each kind of file is found by a
+pattern, so a new file of a kind that is already there needs no change to CMake; a Python module
+may need a stage, <a href="#python">below</a>.</p>
+
+<table>
+<thead><tr><th>What it tests</th><th>The file</th><th>Built into</th><th>Run by</th></tr></thead>
+<tbody>
+<tr data-fw-grep="CMakeLists.txt::file\(GLOB UNIT_TEST_SOURCES CONFIGURE_DEPENDS\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/tests/\*_test\.cpp&quot;\)"><td>A module of <code>src/rmp/</code></td><td><code>tests/&lt;module&gt;_test.cpp</code></td><td><code>unit_test</code></td><td><code>rmp test unit</code></td></tr>
+<tr data-fw-grep="CMakeLists.txt::list\(REMOVE_ITEM UNIT_TEST_SOURCES &quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/tests/ui_layout_test\.cpp&quot;"><td>The interface's layout, headless</td><td>a case in <code>tests/ui_layout_test.cpp</code></td><td><code>ui_layout_test</code>, a program of its own</td><td><code>rmp test layout</code></td></tr>
+<tr><td>The interface on a real GPU</td><td>a case in <code>tests/ui_render_test.cpp</code></td><td><code>ui_render_test</code></td><td><code>rmp test ui-render</code></td></tr>
+<tr data-fw-grep="tests/deep.cmake::file\(GLOB _rmp_properties CONFIGURE_DEPENDS &quot;\$\{CMAKE_CURRENT_LIST_DIR\}/property/\*_prop\.cpp&quot;\)"><td>What holds for every input</td><td><code>tests/property/&lt;module&gt;_prop.cpp</code></td><td><code>property_test</code></td><td><code>rmp test property</code> — <a href="/framework/contributing/properties-fuzzing-mutation.html#rapidcheck">Properties</a></td></tr>
+<tr data-fw-grep="tests/deep.cmake::file\(GLOB _rmp_fuzz_harnesses CONFIGURE_DEPENDS &quot;\$\{CMAKE_CURRENT_LIST_DIR\}/fuzz/\*\.cpp&quot;\)"><td>A parser, fuzzed</td><td><code>tests/fuzz/&lt;name&gt;.cpp</code></td><td><code>fuzz_&lt;name&gt;</code></td><td><code>rmp test fuzz</code> — <a href="/framework/contributing/properties-fuzzing-mutation.html#fuzzing">Fuzzing</a></td></tr>
+<tr><td>An example, played</td><td><code>tests/e2e/&lt;area&gt;/&lt;name&gt;.e2e</code></td><td><code>e2e_&lt;area&gt;_&lt;name&gt;</code></td><td><code>rmp test examples</code> — <a href="/framework/contributing/examples-and-e2e.html">Examples and e2e scripts</a></td></tr>
+<tr data-fw-grep="tests/rmp_test.py::class EveryTestModuleRunsTest\(unittest\.TestCase\):"><td>A tool of <code>tools/</code></td><td><code>tests/&lt;tool&gt;_test.py</code></td><td>Python's <code>unittest</code></td><td>the stage whose pattern finds it — <a href="#python">below</a></td></tr>
+<tr><td>A game's own code</td><td><code>tests/game/&lt;name&gt;_test.cpp</code></td><td><code>game_test</code></td><td><code>rmp test unit</code> — <a href="#game">below</a></td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="CMakeLists.txt::  # CONFIGURE_DEPENDS, and it is not a nicety: without it a NEW test file is\n  # simply not compiled until somebody happens to reconfigure">Every
+<code>tests/*_test.cpp</code> but the two interface tests with a <code>main()</code> of their own
+is compiled into <code>unit_test</code>, and the pattern is read again on every build: without
+that, a new test file is not compiled until somebody happens to reconfigure, and a test that never
+runs looks exactly like one that passes.</p>
+
+<p data-fw-grep="CMakeLists.txt::RMP_TEST_FIXTURES=&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/tests/fixtures/&quot;\)">Files
+a test reads — a map, a picture, a save cut short — go in <code>tests/fixtures/</code>. The build
+compiles in the absolute path of that folder, so a test finds them whatever directory it is run
+from.</p>
+
+<h2 id="a-test-file">A test file</h2>
+
+<p>Here is the smallest test file of the framework, whole: what it holds and why, at the top;
+doctest; the header of the module it tests; and one suite, named after the module, with a case for
+each thing the module promises.</p>
+
+<pre data-include="tests/ads_test.cpp"></pre>
+
+<p data-fw-grep="tests/mutation/floors/random.txt::^tests    unit_test -ts=random$">The suite's name is not decoration. It is what you select a run by, and what a
+<a href="/framework/contributing/properties-fuzzing-mutation.html#mutation">mutation floor</a>
+selects the tests of its module by — <code>tests/mutation/floors/random.txt</code> runs
+<code>unit_test -ts=random</code>.</p>
+
+<p data-fw-grep="tests/clock_test.cpp::#include &quot;doctest\.h&quot;\n\n#include &quot;\.\./src/rmp/internal\.h&quot;\n#include &quot;\.\./src/rmp/ui/internal\.h&quot;\n\n#include &lt;rmp/app\.h&gt;">A
+test that needs the framework's own internals — the seams below — includes their headers by a
+relative path after doctest and before the public headers, as <code>tests/clock_test.cpp</code>
+does: <code>#include "../src/rmp/internal.h"</code> for the clock and the reports, and
+<code>#include "../src/rmp/ui/internal.h"</code> for the interface.</p>
+
+<h3 id="running">Running it</h3>
+
+<pre data-lang="shell">
+rmp test unit
+./build/debug/unit_test -ts=random
+./build/debug/unit_test -tc="*fixed step*"
+./build/debug/unit_test -sf="*clock_test.cpp"
+</pre>
+
+<p><code>rmp test unit</code> configures the debug build with the tests on, builds
+<code>unit_test</code> and runs it; after that the program takes doctest's own options: a suite,
+a case or a source file by name, with <code>*</code> for anything.
+<span data-fw-grep="tests/campaign_test.py::doctest matches -sf\s+against the source's whole path, -ts against\s+the suite names and -tc against the case names, with wildcards and\s+without case">A
+source file is matched against the whole path the compiler was given, which starts wherever the
+checkout is, so its pattern begins with <code>*</code>.</span></p>
+
+<p data-fw-grep="tools/rmp.py::\(&quot;run&quot;, \[&quot;build/debug/unit_test&quot;, &quot;--order-by=rand&quot;, &quot;--rand-seed=1337&quot;,\s+&quot;--test-suite-exclude=audio: device&quot;\], LOCALES_ENV\)">The
+stage runs every case twice: in the order they are written, then shuffled with a fixed seed. A case
+that passes only because the one before it left something behind fails the second run, and fails it
+again on every run after, because the seed does not change. To play the shuffled run yourself:</p>
+
+<pre data-lang="shell">
+bash tools/test_locales.sh build/test-locales
+LOCPATH=build/test-locales ./build/debug/unit_test --order-by=rand --rand-seed=1337 --test-suite-exclude="audio: device"
+</pre>
+
+<p data-fw-grep="tools/test_locales.sh::# Needs glibc's localedef\. Where there is none \(macOS\) this builds nothing and\n# exits 0, and the tests skip -- unless RMP_REQUIRE_TEST_LOCALES=1">The
+first line builds the two test locales a save is read back under — a decimal point that is a
+comma, and one that is two bytes long — and the second points the run at them. Without them those
+cases skip and say so; CI makes the skip a failure. The <code>audio: device</code> suite opens the
+real sound device and runs in the first pass only.</p>
+
+<p data-fw-grep="tools/rmp.py::Stage\(&quot;unit&quot;, &quot;the unit tests in two orders, and tests/game/&quot;,\s+\[\(&quot;configure&quot;, \[&quot;-DBUILD_TESTS=ON&quot;, &quot;-DRMP_WERROR=ON&quot;\]\)">Both
+runs are a debug build, so both are under AddressSanitizer and UndefinedBehaviorSanitizer, and the
+build has warnings as errors: a warning in a test fails the stage like a warning in the framework.
+<a href="/framework/security.html#sanitizers">Security</a> says what the sanitizers catch.</p>
+
+<h2 id="seams">The seams</h2>
+
+<p data-fw-grep="tools/seam_check.sh::# Fail if a file under src/rmp/ or include/rmp/ reads the clock, the input\n# devices, the screen or the global random state on its own\.">A
+seam is the one function through which the framework reads something that changes from run to run.
+A test replaces it, and every answer the framework gives comes from what the test put there.
+<code>rmp test seam</code> fails when any other file of <code>src/rmp/</code> or
+<code>include/rmp/</code> reads the clock, the devices, the screen or the random state on its own,
+because one such read is enough to make a test pass on one machine and fail on the next.</p>
+
+<table>
+<thead><tr><th>What changes</th><th>The seam a test sets</th><th>Declared in</th><th>Put back with</th></tr></thead>
+<tbody>
+<tr data-fw-grep="include/rmp/input.h::using SampleFn = void \(\*\)\(DeviceState &amp;out\);\nvoid set_sample_provider\(SampleFn fn\);"><td>The keyboard, mouse and gamepad, as <code>rmp::input</code> reads them</td><td><code>rmp::input::detail::set_sample_provider()</code>, with a function that fills a <code>rmp::input::detail::DeviceState</code></td><td><code>include/rmp/input.h</code></td><td><code>rmp::input::detail::reset()</code></td></tr>
+<tr data-fw-grep="src/rmp/internal.h::void set_fixed_delta\(float seconds\);"><td>How long a frame is</td><td><code>set_fixed_delta()</code>, in <code>rmp::app::detail</code></td><td><code>src/rmp/internal.h</code></td><td><code>set_fixed_delta(0)</code></td></tr>
+<tr data-fw-grep="src/rmp/internal.h::void set_test_seed\(std::optional&lt;std::uint64_t&gt; seed\);"><td>The seed a run starts from</td><td><code>set_test_seed()</code>, in <code>rmp::app::detail</code>, or <a href="ref:rmp::random::seed"><code>rmp::random::seed()</code></a> itself</td><td><code>src/rmp/internal.h</code></td><td><code>set_test_seed(std::nullopt)</code></td></tr>
+<tr data-fw-grep="src/rmp/ui/internal.h::void set_pointer_provider\(PointerFn fn\);\nvoid set_nav_provider\(NavFn fn\);"><td>The pointer, as the interface reads it</td><td><code>set_pointer_provider()</code>, in <code>rmp::ui::detail</code></td><td><code>src/rmp/ui/internal.h</code></td><td><code>pointer_from_raylib</code></td></tr>
+<tr><td>The keys and buttons the interface navigates with</td><td><code>set_nav_provider()</code>, with a function that fills a <code>NavState</code></td><td><code>src/rmp/ui/internal.h</code></td><td><code>nav_from_raylib</code></td></tr>
+<tr><td>How wide a line of text is</td><td><code>set_measure_provider()</code></td><td><code>src/rmp/ui/internal.h</code></td><td><code>measure_with_raylib</code></td></tr>
+<tr data-fw-grep="src/rmp/ui/internal.h::void set_text_provider\(TextFn fn\); // nullptr puts raylib's back"><td>What the keyboard typed into a text field</td><td><code>set_text_provider()</code></td><td><code>src/rmp/ui/internal.h</code></td><td><code>nullptr</code></td></tr>
+<tr data-fw-grep="src/rmp/ui/internal.h::void set_test_viewport\(float width, float height\);"><td>The size of the window</td><td><code>set_test_viewport()</code>, which also stops the interface drawing</td><td><code>src/rmp/ui/internal.h</code></td><td><code>set_test_viewport(0, 0)</code></td></tr>
+<tr data-fw-grep="src/rmp/internal.h::void set_report_sink\(rmp::Callback&lt;std::string_view&gt; on_report\);\n(?:.*\n)*?int report_count\(\);\nvoid reset_reports_for_tests\(\);"><td>What the framework says about a mistake in the game</td><td><code>set_report_sink()</code>, <code>report_count()</code>, in <code>rmp::detail</code></td><td><code>src/rmp/internal.h</code></td><td><code>set_report_sink({})</code> and <code>reset_reports_for_tests()</code></td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="CLAUDE.md::\*\*The UI reads the keyboard through its own seam, not rmp::input's\.\*\* `rmp::ui` navigation is\s+`nav_from_raylib\(\)` behind `rmp::ui::detail::set_nav_provider\(\)`; feeding keys through\s+`rmp::input::detail::set_sample_provider\(\)` moves the player and leaves the menus deaf\.">The
+input has two seams, and that is on purpose: the game reads <code>rmp::input</code> and the
+interface reads its own navigation. Keys fed to the first move the player and leave the menus deaf.
+A test of a menu sets the second; a test of a game with a menu over it sets both.</p>
+
+<h3 id="input">The input</h3>
+
+<p data-fw-grep="include/rmp/input.h::// Everything the framework knows about the devices this frame\. It is one\n// struct, and the whole of the test seam: a headless test writes one of these\n// and every function above answers from it\.">A
+test writes the devices it wants into a struct and hands the framework a function that copies it
+out. <code>rmp::input::detail::begin_frame()</code> is one turn of the loop: everything about an
+edge — the frame a key went down — is the difference between two of them, so a test that calls it
+once is testing the wrong thing. This is the fixture <code>tests/input_test.cpp</code> starts every
+case with, and a case of the kind it holds:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;doctest/doctest.h&gt;" data-fw-grep="tests/input_test.cpp::struct \{\n    rmp::input::detail::DeviceState devices;\n\} fake;\n\nvoid fake_sample\(rmp::input::detail::DeviceState &amp;out\) \{ out = fake\.devices; \}">
+namespace {
+
+// The devices the test holds down: there is nothing between this and
+// what rmp::input answers.
+struct {
+    rmp::input::detail::DeviceState devices;
+} fake;
+
+void fake_sample(rmp::input::detail::DeviceState &amp;out) { out = fake.devices; }
+
+// Every case starts from nothing and leaves nothing: the cases also run
+// shuffled, and the next one may be anyone's.
+struct Fixture {
+    Fixture() {
+        rmp::input::detail::reset();
+        fake.devices = rmp::input::detail::DeviceState{};
+        rmp::input::detail::set_sample_provider(fake_sample);
+    }
+    Fixture(const Fixture &amp;) = delete;
+    Fixture &amp;operator=(const Fixture &amp;) = delete;
+    ~Fixture() {
+        rmp::input::detail::reset();
+        fake.devices = rmp::input::detail::DeviceState{};
+    }
+};
+
+} // namespace
+
+TEST_CASE_FIXTURE(Fixture, "jump is just pressed on the frame Space goes down, and only then") {
+    rmp::input::action("jump", KEY_SPACE);
+
+    rmp::input::detail::begin_frame();
+    CHECK_FALSE(rmp::input::just_pressed("jump"));
+
+    fake.devices.keys[KEY_SPACE] = true;
+    rmp::input::detail::begin_frame();
+    CHECK(rmp::input::just_pressed("jump"));
+
+    rmp::input::detail::begin_frame();
+    CHECK_FALSE(rmp::input::just_pressed("jump"));
+    CHECK(rmp::input::pressed("jump"));
+}
+</pre>
+
+<p data-fw-grep="src/rmp/input.cpp::void reset\(\) \{\n    registry\.actions\.clear\(\);[\s\S]*?    frames\.sample = sample_with_raylib;\n\}">The
+fixture puts things back in its destructor, and <code>rmp::input::detail::reset()</code> forgets
+every action and every reading and puts raylib back as the provider.
+<span data-fw-grep=".clang-tidy::#   cppcoreguidelines-special-member-functions\n#                                a class that writes one of the five says what\n#                                becomes of the other four\.">Its
+copies are deleted because a class that writes its destructor says what becomes of the rest:
+<code>rmp lint</code> asks, with <code>cppcoreguidelines-special-member-functions</code>.</span></p>
+
+<h3 id="clock">The clock and the seed</h3>
+
+<p data-fw-grep="src/rmp/internal.h::// More than 0: every frame advances exactly `seconds` -- still clamped by\n// \[app\] max_delta -- whatever the machine took\. 0 goes back to the real clock">With
+a fixed step, every frame hands the game exactly that many seconds, still clamped by
+<code>[app] max_delta</code>, whatever the machine took; 0 goes back to the real clock. The
+interface animates by the same number, so the menus and the game cannot disagree about how long a
+frame was. The seed is what <code>rmp::random</code> starts a run from instead of the wall clock.
+Together they are what lets a test — or <a href="/framework/contributing/examples-and-e2e.html#e2e">a
+script</a> — get the same frame twice:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;doctest/doctest.h&gt;
+#include &quot;../src/rmp/internal.h&quot;
+#include &quot;../src/rmp/ui/internal.h&quot;
+#include &lt;optional&gt;" data-fw-grep="tests/clock_test.cpp::    TEST_CASE_FIXTURE\(\n        Fixture, &quot;a fixed step is what the game is handed and what frame_delta says&quot;\) \{\n        rmp::app::detail::set_fixed_delta\(STEP\);\n        CHECK\(rmp::app::detail::step_delta\(\) == STEP\);">
+namespace {
+
+// Back to the real clock and no seed, whatever a case did.
+struct Fixture {
+    Fixture() { reset(); }
+    ~Fixture() { reset(); }
+    Fixture(const Fixture &amp;) = delete;
+    Fixture &amp;operator=(const Fixture &amp;) = delete;
+
+    static void reset() {
+        rmp::app::detail::set_fixed_delta(0);
+        rmp::app::detail::set_test_seed(std::nullopt);
+    }
+};
+
+constexpr float STEP = 1.0F / 60;
+
+} // namespace
+
+TEST_CASE_FIXTURE(Fixture, "a fixed step is what the game is handed, and what the interface animates by") {
+    rmp::app::detail::set_fixed_delta(STEP);
+    CHECK(rmp::app::detail::step_delta() == STEP);
+    CHECK(rmp::ui::detail::frame_time() == STEP);
+}
+</pre>
+
+<p data-fw-grep="CLAUDE.md::A game that reads `GetTime\(\)`/`GetFrameTime\(\)`\s+cannot be scripted -- the platformer's flag did\."><code>tests/clock_test.cpp</code>
+holds the clock itself to this, case by case. Code that reads <code>GetTime()</code> or
+<code>GetFrameTime()</code> for itself is out of the test's reach: a game that does cannot be played
+from a script, and the platformer's flag once did.</p>
+
+<h3 id="reports">What the framework says</h3>
+
+<p data-fw-grep="tests/report_test.cpp::void warn_from_one_site\(int n\) \{ RMP_REPORT_ONCE\(&quot;test: warning number %d&quot;, n\); \}">A
+mistake in the game — an action nobody defined, a widget outside <code>begin()</code> and
+<code>end()</code> — is said once, through RMP_REPORT_ONCE, and a test of that
+mistake checks it was said, and said once. <code>report_count()</code> is how many have been said
+since <code>reset_reports_for_tests()</code>, and a sink set with <code>set_report_sink()</code>
+hears each line. A test that turns <code>[dev] strict</code> on to see the first report stop the
+run replaces what stopping does, with <code>set_strict_handler()</code>, so that the test program
+is not the thing that stops. The fixture of <code>tests/report_test.cpp</code> sets each of these
+and puts each back.</p>
+
+<p data-fw-grep="CLAUDE.md::\*\*That is for mistakes in the GAME\.\*\* A condition of the MACHINE -- no sound\n  device, a portable build in a read-only folder, a disk that refused a write --\n  is a plain `TraceLog`">What
+the machine does wrong — no sound device, a folder that cannot be written — is not a mistake in the
+game, and is a plain log line, never RMP_REPORT_ONCE: strict mode would stop a correct
+game on a CI runner. A test of such a path does not expect a report.</p>
+
+<h2 id="headless-ui">The interface, with no window</h2>
+
+<p data-fw-grep="src/rmp/ui/internal.h::// Test mode: use the viewport given here instead of asking raylib, and skip\n// drawing in end\(\)\. With this on there is no window and no GL context, and\n// Clay_EndLayout is pure computation">The
+interface's layout is Clay's, and Clay's layout is arithmetic. With the text measurement and the
+pointer replaced by functions of the test's, and a viewport given instead of a window, a whole menu
+is laid out with no window and no GPU, and drawing is skipped. Then the test asks where each
+control ended up with <code>bounds_of()</code>: the label, which occurrence of it, and which
+<code>begin()</code>/<code>end()</code> pass of the frame.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;doctest/doctest.h&gt;
+#include &quot;../src/rmp/ui/internal.h&quot;" data-fw-grep="tests/ui_layout_test.cpp::    // Twice: the first frame has no previous geometry to hit-test against, so\n    // running it once is not representative of a real second frame\.">
+namespace {
+
+// Every glyph half its size wide, a line one size tall: the questions are
+// about arrangement, not typography. The parameters are Clay's.
+// NOLINTBEGIN(custom-rmp-raw-pointer): Clay's signature, not ours to choose
+Clay_Dimensions measure_stub(Clay_StringSlice text, Clay_TextElementConfig *config,
+                             void * /*user*/) {
+    // NOLINTEND(custom-rmp-raw-pointer)
+    const auto size = static_cast&lt;float&gt;(config-&gt;fontSize);
+    return Clay_Dimensions{ static_cast&lt;float&gt;(text.length) * size * 0.5F, size };
+}
+
+// No pointer at all: nothing is hovered, nothing is clicked.
+void pointer_stub(Clay_Vector2 &amp;position, bool &amp;down) {
+    position = Clay_Vector2{ -1.0F, -1.0F };
+    down = false;
+}
+
+// The stubs and a window of 1280 x 720 for one case, and the real ones
+// back after it, whatever it did: no focus left on a button either.
+struct HeadlessUi {
+    HeadlessUi() {
+        rmp::ui::detail::set_measure_provider(measure_stub);
+        rmp::ui::detail::set_pointer_provider(pointer_stub);
+        rmp::ui::detail::set_test_viewport(1280, 720);
+    }
+    HeadlessUi(const HeadlessUi &amp;) = delete;
+    HeadlessUi &amp;operator=(const HeadlessUi &amp;) = delete;
+    ~HeadlessUi() {
+        rmp::ui::focus("");
+        rmp::ui::detail::set_measure_provider(rmp::ui::detail::measure_with_raylib);
+        rmp::ui::detail::set_pointer_provider(rmp::ui::detail::pointer_from_raylib);
+        rmp::ui::detail::set_test_viewport(0, 0);
+    }
+};
+
+void draw_menu() {
+    rmp::ui::begin();
+    rmp::ui::button("Play");
+    rmp::ui::button("Quit");
+    rmp::ui::end();
+}
+
+} // namespace
+
+TEST_CASE_FIXTURE(HeadlessUi, "Play is above Quit") {
+    // Twice: the first frame has nothing laid out before it to hit-test against.
+    draw_menu();
+    draw_menu();
+
+    Clay_BoundingBox play{};
+    Clay_BoundingBox quit{};
+    REQUIRE(rmp::ui::detail::bounds_of("Play", 0, 0, &amp;play));
+    REQUIRE(rmp::ui::detail::bounds_of("Quit", 0, 0, &amp;quit));
+    CHECK(play.y + play.height &lt;= quit.y);
+}
+</pre>
+
+<p>Such a case can go in two places, and they are not the same:</p>
+
+<ul>
+<li data-fw-grep="tests/ui_overlay_test.cpp::struct HeadlessUi \{\n    HeadlessUi\(\) \{"><strong>In
+a <code>tests/ui_&lt;what&gt;_test.cpp</code> of <code>unit_test</code></strong>, written as above.
+Its cases run shuffled among every other test of the framework, so the fixture puts the real
+providers back and leaves nothing behind it — no focus, no frame with something in front, no
+report. <code>HeadlessUi</code> in <code>tests/ui_overlay_test.cpp</code> is the whole of such a
+fixture, the navigation and the reports included.</li>
+<li data-fw-grep="tests/ui_layout_test.cpp::// doctest, in a program of its own: the cases run in the order they are\n// written, each in the UI the one before it left, and the last one -- Clay's\n// element ceiling -- leaves it unable to lay anything out again\."><strong>In
+<code>tests/ui_layout_test.cpp</code></strong>, a program of its own whose <code>main()</code>
+puts the stubs in place once, for every case: there a case is the drawing and the checks, with no
+fixture. Its cases run in the order they are written, each in the interface the one before it
+left, and the last one — Clay's ceiling on elements — leaves it unable to lay anything out again,
+so a new case goes before that one. It is where a layout is checked at many window sizes:
+<code>rmp test layout</code> lays the menu out at four.</li>
+</ul>
+
+<pre data-lang="shell" data-fw-grep="tests/ui_layout_test.cpp:://   cmake --preset debug -DBUILD_UI_TESTS=ON\n//   cmake --build --preset debug --target ui_layout_test\n//   \./build/debug/ui_layout_test\n//   \./build/debug/ui_layout_test -tc=&quot;\*dropdown\*&quot;">
+rmp test layout
+cmake --preset debug -DBUILD_UI_TESTS=ON
+cmake --build --preset debug --target ui_layout_test
+./build/debug/ui_layout_test -tc="*dropdown*"
+</pre>
+
+<p data-fw-grep="CLAUDE.md::\(`ui-render`: a hidden window, the backdrop's blur read back -- under `xvfb-run` in CI\)">With
+no window there is nothing drawn, so what only drawing can show — the backdrop's blur, a shader
+built for a phone's GPU — is <code>tests/ui_render_test.cpp</code>'s: a hidden window on a real
+GPU, the frame read back. <code>rmp test ui-render</code> runs it; CI runs it under a virtual
+display.</p>
+
+<h2 id="red-first">Seen red first</h2>
+
+<p data-fw-grep="CLAUDE.md::A test you have not seen\s+go red is not a test, it is a hope with a name\.">The
+framework's rule is that a test you have not seen go red is not a test, it is a hope with a name.
+A test that has only ever passed may be testing nothing: a check on the wrong variable, a case the
+build never compiled, a seam the code under test does not read. The only proof that it can fail is
+to watch it fail on the mistake it is for.</p>
+
+<ol data-fw-grep="tests/cpp_text_property_test.py::Every property here was seen red: the commit that added this file says how\.">
+<li>Write the test before the fix, or take the fix out for a moment.</li>
+<li>Run it, and read the failure. It has to fail at the check you wrote, saying what you meant it
+to say — not a compile error, not a crash somewhere else, not a different check.</li>
+<li>Put the fix in, and see the same test pass.</li>
+<li>Say in the commit message how it was seen red.</li>
+</ol>
+
+<p>When the fix is already written, take it out of the one file it is in and put it back, without
+touching anything else in the working tree:</p>
+
+<pre data-lang="shell">
+git stash push -- src/rmp/clock.cpp
+rmp test unit
+git stash pop
+</pre>
+
+<p data-fw-grep="CLAUDE.md::\*\*A header's promise is not a feature until a test says so\.\*\*">What
+deserves a test is everything a header says the code does. A promise in a header comment with no
+test that would fail without it is not a feature yet: the framework once said for two phases that a
+scene collides against its map's solid tiles, and nothing did.</p>
+
+<p data-fw-grep="CLAUDE.md::For every\s+option: the valid values, every invalid one, the wrong \*type\* \(an array where\s+a string goes — that crashed five checks with `TypeError`\), the empty value,\s+the combination that cannot work\.">And
+what deserves a case is every input: for every option, the valid values, every invalid one, the
+wrong type, the empty one, and the combination that cannot work. A check that only ever sees
+plausible input has not been tested. For inputs nobody would think to write by hand,
+<a href="/framework/contributing/properties-fuzzing-mutation.html">a property or a fuzz target</a>
+looks for them.</p>
+
+<p>A test that is a check on the repository — a gate — is seen red the same way, by planting the
+mistake it exists for: <a href="/framework/contributing/coverage-and-gates.html#gates-red">Coverage
+and the gates</a> says how.</p>
+
+<h2 id="python">Tests of the tools</h2>
+
+<p data-fw-grep="tests/rmp_test.py::Every tests/\*_test\.py is found by the discover\n    pattern of a stage of `rmp test`">The
+Python in <code>tools/</code> is tested by <code>tests/&lt;tool&gt;_test.py</code>, with the standard
+library's <code>unittest</code>. Every such module has to be found by the pattern of a stage of
+<code>rmp test</code>, and a test of the command fails on one that is not: a file of tests no stage
+runs passes in silence, everywhere, for good. A new module either matches a pattern a stage already
+has, or comes with its stage.</p>
+
+<pre data-lang="shell">
+rmp test configure
+python3 -m unittest discover -s tests -p configure_test.py -k ConfigureLineTest -v
+</pre>
+
+<p data-fw-grep="tests/campaign_test.py::def load_tool\(name: str\):\n    &quot;&quot;&quot;tools/&lt;name&gt;\.py, by its path, as `tools\.&lt;name&gt;`: the name mutmut gives\n    the file">A
+test loads the tool it tests by its path, under the name <code>tools.&lt;name&gt;</code>, as
+<code>load_tool()</code> in <code>tests/campaign_test.py</code> does. That is the name mutation
+testing records a test's reach under: a test that imported the tool as plain
+<code>&lt;name&gt;</code> reaches nothing a mutant can be checked against.</p>
+
+<p data-fw-grep="CLAUDE.md::Every combination that cannot work is a rejection with a\n  reason, and every rejection has a test in `tests/configure_test.py`\.">A
+rejection of <code>tools/configure.py</code> is a case of its own in
+<code>tests/configure_test.py</code>: every combination of the <code>.toml</code> that cannot work
+is refused with the line it is on and a reason, and every refusal has a test that sees it
+fire.</p>
+
+<h2 id="game">In a game: <code>tests/game/</code></h2>
+
+<p data-fw-grep="cmake/game_tests.cmake::list\(FILTER _rmp_game_test_sources EXCLUDE REGEX &quot;/src/rmp/&quot;\)">A
+game made with <code>rmp new</code> keeps its own tests in <code>tests/game/</code>. Every
+<code>.cpp</code> there is built with doctest and with everything in the game's <code>src/</code>
+but <code>main.cpp</code> into one program, <code>game_test</code>, which runs with no window. The
+framework runs the same folder against the small game in its own <code>src/</code>, the copy every
+game starts from, so a test a new game would fail on its first day fails in the framework first.</p>
+
+<pre data-lang="shell">
+rmp test unit
+./build/debug/game_test -tc="*menu*"
+</pre>
+
+<p>A game's test drives the game the way the framework would — the <code>delta</code> handed to a
+hook, the seed of <code>rmp::random</code>, the input devices through the seam above — and reads
+what the game keeps.
+<a href="/framework/testing.html#game-tests">Testing</a> has the file a game starts with.</p>
+
+<h2 id="after">After the test</h2>
+
+<ul data-fw-grep="CLAUDE.md::`rmp test fuzz` after touching a parser \(every committed input replayed under libFuzzer and the\nsanitizers\), `rmp test sanitize` after touching anything that parses, casts or frees">
+<li>Framework code added or tested: <code>rmp test coverage</code>, whose floors only rise —
+<a href="/framework/contributing/coverage-and-gates.html#coverage">Coverage</a>.</li>
+<li>Anything that parses, casts or frees touched: <code>rmp test sanitize</code>, the unit and
+layout tests again under gcc's sanitizers, which instrument differently and warn about other
+things.</li>
+<li>A parser touched: <code>rmp test fuzz</code>, every committed input replayed.</li>
+<li>The public API touched: <code>rmp test examples</code>, every example built, booted and
+played.</li>
+</ul>
