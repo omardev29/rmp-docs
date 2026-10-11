@@ -225,6 +225,12 @@ is owned is a value or a <code>std::unique_ptr</code>, and it is freed by its de
 order of the way out is the order the owners go, which is what makes it safe to free a texture
 before the window that its memory belongs to.</p>
 
+<p data-fw-grep="tools/ownership_check.sh::# raylib's LoadFileData contract: the buffer is RL_MALLOC'd by us and\s+# RL_FREE'd by raylib's caller\. C ABI, not ours to own\.">Two
+files of the framework allocate with the C allocator, and <code>tools/ownership_check.sh</code>
+names them with the reason: raylib's file-loading callback and the resource pack's reader hand
+raylib bytes that raylib frees itself, with <code>UnloadFileData()</code>. That is raylib's C
+interface, not an ownership the framework chose, and the list only shrinks.</p>
+
 <pre data-lang="cpp" data-harness="toplevel" data-given="struct Enemy { int hp = 3; };" data-expect="lint" data-check="cppcoreguidelines-owning-memory">
 int wave_hp() {
     auto *boss = new Enemy();
