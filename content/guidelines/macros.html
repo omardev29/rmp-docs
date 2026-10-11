@@ -175,8 +175,8 @@ constexpr float PI = 3.14159265f;
 <p>Here the error is immediate. With a macro that only some platforms define — <code>MIN</code> and
 <code>MAX</code> on the BSDs, <code>DEBUG</code> in Android's debug build — it compiles everywhere
 except there. <a href="/guidelines/naming.html">Naming</a> has the rule and the list; rule R6 of
-<code>tools/naming_check.sh</code> refuses a constant named like any macro the vendored headers or
-the C library define.</p>
+<code>tools/naming_check.sh</code> refuses a constant named like a macro of the vendored headers, or
+like one of the C library's and the BSDs' that are known to collide.</p>
 
 <h2 id="headers">No header makes you write one</h2>
 

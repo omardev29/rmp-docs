@@ -16,7 +16,7 @@ makes when you do not.</p>
 <table>
 <thead><tr><th>Command</th><th>What it does</th><th>Where</th></tr></thead>
 <tbody>
-<tr><td><code>rmp fmt</code></td><td>formats every file in place</td><td>in the framework: <code>include/</code>, <code>src/</code>, <code>tests/</code> and <code>examples/</code>; in a game: its own <code>include/</code>, <code>src/</code> and <code>tests/</code>, and not the framework's copy in <code>src/rmp/</code> and <code>include/rmp/</code></td></tr>
+<tr><td><code>rmp fmt</code></td><td>formats every file in place</td><td>in the framework: <code>include/</code>, <code>src/</code>, <code>tests/</code> and <code>examples/</code>; in a game: its own <code>include/</code>, <code>src/</code> and <code>tests/</code>, and not the files that came with the framework: <code>src/rmp/</code>, <code>include/rmp/</code> and <code>tests/smoke_test.h</code></td></tr>
 <tr><td><code>rmp test fmt</code></td><td>fails on a file clang-format would change, and changes nothing</td><td>the framework, and its CI's lint job</td></tr>
 </tbody>
 </table>

@@ -34,7 +34,8 @@ whole table.</p>
 moved its enumerators from <code>ENUM_NAME</code> to <code>kEnumName</code> because the
 upper-case names collided with macros. The framework keeps the upper case and answers the
 collision with a check instead: rule R6 of <code>tools/naming_check.sh</code> refuses a constant
-named like any macro the vendored headers or the C library define.</p>
+named like a macro of the vendored headers, or like one of the C library's and the BSDs' that are
+known to collide.</p>
 
 <p data-fw-grep=".clang-tidy::key: readability-identifier-naming\.PrivateMemberPrefix\n    value: '_'">The
 private member's underscore is at the front so that it never touches a dot or an arrow:
@@ -104,8 +105,9 @@ make it worse to read, and no tool checks either: it is a question for review.</
 <p data-fw-grep="tools/pointer_check.py::what rmp:: hands a game is values, references,\s+std::span, std::optional, rmp::Ref and rmp::Handle">Google
 uses a pointer to say "this may be absent": a <code>const T *</code> for an optional input, a
 <code>T *</code> for an optional output, a returned pointer when the result may be null. The
-framework's rule allows no raw pointer outside its calls into the C libraries it is built on: a
-result that may be missing is a <code>std::optional</code>,
+framework's rule allows no raw pointer outside the few places
+<a href="/guidelines/pointers-and-raii.html#allowed">Pointers and RAII</a> names, most of them the C
+libraries it is built on: a result that may be missing is a <code>std::optional</code>,
 an optional input is a second overload, a reference that may be empty is an
 <a href="ref:rmp::Ref"><code>rmp::Ref</code></a>, and an object kept across frames is an
 <a href="ref:rmp::Handle"><code>rmp::Handle</code></a>. A pointer asks its reader whether it may be
@@ -137,9 +139,11 @@ keeps it to those two files: a use anywhere else is a question for review.</p>
 
 <p data-fw-grep="CMakeLists.txt::set\(CMAKE_CXX_STANDARD 20\)">Google's guide asks for C++20 and
 no nonstandard extensions. The framework asks CMake for C++20 and leaves CMake's default for
-extensions alone, so GCC and Clang compile with <code>-std=gnu++20</code>; the iOS project, which
-<code>tools/configure.py</code> writes, asks for <code>c++20</code>. The code compiles under both;
-the iOS build is the one that uses the strict standard.</p>
+extensions alone, so GCC and Clang compile with <code>-std=gnu++20</code>. Two builds use the
+standard without GNU's extensions: the iOS project, which <code>tools/configure.py</code> writes,
+asks for <code>c++20</code>, and<span data-fw-grep=".github/workflows/_windows.yml::windows-arm64 is cross-compiled with MSVC">
+MSVC, which builds <code>windows-arm64</code>, has no GNU mode at all</span>. The code compiles
+under both.</p>
 
 <h3 id="varargs">One variadic function</h3>
 
@@ -295,5 +299,5 @@ review. <a href="/guidelines/macros.html">Macros</a> has the rule.</p>
 
 <p>"S1", "S2", "S5" and "S6" are rules of <code>tools/style_check.sh</code>, the <code>style</code>
 stage of <code>rmp test</code>. Every check in the table runs in the framework, and all but
-<code>modernize-use-auto</code> in the examples too; <a href="/guidelines/enforcement.html">what checks
+<code>modernize-use-auto</code> and O1 in the examples too; <a href="/guidelines/enforcement.html">what checks
 what</a> has each one's exact reach.</p>
