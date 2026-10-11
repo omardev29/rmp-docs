@@ -1,6 +1,6 @@
 <!--
 title: Testing
-description: How the framework is tested — unit tests with no window, under the sanitizers, the UI laid out headless, a frame rendered in software and compared, every target booted, every example booted, games played from a script and their frames compared, what the tests reach measured — and what rmp test runs in a game.
+description: How the framework is tested — unit tests with no window, under the sanitizers, the UI laid out headless, a frame rendered in software and compared, every target booted, every example booted, every game, menu, scene and input example played from a script and its frames compared, what the tests reach measured — and what rmp test runs in a game.
 order: 60
 -->
 <h1>Testing</h1>
@@ -20,8 +20,10 @@ the same command runs in a game.</p>
 <p>The unit tests use doctest and run without a window, a GPU or a display. They cover the scene stack and its order of events, objects, handles,
 behaviors and the catalogue, collision against objects and against maps, the camera, input, the
 asset table, sprite animation, the LDtk and Tiled readers, saves and <code>rmp::Value</code>, the
-diagnostics, and the random generator. Every file called <code>tests/*_test.cpp</code> is picked up
-by the build, so a new test needs no change to CMake.</p>
+diagnostics, and the random generator<span data-fw-grep="tests/rlsw_test.cpp::TEST_CASE\(&quot;the far edge, u or v of exactly 1, is the edge texel&quot;\)">,
+and the fix the framework carries in raylib's software renderer, read at the edges of a
+texture</span>. Every file called <code>tests/*_test.cpp</code> is picked up by the build, so a new
+test needs no change to CMake.</p>
 
 <p data-fw-grep="tools/rmp.py::&quot;--order-by=rand&quot;, &quot;--rand-seed=1337&quot;">They run
 twice. Once in the order they are written, and once shuffled with a fixed seed, so a test that only
@@ -53,14 +55,17 @@ runner with no sound card it runs against the audio library's null backend. It r
 the shuffled pass.</li>
 </ul>
 
-<p data-fw-grep="tools/seam_check.sh::&quot;src/rmp/ui/controls\.cpp&quot;\s+# DEBT: the text caret and the character queue">What
+<p data-fw-grep="tools/seam_check.sh::&quot;src/rmp/ui/controls\.cpp&quot;\s+# DEBT: the character queue and backspace[\s\S]*?DEBT_CALLS=\(\n  &quot;src/rmp/ui/controls\.cpp=GetCharPressed\|IsKeyPressed&quot;">What
 makes all of this possible without a window is the seam: time, input and randomness enter the
 framework through a few functions a test replaces — one clock, which the game and the UI both read,
 the game's input sampler and the UI's own, and one random generator.
 <a href="/framework/why/delta-and-time.html">Time is a parameter</a> explains it, and
 <code>tools/seam_check.sh</code> fails if any other file starts reading them on its own. One file is
-on that list as debt rather than as a seam: the UI's text field reads the typed characters,
-Backspace and the clock for its caret straight from raylib.</p>
+on that list as debt rather than as a seam: the UI's text field reads the typed characters and
+Backspace straight from raylib. The list names the calls it is in debt for and holds it to them:
+anything else the check looks for fails there as it would in any other file — <code>GetTime()</code>
+for the caret, which blinks on the game's clock like the rest of the UI — and a call the file stops
+making has to come off its line.</p>
 
 <h2 id="layout">The UI, laid out headless</h2>
 
@@ -70,7 +75,9 @@ viewport injected, a whole menu can be laid out with no window at all.
 <code>tests/ui_layout_test.cpp</code> checks what a person would check by hand once and never again:
 that the menu is centred, that it stays centred when the window changes, that buttons do not
 overlap, that the scale behaves at the extremes, and that a focused button can be pressed from the
-keyboard.</p>
+keyboard<span data-fw-grep="tests/ui_layout_test.cpp::void run_scroll_follows_focus\(\) \{[\s\S]*?void run_pointer_lands_on_interface\(\) \{">;
+that a pointer landing on a button is the interface's before the frame's interface has run, and
+that a list scrolls to keep the focus in view</span>.</p>
 
 <h2 id="render">A frame, in software</h2>
 
@@ -237,7 +244,14 @@ scene under <code>frame()</code>, and each press has to be seen exactly once.</l
 <li data-fw-grep="tools/examples_build.sh::#   5\. Every example with a script in tests/e2e/ is PLAYED from it, frame by\n#      frame, and every shot compared with its golden PNG">Every
 example with a script in <code>tests/e2e/</code> is played from it, and every picture the script
 takes is compared with the one recorded for it — <a href="#e2e">below</a>. As many scripts were
-found as were built and as were played, or the step fails.</li>
+found as were built and as were played, or the step fails.
+<span data-fw-grep="tools/examples_build.sh::slots=\$\(getconf _NPROCESSORS_ONLN 2&gt;/dev/null \|\| echo 1\)[\s\S]*?done \| sort -rn \| cut -d' ' -f2\)">They
+are played side by side, as many at once as the machine has processors, the one with the most
+frames first. Each has a folder of its own, and a frame is a sixtieth of a second however busy the
+machine is, so playing them together changes how long the step waits and nothing a script
+draws.</span> <span data-fw-grep="tools/examples_build.sh::E2E_LIMIT=&quot;timeout 600&quot;">A
+script still playing after ten minutes is stopped, and fails; macOS has no <code>timeout</code>,
+and there nothing stops it.</span></li>
 </ol>
 
 <p>The screenshots are kept, because looking at a picture of every example is how most visual
@@ -257,7 +271,7 @@ reach the game over screen; it jumps from the moving platform at 60 and at 240 f
 and it plays to the flag again at 240. A game that can be won at one frame rate and not another is
 not finished.</p>
 
-<h2 id="e2e">Games played from a script</h2>
+<h2 id="e2e">Examples played from a script</h2>
 
 <p data-fw-grep="tests/e2e/script.h:://     &lt;frame&gt; press KEY_SPACE       held from this frame on">A
 bot that reads positions is one way to play a game. The other is a script of what a player
@@ -281,14 +295,17 @@ and the last frame of the script:</p>
 1432 end
 </pre>
 
-<p>Each line starts with the frame it happens on. <code>press</code> and <code>release</code> hold
-a key down and let it go, <code>tap</code> holds it for one frame, and <code>click x y</code>
-presses the left mouse button for one frame at a point of the window. <code>shot</code> takes the
-picture that frame drew, <code>expect scene</code> names the scene that has to be on top once the
-frame is over, and <code>end</code> is the last frame. The grammar refuses, with the line, a script
-that cannot mean what it says: input on frame 0, which has nothing to compare a key with and so
-sees no press; a key pressed again before it came up; a shot name used twice; a script with no
-<code>end</code>, or one that checks nothing.</p>
+<p data-fw-grep="tests/e2e/script.h:://     &lt;frame&gt; tap GAMEPAD_BUTTON_LEFT_FACE_DOWN\n//                                   the same three for the first gamepad's">Each
+line starts with the frame it happens on. <code>press</code> and <code>release</code> hold a key
+down and let it go, and <code>tap</code> holds it for one frame; the same three press the first
+gamepad's buttons, by raylib's names for them — <code>tap GAMEPAD_BUTTON_RIGHT_FACE_DOWN</code> is
+the bottom face button pressed once. A script has the gamepad's buttons and not its sticks, which
+stay at rest. <code>click x y</code> presses the left mouse button for one frame at a point of the
+window. <code>shot</code> takes the picture that frame drew, <code>expect scene</code> names the
+scene that has to be on top once the frame is over, and <code>end</code> is the last frame. The
+grammar refuses, with the line, a script that cannot mean what it says: input on frame 0, which has
+nothing to compare a key with and so sees no press; a key or a button pressed again before it came
+up; a shot name used twice; a script with no <code>end</code>, or one that checks nothing.</p>
 
 <p data-fw-grep="tests/e2e/driver.cpp::constexpr float STEP = 1\.0f / 60;\nconstexpr std::uint64_t SEED = 1;">The
 game that plays it is the example exactly as it ships — its own <code>main.cpp</code> and its own
@@ -296,13 +313,23 @@ entry point — built against the software renderer with <code>tests/e2e/driver.
 it, which installs itself before <code>main()</code> through the framework's seams. Every frame
 is exactly a sixtieth of a second and <code>rmp::random</code> starts from seed 1, so the run is the
 same run every time — the menus included, since <a href="/framework/why/delta-and-time.html">the
-UI reads the game's clock</a>. The script's keys and clicks reach <code>rmp::input</code> and the
-UI's own navigation and pointer, saves go to a fresh folder, so last run's best score cannot change
-this one, and there is no sound device.
+UI reads the game's clock</a>. The script's keys, buttons and clicks reach <code>rmp::input</code>
+and the UI's own navigation and pointer —
+<span data-fw-grep="tests/e2e/driver.cpp::// The UI's navigation, from the script's keyboard and gamepad: the same two\n// functions nav_from_raylib\(\) reads real ones with[\s\S]*?nav_from_keys\([\s\S]*?nav_from_pad\(">the
+navigation through the same two functions that turn a real keyboard and gamepad into it, so what a
+player navigates with and what a script presses cannot drift apart.</span> Saves go to a fresh
+folder, so last run's best score cannot change this one, and there is no sound device.
 <span data-fw-grep="CLAUDE.md::A script can press only what the game reads through rmp::input or\n  rmp::ui\.\*\* Under PLATFORM=Memory raylib's own key and mouse state never\n  changes">A
 script can only press what the game reads through <code>rmp::input</code> or
 <code>rmp::ui</code>: under the software renderer raylib's own keyboard and mouse never change, so
 a game that asks raylib about a key directly never sees it go down.</span></p>
+
+<p data-fw-grep="tests/e2e/driver.cpp::void reach\(\) \{\n    for \(const std::string &amp;name : rmp::ui::detail::controls_out_of_reach\(\)\) \{">On
+every frame, whatever the script checks, the driver also looks for a control the example has put
+where nobody can reach it: one that takes the focus, is not wholly inside the window, and is in no
+scroll area that could bring it in. Nobody could see that control or click it, and no shot would
+say so unless the script happened to look there, so the script fails, naming the control, the frame
+and the size of the window.</p>
 
 <p data-fw-grep="tests/e2e/compare.h::// A failure leaves three pictures: what was expected, what came out, and the\n// difference, the expected one darkened with every pixel that differs in red\.">Every
 shot is compared with the picture recorded for it — <code>shot red_wins</code> with
@@ -322,13 +349,49 @@ pinned build image, where CI runs it, and only reported anywhere else. The pictu
 there too, and nowhere else: <code>rmp test e2e-update</code> refuses to run outside the image and
 says how to run it inside, and every picture it changed is looked at before it is committed.</p>
 
-<p data-fw-grep="tests/configure_test.py::class E2eScriptsTest\(unittest\.TestCase\):">A
-test holds the arrangement together: every game in <code>examples/games/</code> has a script or a
-line in <code>tests/e2e/pending.txt</code>, a list that may only get shorter, and every shot has its
-picture and every picture a shot that takes it. The build refuses a script that plays no example.
-Pong is played through twice, lost and then won, and started again once with the mouse and once
-from the keyboard; the falling-block game clears a line, keeps a best score and loses. Pong's first
-script found a bug no boot could: the arrow keys moved both paddles.</p>
+<p data-fw-grep="tests/configure_test.py::class E2eScriptsTest\(unittest\.TestCase\):[\s\S]*?PENDING_CEILING = 0\n[\s\S]*?PLAYED = \(&quot;games&quot;, &quot;ui&quot;, &quot;scenes&quot;, &quot;input&quot;\)">A
+test holds the arrangement together. Every example in <code>examples/games/</code>,
+<code>examples/ui/</code>, <code>examples/scenes/</code> and <code>examples/input/</code> has a
+script, or a line in <code>tests/e2e/pending.txt</code> — a list that may only get shorter, and has
+nothing left in it.
+<span data-fw-grep="tests/configure_test.py::NOT_PLAYED = \{\n        &quot;ads&quot;: &quot;rmp::ads shows an ad on Android only:[\s\S]*?&quot;assets&quot;: &quot;assets/01_loading shows a picture and a line of text, and its &quot;\s+&quot;two keys play a sound -- the run has no sound device[\s\S]*?&quot;platform&quot;: &quot;02_mobile_raymob is Android's raymob API, compiled out &quot;\s+&quot;everywhere else; 03_minimal_includes has no main\(\)[\s\S]*?&quot;plain_c&quot;: &quot;plain C with its own main\(\): the driver plays a game through &quot;\s+&quot;rmp's seams, and it has none">Every
+other area of <code>examples/</code> is named in the test with the reason it is not played — an ad
+shows only on Android; the loading example's keys only play a sound, in a run with no sound
+device; the platform examples are Android's own API, or never run at all; and the plain C example
+has none of the seams the driver plays a game through — so a new area is a decision and not a
+gap.</span> Every shot has its picture and every picture a shot that takes it, and the build
+refuses a script that plays no example.</p>
+
+<p data-fw-grep="TECHNICAL.md::one per example of games/ ui/ scenes/ input/: a happy and a failure path">Every
+script plays a way through and a way to fail: Pong lost and then won, and started again
+once with the mouse and once from the keyboard;
+<span data-fw-grep="tests/e2e/games/02_breakout.e2e::# examples/games/02_breakout, played: a game lost, then the wall cleared\.">Breakout's
+three balls lost, then its wall cleared;</span>
+<span data-fw-grep="tests/e2e/games/07_platformer.e2e::# examples/games/07_platformer, played: the world to the flag and a best run\n# kept, then three falls, game over">the
+platformer's world played to the flag, then every life lost to a fall;</span>
+<span data-fw-grep="tests/e2e/ui/01_menu.e2e::# examples/ui/01_menu, played: every screen, with the keyboard, the gamepad\n# and the mouse">every
+screen of the menu example, with the keyboard, the gamepad and the mouse.</span></p>
+
+<p>A script that cannot do what a player can is news about the example, and these have found what
+no boot could.
+<span data-fw-grep="tests/e2e/games/01_pong.e2e::The arrows are Red's ALONE: they\n# moved both paddles until this script saw it">Pong's
+arrow keys moved both paddles.</span>
+<span data-fw-grep="examples/games/02_breakout/src/main.cpp::At 3 % it was\n\s+// four times its serve by the thirtieth brick, far faster than the\n\s+// paddle[\s\S]*?\.speed_up = 1\.01f">Breakout
+could not be won: its ball sped up 3 % a bounce and was four times its serve by the thirtieth
+brick, faster than the paddle could follow, so its <code>speed_up</code> is 1.01.</span>
+<span data-fw-grep="examples/games/03_space_invaders/src/main.cpp::uncapped, the last alien moved 44 times as\n\s+// fast, came down at over 300 units a second and landed before a ship\n\s+// could get under it[\s\S]*?std::max\(_alive, ALIENS / 4\)">In
+Space Invaders the formation sped up without limit as it thinned, and the last alien came down
+before a ship could get under it; it stops at four times the pace it starts at.</span>
+<span data-fw-grep="tests/rlsw_test.cpp::// tests/e2e/games/07_platformer\.e2e found it, as AddressSanitizer reading past\n// a bat's sprite sheet drawn at the edge of its frame: nothing had drawn a bat\n// under ASan before -- the platformer's bot plays its levels without drawing\n// them\.">Drawing
+the platformer's bats under the sanitizers — its bot plays the levels without drawing them — found
+raylib's software renderer reading one texel past a texture at its far edge, which the framework
+fixes in its <a href="/framework/licences.html#raylib">copy of raylib</a>.</span></p>
+
+<p><span data-fw-grep="TECHNICAL.md::the UI's found the settings screen's Apply button and\nhalf the style page below the bottom of their own window, a list whose focus walked out of\nsight, a tap on a button that reached the game underneath it as well, and two examples that read\nthe keyboard and the mouse from raylib where no script, and no gamepad, could press them">The
+interface examples' scripts found the settings screen's Apply button and half of the style page
+below the bottom of their own window, a list whose focus walked out of sight, a tap on a button
+that reached the game underneath as well, and the menu and inventory examples reading Escape and
+the mouse from raylib, where no script and no gamepad could press them.</span></p>
 
 <h2 id="sanitize">Sanitizers</h2>
 
