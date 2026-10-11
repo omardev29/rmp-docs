@@ -1,0 +1,183 @@
+<!--
+title: Strings
+description: Text goes in as a std::string_view and comes out as a std::string, never as a C string; how it reaches raylib's C without reading past its end; and what builds text in a game the oldest compiler can still build.
+order: 50
+-->
+<h1>Strings</h1>
+
+<p class="lede">Text goes into a function as a <code>std::string_view</code> and comes out of one
+as a <code>std::string</code> — or as a view whose comment says how long it is good for. No
+declaration a game can name has a C string in it. Where text has to reach raylib, which is C and
+wants a <code>const char *</code> that ends in a zero, it goes through a <code>std::string</code>
+and never through a view's <code>data()</code>.</p>
+
+<h2 id="in">In: <code>std::string_view</code></h2>
+
+<p>One parameter type takes a literal, a <code>std::string</code> and another view, and copies
+none of them. A <code>const char *</code> may be null, and has to end in a zero nobody can see; a
+<code>const std::string &amp;</code> turns every literal handed to it into a
+<code>std::string</code> first. So the framework's functions that take a name take a view —
+<a href="ref:rmp::assets::load_texture"><code>load_texture</code></a>,
+<a href="ref:rmp::input::pressed"><code>input::pressed</code></a>,
+<a href="ref:rmp::audio::play"><code>audio::play</code></a>, every label of
+<a href="ref:rmp::ui::button"><code>rmp::ui</code></a> — and
+<code>tools/pointer_check.py</code> refuses a C string in any declaration a game can name:</p>
+
+<pre data-lang="cpp" data-harness="header" data-expect="gate" data-gate="pointers">
+#pragma once
+
+namespace rmp {
+void say(const char *line);
+} // namespace rmp
+</pre>
+
+<pre data-lang="cpp" data-harness="header">
+#pragma once
+
+#include &lt;string_view&gt;
+
+namespace rmp {
+void say(std::string_view line);
+} // namespace rmp
+</pre>
+
+<p>Outside the public headers a <code>const char *</code> is a raw pointer like any other, and
+clang-tidy refuses it as one (<a href="/guidelines/pointers-and-raii.html">Pointers and
+RAII</a>). A <code>const std::string &amp;</code> parameter passes every tool; it is a question
+for review.</p>
+
+<h2 id="out">Out: a <code>std::string</code>, or a view that says how long</h2>
+
+<p>A function that makes text hands it back as a <code>std::string</code>, which owns it:
+<a href="ref:rmp::save::directory"><code>save::directory()</code></a> does. A view handed back
+is a view of something that lives elsewhere, so it is only right when that something outlives the
+call, and its comment says until when.</p>
+
+<p data-fw-grep="include/rmp/save.h::// Valid while this Value is alive and unchanged -- and adding to the\n    // object or list that holds it moves it\.">The
+view <a href="ref:rmp::Value::as_string"><code>Value::as_string()</code></a> hands back is good
+while that value is alive and unchanged, and the one
+<a href="ref:rmp::Sprite::playing"><code>Sprite::playing()</code></a> hands back for as long as
+the sheet is loaded; each comment says so. A view of a <code>std::string</code> that dies at the end of the line,
+or of the function, is refused:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;string&gt;" data-expect="lint" data-check="bugprone-dangling-handle">
+std::string_view title_for(const int level) {
+    const std::string title = "Level " + std::to_string(level);
+    return title;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;string&gt;">
+std::string title_for(const int level) { return "Level " + std::to_string(level); }
+</pre>
+
+<h2 id="to-raylib">To raylib: through a <code>std::string</code></h2>
+
+<p>raylib's text functions take a <code>const char *</code> and read until they find a zero. A
+<code>std::string_view</code> has no zero after its last character: it may be a piece of a longer
+text, and its <code>data()</code> carries on into whatever comes next. The compiler will not turn
+a view into a pointer, so the mistake is to reach for <code>data()</code>:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="error" data-error="const char">
+void say(std::string_view line) {
+    DrawText(line, 10, 10, 20, WHITE);
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="bugprone-suspicious-stringview-data-usage">
+void say(std::string_view line) {
+    DrawText(line.data(), 10, 10, 20, WHITE);
+}
+</pre>
+
+<p data-fw-grep="src/rmp/audio.cpp::std::string\(name\)\.c_str\(\)">A <code>std::string</code>
+made from the view ends in a zero, and lives until the end of the statement: long enough for the
+call. The framework passes a name to raylib this way.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;string&gt;">
+void say(std::string_view line) {
+    DrawText(std::string(line).c_str(), 10, 10, 20, WHITE);
+}
+</pre>
+
+<p data-fw-grep="src/rmp/ui/internal.h::// Text lives in a bump arena that is reset every begin\(\)\. Clay does NOT copy\n// strings">The
+UI takes the other way out: it copies every piece of text it is given into memory of its own
+that lasts until the next frame, because the layout library under it keeps the pointer it is given
+and reads it later. So a temporary is safe there:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="#include &lt;string&gt;
+static int score = 0;">
+rmp::ui::begin();
+rmp::ui::text(std::to_string(score));
+rmp::ui::end();
+</pre>
+
+<p>Text from raylib comes back the other way as a <code>const char *</code>, and goes into a
+<code>std::string</code> before it goes anywhere else. A <a href="ref:rmp::Value"><code>rmp::Value</code></a>
+takes a literal, a <code>std::string</code> and a view, and does not take a
+<code>const char *</code>, which might be null:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="const char">
+rmp::Value settings = rmp::Value::object();
+settings["folder"] = GetWorkingDirectory();
+</pre>
+
+<pre data-lang="cpp" data-harness="function" data-given="#include &lt;string&gt;">
+rmp::Value settings = rmp::Value::object();
+settings["folder"] = std::string(GetWorkingDirectory());
+</pre>
+
+<h2 id="building-text">Building text</h2>
+
+<p>With what every compiler a game is built with has: <code>std::to_string</code> and
+<code>+</code> for a <code>std::string</code>, and raylib's <code>TextFormat</code> for a line to
+draw.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="#include &lt;string&gt;">
+std::string lives_text(const int lives) { return std::to_string(lives) + " lives"; }
+
+void draw_lives(const int lives) {
+    DrawText(TextFormat("%d lives", lives), 10, 10, 20, WHITE);
+}
+</pre>
+
+<p data-fw-grep="tools/style_check.sh::#   S4  nothing newer than the floor compiler, NetBSD's GCC 10\.5, in the code a\n#       game compiles: &lt;format&gt;, &lt;source_location&gt;, std::bit_cast and\n#       `using enum` arrived in GCC 11-13">Not
+<code>&lt;format&gt;</code>: the oldest compiler a game is built with, NetBSD's GCC 10.5, does not
+have it. It compiles on a newer one, so <code>tools/style_check.sh</code> refuses it, in every
+branch of every <code>#if</code>:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="style" data-rule="S4">
+#include &lt;format&gt;
+#include &lt;string&gt;
+
+std::string lives_text(const int lives) { return std::format("{} lives", lives); }
+</pre>
+
+<p data-fw-grep="tools/style_check.sh::#   S5  no user-defined literal, ours or the standard library's \(Google's\n#       rule\)">And
+not <code>"Pong"sv</code>: Google's guide has no user-defined literals, the standard library's
+included, and neither does the framework. A <code>std::string_view</code> constant is spelt out,
+and a literal turns into one by itself.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="style" data-rule="S5">
+using namespace std::string_view_literals;
+constexpr auto TITLE = "Pong"sv;
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+constexpr std::string_view TITLE = "Pong";
+</pre>
+
+<h2 id="who-checks">Who checks what</h2>
+
+<table>
+<thead><tr><th>Rule</th><th>Tool</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>No C string in a declaration a game can name</td><td><code>tools/pointer_check.py</code>, <code>rmp test pointers</code></td><td>the declarations in <code>include/rmp/</code></td></tr>
+<tr><td>No <code>const char *</code> anywhere else</td><td><code>custom-rmp-raw-pointer</code>; <code>rmp lint</code>, against <code>tools/lint_debt.txt</code></td><td><code>src/</code>, <code>tests/</code>, <code>examples/</code></td></tr>
+<tr><td>No view that outlives what it views</td><td><code>bugprone-dangling-handle</code>; <code>rmp lint</code></td><td><code>src/</code>, <code>tests/</code>, <code>examples/</code></td></tr>
+<tr><td>No <code>data()</code> of a view where a C string is wanted</td><td><code>bugprone-suspicious-stringview-data-usage</code>; <code>rmp lint</code></td><td><code>src/</code>, <code>tests/</code>, <code>examples/</code></td></tr>
+<tr><td>No <code>&lt;format&gt;</code>, no user-defined literal</td><td><code>tools/style_check.sh</code> S4 and S5, <code>rmp test style</code></td><td><code>include/</code>, <code>src/</code> and <code>examples/</code>; S5 in <code>tests/</code> too</td></tr>
+</tbody>
+</table>
+
+<p>A game gets none of these tools: in a game, these rules are a recommendation.</p>

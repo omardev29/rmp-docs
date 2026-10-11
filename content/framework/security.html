@@ -436,7 +436,8 @@ raw pointer in the API</dt>
 or a C string in any declaration a game can name: a pointer cannot say whether it may be null, who
 owns it or how long it lives. The few pointers a game cannot reach are listed in
 <code>tools/pointer_ratchet.txt</code>, each with its reason, and that list only shrinks.
-<a href="/framework/why/ownership.html">Ownership</a> says what the API hands out instead.</dd>
+<a href="/guidelines/pointers-and-raii.html">Pointers and RAII</a> says what the API hands out
+instead.</dd>
 <dt data-fw-grep="tools/ownership_check.sh::#   O1  no bare new/delete, no malloc/free, under include/rmp/ or src/rmp/\.">Nothing
 owned by hand</dt>
 <dd><code>rmp test ownership</code> fails on a bare <code>new</code>, <code>delete</code>,

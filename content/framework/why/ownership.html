@@ -35,14 +35,10 @@ first choice to last:</p>
 </table>
 
 <p data-fw-grep="tools/pointer_check.py::The rule, Omar's of 2026-10-10: what rmp:: hands a game is values, references,\s+std::span, std::optional, rmp::Ref and rmp::Handle -- never a `T \*` and never a\s+`const char \*`">There
-is no <code>T *</code> in that list. A raw pointer in a signature leaves the reader to ask whether
-it may be null, whose it is and how long it lives, and its type answers none of the three; each
-form above answers all of them. So no declaration a game can name has one, and no C string either:
-text goes in as a <code>std::string_view</code> and comes back as a <code>std::string</code>, or as
-a view whose comment says how long it is good for. <code>tools/pointer_check.py</code> reads the
-headers' declarations and fails a public pointer; the ones left inside <code>detail</code>
-namespaces and private members are listed in <code>tools/pointer_ratchet.txt</code>, each with
-its reason, and that list only shrinks.</p>
+is no <code>T *</code> in that list, and no C string: a game names neither in the API, and the
+rest of the framework is held to the same rule. <a href="/guidelines/pointers-and-raii.html">Pointers
+and RAII</a>, in the Guidelines, says why, what to write in each case instead, the few places a
+pointer is allowed, and which tools refuse one where.</p>
 
 <p>The optional reference is the one form of the framework's own. An
 <a href="ref:rmp::Ref"><code>rmp::Ref&lt;T&gt;</code></a> is empty or refers to something; it owns

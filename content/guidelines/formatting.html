@@ -1,0 +1,269 @@
+<!--
+title: Formatting
+description: How the framework's code is laid out, what clang-format does to code that is laid out any other way, the reasons behind the settings that are not LLVM's, and who runs it.
+order: 20
+-->
+<h1>Formatting</h1>
+
+<p class="lede">Nobody formats the framework's code by hand. <code>.clang-format</code> says how
+it is laid out, <code>rmp fmt</code> lays it out that way, and <code>rmp test fmt</code> refuses a
+file that is not. What follows is what that file decides, why, and what clang-format says about
+code written any other way — so that you can write it right the first time, and read the diff it
+makes when you do not.</p>
+
+<h2 id="who-runs-it">Who runs it, and where</h2>
+
+<table>
+<thead><tr><th>Command</th><th>What it does</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td><code>rmp fmt</code></td><td>formats every file in place</td><td>in the framework: <code>include/</code>, <code>src/</code>, <code>tests/</code> and <code>examples/</code>; in a game: its own <code>include/</code>, <code>src/</code> and <code>tests/</code>, and not the framework's copy in <code>src/rmp/</code> and <code>include/rmp/</code></td></tr>
+<tr><td><code>rmp test fmt</code></td><td>fails on a file clang-format would change, and changes nothing</td><td>the framework, and its CI's lint job</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="tools/rmp.py::# What `rmp fmt` formats\. A game formats its own code and not the framework's:\s+# a different clang-format would rewrite src/rmp/ for no reason of its own\.">A
+game made with <code>rmp new</code> gets the framework's <code>.clang-format</code>, so
+<code>rmp fmt</code> lays its code out the same way; nothing in its CI refuses a file that is not.
+It leaves the framework's own sources alone because a different clang-format would rewrite them
+for no reason of the game's.</p>
+
+<p data-fw-grep="thirdparty/FROZEN_VERSIONS.md::clang_format\s+22\.1\.8">The version is pinned,
+and it matters: clang-format one minor version out reformats files that were already right. The
+framework pins clang-format 22.1.8 in <code>thirdparty/FROZEN_VERSIONS.md</code>, and its
+<code>tools/versions_check.sh</code> says so when the one on your <code>PATH</code> is another. Each
+block on this page shown refused is what that version says about it.</p>
+
+<h2 id="indentation">Four spaces, 90 columns, braces on the line</h2>
+
+<p data-fw-grep=".clang-format::IndentWidth: 4\nTabWidth: 4\nUseTab: Never">Four spaces and no tab,
+where LLVM's style, which the file starts from, has two. A brace opens on the line of what it
+belongs to.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="format">
+struct Ship {
+  int hp = 3;
+  float speed = 120.0f;
+};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+struct Ship {
+    int hp = 3;
+    float speed = 120.0f;
+};
+</pre>
+
+<p data-fw-grep=".clang-format::ColumnLimit: 90">A line is at most 90 columns, not LLVM's 80: wide
+enough for a declaration of the public headers and the comment after it, which is a shape nearly
+every line of them has. A longer one is broken where clang-format breaks it:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="format">
+void announce(const int level, const int lives) { DrawText(TextFormat("Level %d, %d lives left", level, lives), 10, 10, 20, WHITE); }
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+void announce(const int level, const int lives) {
+    DrawText(TextFormat("Level %d, %d lives left", level, lives), 10, 10, 20, WHITE);
+}
+</pre>
+
+<h2 id="no-alignment">No alignment, of any kind</h2>
+
+<p data-fw-grep=".clang-format::AlignConsecutiveAssignments: None\nAlignConsecutiveDeclarations: None\nAlignConsecutiveBitFields: None\nAlignConsecutiveMacros: None\nAlignArrayOfStructures: None\nAlignOperands: DontAlign\nAlignTrailingComments:\n  Kind: Never">No
+column of <code>=</code> signs, no comments padded out to line up, no table squared with spaces.
+A column lined up with a ruler looks tidy in the commit that wrote it and costs something every time
+after: renaming one field moves twenty lines, the diff of a one-line change is a paragraph, and
+<code>git blame</code> stops pointing at whoever wrote the code and points at whoever moved the
+spaces. Code takes its shape from its structure, not from padding.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="format">
+struct Theme {
+    Color background    = { 18, 18, 22, 255 }; // behind everything
+    Color surface_hover = { 60, 60, 76, 255 };  // a button under the pointer
+};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+struct Theme {
+    Color background = { 18, 18, 22, 255 }; // behind everything
+    Color surface_hover = { 60, 60, 76, 255 }; // a button under the pointer
+};
+</pre>
+
+<h2 id="one-line">A guard on one line</h2>
+
+<p data-fw-grep=".clang-format::AllowShortIfStatementsOnASingleLine: WithoutElse\nAllowShortLoopsOnASingleLine: true\nAllowShortFunctionsOnASingleLine: All">An
+<code>if</code> that leaves early stays on one line, and so does a short loop or a short
+function. <code>if (!ready) return;</code> reads as a guard; a guard spread over three lines stops
+looking like one. Without braces: a block gets lines of its own.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="void jump();" data-expect="gate" data-gate="format">
+void step(const bool ready) {
+    if (!ready)
+        return;
+    jump();
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="void jump();">
+void step(const bool ready) {
+    if (!ready) return;
+    jump();
+}
+</pre>
+
+<p data-fw-grep=".clang-format::KeepEmptyLinesAtTheStartOfBlocks: false">A function that fits on
+a line is written on one, and a block does not start with an empty line:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="format">
+class Ship {
+public:
+    [[nodiscard]] int hp() const {
+
+        return _hp;
+    }
+
+private:
+    int _hp = 3;
+};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Ship {
+public:
+    [[nodiscard]] int hp() const { return _hp; }
+
+private:
+    int _hp = 3;
+};
+</pre>
+
+<h2 id="classes-and-namespaces">Classes, namespaces and switches</h2>
+
+<p data-fw-grep=".clang-format::AccessModifierOffset: -4">An access specifier stands at the
+column of its class, so <code>public:</code> and <code>private:</code> read as the headings they
+are:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="format">
+class Coin {
+    public:
+    int value = 10;
+};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Coin {
+public:
+    int value = 10;
+};
+</pre>
+
+<p data-fw-grep=".clang-format::NamespaceIndentation: None\nFixNamespaceComments: true\nShortNamespaceLines: 0">A
+namespace does not indent what is in it, and its closing brace says which namespace it closes,
+however short it is:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="format">
+namespace layer {
+    constexpr unsigned PLAYER = 1U &lt;&lt; 0;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+namespace layer {
+constexpr unsigned PLAYER = 1U &lt;&lt; 0;
+} // namespace layer
+</pre>
+
+<p data-fw-grep=".clang-format::# The switches in render\.cpp indent their cases\.\nIndentCaseLabels: true">A
+<code>case</code> is indented inside its <code>switch</code>:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="enum class State { IDLE, RUNNING };" data-expect="gate" data-gate="format">
+float speed_for(const State state) {
+    switch (state) {
+    case State::IDLE:
+        return 0.0f;
+    case State::RUNNING:
+        return 120.0f;
+    }
+    return 0.0f;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel" data-given="enum class State { IDLE, RUNNING };">
+float speed_for(const State state) {
+    switch (state) {
+        case State::IDLE:
+            return 0.0f;
+        case State::RUNNING:
+            return 120.0f;
+    }
+    return 0.0f;
+}
+</pre>
+
+<h2 id="pointers-and-braces"><code>int &amp;x</code>, and <code>{ 1, 2 }</code></h2>
+
+<p data-fw-grep=".clang-format::DerivePointerAlignment: false\nPointerAlignment: Right\nReferenceAlignment: Pointer">The
+<code>&amp;</code> of a reference sits against the name, not the type — as the <code>*</code> of a
+pointer does, which is how raylib writes it: <code>const char *text</code>. There is no pointer in
+the framework's own code to show it on (<a href="/guidelines/pointers-and-raii.html">Pointers and
+RAII</a> says why), but every call into raylib's C has one.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="format">
+void heal(int&amp; hp, int amount);
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+void heal(int &amp;hp, int amount);
+</pre>
+
+<p data-fw-grep=".clang-format::Cpp11BracedListStyle: false">A braced list keeps a space inside
+each brace, as raylib's colours are written. LLVM's style closes them up, and every colour of the
+theme would change.</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="format">
+constexpr Color SKY = Color{135, 206, 235, 255};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+constexpr Color SKY = { 135, 206, 235, 255 };
+</pre>
+
+<h2 id="what-it-leaves-alone">What clang-format leaves alone</h2>
+
+<p data-fw-grep=".clang-format::SortIncludes: Never\nIncludeBlocks: Preserve">It does not sort the
+includes. They are in the order they were written, and each one may say after it what it is
+for; sorting them would scramble that, and in code that speaks to C the order of includes can
+matter.</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;string_view&gt; // a name on the way in
+#include &lt;vector&gt; // the enemies on screen
+</pre>
+
+<p data-fw-grep=".clang-format::ReflowComments: Never">It never rewraps a comment. The framework's
+file headers carry trees, tables and paragraphs wrapped by hand, and a formatter that rewraps them
+destroys the part of the code that took longest to write.</p>
+
+<p data-fw-grep="include/rmp/app.h::// clang-format off\n// The one exemption left in the repository, and it is NOT about alignment:">And
+it does not touch the entry-point macros of <code>rmp/app.h</code>, which sit between
+<code>// clang-format off</code> and <code>// clang-format on</code>: their bodies hold block
+comments, and every formatter mangles a <code>/* */</code> inside a macro's continued lines. They are
+the only code in the framework it is told to leave alone.</p>
+
+<h2 id="files">Files</h2>
+
+<p data-fw-grep=".clang-tidy::-portability-avoid-pragma-once">A header is <code>.h</code> and a source file <code>.cpp</code>, and a header starts with
+<code>#pragma once</code>: every compiler the framework builds with understands it, and it cannot
+get out of step with the file's name the way an include guard can. clang-tidy has a check that
+would refuse it, <code>portability-avoid-pragma-once</code>, and the framework's
+<code>.clang-tidy</code> turns it off; nothing checks that a header has it, and every header of the
+framework does.</p>
+
+<pre data-lang="cpp" data-harness="header">
+#pragma once
+
+namespace game {
+inline constexpr int START_LIVES = 3;
+} // namespace game
+</pre>
