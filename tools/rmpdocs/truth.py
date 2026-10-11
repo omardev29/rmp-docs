@@ -70,6 +70,9 @@ def rmp_problem(words: list[str], help_data: dict, examples: set[str]) -> str | 
     command, rest = words[0], words[1:]
     if command in ("-h", "--help"):
         return None
+    # `sudo rmp …`, `rmp <command>`: any command, a placeholder and not a name.
+    if command in ("…", "...") or command.startswith(("<", "[")):
+        return None
     if command not in commands:
         return f"there is no `rmp {command}`"
     usage = commands[command]["usage"].split()[1:]
@@ -122,7 +125,10 @@ def check_commands(ctx: Context) -> list[Problem]:
             line = text.strip()
             if kind.startswith("block:") and kind not in ("block:shell", "block:powershell", "block:"):
                 continue
-            for m in re.finditer(r"(?:^|[;&|]\s*|&&\s*)(?:\./)?rmp(?:\.ps1|\.cmd)?\s+([^;&|#`]+)", line):
+            # `RMP_DRM=1 rmp run` and `sudo rmp clean` are rmp commands too: the
+            # environment a line sets first, and sudo, are read past.
+            for m in re.finditer(r"(?:^|[;&|]\s*|&&\s*)(?:[A-Za-z_]\w*=\S*\s+)*(?:sudo\s+)?"
+                                 r"(?:\./)?rmp(?:\.ps1|\.cmd)?\s+([^;&|#`]+)", line):
                 try:
                     words = shlex.split(m.group(1))
                 except ValueError:
