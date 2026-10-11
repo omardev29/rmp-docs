@@ -194,8 +194,9 @@ point takes its input as a pointer, because that is its C interface.</li>
 how <code>health-&gt;hp</code> reads, on a <code>Ref</code> and on a <code>Handle</code>.</li>
 <li><strong>Inside <code>rmp::Ref</code></strong>: its one member is the optional reference, so
 that nothing else has to hold one.</li>
-<li><strong>C</strong>: the resource packer, the plain C example and the sanitizer hooks are C
-because they have to be, and C has nothing else.</li>
+<li data-fw-grep=".clang-tidy::unless\(isExpansionInFileMatching\(&quot;\[\.\]c\$&quot;\)\)"><strong>C</strong>:
+a <code>.c</code> file — the resource packer, the plain C example, the sanitizer hooks — is C
+because it has to be, and C has nothing else.</li>
 </ul>
 
 <p>raylib is not on the list. A raylib function that takes an address takes it in a call, and an
