@@ -219,7 +219,8 @@ the framework puts it back however the game ends. Before the window opens it rem
 terminal, and puts it back on every fatal signal — then hands the signal on to whoever had it, so
 a crash is still a crash: a core dump, AddressSanitizer's report, the status your shell sees — on
 the sanitizers' way out, and at exit. <span data-fw-grep="src/rmp/console.cpp::ours\.sa_flags = SA_SIGINFO \| SA_ONSTACK;">Its
-handler runs on a stack of its own, because a stack overflow leaves none to run on.</span></p>
+handler runs on a stack set apart for signals — AddressSanitizer's, or one of its own where
+nothing set one up — because a stack overflow leaves none to run on.</span></p>
 
 <p data-fw-grep="tools/rmp.py::print\(f&quot;  console  the game left the terminal changed -- \{', '\.join\(changed\)\} -- &quot;">SIGKILL
 is the one ending nothing inside a process can catch, so <code>rmp run</code> also saves the
@@ -228,12 +229,14 @@ terminal changed -- … -- and rmp put it back</samp>. The screen needs none of 
 gives the console its screen back when the game's last handle on the card closes, however the
 process ended.</p>
 
-<p data-fw-grep="tests/console_test.cpp::&quot;guarded, it comes back however the game ends, and the ending is the same&quot;">The
+<p data-fw-grep="tests/console_test.cpp::&quot;a game that ends without its atexit handlers leaves it broken: the control&quot;[\s\S]*?&quot;guarded, it comes back however the game ends, and the ending is the same&quot;[\s\S]*?TEST_CASE\(&quot;SIGKILL is the one nothing inside can catch&quot;\)">The
 framework's tests make a small program die each of those ways on a pseudo-terminal — an exit, a
 segmentation fault, <code>abort()</code>, SIGTERM, a trap, a division by zero, a stack overflow,
-an AddressSanitizer report — with the guard and without it, and the terminal has to come back with
-it and stay changed without. SIGKILL leaves it changed either way, which is why
-<code>rmp run</code> mends it from outside.</p>
+an AddressSanitizer report — with the guard, and the terminal has to come back each time, with
+the program still ending the way it would have. Without the guard, a crash, <code>abort()</code>,
+SIGTERM, a stack overflow and the sanitizer's report have to leave it changed, or the test would
+prove nothing. SIGKILL leaves it changed with the guard too, which is why <code>rmp run</code>
+mends it from outside.</p>
 
 <h2 id="while-it-runs">While it runs</h2>
 

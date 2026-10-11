@@ -37,10 +37,12 @@ narrows what the .toml enables and can never add to it. It takes one group or ta
 separated by commas, and builds what they come to together, each in full. A name that does not
 exist, one whose targets the .toml all switched off, one given twice and an empty one between two
 commas each stop the run in its first job, saying which item it was: a run that asked for a
-platform and quietly did not build it would be a green that proved nothing about it. The last line
-above is the way to check a fix for a red fast lane on just the platforms it involves, before the
-next push. A third input,
-<code>image_digest</code>, builds with another build image than the pinned one, to try a new image
+platform and quietly did not build it would be a green that proved nothing about it.</p>
+
+<p>The last line above is how to check a fix for a red fast lane on just the platforms it
+involves, before the next push.</p>
+
+<p>A third input, <code>image_digest</code>, builds with another build image than the pinned one, to try a new image
 before committing to it.</p>
 
 <p>A new push to a branch cancels that branch's run still in progress — a run of a commit nobody

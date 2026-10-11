@@ -282,8 +282,9 @@ in — <code>rcore.c</code>, which carries the rasteriser, <code>rshapes.c</code
 <code>rtext.c</code> — at <code>-O2 -ffp-contract=off</code>, still under the sanitizers.
 <span data-fw-grep="CMakeLists.txt::# Measured in the pinned image on four processors \(2026-10-11\): an e2e frame is\n# about five times faster -- Pong's script 85 s at -O0, 17 s this way">A
 frame costs about a fifth of what it did: measured in the build image, Pong's script plays in 17
-seconds instead of 85.</span>
-<span data-fw-grep="CMakeLists.txt::# -ffp-contract=off is what keeps the pixels: at -O2 a compiler may fuse a\n# multiply and an add into one FMA instruction, rounded once instead of twice[\s\S]*?It was adopted only after all 72 e2e shots came out\n# identical to their goldens">Turning
+seconds instead of 85.</span></p>
+
+<p><span data-fw-grep="CMakeLists.txt::# -ffp-contract=off is what keeps the pixels: at -O2 a compiler may fuse a\n# multiply and an add into one FMA instruction, rounded once instead of twice[\s\S]*?It was adopted only after all 72 e2e shots came out\n# identical to their goldens">Turning
 off contraction is what keeps the pixels: at <code>-O2</code> a compiler may fuse a multiply and an
 add into one instruction that rounds once instead of twice, and every picture is compared byte for
 byte. It was adopted only once every picture the scripts take came out identical to the ones
@@ -544,8 +545,7 @@ summary <code>rmp help test</code> prints for each.</p>
 
 <h2 id="ci">In CI</h2>
 
-<p data-fw-grep=".github/workflows/ci.yml::#   push / pull_request  -&gt;  fast lane: Linux x64, Web, Android, Windows x64">A
-push to the framework runs every stage of <code>rmp test</code> that checks something — all but
+<p>A push to the framework runs every stage of <code>rmp test</code> that checks something — all but
 the two that record a golden — in its <code>lint</code> job, or in a job of its own:
 <code>examples</code>, which builds and boots every example, <code>e2e</code>, which plays the
 ones with a script — the two halves of <code>rmp test examples</code> — and
@@ -553,8 +553,9 @@ ones with a script — the two halves of <code>rmp test examples</code> — and
 <span data-fw-grep="tests/rmp_test.py::    JOBS = \{\n        &quot;examples&quot;: &quot;examples&quot;,[^\n]*\n        &quot;coverage&quot;: &quot;coverage&quot;,[^\n]*\n    \}\n[\s\S]*?STEP_JOBS = \{[\s\S]*?&quot;tools/examples_build\.sh e2e&quot;: &quot;e2e&quot;,[\s\S]*?NOT_A_CHECK = \{&quot;render-update&quot;[^}]*&quot;e2e-update&quot;">A
 test of the command checks each stage, and each half of one, against the job that runs it.</span>
 <span data-fw-grep=".github/workflows/ci.yml::  tidy:\n    needs: config\n    if: needs\.config\.outputs\.framework == 'true'[\s\S]*?- name: clang-tidy\n        run: bash tools/lint\.sh">clang-tidy,
-which is <code>rmp lint</code> and not a stage, has a job of its own too, <code>tidy</code>.</span>
-<span data-fw-grep=".github/workflows/ci.yml::# that catch most regressions, beside the framework's own jobs \(lint, tidy,\n# examples, e2e, coverage, docs, rmp_new\), every one of them side by side">Each
+which is <code>rmp lint</code> and not a stage, has a job of its own too, <code>tidy</code>.</span></p>
+
+<p data-fw-grep=".github/workflows/ci.yml::#   push / pull_request  -&gt;  fast lane: Linux x64, Web, Android, Windows x64"><span data-fw-grep=".github/workflows/ci.yml::# that catch most regressions, beside the framework's own jobs \(lint, tidy,\n# examples, e2e, coverage, docs, rmp_new\), every one of them side by side">Each
 of these starts as soon as the configuration is read, beside the others and beside the platform
 builds, so the run takes as long as its longest job rather than their sum.</span> The same push
 makes a new game with <code>rmp new</code> and runs that game's own checks, follows the recipe at
