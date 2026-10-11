@@ -67,7 +67,7 @@ void announce(const int level, const int lives) {
 }
 </pre>
 
-<h2 id="no-alignment">No alignment, of any kind</h2>
+<h2 id="no-alignment">No alignment</h2>
 
 <p data-fw-grep=".clang-format::AlignConsecutiveAssignments: None\nAlignConsecutiveDeclarations: None\nAlignConsecutiveBitFields: None\nAlignConsecutiveMacros: None\nAlignArrayOfStructures: None\nAlignOperands: DontAlign\nAlignTrailingComments:\n  Kind: Never">No
 column of <code>=</code> signs, no comments padded out to line up, no table squared with spaces.
@@ -89,6 +89,10 @@ struct Theme {
     Color surface_hover = { 60, 60, 76, 255 }; // a button under the pointer
 };
 </pre>
+
+<p data-fw-grep=".clang-format::AlignEscapedNewlines: Left">One column is left, and clang-format
+keeps it: the backslashes that carry a macro over several lines line up just past the macro's
+longest line, so a new longest line moves every one of them.</p>
 
 <h2 id="one-line">A guard on one line</h2>
 
