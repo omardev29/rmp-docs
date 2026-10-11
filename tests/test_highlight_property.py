@@ -99,9 +99,20 @@ def _not(words):
 
 
 CPP_PLAIN = _not(highlight.CPP_KEYWORDS | highlight.C_EXTRA_KEYWORDS | highlight.CPP_TYPES)
-CLASSIFIED = st.one_of(
+
+
+def cases(langs, *leaves):
+    """A strategy per leaf: (language, line, the HTML it must come out as)."""
+    return [st.tuples(st.sampled_from(langs), leaf).map(lambda t: (t[0],) + t[1]) for leaf in leaves]
+
+
+# Every case each scanner tells apart, drawn ALL of them in every example
+# (test_each_scanner_tells_its_tokens_apart): one strategy choosing among
+# fifty spent 200 examples so unevenly that a PowerShell keyword was never
+# written, and mutmut's `w.upper() in PS_KEYWORDS` lived.
+CASES = [
     # C and C++
-    st.tuples(st.sampled_from(["cpp", "c"]), st.one_of(
+    *cases(["cpp", "c"],
         SAID.map(lambda t: ("//" + t, span("c", "//" + t))),
         INSIDE_QUOTES.map(lambda t: (f'"{t}"', span("s", f'"{t}"'))),
         st.sampled_from(sorted(highlight.CPP_KEYWORDS)).map(lambda k: (k, span("k", k))),
@@ -114,21 +125,25 @@ CLASSIFIED = st.one_of(
         WORD.map(lambda h: (f"#include <{h}.h>", span("p", "#include") + " " + span("s", f"<{h}.h>"))),
         CAPS.map(lambda m: (f"#define {m} 1", span("p", "#define") + " " + span("m", m) + " 1")),
         SAID.map(lambda t: (f"#if x //{t}", span("p", "#if") + " x " + span("c", "//" + t))),
-    )).map(lambda t: (t[0],) + t[1]),
+    ),
     st.sampled_from(sorted(highlight.C_EXTRA_KEYWORDS)).map(lambda k: ("c", k, span("k", k))),
+    # ...and C's own keywords are words in C++.
+    st.sampled_from(["restrict x", "_Bool x"]).map(lambda w: ("cpp", w, w)),
     # TOML
-    st.tuples(st.just("toml"), st.one_of(
+    *cases(["toml"],
         SAID.map(lambda t: ("#" + t, span("c", "#" + t))),
         WORD.map(lambda w: (f"[{w}]", span("k", f"[{w}]"))),
         WORD.map(lambda w: (f"[[{w}.x]]", span("k", f"[[{w}.x]]"))),
         st.tuples(WORD, NUMBER).map(lambda t: (f"{t[0]} = {t[1]}", span("a", t[0]) + " = " + span("n", t[1]))),
         INSIDE_QUOTES.map(lambda t: (f'x = "{t}"', span("a", "x") + " = " + span("s", f'"{t}"'))),
         INSIDE_QUOTES.map(lambda t: (f"x = '{t}'", span("a", "x") + " = " + span("s", f"'{t}'"))),
+        st.tuples(INSIDE_QUOTES, INSIDE_QUOTES).map(lambda t: (f'x = """{t[0]}\n{t[1]}"""', span("a", "x") + " = "
+                                                              + span("s", f'"""{t[0]}\n{t[1]}"""'))),
         st.sampled_from(["true", "false"]).map(lambda b: (f"x = {b}", span("a", "x") + " = " + span("k", b))),
         st.sampled_from(["nan", "inf", "-inf", "+1_000"]).map(lambda n: (f"x = {n}", span("a", "x") + " = " + span("n", n))),
-    )).map(lambda t: (t[0],) + t[1]),
+    ),
     # shell
-    st.tuples(st.just("shell"), st.one_of(
+    *cases(["shell"],
         SAID.map(lambda t: ("#" + t, span("c", "#" + t))),
         st.tuples(_not(highlight.SHELL_KEYWORDS), WORD).map(
             lambda t: (f"{t[0]} --{t[1]}", span("f", t[0]) + " " + span("a", f"--{t[1]}"))),
@@ -137,9 +152,9 @@ CLASSIFIED = st.one_of(
         INSIDE_QUOTES.filter(lambda t: "'" not in t).map(lambda t: (f"echo '{t}'", span("f", "echo") + " " + span("s", f"'{t}'"))),
         st.sampled_from(sorted(highlight.SHELL_KEYWORDS)).map(lambda k: (k, span("k", k))),
         _not(highlight.SHELL_KEYWORDS).map(lambda w: (f"a | {w}", span("f", "a") + " | " + span("f", w))),
-    )).map(lambda t: (t[0],) + t[1]),
+    ),
     # PowerShell
-    st.tuples(st.just("powershell"), st.one_of(
+    *cases(["powershell"],
         SAID.map(lambda t: ("#" + t, span("c", "#" + t))),
         WORD.map(lambda w: (f"${w}", span("v", "$" + w))),
         PASCAL.map(lambda t: (f"[{t}]", span("t", f"[{t}]"))),
@@ -149,32 +164,32 @@ CLASSIFIED = st.one_of(
             lambda t: (f"{t[0]} -{t[1]}", span("f", t[0]) + " " + span("a", f"-{t[1]}"))),
         st.sampled_from(sorted(highlight.PS_KEYWORDS)).map(lambda k: (k.capitalize(), span("k", k.capitalize()))),
         INSIDE_QUOTES.filter(lambda t: "'" not in t).map(lambda t: (f"'{t}'", span("s", f"'{t}'"))),
-    )).map(lambda t: (t[0],) + t[1]),
+    ),
     # CMake
-    st.tuples(st.just("cmake"), st.one_of(
+    *cases(["cmake"],
         SAID.map(lambda t: ("#" + t, span("c", "#" + t))),
         WORD.map(lambda w: (f"{w}(x)", span("f", w) + "(x)")),
         CAPS.map(lambda m: (m, span("m", m))),
         WORD.map(lambda w: ("${" + w + "}", span("v", "${" + w + "}"))),
         INSIDE_QUOTES.map(lambda t: (f'"{t}"', span("s", f'"{t}"'))),
-    )).map(lambda t: (t[0],) + t[1]),
+    ),
     # JSON
-    st.tuples(st.just("json"), st.one_of(
+    *cases(["json"],
         st.tuples(WORD, NUMBER.filter(lambda n: "e" not in n)).map(
             lambda t: (f'"{t[0]}": -{t[1]}', span("a", f'"{t[0]}"') + ": " + span("n", f"-{t[1]}"))),
         INSIDE_QUOTES.filter(lambda t: '"' not in t).map(lambda t: (f'["{t}"]', "[" + span("s", f'"{t}"') + "]")),
         st.sampled_from(["true", "false", "null"]).map(lambda k: (f"[{k}]", "[" + span("k", k) + "]")),
-    )).map(lambda t: (t[0],) + t[1]),
+    ),
     # YAML
-    st.tuples(st.just("yaml"), st.one_of(
+    *cases(["yaml"],
         SAID.map(lambda t: ("#" + t, span("c", "#" + t))),
         WORD.map(lambda w: (f"{w}: x", span("a", w) + ": x")),
         WORD.map(lambda w: (f"- {w}: x", span("a", f"- {w}") + ": x")),
         WORD.map(lambda w: ("x: ${{ " + w + " }}", span("a", "x") + ": " + span("v", "${{ " + w + " }}"))),
         st.sampled_from(["true", "false", "null", "yes", "no"]).map(lambda k: (f"x: {k}", span("a", "x") + ": " + span("k", k))),
         INSIDE_QUOTES.filter(lambda t: "'" not in t).map(lambda t: (f"x: '{t}'", span("a", "x") + ": " + span("s", f"'{t}'"))),
-    )).map(lambda t: (t[0],) + t[1]),
-)
+    ),
+]
 
 
 class HighlightTest(unittest.TestCase):
@@ -184,10 +199,11 @@ class HighlightTest(unittest.TestCase):
         # test, so that a test of one language is a test of its scanner.
         highlight._SCANNERS.clear()
 
-    @given(CLASSIFIED)
-    def test_each_scanner_tells_its_tokens_apart(self, case):
-        lang, line, expected = case
-        self.assertEqual(highlight.highlight(line, lang), expected, (lang, line))
+    @given(st.data())
+    def test_each_scanner_tells_its_tokens_apart(self, data):
+        for case in CASES:
+            lang, line, expected = data.draw(case)
+            self.assertEqual(highlight.highlight(line, lang), expected, (lang, line))
 
     @given(SOURCE, LANG)
     def test_the_text_survives_exactly(self, src, lang):
