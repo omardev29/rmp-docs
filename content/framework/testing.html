@@ -57,17 +57,16 @@ runner with no sound card it runs against the audio library's null backend. It r
 the shuffled pass.</li>
 </ul>
 
-<p data-fw-grep="tools/seam_check.sh::&quot;src/rmp/ui/controls\.cpp&quot;\s+# DEBT: the character queue and backspace[\s\S]*?DEBT_CALLS=\(\n  &quot;src/rmp/ui/controls\.cpp=GetCharPressed\|IsKeyPressed&quot;">What
+<p data-fw-grep="tools/seam_check.sh::&quot;src/rmp/ui/context\.cpp&quot;\s+# the seam: read_pointer\(\) and read_nav\(\)[\s\S]*?read_typed\(\), the characters and the\n\s+# Backspace a text field types[\s\S]*?is on the allowlist but no longer needs to be\. Remove the entry">What
 makes all of this possible without a window is the seam: time, input and randomness enter the
 framework through a few functions a test replaces — one clock, which the game and the UI both read,
 the game's input sampler and the UI's own, and one random generator.
 <a href="/framework/why/delta-and-time.html">Time is a parameter</a> explains it, and
-<code>tools/seam_check.sh</code> fails if any other file starts reading them on its own. One file is
-on that list as debt rather than as a seam: the UI's text field reads the typed characters and
-Backspace straight from raylib. The list names the calls it is in debt for and holds it to them:
-anything else the check looks for fails there as it would in any other file — <code>GetTime()</code>
-for the caret, which blinks on the game's clock like the rest of the UI — and a call the file stops
-making has to come off its line.</p>
+<code>tools/seam_check.sh</code> fails if any other file starts reading them on its own. The files it
+allows are the seams themselves, and the list only gets shorter: a file on it that stops reading the
+real thing fails until its line goes. The UI's text field is not on it. What it types — the
+characters and Backspace — comes through the UI's own seam like the rest of its input, which is how
+the layout test types into it, and its caret blinks on the game's clock like the rest of the UI.</p>
 
 <h2 id="layout">The UI, laid out headless</h2>
 
@@ -119,6 +118,15 @@ sanitizer reported anything, the game exited with status 0, and it printed
 prints the log, or the report, and says which: <samp>a sanitizer reported the run above (exit
 …)</samp>, <samp>the game exited with status …</samp>, <samp>the game did not boot, or an asset
 failed to load</samp>, or <samp>the game booted and drew nothing</samp>.</p>
+
+<p data-fw-grep="tools/rmp.py::if not re\.search\(r&quot;RAY_TEST_REPORTS=0\$&quot;, out, re\.M\):">And
+it holds the game to no mistake the framework reports. A mistake in the game that the framework says
+once in the log — a widget outside <code>begin()</code>/<code>end()</code>, an action nobody
+defined — is counted, and the last frame prints the count, <samp>RAY_TEST_REPORTS=0</samp> when
+there was none. Anything else fails the stage, with the warnings it counted: <samp>the framework
+reported a mistake in the game (the WARNING lines above, said once each)</samp>. That holds in a game
+<code>rmp new</code> makes as much as in the framework; a game in plain C has no framework to report
+anything, and prints no count.</p>
 
 <p data-fw-grep="include/rmp/assets.h::nothing in the pack and nothing on disk, or a file that is there and does not\s+// decode">The
 count in <code>assets_failed</code> is of every load that gave nothing usable: a name with nothing
@@ -234,8 +242,8 @@ so the gate is seen red before it is trusted green.</p>
 <p data-fw-grep="tools/examples_build.sh::1\. tools/examples_check\.sh: every example has the SHAPE of an entry point">The
 {{count:examples}} examples are tests too. <code>rmp test examples</code> — kept out of the plain
 <code>rmp test</code>, because it compiles all of them — runs one script, the one CI runs,
-<span data-fw-grep="tools/examples_build.sh::# 1-4 are `boot` and 5 is `e2e`, and with no argument it is both, one after\n# the other -- `rmp test examples`\. CI runs the two halves in two jobs side by\n# side">in
-its two halves: <code>boot</code>, the first four steps below, and <code>e2e</code>, the fifth,
+<span data-fw-grep="tools/examples_build.sh::# 1-5 are `boot` and 6 is `e2e`, and with no argument it is both, one after\n# the other -- `rmp test examples`\. CI runs the two halves in two jobs side by\n# side">in
+its two halves: <code>boot</code>, the first five steps below, and <code>e2e</code>, the sixth,
 which CI runs in two jobs side by side.</span></p>
 
 <ol>
@@ -248,16 +256,23 @@ saying which platforms that rules out and why.</li>
 <li>Every example directory became a build target, and the number of targets is the number of
 directories — a pattern that stops matching would otherwise look exactly like a folder where
 everything passes.</li>
-<li>Every example with an entry point is built against the software renderer, booted for a budget
-of frames, and required to boot with no asset missing, draw, exit cleanly and leave a screenshot.
-The plain C example is booted like the rest: it calls the C smoke-test hooks the entry point calls
-for every other example.</li>
+<li data-fw-grep="tools/examples_build.sh::#   3\. Every example that has an entry point boots, draws pixels and exits\n[\s\S]*?#      made no mistake the framework reports \(RAY_TEST_REPORTS=0\) -- but the\n#      plain C one">Every
+example with an entry point is built against the software renderer, booted for a budget of frames,
+and required to boot with no asset missing, draw, exit cleanly, leave a screenshot and make no
+mistake the framework reports. The plain C example is booted like the rest: it calls the C
+smoke-test hooks the entry point calls for every other example, and has no framework to report
+anything.</li>
+<li data-fw-grep="tools/examples_build.sh::for size in 450x800 1280x450; do">At the design size every
+<code>[window] stretch</code> draws the same picture, so the stretch example is booted twice more,
+in a window taller than it is wide and in one wider than 16:9, letterboxed, and its last frame
+read back: the bars are its clear colour, the world reaches every edge of the area between them, and
+the court's lines are centred in the window.</li>
 <li data-fw-grep="tools/examples_build.sh::rmp::input is read both ways a game is written \(tests/input_play\.cpp\)">The
 platformer is played to the end — <a href="#platformer">below</a> — and
 <code>tests/input_play.cpp</code> drives one program through the real desktop runner with keys
 pressed through the input seam, once with a hook that reads the input itself and once with a
 scene under <code>frame()</code>, and each press has to be seen exactly once.</li>
-<li data-fw-grep="tools/examples_build.sh::#   5\. Every example with a script in tests/e2e/ is PLAYED from it, frame by\n#      frame, and every shot compared with its golden PNG">Every
+<li data-fw-grep="tools/examples_build.sh::#   6\. Every example with a script in tests/e2e/ is PLAYED from it, frame by\n#      frame, and every shot compared with its golden PNG">Every
 example with a script in <code>tests/e2e/</code> is played from it, and every picture the script
 takes is compared with the one recorded for it — <a href="#e2e">below</a>. As many scripts were
 found as were built and as were played, or the step fails.
@@ -484,10 +499,10 @@ line is raised in the commit that earned it: a ratchet nobody has to remember to
 does not stall. A file of <code>src/rmp/</code> with no line fails, and so does a source file the
 report does not hold, unless it has no code of its own. The floors run from 0 — <code>src/rmp/ads.cpp</code>, which does something
 only on Android — to 100.</dd>
-<dt data-fw-grep="tools/untested_api.txt::\A(?:#[^\n]*\n)+(?:[^#\n][^\n]*\n){30}\Z">The
+<dt data-fw-grep="tools/untested_api.txt::\A(?:#[^\n]*\n)+(?:[^#\n][^\n]*\n){14}\Z">The
 public functions no test calls, a list that only shrinks</dt>
 <dd><code>tools/untested_api.txt</code> names every function of <code>include/rmp/</code> a game
-can call and no test does — 30 of them. clang reads the headers to find them, and a template counts
+can call and no test does — 14 of them. clang reads the headers to find them, and a template counts
 as called when any instance of it runs. A new public function no test calls fails: write the test.
 A listed one a test calls, or one that is gone, fails until its line is removed.</dd>
 </dl>

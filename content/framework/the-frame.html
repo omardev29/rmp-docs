@@ -160,7 +160,7 @@ never called.</p>
 
 <h3 id="delta">The delta</h3>
 
-<p data-fw-grep="src/rmp/clock.cpp::if \(raw &lt; 0\) \{\s+step = 0;\s+\} else if \(RMP_MAX_DELTA &gt; 0 &amp;&amp; raw &gt; RMP_MAX_DELTA\) \{\s+step = RMP_MAX_DELTA;\s+\}\s+timing\.last = step;">The
+<p data-fw-grep="src/rmp/clock.cpp::float clamped\(const float raw\) \{\s+if \(raw &lt; 0\) return 0\.0f;\s+if \(RMP_MAX_DELTA &gt; 0 &amp;&amp; raw &gt; RMP_MAX_DELTA\) return RMP_MAX_DELTA;[\s\S]*?float step_delta\(\) \{\s+timing\.last = clamped\(raw_delta\(\)\);">The
 <code>delta</code> every hook receives is raylib's <code>GetFrameTime()</code> with two corrections:
 a negative reading becomes 0, and a reading longer than
 <a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a> — a
@@ -173,7 +173,7 @@ rest of the frame: the UI animates by it too.
 
 <h2 id="input">1. Input, once</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::void begin_frame\(\) \{ rmp::input::detail::begin_frame\(\); \}">The
+<p data-fw-grep="src/rmp/app.cpp::void begin_frame\(\) \{\n    rmp::input::detail::begin_frame\(\);">The
 runner samples every input device once, before it calls the frame hook. The keyboard, the mouse —
 which a touch screen drives too — and the first gamepad are read into one snapshot, and every
 <a href="ref:rmp::input::pressed"><code>pressed</code></a> and
@@ -313,20 +313,23 @@ frame is opened with <code>BeginDrawing()</code> and cleared. The colour is the
 drawn, because everything above it is drawn over it; when that is <code>BLANK</code>, the
 default, the clear colour is the UI theme's background.</p>
 
-<p data-fw-grep="src/rmp/scene.cpp::if \(window\) BeginMode2D\(scene\.camera\.raylib\(\)\);\s+scene\.map\.draw\(\);\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);\s+scene\._draw\(\);">Then
+<p data-fw-grep="src/rmp/scene.cpp::const Camera2D camera = scene\.camera\.raylib\(\);[\s\S]*?if \(clip\) BeginScissorMode\(clip-&gt;x, clip-&gt;y, clip-&gt;width, clip-&gt;height\);\s+if \(window\) BeginMode2D\(camera\);\s+scene\.map\.draw\(\);\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);\s+if \(clip\) EndScissorMode\(\);[\s\S]*?set_pass_camera\(camera\);[\s\S]*?scene\._draw\(\);">Then
 the scenes draw, bottom up, from the lowest one the stack shows
 (<a href="ref:rmp::Scene::draws_below"><code>draws_below</code></a>). Each one, in this order:</p>
 
 <ol>
 <li><strong>The camera opens</strong>: <code>BeginMode2D()</code> with the scene's camera, so what
-follows is drawn in world units.</li>
+follows is drawn in world units — fitted to the window the way
+<a href="/manual/core/camera.html"><code>[window] stretch</code></a> says. When the stretch
+letterboxes, the world is also cut to the game's area, so the bars around it keep the clear
+colour.</li>
 <li><strong>The map</strong>, under everything, because it is the level the objects stand
 on.</li>
 <li><strong>The objects</strong> that are alive and visible, sorted by
 <a href="ref:rmp::Object::layer"><code>layer</code></a> and, within a layer, in the order they
 were spawned. Each one draws its sprite, or its shape when it has no sprite, then its behaviors'
 <code>_draw</code>, then its own <a href="ref:rmp::Object::_draw"><code>_draw()</code></a>.</li>
-<li><strong>The camera closes</strong>: <code>EndMode2D()</code>.</li>
+<li><strong>The camera closes</strong>: <code>EndMode2D()</code>, and the cut with it.</li>
 <li><strong>The scene's <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a></strong>, in
 screen space. This is where a scene's <code>rmp::ui::begin()</code> and
 <code>rmp::ui::end()</code> go, and <code>end()</code> is what draws the UI — over the world,
@@ -341,6 +344,14 @@ pointer finds objects in: the last thing drawn is the first thing clicked.</p>
 <p>A scene the input cannot reach is drawn exactly the same, UI included, but no widget in it can
 be hovered or pressed: the HUD under an open pause menu is visible and inert, and neither scene
 wrote a line about it.</p>
+
+<p data-fw-grep="src/rmp/app.cpp::void frame\(float delta\) \{[\s\S]*?BeginDrawing\(\);[\s\S]*?rmp::ui::detail::begin_backdrop\(\);\s+ClearBackground\(rmp::scenes::detail::clear_color\(\)\);\s+rmp::scenes::detail::draw\(\);[\s\S]*?rmp::ui::detail::finish_backdrop\(\);\s+rmp::ui::detail::draw_notices\(\);">Two
+things of the interface's go around the scenes. When the last frame's
+<a href="ref:rmp::ui::overlay"><code>overlay()</code></a> asked for a blur, this frame is drawn
+into a texture from <code>BeginDrawing()</code> on, clear included, so that the overlay has the
+picture under it to blur; after the last scene, if no overlay took it, the texture goes on screen
+as it is. And after every scene, what <a href="ref:rmp::ui::notify"><code>rmp::ui::notify()</code></a>
+queued is drawn over everything, taking no input.</p>
 
 <h2 id="capture">4. The CI capture</h2>
 
@@ -396,21 +407,26 @@ everything else in the frame, has finished.</p>
 
 <h2 id="after">After the frame</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::SmokeTest_CaptureFrameIfMissed\(\);\s+SmokeTest_Tick\(\);[\s\S]*?rmp::audio::detail::update\(\);[\s\S]*?frame_ended\(\);\n\}">Back
-in the loop, outside <code>frame()</code>, two last things happen on every platform. The CI frame
-budget advances, and the music stream is fed. Feeding the music here, and not in the scene
-stack, keeps it playing under a pause menu that freezes the game, and in a game that does not use
-scenes at all. After both, the end of the frame is reported to whoever is watching: nobody, unless
-a test that <a href="/framework/testing.html#e2e">plays the game from a script</a> is, and then it
-sees the frame drawn and its scene changes applied.</p>
+<p data-fw-grep="src/rmp/app.cpp::void end_frame\(\) \{[\s\S]*?SmokeTest_CaptureFrameIfMissed\(\);[\s\S]*?rmp::audio::detail::update\(\);[\s\S]*?rmp::ui::detail::runner_end_frame\(\);[\s\S]*?if \(SmokeTest_Tick\(\) != 0\) \{\s+TraceLog\(LOG_INFO, &quot;RAY_TEST_REPORTS=%d&quot;, rmp::detail::report_count\(\)\);\s+\}[\s\S]*?frame_ended\(\);\n\}">Back
+in the loop, outside <code>frame()</code>, the same last things happen on every platform. The
+music stream is fed: here, and not in the scene stack, so it keeps playing under a pause menu that
+freezes the game, and in a game that does not use scenes at all. A game with a frame hook of its
+own has the UI's frame closed, which the runner opened before the hook; a <code>begin()</code> it
+left without its <code>end()</code> is reported once and closed for it. The CI frame budget
+advances, and on the budget's last frame the framework prints how many of the game's mistakes it
+has reported, which a correct game keeps at 0. Last, the end of the frame is reported to whoever
+is watching: nobody, unless a test that <a href="/framework/testing.html#e2e">plays the game from
+a script</a> is, and then it sees the frame drawn and its scene changes applied.</p>
 
 <h2 id="start-and-stop">Before the first frame, and after the last</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::set_resources_root\(RMP_RESOURCES_PATH\);[\s\S]*?rmp::random::seed\(test_seed\(\)\.value_or\([\s\S]*?set_strict\(true\);[\s\S]*?SmokeTest_Begin\(\);[\s\S]*?ChangeDirectory\(GetApplicationDirectory\(\)\);[\s\S]*?rmp::assets::init\(\);">Before
+<p data-fw-grep="src/rmp/app.cpp::set_resources_root\(RMP_RESOURCES_PATH\);[\s\S]*?rmp::random::seed\(test_seed\(\)\.value_or\([\s\S]*?set_strict\(true\);[\s\S]*?#if !defined\(NDEBUG\)\s+rmp::detail::set_report_sink\(rmp::ui::detail::show_report\);[\s\S]*?SmokeTest_Begin\(\);[\s\S]*?ChangeDirectory\(GetApplicationDirectory\(\)\);[\s\S]*?rmp::assets::init\(\);">Before
 the first frame the entry point prepares the run: it tells the asset layer where this
 executable's <code>resources/</code> are, seeds <a href="ref:rmp::random"><code>rmp::random</code></a>
 from the wall clock — or from the seed a test that plays the game names — turns on <a href="/reference/configuration.html#dev-strict"><code>[dev]
-strict</code></a> in a debug build that asks for it, reads the CI frame budget, moves into the app
+strict</code></a> in a debug build that asks for it, has a debug build say each of the
+framework's warnings on screen as well, with <a href="ref:rmp::ui::notify"><code>rmp::ui::notify()</code></a>,
+reads the CI frame budget, moves into the app
 bundle on iOS or next to the executable in a desktop release, and opens the resource pack if there
 is one.</p>
 
@@ -428,12 +444,14 @@ working directory. NetBSD and OpenBSD cannot say where an executable is, so ther
 working directory and logs <samp>ASSETS: this system does not say where the executable is, so …
 is read from the working directory, …</samp>.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::if \(RMP_WINDOW_FPS &gt; 0\) SetTargetFPS\(RMP_WINDOW_FPS\);[\s\S]*?InitWindow\(RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT, RMP_WINDOW_TITLE\);\s+rmp::scenes::detail::start\(std::move\(first\)\);">Then
+<p data-fw-grep="src/rmp/app.cpp::if \(RMP_WINDOW_FPS &gt; 0\) SetTargetFPS\(RMP_WINDOW_FPS\);[\s\S]*?if \(SmokeTest_maxFrames &gt; 0\) \{[\s\S]*?std::getenv\(&quot;RAY_TEST_WINDOW&quot;\);[\s\S]*?WindowSize\{ RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT \}\);\s+InitWindow\(size\.width, size\.height, RMP_WINDOW_TITLE\);\s+rmp::scenes::detail::start\(std::move\(first\)\);">Then
 the ready hook. <code>RMP_GAME</code>'s opens the window from <code>[window]</code> — vsync and a
 resizable window first, the frame cap before <code>InitWindow()</code> because raylib's DRM backend
 chooses the display mode from it, and never on the web or iOS, where the browser and the display
 pace the frame — and enters your first scene, whose <code>_ready()</code> runs with the window
-already open.</p>
+already open. The window opens at <code>[window] width</code> by <code>height</code>; only under the
+CI frame budget can <code>RAY_TEST_WINDOW</code> open it at another size, so that a
+<code>[window] stretch</code> can be booted on a screen of another shape.</p>
 
 <p data-fw-grep="src/rmp/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">Right
 after the ready hook, on every runner, Escape is taken back from raylib. <code>InitWindow()</code>
@@ -448,7 +466,7 @@ there. The window's close button still closes the game. A <code>SetExitKey()</co
 if (IsKeyPressed(KEY_ESCAPE)) rmp::app::quit();
 </pre>
 
-<p data-fw-grep="src/rmp/app.cpp::SetExitKey\(KEY_NULL\);[\s\S]*?if \(save_test &amp;&amp; !smoke_save_round_trip\(\)\) return;\s+SmokeTest_ReportBoot">Then,
+<p data-fw-grep="src/rmp/app.cpp::SetExitKey\(KEY_NULL\);[\s\S]*?if \(save_test &amp;&amp; !smoke_save_round_trip\(\)\) return;[\s\S]*?if \(test_window\.refused\) return;\s+SmokeTest_ReportBoot">Then,
 under CI, a save is written to the platform's real folder and read back, and the boot is
 reported.</p>
 

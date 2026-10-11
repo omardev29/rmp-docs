@@ -32,7 +32,7 @@ read it.</p>
 
 <h2 id="where">Where the clock is read</h2>
 
-<p data-fw-grep="src/rmp/clock.cpp::float step_delta\(\) \{\s+const float raw = timing\.fixed &gt; 0 \? timing\.fixed : GetFrameTime\(\);">Once
+<p data-fw-grep="src/rmp/clock.cpp::float raw_delta\(\) \{ return timing\.fixed &gt; 0 \? timing\.fixed : GetFrameTime\(\); \}[\s\S]*?float step_delta\(\) \{\s+timing\.last = clamped\(raw_delta\(\)\);">Once
 a frame, in one function of <code>src/rmp/clock.cpp</code>, which asks raylib for the frame time,
 corrects it, remembers it, and hands it to the frame. It is the one call to
 <code>GetFrameTime()</code> in the framework. Every entry point — the desktop loop, the browser's
@@ -57,31 +57,35 @@ answer every run, and a test that fails one time in twenty teaches everyone to i
 <code>tools/seam_check.sh</code> fails the framework's tests if any file under
 <code>src/rmp/</code> or <code>include/rmp/</code> calls <code>GetFrameTime()</code>,
 <code>GetTime()</code>, reads the keyboard, the mouse or the gamepad, asks for the screen size, or
-uses raylib's random numbers — except a short list of files, each with the reason it is allowed.
-All but one are the seams themselves; the other, the UI's text field, is listed as debt. The same goes for the other
-things that change between two runs. The game's input is sampled in one place,
-<code>rmp::input</code>, into a snapshot a test can replace, and the UI samples the pointer and the
-keys it navigates with through a sampler of its own that a test replaces the same way. Randomness comes from
+uses raylib's random numbers — except a short list of files, each with the reason it is allowed,
+and every one of them a seam itself. The same goes for the other things that change between two
+runs. The game's input is sampled in one place, <code>rmp::input</code>, into a snapshot a test can
+replace, and the UI samples the pointer, the keys it navigates with and what a text field types
+through samplers of its own that a test replaces the same way. Randomness comes from
 <a href="ref:rmp::random"><code>rmp::random</code></a>, one generator with a seed: a test keeps
 the fixed default and gets the same sequence every time, while a shipped game is seeded from the
 wall clock when it starts, and <a href="ref:rmp::random::current_seed"><code>current_seed()</code></a>
 tells you which run you are in.</p>
 
-<p data-fw-grep="src/rmp/ui/context.cpp::float frame_time\(\) \{ return test_mode\(\) \? 0\.0f : rmp::app::detail::frame_delta\(\); \}">The
-UI has no clock of its own either. Its transitions, its scrolling, the repeat of a held arrow key
-and the blink of a text field's caret take their time from <code>frame_time()</code>, which is the
-<code>delta</code> the frame was handed: the number <code>step_delta()</code> remembered. A menu
-and the game under it cannot disagree about how long a frame took. The layout tests run the UI in a
-mode where that time is 0, so a layout comes out the same on every run.</p>
+<p data-fw-grep="src/rmp/ui/context.cpp::float frame_time\(\) \{\n    return test_mode\(\) \? test_clock\.seconds : rmp::app::detail::frame_delta\(\);">The
+UI has no clock of its own either. Its transitions, its scrolling, the repeat of a held arrow key,
+the blink of a text field's caret, a tooltip's wait and a notice's time on screen take their time
+from <code>frame_time()</code>, which is the <code>delta</code> the frame was handed: the number
+<code>step_delta()</code> remembered.
+<span data-fw-grep="src/rmp/clock.cpp::float frame_delta\(\) \{ return timing\.stepped \? timing\.last : clamped\(raw_delta\(\)\); \}">In
+a loop of the game's own with no runner to call <code>step_delta()</code>, it is the frame raylib
+timed, clamped the same way.</span> A menu and the game under it cannot disagree about how long a
+frame took. The layout tests run the UI in a mode where no time passes unless the test says how
+much does, so a layout comes out the same on every run.</p>
 
-<p data-fw-grep="src/rmp/ui/controls.cpp::caret\.f \+= detail::frame_time\(\);[\s\S]*?while \(\(c = GetCharPressed\(\)\) != 0\)[\s\S]*?if \(IsKeyPressed\(KEY_BACKSPACE\)[\s\S]*?const bool caret_on = typing &amp;&amp; std::fmod\(caret\.f, 1\.0f\) &lt; 0\.5f;">The
-text field is the debt on that list, and only for what is typed: it reads the typed characters and
-Backspace straight from raylib, so no seam lets a test type into it. Its caret is not: it blinks
-on <code>frame_time()</code> like everything else in the UI, shown the moment the field takes the
-keyboard and then for the first half of every second it types —
-<span data-fw-grep="tools/seam_check.sh::DEBT_CALLS=\(\n  &quot;src/rmp/ui/controls\.cpp=GetCharPressed\|IsKeyPressed&quot;">and
-the check holds the file to the two calls it is in debt for, so a <code>GetTime()</code> there
-fails it.</span></p>
+<p data-fw-grep="src/rmp/ui/controls.cpp::caret\.f \+= detail::frame_time\(\);[\s\S]*?detail::read_typed\(typed\);[\s\S]*?const bool caret_on = typing &amp;&amp; std::fmod\(caret\.f, 1\.0f\) &lt; 0\.5f;">A
+text field is no exception. What it types — the characters and Backspace — comes through the UI's
+seam, so a test types into it as a player would, and its caret blinks on
+<code>frame_time()</code> like everything else in the UI, shown the moment the field takes the
+keyboard and then for the first half of every second it types.
+<span data-fw-grep="tools/seam_check.sh::# them is debt any more: the last one, the text field in ui/controls\.cpp,">The
+file is not on the check's list, so a <code>GetTime()</code> or a key read straight from raylib
+there fails it, as in any other file that is not a seam.</span></p>
 
 <p data-fw-grep="src/rmp/clock.cpp::void set_fixed_delta\(float seconds\) \{ timing\.fixed = seconds &gt; 0 \? seconds : 0; \}">One
 clock is also what lets a whole game be played the same way twice. A test can fix the step, so that
@@ -123,7 +127,7 @@ to the flag at 60 frames a second and again at 240, and jumps from its moving pl
 and the next frame time comes back as half a second. A bullet at 900 units a second then moves 450
 units in one step — through the wall and out the other side, without ever overlapping it.</p>
 
-<p data-fw-grep="src/rmp/clock.cpp::\} else if \(RMP_MAX_DELTA &gt; 0 &amp;&amp; raw &gt; RMP_MAX_DELTA\) \{\s+step = RMP_MAX_DELTA;">So the
+<p data-fw-grep="src/rmp/clock.cpp::float clamped\(const float raw\) \{\s+if \(raw &lt; 0\) return 0\.0f;\s+if \(RMP_MAX_DELTA &gt; 0 &amp;&amp; raw &gt; RMP_MAX_DELTA\) return RMP_MAX_DELTA;">So the
 <code>delta</code> the game is handed is clamped to
 <a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a>, a
 twentieth of a second unless you change it. A frame that really took longer arrives as a twentieth

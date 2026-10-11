@@ -250,11 +250,7 @@ anything of the framework's or the game's; a test refuses a line that could matc
 code, and a leak planted in a function of the framework's own has to be reported through the list.
 The list is empty.</p>
 
-<p data-fw-grep="cmake/sanitize_ignore.txt::^fun:\*cute_tiled_\*$">The
-clang builds also skip what <code>cmake/sanitize_ignore.txt</code> lists, each line with its
-reason, and the list may only name vendored code. It has one line: the Tiled reader finds a struct
-from a pointer to one of its members with the classic <code>OFFSET_OF</code> macro, a member
-access through a null pointer that every C compiler has always accepted.</p>
+<p data-fw-grep="cmake/sanitize_ignore.txt::^# Empty, and that is the aim\.">The clang builds would also skip what <code>cmake/sanitize_ignore.txt</code> lists, each line with its reason, and the list may only name vendored code. It is empty. It held one line, which turned every sanitizer off for the Tiled reader over one null-pointer member access in its <code>OFFSET_OF</code>, and that hid a parser that read past the end of a map cut short and leaked on every refusal; cute_tiled is patched instead (<code>thirdparty/cute_tiled/PATCHES.md</code>) and fuzzed under the sanitizers like the framework's own code.</p>
 
 <h3 id="probe">Whether they really run</h3>
 
@@ -659,19 +655,20 @@ line endings each file is checked out with — which the site's own build checks
 <p>At the commit these pages document, these do not exist:</p>
 
 <ul>
-<li data-fw-grep="tests/deep.cmake::# What a harness needs besides librmp\.a, by its name\. tests/e2e/script\.cpp is\n# the e2e scripts' grammar, a parser of the tests' own\.\nset\(_rmp_fuzz_extra_e2e_script"><strong>No
-parser of the framework fuzzed.</strong> The one fuzz target is the grammar of the
-<a href="/framework/testing.html#e2e">scripts the examples are played from</a>, a parser of the
-tests' own. No reader of the framework — the LDtk, Tiled and Aseprite readers, the save reader,
-the resource pack — is fed generated input yet.</li>
-<li data-fw-grep="tests/property/waivers.txt::\A(?:(?:#[^\n]*)?\n)*(?:[^#\n][^\n]*\n(?:(?:#[^\n]*)?\n)*){296}\Z"><strong>No
-public function held by a property.</strong> The properties that run check the generators they are
-written with, and the scanner the text gates read C++ through. Every public function of
-<code>include/rmp/</code>, all 296, is still on <code>tests/property/waivers.txt</code>, a list
-that only shrinks.</li>
-<li data-fw-grep="tests/mutation/floors/random.txt::^floor +80$"><strong>Little mutation testing
-measured.</strong> Of the framework's C++, only <code>rmp::random</code> has a mutation score held
-to a floor; every other file of <code>src/rmp/</code> has its module and no score yet.
+<li data-fw-grep="tests/fuzz/tiled.cpp::// The Tiled reader \(src/rmp/tilemap\.cpp over thirdparty/cute_tiled\), fuzzed\."><strong>Not
+every reader fuzzed.</strong> The LDtk and Tiled readers and the save file's reader — its header,
+its JSON, and a sealed save somebody changed — are fed generated input, each from a corpus
+committed in <code>tests/fuzz/</code>. The Aseprite reader and the resource pack are not yet.</li>
+<li data-fw-grep="tests/property/waivers.txt::\A(?:(?:#[^\n]*)?\n)*(?:[^#\n][^\n]*\n(?:(?:#[^\n]*)?\n)*){235}\Z"><strong>Most
+public functions not held by a property.</strong> Properties hold the functions of
+<a href="ref:rmp::Value"><code>rmp::Value</code></a>, <a href="ref:rmp::save"><code>rmp::save</code></a>
+and <a href="ref:rmp::Tilemap"><code>rmp::Tilemap</code></a>, and loading a map, to the deep tests'
+rules, on generated input. The other 235 public functions of <code>include/rmp/</code> are on
+<code>tests/property/waivers.txt</code>, a list that only shrinks.</li>
+<li data-fw-grep="tests/mutation/floors/save.txt::^floor +95$"><strong>Mutation testing on part of
+the framework.</strong> Of the framework's C++, <code>rmp::random</code>, <code>rmp::save</code>,
+<code>rmp::Value</code>, the LDtk reader and the tilemap have a mutation score held to a floor;
+every other file of <code>src/rmp/</code> has its module and no score yet.
 <a href="#coverage">Coverage</a> says which lines the tests run; for the rest of the framework,
 nothing yet says how many mistakes in those lines the tests would miss.</li>
 <li><strong>No reading of how a Windows, macOS or BSD release was linked.</strong> The BSD releases are hardened
