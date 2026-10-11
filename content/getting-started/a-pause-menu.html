@@ -102,7 +102,6 @@ changes; its header is as it was:</p>
 #include &lt;rmp/random.h&gt;
 #include &lt;rmp/ui.h&gt;
 
-#include &lt;algorithm&gt;
 #include &lt;string&gt;
 
 namespace {
@@ -134,11 +133,6 @@ void GameScene::_ready() {
 }
 
 void GameScene::_update(float delta) {
-    // The whole arena on screen, whatever the window: a phone's, or one
-    // somebody has resized.
-    camera.zoom =
-        std::min(GetScreenWidth() / ARENA.width, GetScreenHeight() / ARENA.height);
-
     if (rmp::input::just_pressed("pause")) rmp::Scene::push&lt;PauseScene&gt;();
 
     _next_bat -= delta;
@@ -198,12 +192,12 @@ void GameScene::caught() { rmp::Scene::push&lt;GameOverScene&gt;(_coins); }
 </pre>
 
 <p>The keyboard and the gamepad have their key, but a phone has neither, so on Android and iOS the
-score gets a Pause button. The <code>#if</code> keeps it to those two for a reason: a button on
-screen holds the keyboard's focus when nothing else does, so on a desktop Enter or Space would
-press it in the middle of the game, and the arrows that move the rabbit would light up its focus
-ring. The
-<a href="/manual/modules/ui.html#a-button-in-the-hud">interface chapter</a> shows the other way
-out, turning keyboard navigation off while the game is played.</p>
+score gets a Pause button; the <code>#if</code> keeps it off a desktop, which has P and Escape.
+Where it is, it does not get in the game's way. The rabbit reads the arrows through
+<code>rmp::input</code>, so the interface knows this scene is being played and its button is a
+HUD's: it takes no focus by itself, so Enter and Space never press it in the middle of the game, and
+a finger or the mouse does. The <a href="/manual/modules/ui.html#a-button-in-the-hud">interface
+chapter</a> has the rest.</p>
 
 <p>The button is also where the pointer check of the player pays off. A finger on Pause is a finger
 on the screen, and <code>consumed_pointer()</code> is what keeps the rabbit from running to the

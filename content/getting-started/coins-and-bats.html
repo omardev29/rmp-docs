@@ -117,7 +117,6 @@ private:
 #include &lt;rmp/random.h&gt;
 #include &lt;rmp/ui.h&gt;
 
-#include &lt;algorithm&gt;
 #include &lt;string&gt;
 
 namespace {
@@ -149,11 +148,6 @@ void GameScene::_ready() {
 }
 
 void GameScene::_update(float delta) {
-    // The whole arena on screen, whatever the window: a phone's, or one
-    // somebody has resized.
-    camera.zoom =
-        std::min(GetScreenWidth() / ARENA.width, GetScreenHeight() / ARENA.height);
-
     // There is no pause menu yet, so for now "pause" goes back to the menu.
     if (rmp::input::just_pressed("pause")) rmp::Scene::change&lt;MainMenuScene&gt;();
 

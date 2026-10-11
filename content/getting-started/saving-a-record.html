@@ -98,7 +98,6 @@ was beaten. Replace the game scene's code; its header does not change:</p>
 #include &lt;rmp/random.h&gt;
 #include &lt;rmp/ui.h&gt;
 
-#include &lt;algorithm&gt;
 #include &lt;string&gt;
 
 namespace {
@@ -131,11 +130,6 @@ void GameScene::_ready() {
 }
 
 void GameScene::_update(float delta) {
-    // The whole arena on screen, whatever the window: a phone's, or one
-    // somebody has resized.
-    camera.zoom =
-        std::min(GetScreenWidth() / ARENA.width, GetScreenHeight() / ARENA.height);
-
     if (rmp::input::just_pressed("pause")) rmp::Scene::push&lt;PauseScene&gt;();
 
     _next_bat -= delta;

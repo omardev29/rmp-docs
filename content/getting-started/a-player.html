@@ -180,7 +180,6 @@ public:
 
 #include &lt;rmp/input.h&gt;
 
-#include &lt;algorithm&gt;
 
 namespace {
 // The arena is the design resolution: [window] width and height in the .toml.
@@ -201,11 +200,6 @@ void GameScene::_ready() {
 }
 
 void GameScene::_update(float /*delta*/) {
-    // The whole arena on screen, whatever the window: a phone's, or one
-    // somebody has resized.
-    camera.zoom =
-        std::min(GetScreenWidth() / ARENA.width, GetScreenHeight() / ARENA.height);
-
     // There is no pause menu yet, so for now "pause" goes back to the menu.
     if (rmp::input::just_pressed("pause")) rmp::Scene::change&lt;MainMenuScene&gt;();
 }
@@ -222,11 +216,15 @@ are its starting values, which <code>spawn()</code> applies before <code>_ready(
 and <code>.edges = rmp::Edge::CLAMP</code> with <code>.bounds = ARENA</code> stops it at the
 arena's edges.</p>
 
-<p>The window is resizable, though, and a phone's screen is whatever size it is. The scene's
+<p data-fw-grep="raylib_multiplatform.toml::^stretch = &quot;letterbox&quot;">The window is resizable,
+though, and a phone's screen is whatever size it is. The scene's
 <a href="ref:rmp::Scene::camera"><code>camera</code></a> decides what part of the world is on
-screen; it starts centred on the arena, and setting its <code>zoom</code> every frame to the
-smaller of the two ratios keeps the whole arena in view, at any size and either way round. The
-menu needed none of this: the interface scales on its own.</p>
+screen, and it starts centred on the arena. On a window of another size it does what
+<code>[window] stretch</code> in the <code>.toml</code> says, and <code>rmp new</code> wrote
+<code>"letterbox"</code> there: the arena is scaled to fit the window and centred in it, with bars
+of the clear colour around it, so the whole arena is in view at any size and either way round, and
+nothing in the game says so. The menu needed none of this either: the interface scales on its
+own.</p>
 
 <p><a href="ref:rmp::Scene::background"><code>background</code></a> is the colour the frame is
 cleared with. There is no pause menu yet, so for now <code>pause</code> goes back to the menu.</p>
