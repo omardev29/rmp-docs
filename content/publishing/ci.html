@@ -299,7 +299,11 @@ Alpine the musl build is started on</strong> is the framework's own image,
 <code>ghcr.io/omardev29/raylib-run-alpine</code>, by digest: Alpine itself pinned by its digest,
 with the virtual X server, Mesa and the X libraries an Alpine desktop gives the game, and checked
 when it is built by drawing on it. The job downloads nothing into it, and every container it starts
-runs with the network off. No workflow takes an image from Docker Hub.</li>
+runs with the network off. No workflow takes an image from Docker Hub.
+<span data-fw-grep="tests/configure_test.py::class GameContainersHaveAnInitTest\(unittest\.TestCase\):[\s\S]*?STARTS_A_GAME = re\.compile\(r&quot;RAY_TEST_MAX_FRAMES=\|\\bxvfb-run\\b\|\\\./rmp run\\b&quot;\)">Every container that starts a game, here and in the DRM job, has an
+init as its first process, so that a game that hangs is ended by its step's timeout instead of
+holding the job until the job's own limit: a program that is a container's first process ignores a
+SIGTERM it has no handler for.</span></li>
 <li><strong>Every GitHub Action</strong>, by the full commit it resolves to, with the tag in a
 comment beside it.</li>
 </ul>

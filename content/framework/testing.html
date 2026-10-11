@@ -178,6 +178,15 @@ containers start the game from <code>/</code>. On NetBSD and OpenBSD, which cann
 executable is, the check starts the shipped release from its own folder and wants the line that
 says so.</p>
 
+<p data-fw-grep="tests/configure_test.py::class GameContainersHaveAnInitTest\(unittest\.TestCase\):[\s\S]*?STARTS_A_GAME = re\.compile\(r&quot;RAY_TEST_MAX_FRAMES=\|\\bxvfb-run\\b\|\\\./rmp run\\b&quot;\)">Every
+container a workflow starts a game in — the musl boots on Alpine, the DRM boot and
+<code>rmp run</code> on the virtual display — has an init as its first process, which Docker's
+<code>--init</code> puts there. A program that is a container's first process ignores a SIGTERM it
+has no handler for, so a game there that hung could not be ended by the step's timeout, and held
+its job until the job's own limit ran out. A test reads every workflow and fails on a container that
+starts a game — one that sets <code>RAY_TEST_MAX_FRAMES</code>, runs <code>xvfb-run</code> or runs
+<code>./rmp run</code> — without one.</p>
+
 <h2 id="binaries">What ships, read out of the binary</h2>
 
 <p>A boot on a CI runner proves the game starts on that runner, and a runner is a developer's
