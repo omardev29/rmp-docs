@@ -198,7 +198,7 @@ void GameScene::spawn_coin() {
     coin.collision_mask = layer::PLAYER;
     coin.on_collision([this](rmp::Object &amp;self, rmp::Object &amp;) {
         self.destroy();
-        _coins++;
+        ++_coins;
         rmp::audio::play("coin");
         spawn_coin();
     });

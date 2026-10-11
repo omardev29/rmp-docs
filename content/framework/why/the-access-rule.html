@@ -77,7 +77,7 @@ this needs.</p>
 
 <h2 id="both">Both at once</h2>
 
-<p data-fw-grep="src/rmp/collision.cpp::if \(a_was\) a\._collision\(b\);\s+if \(a_was\) collide_behaviors\(a, b\);[\s\S]*?if \(a_was\) Storage::notify_collision\(a, b\);">The
+<p data-fw-grep="src/rmp/collision.cpp::if \(a_was\) \{\s+a\._collision\(b\);\s+collide_behaviors\(a, b\);\s+\}[\s\S]*?if \(a_was\) Storage::notify_collision\(a, b\);">The
 two spellings never collide, which is the reason there are two. An object can override
 <code>_collision</code> and carry an <code>on_collision</code>, and both run: the override first,
 then its behaviors', then the function it was handed. Nobody has to choose between subclassing and

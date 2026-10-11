@@ -362,7 +362,7 @@ a shot that pierces, or a line of sight that has to know everything in the way:<
 static Vector2 muzzle{}, target{};">
 std::array&lt;rmp::RayHit, 8&gt; hits;
 const int count = raycast_all({ .from = muzzle, .to = target }, hits);
-for (int i = 0; i &lt; count; i++) {
+for (int i = 0; i &lt; count; ++i) {
     if (auto object = hits[i].object.get()) object-&gt;destroy();
 }
 </pre>

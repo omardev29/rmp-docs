@@ -57,7 +57,7 @@ const std::string &amp;line = greetings[rmp::random::index(static_cast&lt;int&gt
 
 <pre data-lang="cpp" data-harness="function">
 std::vector&lt;int&gt; bag = { 0, 1, 2, 3, 4, 5, 6 };
-for (int i = static_cast&lt;int&gt;(bag.size()) - 1; i &gt; 0; i--) {
+for (int i = static_cast&lt;int&gt;(bag.size()) - 1; i &gt; 0; --i) {
     std::swap(bag[i], bag[rmp::random::index(i + 1)]);
 }
 </pre>

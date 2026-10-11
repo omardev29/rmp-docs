@@ -73,7 +73,7 @@ arrow key. It reads raylib's frame time for those through one function of its ow
 The layout tests run the UI in a mode where that time is 0, so a layout comes out the same on every
 run.</p>
 
-<p data-fw-grep="src/rmp/ui/controls.cpp::bool caret_on = typing &amp;&amp; \(static_cast&lt;int&gt;\(GetTime\(\) \* 2\.0\) % 2\) == 0;">The
+<p data-fw-grep="src/rmp/ui/controls.cpp::const bool caret_on =\s+typing &amp;&amp; \(static_cast&lt;int&gt;\(GetTime\(\) \* 2\.0\) % 2\) == 0;">The
 exception is the text field, the debt on that list. It blinks its caret from
 <code>GetTime()</code> and reads the typed characters and Backspace straight from raylib, so test
 mode does not stop the caret blinking, and no seam lets a test type into it.</p>

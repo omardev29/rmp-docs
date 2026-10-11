@@ -40,7 +40,7 @@ struct. A missing picture is a hole in the frame, not a dead process. The failur
 the boot line CI reads reports how many assets failed to load, and a boot with any failure is
 red.</p>
 
-<p data-fw-grep="src/rmp/assets.cpp::void decode_failed\(const char \*name\) \{\s+detail::loads\.failed\+\+;">A
+<p data-fw-grep="src/rmp/assets.cpp::void decode_failed\(const char \*name\) \{\s+\+\+detail::loads\.failed;">A
 file that is there and does not decode — a picture, a sound, a song or a font cut short or
 corrupt — is a failed load in the same way: what comes back is empty, the failure is counted,
 and the log says so once per name. A font is no exception. raylib answers

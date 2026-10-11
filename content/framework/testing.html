@@ -1,6 +1,6 @@
 <!--
 title: Testing
-description: How the framework is tested — unit tests with no window, the UI laid out headless, a frame rendered in software and compared, every target booted, every example played — and what rmp test runs in a game.
+description: How the framework is tested — unit tests with no window, under the sanitizers, the UI laid out headless, a frame rendered in software and compared, every target booted, every example played — and what rmp test runs in a game.
 order: 60
 -->
 <h1>Testing</h1>
@@ -27,7 +27,12 @@ by the build, so a new test needs no change to CMake.</p>
 twice. Once in the order they are written, and once shuffled with a fixed seed, so a test that only
 passes because an earlier one left something behind is found, and found again the next time.</p>
 
-<p data-fw-grep="tools/rmp.py::# The demo game's tests: the copy every game starts from\.\s+\(&quot;build&quot;, &quot;game_test&quot;\),\s+\(&quot;run&quot;, \[&quot;build/game_test&quot;\]\)">The
+<p data-fw-grep="tools/rmp.py::Stage\(&quot;unit&quot;, &quot;the unit tests in two orders, and tests/game/&quot;,\s+\[\(&quot;configure&quot;, \[&quot;-DBUILD_TESTS=ON&quot;, &quot;-DRMP_WERROR=ON&quot;\]\)">Both
+runs are a debug build of the framework, so both run under the
+<a href="#sanitize">sanitizers</a>, and the build is configured with <code>RMP_WERROR</code>: a
+compiler warning in the framework or in a test is an error there.</p>
+
+<p data-fw-grep="tools/rmp.py::# The demo game's tests: the copy every game starts from\.\s+\(&quot;build&quot;, &quot;game_test&quot;\),\s+\(&quot;run&quot;, \[&quot;build/debug/game_test&quot;\]\)">The
 same stage then builds and runs <code>tests/game/</code>, the tests every game is given, against
 the small game in the framework's own <code>src/</code> — the copy every game starts from — so a
 test a new game would fail on its first day fails here first. <a href="#game-tests">Below</a> is
@@ -77,6 +82,13 @@ the log: the game booted with every asset loaded, a frame was read back and had 
 and the run reached the end of its frames instead of dying on the way out. It also checks that the
 window was asked for the vertical sync the <code>.toml</code> says.</p>
 
+<p data-fw-grep="tools/render_check.sh::STATUS=0\nRAY_TEST_MAX_FRAMES=10 &quot;\./\$BIN&quot; &gt; &quot;\$LOG&quot; 2&gt;&amp;1 &lt; /dev/null \|\| STATUS=\$\?">Before
+any of that, it reads how the game ended. The markers are printed before the process exits, and
+two things come after them: a crash while the game shuts down, and LeakSanitizer's report of the
+memory nobody freed, which a sanitized debug build prints at exit. So a report from a sanitizer
+anywhere in the log fails the stage, with the first forty lines of it, and so does an exit status
+other than 0.</p>
+
 <p data-fw-grep="tools/render_check.sh::GOLDEN=tests/fixtures/render_hash\.txt">In the framework,
 the frame is also hashed and compared with <code>tests/fixtures/render_hash.txt</code>. Software
 rendering involves no driver, so the same frame comes out byte for byte on Linux x86-64 and on
@@ -92,11 +104,12 @@ nothing but the clear colour, and after it the frame may already be gone.
 
 <p data-fw-grep="tools/rmp.py::if &quot;RAY_TEST_BOOT_OK assets_failed=0 &quot; not in out:">The smoke
 stage builds the game the ordinary way and runs it with a budget of ten frames
-(<code>RAY_TEST_MAX_FRAMES=10</code>), after which it exits by itself. It passes only if the game
-printed <samp>RAY_TEST_BOOT_OK assets_failed=0</samp> and
-<samp>RAY_TEST_RENDER_OK</samp>. Otherwise it prints the log and says which:
-<samp>the game did not boot, or an asset failed to load</samp>, or <samp>the game booted and drew
-nothing</samp>.</p>
+(<code>RAY_TEST_MAX_FRAMES=10</code>), after which it exits by itself. It passes only if no
+sanitizer reported anything, the game exited with status 0, and it printed
+<samp>RAY_TEST_BOOT_OK assets_failed=0</samp> and <samp>RAY_TEST_RENDER_OK</samp>. Otherwise it
+prints the log, or the report, and says which: <samp>a sanitizer reported the run above (exit
+…)</samp>, <samp>the game exited with status …</samp>, <samp>the game did not boot, or an asset
+failed to load</samp>, or <samp>the game booted and drew nothing</samp>.</p>
 
 <p data-fw-grep="include/rmp/assets.h::nothing in the pack and nothing on disk, or a file that is there and does not\s+// decode">The
 count in <code>assets_failed</code> is of every load that gave nothing usable: a name with nothing
@@ -118,9 +131,11 @@ CI the same markers are read on every target a runner can start, each in the mos
 place available, and every one of those checks wants <code>assets_failed=0</code> on the boot
 line, never the marker alone: a game with every texture missing still opens its window. A test
 reads every workflow, script and tool and fails on a check that looks for the marker without
-it. The Linux desktop builds boot under a virtual X display. The musl build boots
-inside a bare Alpine container with nothing installed, because needing something Alpine does not
-ship is exactly the bug that build can have. The DRM build boots on a virtual kernel display.
+it. The Linux desktop builds boot under a virtual X display. The musl builds boot on Alpine, in
+an image of the framework's own pinned by its digest and with the network off: a software-rendered
+build of the game, and the binary the archive ships, under a virtual X display. What a musl binary
+needs from the system is read out of it rather than proven by a boot — <a href="#binaries">below</a>.
+The DRM build boots on a virtual kernel display.
 Windows boots on its runner with its save folder under a path that is not ASCII, the kind a player
 called José has, and with the compiler off <code>PATH</code>, so that a DLL the runner has and a
 player does not cannot be found. macOS and the BSDs run the render stage under the software renderer. The web build
@@ -154,9 +169,10 @@ says so.</p>
 <h2 id="binaries">What ships, read out of the binary</h2>
 
 <p>A boot on a CI runner proves the game starts on that runner, and a runner is a developer's
-machine with everything installed. Two things a player's machine can lack are invisible from there
-and written in the binary itself, so CI reads them out of it with
-<code>tools/binary_check.py</code>, which needs nothing but Python's standard library:</p>
+machine with everything installed. What a player's machine has to give the game is invisible from
+there and written in the binary itself, and so is what a release was linked with, so CI reads them
+out of it with <code>tools/binary_check.py</code>, which needs nothing but Python's standard
+library:</p>
 
 <ul>
 <li data-fw-grep="tools/binary_check.py::def check_windows\(paths"><strong>What a Windows <code>.exe</code>
@@ -169,12 +185,24 @@ shows.</li>
 The macOS job reads the deployment target back out of the CMake cache, then the minimum macOS out
 of every slice of the universal binary, and fails on a slice that asks for more — allowing 11.0 for
 arm64, which the toolchain raises any lower target to.</li>
+<li data-fw-grep="tools/binary_check.py::def check_elf\(paths: list\[str\], pie: bool = False, musl: bool = False\)"><strong>How
+a Linux binary was linked.</strong> Every Linux job reads its release before UPX packs it: the
+relocated data read-only once the loader is done (RELRO), every symbol bound at start
+(BIND_NOW), a stack that is not executable, and — the release being linked position-independent —
+an executable ASLR can move. A flag a toolchain ignored was never there, and this is where that
+shows.</li>
+<li data-fw-grep="tools/binary_check.py::def musl_findings\(elf: Elf\)"><strong>What a musl
+binary asks the system for.</strong> With <code>--musl</code>, its interpreter has to be musl's
+loader and the one library it names musl's <code>libc.so</code>, or it has to be static and name
+neither. A boot cannot say this: the Alpine it boots on has what the shipped binary needs, and a
+static binary would boot on any Linux.</li>
 </ul>
 
 <p data-fw-grep="tests/binary_check_test.py::The binaries are built here, byte by byte, rather than committed">The
 readers are tested by the <code>binaries</code> stage, <code>tests/binary_check_test.py</code>,
 against binaries it builds byte by byte rather than commits: an <code>.exe</code> with an import
-table, a delay-load table and an icon group, and a universal Mach-O with a minimum per slice. Among
+table, a delay-load table and an icon group, a universal Mach-O with a minimum per slice, and ELF
+files with and without each of the things the Linux reader asks for. Among
 them are the shapes a broken build really has — a MinGW build that imports
 <code>libstdc++-6.dll</code>, an MSVC one with the dynamic runtime that imports
 <code>VCRUNTIME140.dll</code>, a Mac binary that asks for its build machine's macOS in both slices —
@@ -226,12 +254,25 @@ not finished.</p>
 
 <h2 id="sanitize">Sanitizers</h2>
 
-<p>A test asserts what it can see, and undefined behaviour is what a test cannot see: a signed
-overflow that wraps to a harmless number, a read one past the end that finds a zero.
-<code>rmp test sanitize</code> builds the unit tests again, in a build directory of their own,
-under AddressSanitizer and UndefinedBehaviorSanitizer, and makes every report fatal. The few
-reports it does not raise are listed in <code>tools/sanitize_ignore.txt</code>, each with its
-reason, and the list may only name vendored code, never the framework's.</p>
+<p data-fw-grep="cmake/sanitize.cmake::&quot;undefined&quot;\. The framework lists both, so its Debug builds always have them;">A
+test asserts what it can see, and undefined behaviour is what a test cannot see: a signed overflow
+that wraps to a harmless number, a read one past the end that finds a zero. So every debug build of
+the framework — the library, every example and every test — runs under AddressSanitizer and
+UndefinedBehaviorSanitizer, with LeakSanitizer on Linux, because the framework's own
+<a href="/manual/basics/configuration.html#sanitizers"><code>[dev] sanitize</code></a> lists both;
+every report is fatal. The unit tests, the layout test, the render stage and the smoke stage all
+run that way, and the boots read the report as well as the exit status. In CI those jobs set
+<code>RMP_REQUIRE_SANITIZERS=1</code>, so a runner whose compiler cannot instrument the build fails
+it instead of testing nothing in silence.</p>
+
+<p data-fw-grep="tools/sanitize_check.sh::RMP_REQUIRE_SANITIZERS=1 cmake -S \. -B &quot;\$BUILD&quot; -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \\\s+-DRMP_DEV_TOOLCHAIN=OFF -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g\+\+">That
+run is clang's, the framework's development compiler. <code>rmp test sanitize</code> builds the unit
+tests again with gcc, in a build directory of their own and with warnings as errors: the second
+compiler instruments differently and warns about other things. The clang builds leave alone what
+<code>cmake/sanitize_ignore.txt</code> lists, each line with its reason, and the list may only name
+vendored code, never the framework's. <code>tests/sanitize_test.cpp</code> holds the whole
+arrangement to what it promises: it runs a small program that leaks, overflows a buffer and
+overflows an integer on request, and each one has to be reported.</p>
 
 <h2 id="gates">The gates</h2>
 
@@ -249,13 +290,16 @@ a mistake that could be described precisely enough for a machine to reject it:</
 <tr><td><code>portable</code></td><td>a script uses something macOS's old bash or the BSDs do not have, or the BSD jobs' inline script is not plain ASCII</td></tr>
 <tr><td><code>shell</code></td><td>a script writes <code>A &amp;&amp; B || C</code>, which runs <code>C</code> when <code>B</code> fails</td></tr>
 <tr><td><code>naming</code></td><td>a name breaks the <a href="/framework/why/naming.html">naming rules</a> in any branch of any <code>#if</code></td></tr>
-<tr><td><code>ownership</code></td><td>the framework allocates or frees memory by hand</td></tr>
+<tr><td><code>style</code></td><td>a rule of the style guide that clang-tidy cannot see is broken in any branch of any <code>#if</code>: a C cast, <code>NULL</code>, a <code>TODO</code>, something newer than the oldest compiler a game is built with, a user-defined literal, <code>i++</code> where <code>++i</code> says the same</td></tr>
+<tr><td><code>ownership</code></td><td>the framework allocates or frees memory by hand, or calls a raylib <code>Load*</code> or <code>Unload*</code> outside the file that owns what it makes</td></tr>
 <tr><td><code>pointers</code></td><td>a declaration a game can name has a raw pointer or a C string in it — <a href="/framework/why/ownership.html#preference">Ownership</a> says what goes there instead</td></tr>
+<tr><td><code>cppcheck</code></td><td>cppcheck, a second static analyser with its own reading of the code, finds anything in <code>src/rmp</code>, or a suppression of one has no reason or no longer matches anything</td></tr>
 <tr><td><code>headers</code></td><td>a public header does not compile on its own, or lacks the <code>.toml</code> values</td></tr>
 <tr><td><code>cost</code></td><td>a public header's preprocessed size moved away from its budget</td></tr>
 <tr><td><code>configure</code></td><td><code>tools/configure.py</code> accepts something it should refuse, or the other way round, or the suite itself leaves a file the checkout generated changed</td></tr>
 <tr><td><code>rmp</code></td><td>the <code>rmp</code> command itself misbehaves — including when a file the framework tracks has not been classified as part of a new game or not</td></tr>
 <tr><td><code>binaries</code></td><td>the readers that judge a shipped <code>.exe</code> and Mac binary misread one — <a href="#binaries">above</a></td></tr>
+<tr><td><code>size</code></td><td><code>tools/size_budget.txt</code> lacks a line for a binary an enabled target ships, has one for a binary nothing ships, or gives a packed size where <code>[upx]</code> packs nothing, or the other way round; or the reader behind it misjudges a size — <a href="/publishing/ci.html#size-budget">Continuous integration</a> says what the budget holds</td></tr>
 </tbody>
 </table>
 
@@ -275,9 +319,10 @@ builds every target, and so can a run started by hand. The Linux jobs run inside
 pinned by digest, with every compiler and tool already in it, so a build does not depend on a
 download succeeding.</p>
 
-<p>The BSD builds run inside virtual machines, and a script that stops early can still exit 0 in
-one. So the script writes a file as its very last act, and the step after it fails if the file is
-not there: nothing inside a script can catch its own early exit.</p>
+<p data-fw-grep=".github/workflows/_bsd.yml::if \[ ! -f build/memory/\.rmp-render-complete \]; then">The
+BSD builds run inside virtual machines, and a script that stops early can still exit 0 in one. So
+the check that ends the script writes a file once it has reached its verdict, and the step after it
+fails if the file is not there: nothing inside a script can catch its own early exit.</p>
 
 <h2 id="in-a-game">In your game</h2>
 
@@ -306,8 +351,12 @@ boot, pixels on the screen and a clean exit. A game has no golden hash: its titl
 author's to change.</dd>
 <dt><code>smoke</code></dt>
 <dd>The game built the ordinary way and booted with a frame budget, which must report every asset
-loaded and a frame drawn.</dd>
+loaded and a frame drawn, and exit with status 0.</dd>
 </dl>
+
+<p>Both are debug builds, and a game's <code>[dev] sanitize</code> is <code>[]</code> until it lists
+a sanitizer: with one listed, a report fails the stage the way it does in the framework. See
+<a href="/manual/basics/configuration.html#sanitizers">Configuration</a>.</p>
 
 <p>A game's CI runs the same stages in its own <code>lint</code> job, and builds its targets the
 way the framework's does. The framework's own tests stay with the framework: they test the
@@ -335,7 +384,7 @@ the boot's to check, in <code>render</code> and <code>smoke</code>.</p>
 
 <pre data-lang="shell">
 rmp test unit
-./build/game_test -tc="*menu*"
+./build/debug/game_test -tc="*menu*"
 </pre>
 
 <p><code>rmp test unit</code> builds the program and runs every case; the program itself takes

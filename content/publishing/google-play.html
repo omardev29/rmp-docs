@@ -117,8 +117,8 @@ export ANDROID_KEY_PASSWORD=...
 cd raymob &amp;&amp; ./gradlew bundleRelease
 </pre>
 
-<p>The bundle is written to <code>build/outputs/bundle/release/</code> inside
-<code>raymob/app/</code>. Without <code>ANDROID_KEYSTORE_FILE</code> it comes out unsigned, which
+<p>Gradle writes the bundle into a build folder of its own,
+<code>raymob/app/build/outputs/bundle/release/</code>. Without <code>ANDROID_KEYSTORE_FILE</code> it comes out unsigned, which
 is fine for a look and refused by Play.</p>
 
 <p data-fw-grep="raymob/settings.gradle::&quot;raymob/generated\.properties is missing\.\\n&quot;">Gradle reads the game's identity from <code>raymob/generated.properties</code>, which only

@@ -283,7 +283,7 @@ velocity going into what pushed it, and keeps the rest. After the notification, 
 alone.</li>
 </ol>
 
-<p data-fw-grep="src/rmp/collision.cpp::if \(a_was\) a\._collision\(b\);\s+if \(a_was\) collide_behaviors\(a, b\);\s+if \(b_was\) b\._collision\(a\);\s+if \(b_was\) collide_behaviors\(b, a\);\s+if \(a_was\) Storage::notify_collision\(a, b\);\s+if \(b_was\) Storage::notify_collision\(b, a\);">For
+<p data-fw-grep="src/rmp/collision.cpp::if \(a_was\) \{\s+a\._collision\(b\);\s+collide_behaviors\(a, b\);\s+\}\s+if \(b_was\) \{\s+b\._collision\(a\);\s+collide_behaviors\(b, a\);\s+\}\s+if \(a_was\) Storage::notify_collision\(a, b\);\s+if \(b_was\) Storage::notify_collision\(b, a\);">For
 each touching pair, once per frame and whether or not either is solid, the notification goes to
 both sides in this order: the first object's
 <a href="ref:rmp::Object::_collision"><code>_collision</code></a>, then its behaviors', then the
@@ -414,7 +414,7 @@ there is a <code>resources/</code> folder there, before the pack is opened, and 
 the same from anywhere. A change of
 directory rather than an absolute path, so a plain raylib <code>LoadTexture()</code> of a
 <code>RMP_RESOURCES_PATH</code> path keeps working too. Without a <code>resources/</code> beside
-it — a release run from the source tree, whose executable is in <code>build/</code> — it keeps the
+it — a release run from the source tree, whose executable is in <code>build/release/</code> — it keeps the
 working directory. NetBSD and OpenBSD cannot say where an executable is, so there it keeps the
 working directory and logs <samp>ASSETS: this system does not say where the executable is, so …
 is read from the working directory, …</samp>.</p>

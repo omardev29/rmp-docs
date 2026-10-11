@@ -167,6 +167,15 @@ objects one <code>Spawner</code> keeps track of, is a constant of <code>rmp::beh
 Outside the cases above, that is the rule: a value the framework defines is a constant in a
 namespace, where it cannot collide with anything.</p>
 
+<p data-fw-grep=".clang-tidy::key: cppcoreguidelines-macro-usage\.AllowedRegexp">Both halves are
+checked. clang-tidy's <code>cppcoreguidelines-macro-usage</code> refuses a macro of the
+framework's that is not one of the cases above — it is told their names, and a new one is a
+question for review, not something to slip past it. And a query of the framework's own
+<code>.clang-tidy</code> refuses a constant at namespace scope in a header that is not
+<code>inline constexpr</code>: a plain <code>const</code> or <code>constexpr</code> there is a
+copy in every file that includes it, where <code>inline</code> makes it one object for the whole
+program.</p>
+
 <h2 id="names">One namespace for every macro</h2>
 
 <p>The preprocessor has a single namespace, shared by raylib, the C library, every vendored

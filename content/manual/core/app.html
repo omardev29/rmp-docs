@@ -93,7 +93,7 @@ game starts the same from anywhere, and plain raylib calls with relative paths, 
 <code>LoadTexture(RMP_RESOURCES_PATH "x.png")</code>, find their files too.</p>
 
 <p>When the executable's folder has no <code>resources/</code> — a release built in the project and
-started from the project's root, with the executable in <code>build/</code> — the game keeps the
+started from the project's root, with the executable in <code>build/release/</code> — the game keeps the
 folder it was started from and says so in its log. On NetBSD and OpenBSD raylib's
 <code>GetApplicationDirectory()</code>, which the framework asks, has no code and answers nothing, so
 a release there always reads <code>resources/</code> from the folder it was started from, and logs
@@ -256,7 +256,7 @@ enemies of a level and exactly wrong for the player's best score. The second kin
 
 <pre data-lang="cpp" data-harness="function" data-given="struct Progress { int best_score = 0; int runs = 0; };
 static int score = 0;">
-rmp::global&lt;Progress&gt;().runs++;
+++rmp::global&lt;Progress&gt;().runs;
 
 Progress &amp;progress = rmp::global&lt;Progress&gt;();
 if (score &gt; progress.best_score) progress.best_score = score;

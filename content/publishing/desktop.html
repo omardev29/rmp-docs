@@ -1,6 +1,6 @@
 <!--
 title: Desktop and BSD archives
-description: What is in the zip CI makes for each Windows, macOS, Linux and BSD target, what each asks of a player's machine — no DLL, macOS 10.15, the Linux glibc floor — and what compressing with UPX costs.
+description: What is in the zip CI makes for each Windows, macOS, Linux and BSD target, what each asks of a player's machine — no DLL, macOS 10.15, the Linux glibc floor — what it is hardened with, and what compressing with UPX costs.
 order: 20
 -->
 <h1>Desktop and BSD archives</h1>
@@ -93,6 +93,46 @@ starts that one from its own folder and requires the log line above instead. The
 they ship and start it from another folder, the Windows job starts the <code>.exe</code> from one,
 and the musl and DRM runs start it from <code>/</code>.</p>
 
+<h2 id="hardening">Built to be hard to exploit</h2>
+
+<p data-fw-grep="CMakeLists.txt::if\(PRODUCTION_BUILD AND NOT MSVC AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS\)">A
+game reads files a player can change — its saves, its assets — and a memory mistake that a
+debug build's <a href="/manual/basics/configuration.html#sanitizers">sanitizers</a> did not meet is
+still in the release. So a release is compiled and linked with what makes such a mistake harder to
+turn into anything worse, and each flag is checked against the toolchain first: one it does not
+take is left out, never a broken build, and the configure log lists what was applied, after
+<code>=== RELEASE HARDENING:</code>.</p>
+
+<ul>
+<li><strong>Linux, macOS and the BSDs:</strong> the stack protector,
+<code>-fstack-protector-strong</code>, and the cheap bounds checks of the C++ library, libstdc++'s
+and libc++'s.</li>
+<li><strong>Linux and the BSDs</strong>, on top of that: stack-clash protection; relocations made
+read-only once the loader is done, and every symbol bound at start (RELRO and BIND_NOW); a stack
+that is not executable; and <code>_FORTIFY_SOURCE</code> where the C library is glibc. And the
+executable is position-independent, so that ASLR moves it too and not only the libraries around
+it.</li>
+<li><strong>Windows:</strong> MSVC's defaults are the stack protector, ASLR, data execution
+prevention and high-entropy addresses. MinGW is asked for the last three, which its linker gives by
+default anyway, and not for the stack protector, which there can mean shipping a DLL beside the
+game.</li>
+<li><strong>macOS, iOS and Android</strong> are position-independent by the platform's rule, and
+Android's toolchain adds the stack protector and <code>_FORTIFY_SOURCE</code> by itself. The web
+has no stack to execute and no loader to move.</li>
+</ul>
+
+<p data-fw-grep="CMakeLists.txt::option\(RMP_RELEASE_PIE &quot;Link a Linux or BSD release position-independent \(\+5\.5% on linux-x64-glibc\)&quot; ON\)">Each
+one was measured on <code>linux-x64-glibc</code> before it went in, and they cost about 2% of the
+binary together. Position independence costs 5.5% more, mostly in the relocations the loader has to
+apply, and is on all the same: without it the executable sits at the same address on every run.
+<code>-DRMP_RELEASE_PIE=OFF</code> exists to measure that, not to ship. Every Linux job then reads
+what the linker made of it off the binary, with <code>tools/binary_check.py elf</code>, and fails
+on a release that lacks any of it:</p>
+
+<pre data-lang="shell">
+python3 tools/binary_check.py elf --pie build/release/my_game
+</pre>
+
 <h2 id="where-the-saves-go">Where the saves go</h2>
 
 <p><a href="ref:rmp::save"><code>rmp::save</code></a> writes into one of two places, chosen by
@@ -184,7 +224,7 @@ built that way and checked. The rest are built differently:</p>
 <li><strong>DRM</strong> links the system's <code>libdrm</code>, <code>libgbm</code> and
 <code>libEGL</code> directly, and those were built against the build machine's glibc, so its floor
 is the build machine's. Its job prints the floor the binary really has, on every run.</li>
-<li data-fw-grep=".github/workflows/_linux.yml::# Held to its OWN floor, not \[linux\] glibc's\. This target is\n      # cross-compiled with the image's riscv64 GNU toolchain[\s\S]*?run: bash tools/glibc_check\.sh build/\$\{\{ inputs\.project_name \}\} 2\.38\n\n      - name: Test \(static\) — binary exists, is RISC-V ELF"><strong><code>linux-riscv64-glibc</code></strong> is built with the cross compiler in CI's
+<li data-fw-grep=".github/workflows/_linux.yml::# Held to its OWN floor, not \[linux\] glibc's\. This target is\n      # cross-compiled with the image's riscv64 GNU toolchain[\s\S]*?run: bash tools/glibc_check\.sh build/release/\$\{\{ inputs\.project_name \}\} 2\.38\n\n      # The hardening[\s\S]*?- name: Test \(static\) — binary exists, is RISC-V ELF"><strong><code>linux-riscv64-glibc</code></strong> is built with the cross compiler in CI's
 image against that image's own riscv64 glibc, Ubuntu 24.04's, so <code>[linux] glibc</code> does
 not reach it. <span data-fw-grep="raylib_multiplatform.toml::linux-riscv64-glibc is cross-compiled with the distribution's GNU\n#        toolchain against Ubuntu 24\.04's glibc, and needs glibc 2\.38 or newer\n#        \(Ubuntu 24\.04, Debian 13 and Fedora 39 have it; Debian 12 and Ubuntu\n#        22\.04 do not\)">It needs glibc 2.38 or newer: Ubuntu 24.04, Debian 13 and Fedora 39 have
 it, Debian 12 and Ubuntu 22.04 do not.</span> Its job holds it to that floor of its own and fails
@@ -273,9 +313,12 @@ and not on itch.io, which has no BSD platform.</p>
 
 <h2 id="compressing-with-upx">Compressing with UPX</h2>
 
-<p>UPX compresses an executable into one that unpacks itself in memory when it starts. On this
-framework's own game it makes the binary about three quarters smaller, at the cost of a few
-milliseconds at every launch. <code>[upx]</code> says which targets get it:</p>
+<p data-fw-grep="raylib_multiplatform.toml::1 234 656 bytes\n# down to 365 836, a 70 % cut">UPX
+compresses an executable into one that unpacks itself in memory when it starts, at the cost of a
+few milliseconds at every launch. On this framework's own game, built the way CI builds it, it
+takes <code>linux-x64-glibc</code> from 1 234 656 bytes to 365 836, 70% smaller, and
+<code>linux-x64-glibc-drm</code>, which links its graphics libraries instead of carrying them, 58%.
+<code>[upx]</code> says which targets get it:</p>
 
 <pre data-lang="toml" data-file="raylib_multiplatform.toml">
 [upx]
@@ -283,11 +326,12 @@ enabled  = ["linux"]
 disabled = ["linux-riscv64-glibc"]
 </pre>
 
-<p data-fw-grep="tools/configure.py::.upx.: \{.enabled.: \[.linux-x64-glibc., .linux-arm64-glibc.\]">Groups expand and <code>disabled</code> is taken away afterwards, like <code>[targets]</code>.
+<p data-fw-grep="tools/configure.py::&quot;upx&quot;: \{&quot;enabled&quot;: \[&quot;linux-x64-glibc&quot;, &quot;linux-arm64-glibc&quot;, &quot;linux-x64-musl&quot;,\s+&quot;linux-x64-glibc-drm&quot;\]">Groups expand and <code>disabled</code> is taken away afterwards, like <code>[targets]</code>.
 The groups here are <code>all</code>, <code>linux</code>, <code>windows</code> and
 <code>bsd</code>, and <code>all</code> means every target that can be compressed — not every
-target. The default is <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code>. To turn
-compression off, empty <code>enabled</code>.</p>
+target. The default is <code>linux-x64-glibc</code>, <code>linux-arm64-glibc</code>,
+<code>linux-x64-musl</code> and <code>linux-x64-glibc-drm</code>. To turn compression off, empty
+<code>enabled</code>.</p>
 
 <p>Each target that cannot be compressed has its own reason, and naming one, in either list, is
 an error that says it, not a setting that quietly does nothing:</p>
@@ -342,10 +386,13 @@ max_size_mb = 0
 <code>upx -t</code> before it goes into the zip. The version is pinned with a checksum in
 <code>thirdparty/FROZEN_VERSIONS.md</code>.</p>
 
-<p data-fw-grep=".github/workflows/_linux.yml::It is\n      # also the binary that ships, so a \[upx\]-packed one is started here\.">The default is exactly the targets whose packed binary CI starts: the
-<code>linux-x64-glibc</code> job unzips the archive it ships, compressed, and starts it on every
-push, and the <code>linux-arm64-glibc</code> job does the same on a full run, on a runner of its
-own architecture. On every other target, what CI starts is the binary before the packaging step
-compresses it, or a separate software-rendered build, or nothing, so a binary compressed there is
-checked by <code>upx -t</code> and never started. UPX supports those targets; turning it on for
-one ships a packed binary whose launch nothing has seen.</p>
+<p data-fw-grep="raylib_multiplatform.toml::THE DEFAULT IS EXACTLY THE TARGETS WHOSE PACKED BINARY CI STARTS\. Each of\n# these four jobs unzips the archive it ships">The
+default is exactly the targets whose packed binary CI starts. Each of those four jobs unzips the
+archive it ships, compressed, starts what is in it and checks it draws:
+<code>linux-x64-glibc</code> on every push, under a virtual X server; and on a full run
+<code>linux-arm64-glibc</code> on a runner of its own architecture, <code>linux-x64-musl</code> on
+Alpine under a virtual X server, and <code>linux-x64-glibc-drm</code> on a virtual DRM display. So
+a compressed binary that does not launch is a red run. Every other target is started before
+packaging compresses it, or as a separate software-rendered build, or not at all, so a binary
+compressed there is checked by <code>upx -t</code> and never started. UPX supports those targets; turning it on for one ships a packed binary whose launch
+nothing has seen.</p>

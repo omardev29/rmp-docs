@@ -28,7 +28,7 @@ one and cannot read them.</p>
 <table>
 <thead><tr><th>It writes</th><th>Which is read by</th></tr></thead>
 <tbody>
-<tr><td><code>cmake/generated/</code></td><td>CMake: the project name, which raylib modules to build, the development compiler and linker, the web build's memory, the Windows icon.</td></tr>
+<tr><td><code>cmake/generated/</code></td><td>CMake: the project name, which raylib modules to build, the compiler, linker and sanitizers of debug builds, the web build's memory, the Windows icon.</td></tr>
 <tr><td><code>rmp/config.h</code>, generated</td><td>Your C and C++: the <code>RMP_</code> values, such as <code>RMP_WINDOW_WIDTH</code>.</td></tr>
 <tr><td><code>raymob/generated.properties</code> and the manifest</td><td>Gradle: the application id, the SDK levels, the permissions, the orientation, the OpenGL ES version the game is compiled for, whether AdMob is in the build.</td></tr>
 <tr><td><code>ios/project.yml</code></td><td>XcodeGen, which makes the Xcode project: the bundle id, the deployment target, your <code>[ios.settings]</code>.</td></tr>
@@ -219,9 +219,9 @@ defaults.</p>
 <tr><td><a href="/reference/configuration.html#section-resources"><code>[resources]</code></a></td><td>The password the asset pack is encrypted with.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-raylib"><code>[raylib]</code></a></td><td>raylib modules a game does not use, left out to shrink the binary.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-web"><code>[web]</code></a></td><td>The browser build's memory, whether it may grow, and which layer raylib talks to.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-linux"><code>[linux]</code></a>, <a href="/reference/configuration.html#section-windows"><code>[windows]</code></a></td><td data-fw-grep=".github/workflows/_linux.yml::^  riscv64:\n(?:(?!^  \S)[\s\S])*?- name: The glibc it needs, against the floor the \.toml gives it\s+run: bash tools/glibc_check\.sh build/\$\{\{ inputs\.project_name \}\} 2\.38">The windowing backend on each, native Wayland, and the oldest glibc the <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code> binaries may need. <code>linux-riscv64-glibc</code> is cross-compiled against Ubuntu 24.04's glibc and needs 2.38, which its CI job holds it to.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-linux"><code>[linux]</code></a>, <a href="/reference/configuration.html#section-windows"><code>[windows]</code></a></td><td data-fw-grep=".github/workflows/_linux.yml::^  riscv64:\n(?:(?!^  \S)[\s\S])*?- name: The glibc it needs, against the floor the \.toml gives it\s+run: bash tools/glibc_check\.sh build/release/\$\{\{ inputs\.project_name \}\} 2\.38">The windowing backend on each, native Wayland, and the oldest glibc the <code>linux-x64-glibc</code> and <code>linux-arm64-glibc</code> binaries may need. <code>linux-riscv64-glibc</code> is cross-compiled against Ubuntu 24.04's glibc and needs 2.38, which its CI job holds it to.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-upx"><code>[upx]</code></a></td><td>Which shipped binaries are compressed with UPX. A target that cannot be compressed is refused by name, with the reason.</td></tr>
-<tr><td><a href="/reference/configuration.html#section-dev"><code>[dev]</code></a></td><td>Debug builds only: their compiler and linker, and whether a framework warning aborts them. The debug builds CI runs its checks with read it too; the release and web builds that ship never do.</td></tr>
+<tr><td><a href="/reference/configuration.html#section-dev"><code>[dev]</code></a></td><td>Debug builds only: their compiler and linker, whether a framework warning aborts them, and the sanitizers they run under. The debug builds CI runs its checks with read it too; the release and web builds that ship never do.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-ci"><code>[ci]</code></a></td><td>Whether CI runs on every push and every pull request, or only on a release tag and when you start it by hand. See <a href="/publishing/ci.html#on-push">Continuous integration</a>.</td></tr>
 <tr><td><a href="/reference/configuration.html#section-deploy"><code>[deploy]</code></a>, <a href="/reference/configuration.html#section-deploy-itch"><code>[deploy.itch]</code></a>, <a href="/reference/configuration.html#section-deploy-firebase"><code>[deploy.firebase]</code></a></td><td>Whether a <code>LICENSES.txt</code> ships with the game, where a release is published on itch.io, and the Firebase project whose Test Lab runs the Android build and taps through it.</td></tr>
 </tbody>
@@ -334,3 +334,72 @@ debugger, at the line that caused it. Release builds compile that check out.</p>
 the software render check in a game's own CI is one, booting the game for a few frames — and those
 read <code>[dev]</code> exactly as yours do. So with <code>strict = true</code>, a warning the game
 triggers while CI boots it aborts the game and fails the check.</p>
+
+<h3 id="sanitizers">[dev] sanitize: a debug build that checks memory</h3>
+
+<p data-fw-grep="tools/configure.py::SANITIZERS = \{&quot;address&quot;, &quot;undefined&quot;\}">A test sees what
+it asserts, and a read one past the end of an array that happens to find a zero passes every test
+there is. <code>[dev] sanitize</code> lists what a debug build is instrumented with to catch that
+kind of mistake where it happens instead of where it crashes, and each report stops the game at
+the line that did it, with the stack that got there:</p>
+
+<ul>
+<li><code>"address"</code>, AddressSanitizer: a read or a write past a buffer, a use after free or
+after return, and on Linux, through LeakSanitizer, memory nobody freed, reported when the game
+exits. About twice as slow, and three times the memory.</li>
+<li><code>"undefined"</code>, UndefinedBehaviorSanitizer: a signed overflow, a shift past the
+width, a float cast to an int it does not fit, a misaligned or null access. Cheap.</li>
+</ul>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[dev]
+sanitize = ["address", "undefined"]
+</pre>
+
+<p data-fw-grep="tools/configure.py::&quot;dev&quot;: \{&quot;compiler&quot;: &quot;clang&quot;, &quot;linker&quot;: &quot;auto&quot;, &quot;strict&quot;: False, &quot;sanitize&quot;: \[\]\}">A
+game starts with <code>sanitize = []</code>, none: turning them on is its author's choice. The
+framework lists both, so every debug build of its own — the library, the examples and every test —
+runs under them. Release, web, Android and iOS builds never read the key.</p>
+
+<p data-fw-grep="cmake/sanitize.cmake::if\(&quot;\$ENV\{RMP_REQUIRE_SANITIZERS\}&quot; STREQUAL &quot;1&quot;\)\s+message\(FATAL_ERROR">Whether
+the compiler can give a sanitizer is decided when the build is configured, by building a small
+program with it and running it, because a compiler can accept the flag and then have no runtime to
+link. A sanitizer that does not run is the machine's problem and not the <code>.toml</code>'s: the
+debug build goes on without it and says so in a warning, naming what brings it — on Linux, clang
+needs compiler-rt, <code>libclang-rt-&lt;N&gt;-dev</code> on Debian and Ubuntu, and gcc's runtimes
+come with most distributions. With <code>RMP_REQUIRE_SANITIZERS=1</code> in the environment the
+same configure fails instead, and the software-render check of CI's <code>lint</code> job sets it,
+so a sanitizer the <code>.toml</code> lists is never quietly missing there. <code>cmake --preset debug -DRMP_SANITIZE=OFF</code> turns them
+off for one build folder, to measure what they cost.</p>
+
+<p data-fw-grep="cmake/sanitize.cmake::\[dev\] sanitize: UBSan runs WITHOUT its vptr check here">A
+runtime can also have part of a sanitizer. The probe calls a virtual function, which is what
+UndefinedBehaviorSanitizer's check of dynamic types needs, and NetBSD's GCC has no runtime for that
+one check: there a debug build keeps every other check of <code>"undefined"</code>, and of
+<code>"address"</code>, leaves out that one, and says so in a warning.</p>
+
+<p data-fw-grep="tools/configure.py::SANITIZE_REFUSED = \{">What can never work is
+refused in <code>configure.py</code>, with its reason. Every other sanitizer a compiler knows —
+<code>thread</code>, <code>memory</code>, <code>leak</code>, <code>hwaddress</code>,
+<code>integer</code>, <code>implicit-conversion</code> and <code>fuzzer</code> — is refused by
+name, saying why it does not fit a game:</p>
+
+<pre data-lang="toml" data-expect="reject">
+[dev]
+sanitize = ["thread"]
+</pre>
+
+<p>So is a pair that cannot work together: <code>"undefined"</code> with
+<code>[dev] compiler = "msvc"</code>, whose <code>/fsanitize</code> has address only; any
+sanitizer with <code>"mingw"</code>, whose GCC ships no runtime; and <code>"address"</code> on
+OpenBSD, whose clang has no AddressSanitizer.</p>
+
+<p data-fw-grep="tools/render_check.sh::if grep -qE 'ERROR: \(AddressSanitizer\|LeakSanitizer\)\|runtime error:' &quot;\$LOG&quot;; then">A
+report fails the checks that boot the game in debug. <code>rmp test smoke</code>, <code>rmp test
+render</code> and the software-render check in CI read the game's output for one and its exit
+status as well, because a leak is reported after the game has printed everything else; they stop
+with <samp>a sanitizer reported the run above (exit …)</samp> and the first forty lines of the
+report. Code that has to know — a timing test that allows for the slowdown — can ask
+<code>#if defined(RMP_SANITIZE)</code>, and <code>RMP_SANITIZE_ADDRESS</code> or
+<code>RMP_SANITIZE_UNDEFINED</code> for one of them; the build defines each for what it
+applied.</p>

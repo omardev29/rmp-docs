@@ -264,11 +264,32 @@ files back with git before building again.</p>
 <h2>What CI checks</h2>
 
 <p>Android is in the fast lane. On every push CI builds the debug APK and checks it holds a manifest
-and the native library; builds the release AAB, signs it and verifies the signature; checks from the
-compiler's own records that the release was compiled as a release; and checks that Gradle put back
-every source it rewrote. It does not run the game: an Android emulator on a CI runner is slow and
+and the native library; builds the release AAB, signs it and verifies the signature; holds each
+ABI's native library to its line of the <a href="/publishing/ci.html#size-budget">size budget</a>,
+once the game has one; checks from the compiler's own records that the release was compiled as a
+release; and checks that Gradle put back every source it rewrote. It does not run the game: an Android emulator on a CI runner is slow and
 fails for reasons that have nothing to do with the game. A release can also send the debug APK to
 Firebase Test Lab, to be started on one of its devices — by default MediumPhone.arm, an Arm virtual
 device — and crawled by its Robo test, which taps whatever
 is on the screen — the debug APK and never the release, because the debug build shows only Google's
 test ads. See <a href="/publishing/index.html">Publishing</a>.</p>
+
+<h3 id="gradle-in-ci">Gradle in CI</h3>
+
+<p data-fw-grep=".github/workflows/_android.yml::OFFLINE=\$\(sed -n 's/\^gradle\\\.offline=//p' raymob/generated\.properties\)">CI's
+Android job downloads nothing. Gradle, the Android build plugin and every library the app builds
+with — the AdMob SDK too, for a game that turns ads on — come from a Gradle home warmed for them in
+the build image, and
+Gradle runs with <code>--offline</code>, so a library the image lacks fails the build at once, by
+name. Before that, a step checks that the Gradle the wrapper asks for is in the image, because
+<code>--offline</code> does not reach the wrapper. A game that adds a Gradle dependency of its own
+turns it off:</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[android]
+gradle_offline = false
+</pre>
+
+<p>Then Gradle downloads what the image lacks, and the job says so in a warning. <code>rmp
+android</code> is never offline: on your machine Gradle downloads what it needs, as it always
+does.</p>

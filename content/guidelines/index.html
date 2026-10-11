@@ -45,8 +45,18 @@ not remembered</a> lists the rules the framework's tools hold today.</p>
 game made with <code>rmp new</code> gets <code>.clang-format</code>, so <code>rmp fmt</code> formats
 it the framework's way, and the one compiler flag the framework hands every target that links it:
 under Clang, designated initialisers out of declaration order are an error, as they already are
-under GCC and MSVC. It does not get the framework's <code>.clang-tidy</code>: <code>rmp lint</code>
-is a command of the framework's own repository, and a game chooses its own checks.</p>
+under GCC and MSVC. It does not get the framework's <code>.clang-tidy</code>, its style gates or its
+cppcheck: <code>rmp lint</code> is a command of the framework's own repository, and a game chooses
+its own checks.</p>
+
+<p data-fw-grep="CMakeLists.txt::function\(rmp_apply_warnings target\)[\s\S]*?-Wall -Wextra -Wno-missing-field-initializers">The
+game's own code is compiled with the warnings the framework's is, <code>-Wall -Wextra</code> under
+GCC and Clang, and with <code>-Wno-missing-field-initializers</code>, because leaving fields of an
+options struct out — <code>{ .width = 8 }</code> — is how the API is written. They stay warnings: a
+newer compiler on its author's machine must not stop a game's build that was fine yesterday. The
+framework's own checks build with <code>RMP_WERROR</code>, which makes them errors; a game can
+configure with <code>-DRMP_WERROR=ON</code> for the same. The vendored libraries are included as
+system headers, so the warnings are about the game's code and not about theirs.</p>
 
 <h2 id="the-pages">The pages</h2>
 

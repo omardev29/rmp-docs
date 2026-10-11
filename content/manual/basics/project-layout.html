@@ -171,7 +171,7 @@ the desktops, and compiled into the game on Android and iOS, whose builds take e
 <code>src/</code>. With it gone there is no <code>rmp</code> library, and none is built; a C++ file
 left in <code>src/</code> without it stops the configure with a message that says so.</p>
 
-<p data-fw-grep="CMakeLists.txt::if\(_plain_c\)\s+add_executable\(\$\{NAME\} \$\{_game_sources\}\)[\s\S]*?target_include_directories\(\$\{NAME\} PRIVATE &quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/include&quot;\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/tests&quot;\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/thirdparty/raymob&quot;\)">What
+<p data-fw-grep="CMakeLists.txt::if\(_plain_c\)\s+add_executable\(\$\{NAME\} \$\{_game_sources\}\)[\s\S]*?target_include_directories\(\$\{NAME\} PRIVATE &quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/include&quot;\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/tests&quot;\)\s+target_include_directories\(\$\{NAME\} SYSTEM PRIVATE\s+&quot;\$\{CMAKE_CURRENT_SOURCE_DIR\}/thirdparty/raymob&quot;\)">What
 the C game still includes is written in C, and on its include path on every target:
 <code>rmp/config.h</code> for the <code>.toml</code>'s values, which is why <code>include/rmp/</code>
 stays, <code>tests/smoke_test.h</code> for the boot checks CI runs, and <code>&lt;admob.h&gt;</code>,
@@ -238,11 +238,11 @@ with the <code>.toml</code>, and <code>git status</code> stays clean after a bui
 <table>
 <thead><tr><th>Generated</th><th>For</th></tr></thead>
 <tbody>
-<tr><td><code>cmake/generated/</code></td><td>CMake: the project name, raylib's module switches, the linker and compiler for development builds, the Windows icon, the <code>LICENSES.txt</code> of each family of targets.</td></tr>
+<tr><td><code>cmake/generated/</code></td><td>CMake: the project name, raylib's module switches, the compiler, linker and sanitizers of debug builds, the Windows icon, the <code>LICENSES.txt</code> of each family of targets.</td></tr>
 <tr><td><code>include/rmp/generated/</code></td><td>C and C++: the <code>config.h</code> that holds the <code>RMP_</code> values. See <a href="/manual/basics/headers.html#rmp-config-h">Headers</a>.</td></tr>
 <tr><td><code>raymob/generated.properties</code>, <code>raymob/app/generated/</code></td><td>Gradle: the Android properties and the manifest.</td></tr>
 <tr><td><code>ios/project.yml</code></td><td>XcodeGen: the iOS project.</td></tr>
-<tr><td><code>build/</code></td><td>Everything compiled: <code>build/</code> for debug and release, <code>build/web/</code> for the browser.</td></tr>
+<tr><td><code>build/</code></td><td data-fw-grep="tools/rmp.py::BUILD_DIRS = \{\s+&quot;debug&quot;: [^\n]*\s+&quot;release&quot;: [^\n]*\s+&quot;web&quot;: ">Everything compiled, one folder per build: <code>build/debug/</code>, <code>build/release/</code>, <code>build/web/</code> for the browser, <code>build/memory/</code> for the software-rendered check.</td></tr>
 </tbody>
 </table>
 
@@ -254,7 +254,7 @@ with the <code>.toml</code>, and <code>git status</code> stays clean after a bui
 <a href="/reference/configuration.html#ci-on_push"><code>[ci] on_push</code></a>.
 <a href="/publishing/ci.html#when-it-runs">Continuous integration</a> explains it.</p>
 
-<p data-fw-grep="tools/rmp.py::CLEAN_PATHS = \(&quot;build&quot;, &quot;raymob/app/generated&quot;, &quot;raymob/generated\.properties&quot;,\s+&quot;cmake/generated&quot;, &quot;include/rmp/generated&quot;, &quot;ios/project\.yml&quot;\)"><code>rmp clean</code> deletes <code>build/</code> and every generated file except the Android and iOS
+<p data-fw-grep="tools/rmp.py::BUILD_ROOT = &quot;build&quot;[\s\S]*?CLEAN_PATHS = \(BUILD_ROOT, &quot;raymob/app/generated&quot;, &quot;raymob/generated\.properties&quot;,\s+&quot;cmake/generated&quot;, &quot;include/rmp/generated&quot;, &quot;ios/project\.yml&quot;\)"><code>rmp clean</code> deletes <code>build/</code> and every generated file except the Android and iOS
 icons, which stay because making the Android ones again needs Pillow. The Windows icon lives in
 <code>cmake/generated/</code> and is deleted with it, so after a clean a machine without Pillow builds
 an <code>.exe</code> with no icon. The next build makes the rest again. Gradle and XcodeGen

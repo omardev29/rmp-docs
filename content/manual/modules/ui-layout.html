@@ -336,7 +336,7 @@ size onto a longer list:</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="static int level_count = 30; void play_level(int);">
 rmp::ui::scroll({ .height = 200, .id = "levels" }, [&amp;] {
-    for (int i = 1; i &lt;= level_count; i++) {
+    for (int i = 1; i &lt;= level_count; ++i) {
         if (rmp::ui::button("Level " + std::to_string(i))) play_level(i);
     }
 });

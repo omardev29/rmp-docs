@@ -195,7 +195,7 @@ different control with nothing in your code having changed. The
 <code>id</code> field is the escape: a name that is the same control whatever else is on screen.</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="struct Slot { std::string name; bool used; }; static Slot slots[3]; void erase(int);">
-for (int i = 0; i &lt; 3; i++) {
+for (int i = 0; i &lt; 3; ++i) {
     if (!slots[i].used) continue;
     rmp::ui::text(slots[i].name);
     const std::string id = "erase" + std::to_string(i);

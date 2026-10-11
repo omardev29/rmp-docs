@@ -215,7 +215,7 @@ rebuilds nothing.</p>
 <tbody>
 <tr><td><code>cmake/generated/project.cmake</code></td><td>the project name, the pack password, the web memory settings, the windowing backend per platform</td><td>the top of <code>CMakeLists.txt</code>, before <code>project()</code></td></tr>
 <tr><td><code>cmake/generated/raylib_flags.cmake</code></td><td>raylib's complete set of feature flags, with the modules <code>[raylib] disabled_modules</code> removed</td><td>CMake, and the Android build's own CMake</td></tr>
-<tr><td><code>cmake/generated/dev_toolchain.cmake</code> and <code>dev_linker.cmake</code></td><td>the compiler and linker from <code>[dev]</code></td><td>debug builds only: a release never reads them</td></tr>
+<tr><td><code>cmake/generated/dev_toolchain.cmake</code>, <code>dev_linker.cmake</code> and <code>dev_sanitize.cmake</code></td><td>the compiler, the linker and the sanitizers from <code>[dev]</code></td><td>debug builds only: a release never reads them</td></tr>
 <tr><td><code>cmake/generated/rmp_web_name.js</code></td><td>the name of the game's save database in the browser</td><td>the web build</td></tr>
 <tr><td><code>include/rmp/generated/config.h</code></td><td>every value a game can read in C or C++, as <code>RMP_</code> macros</td><td>your code, through every public header — <a href="#config-h">below</a></td></tr>
 <tr><td><code>raymob/generated.properties</code></td><td>the Android application id, minimum SDK, version, the OpenGL ES version to compile for, permissions, and whether AdMob is on and its ids</td><td>Gradle</td></tr>

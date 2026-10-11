@@ -110,10 +110,10 @@ rmp::Value v;
 rmp::save::read("slot1", v);
 const rmp::Value &amp;items = v["inventory"];
 std::vector&lt;std::string&gt; names;
-for (int i = 0; i &lt; items.size(); i++) names.emplace_back(items[i].as_string("?"));
+for (int i = 0; i &lt; items.size(); ++i) names.emplace_back(items[i].as_string("?"));
 
 const rmp::Value &amp;stats = v["stats"];
-for (int i = 0; i &lt; stats.size(); i++) {
+for (int i = 0; i &lt; stats.size(); ++i) {
     const std::string_view key = stats.key(i);
     const int value = stats[key].as_int(0);
 }

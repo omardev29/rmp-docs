@@ -1,6 +1,6 @@
 <!--
 title: Continuous integration
-description: What CI builds, boots and checks for each target on a push and on a tag, what it pins so the build cannot change under you, and how to read a run that went red.
+description: What CI builds, boots and checks for each target on a push and on a tag, the size it holds every release binary to, what it pins so the build cannot change under you, and how to read a run that went red.
 order: 70
 -->
 <h1>Continuous integration</h1>
@@ -108,27 +108,29 @@ file it built without running it — its format, its architecture, what it links
 <table>
 <thead><tr><th>Target</th><th>Lane</th><th>What CI does with it</th></tr></thead>
 <tbody>
-<tr data-fw-grep=".github/workflows/_linux.yml::- name: The archive starts from any folder"><td><code>linux-x64-glibc</code></td><td>every push</td><td>Booted under a virtual X server. Then the archive it ships is unzipped and started from another folder: the binary a player gets, compressed when <code>[upx]</code> says so, has to find its <code>resources/</code>. Checked: x86-64 ELF, no debug sections, glibc no newer than <code>[linux] glibc</code>.</td></tr>
-<tr data-fw-grep=".github/workflows/_linux.yml::^  arm64:\n    if: inputs\.full"><td><code>linux-arm64-glibc</code></td><td>full</td><td>Booted under a virtual X server on an ARM64 runner, and its archive unzipped and started from another folder, as on x64. Checked: aarch64 ELF, the glibc floor.</td></tr>
-<tr data-fw-grep=".github/workflows/_linux.yml::# Held to its OWN floor, not \[linux\] glibc's\. This target is\n      # cross-compiled with the image's riscv64 GNU toolchain[\s\S]*?run: bash tools/glibc_check\.sh build/\$\{\{ inputs\.project_name \}\} 2\.38\n\n      - name: Test \(static\) — binary exists, is RISC-V ELF"><td><code>linux-riscv64-glibc</code></td><td>full</td><td>Cross-compiled; checked statically (RISC-V ELF), and held to a glibc floor of its own, 2.38, which the note on <code>[linux] glibc</code> in the .toml names because the setting does not reach this target. Never run — there is no RISC-V runner.</td></tr>
-<tr><td><code>linux-x64-musl</code></td><td>full</td><td>Checked: linked against musl, with no glibc symbol in it. A software-rendered release of the game is booted inside Alpine Linux with nothing installed, started from <code>/</code>.</td></tr>
-<tr><td><code>linux-x64-glibc-drm</code></td><td>full</td><td>Booted through DRM/KMS on a virtual display the kernel provides, started from <code>/</code>. Checked: it links <code>libdrm</code> and no X11 or Wayland; its real glibc floor is printed.</td></tr>
-<tr><td><code>linux-arm64-glibc-drm</code></td><td>full</td><td>Checked statically: aarch64, <code>libdrm</code>, no X11 or Wayland. Not run: a virtual display would not answer the question a Raspberry Pi's own display pipeline does.</td></tr>
+<tr data-fw-grep=".github/workflows/_linux.yml::- name: The archive starts from any folder"><td><code>linux-x64-glibc</code></td><td>every push</td><td>Booted under a virtual X server. Then the archive it ships is unzipped and started from another folder: the binary a player gets, compressed when <code>[upx]</code> says so, has to find its <code>resources/</code>. Checked: x86-64 ELF, no debug sections, glibc no newer than <code>[linux] glibc</code>, <a href="/publishing/desktop.html#hardening">linked hardened</a>.</td></tr>
+<tr data-fw-grep=".github/workflows/_linux.yml::^  arm64:\n    if: inputs\.full"><td><code>linux-arm64-glibc</code></td><td>full</td><td>Booted under a virtual X server on an ARM64 runner, and its archive unzipped and started from another folder, as on x64. Checked: aarch64 ELF, the glibc floor, linked hardened.</td></tr>
+<tr data-fw-grep=".github/workflows/_linux.yml::# Held to its OWN floor, not \[linux\] glibc's\. This target is\n      # cross-compiled with the image's riscv64 GNU toolchain[\s\S]*?run: bash tools/glibc_check\.sh build/release/\$\{\{ inputs\.project_name \}\} 2\.38\n\n      # The hardening[\s\S]*?- name: Test \(static\) — binary exists, is RISC-V ELF"><td><code>linux-riscv64-glibc</code></td><td>full</td><td>Cross-compiled; checked statically (RISC-V ELF), and held to a glibc floor of its own, 2.38, which the note on <code>[linux] glibc</code> in the .toml names because the setting does not reach this target. Never run — there is no RISC-V runner. Checked as well: linked hardened.</td></tr>
+<tr data-fw-grep=".github/workflows/_linux.yml::- name: It needs nothing but musl\n        run: python3 tools/binary_check\.py elf --musl"><td><code>linux-x64-musl</code></td><td>full</td><td>Checked: no glibc symbol in it, linked hardened, and what it asks the system for is musl and nothing else — musl's loader and musl's <code>libc.so</code>, read out of the binary. Then on Alpine, in an image of the framework's own pinned by digest, with the network off and started from <code>/</code>: a software-rendered release of the game is booted, and the binary the archive ships, compressed by default, is unzipped and started under a virtual X server.</td></tr>
+<tr data-fw-grep=".github/workflows/_linux.yml::unzip -q drm-zip/linux-x64-glibc-drm-build\.zip -d drm-bin"><td><code>linux-x64-glibc-drm</code></td><td>full</td><td>The binary the archive ships, compressed by default, is unzipped and booted through DRM/KMS on a virtual display the kernel provides, started from <code>/</code>. Checked: it links <code>libdrm</code> and no X11 or Wayland, linked hardened; its real glibc floor is printed.</td></tr>
+<tr><td><code>linux-arm64-glibc-drm</code></td><td>full</td><td>Checked statically: aarch64, <code>libdrm</code>, no X11 or Wayland, linked hardened. Not run: a virtual display would not answer the question a Raspberry Pi's own display pipeline does.</td></tr>
 <tr><td><code>windows-x64</code></td><td>every push</td><td>Checked: a PE whose imports are all part of Windows 10, carrying its icon when <code>[icon] source</code> exists. Booted on a real Windows runner, started from a folder that is not its own, with Mesa's software OpenGL next to the <code>.exe</code> and the compiler off <code>PATH</code>, with the player's data folder set to a path that is not ASCII and a save written there and read back. The three Mesa DLLs are deleted before packaging, and the zip is checked to carry neither <code>opengl32.dll</code> nor <code>libgallium_wgl.dll</code>.</td></tr>
 <tr><td><code>windows-arm64</code></td><td>full</td><td>Cross-compiled; checked statically — an ARM64 PE, its imports all part of Windows 10, its icon — and never run.</td></tr>
 <tr><td><code>macos</code></td><td>full</td><td>Checked: a universal Mach-O with both slices, neither asking for a newer macOS than the deployment target — 10.15, and 11 for arm64. A software-rendered build of the game is booted on the runner, and a software-rendered release is started from the project folder where it was built and then, laid out as the archive ships it, from another folder.</td></tr>
 <tr><td><code>ios</code></td><td>full</td><td>Engine and simulator app built; the bundle checked for its identifier and its <code>resources/</code>. The simulator boot is off unless <code>IOS_SIMULATOR_TEST</code> is <code>true</code>.</td></tr>
 <tr><td><code>web</code></td><td>every push</td><td>Booted in headless Chromium: a screenshot of the canvas is measured, and a save is written to IndexedDB and read back.</td></tr>
-<tr><td><code>android</code></td><td>every push</td><td>Debug APK and signed App Bundle built. Checked: the manifest and native library in the APK, the bundle's signature and signer, and that the bundle was compiled as a release. Not run, unless Firebase Test Lab is configured — then on Test Lab's device (by default MediumPhone.arm, an Arm virtual device), on full runs.</td></tr>
+<tr><td><code>android</code></td><td>every push</td><td>Debug APK and signed App Bundle built, by Gradle working offline from the build image (<a href="#gradle-offline">below</a>). Checked: the manifest and native library in the APK, the bundle's signature and signer, and that the bundle was compiled as a release. Not run, unless Firebase Test Lab is configured — then on Test Lab's device (by default MediumPhone.arm, an Arm virtual device), on full runs.</td></tr>
 <tr><td><code>freebsd-x64</code>, <code>freebsd-arm64</code>, <code>openbsd-x64</code>, <code>openbsd-arm64</code>, <code>netbsd-x64</code></td><td>full</td><td>Built inside a virtual machine of each system. Checked: an ELF. A software-rendered build of the game is booted in the same machine, and a software-rendered release is started from the project folder where it was built and then, laid out as the archive ships it, from another folder. OpenBSD and NetBSD cannot say where an executable is, so there the shipped release is started from its own folder and has to log that it reads the working directory's <code>resources/</code>.</td></tr>
 </tbody>
 </table>
 
 <p>Next to the platforms, the <code>lint</code> job runs on every push. In a game it checks the
 workflows (actionlint, with shellcheck over every script in them), validates the configuration,
-compares every pinned version across the files that state it, checks every licence, runs the
+compares every pinned version across the files that state it, checks the
+<a href="#size-budget">size budget</a> when the game has one, checks every licence, runs the
 game's own tests in <code>tests/game/</code> — and says it skipped them when there are none — and
-draws a frame with raylib's software renderer. In the framework's own repository it also runs the
+draws a frame with raylib's software renderer, in a debug build that runs under whatever
+<a href="/manual/basics/configuration.html#sanitizers"><code>[dev] sanitize</code></a> lists. In the framework's own repository it also runs the
 framework's tests and gates, and jobs of its own build and boot every example, make a game with
 <code>rmp new</code> to test it — and a copy of that game in plain C, made the way
 <code>examples/plain_c</code> says, booted and its release started from the project folder and
@@ -151,7 +153,7 @@ boot marker from the browser's console and measures the canvas itself:</p>
 
 <dl>
 <dt><code>RAY_TEST_BOOT_OK assets_failed=0</code></dt>
-<dd data-fw-grep="src/rmp/assets.cpp::void decode_failed\(const char \*name\) \{\n    detail::loads\.failed\+\+;">A window opened, and every asset the game asked for was found and decoded: a file that
+<dd data-fw-grep="src/rmp/assets.cpp::void decode_failed\(const char \*name\) \{\n    \+\+detail::loads\.failed;">A window opened, and every asset the game asked for was found and decoded: a file that
 is there and cannot be read as an image, a sound, a song or a font counts as failed, the same as a
 missing one. Neither stops a game from starting, which is why the count is part of the
 marker.</dd>
@@ -165,12 +167,16 @@ here. It is printed at the end of the last frame, before the game shuts down, so
 shuts down comes after it.</dd>
 </dl>
 
-<p data-fw-grep=".github/workflows/_linux.yml::\|\| \{ echo &quot;FAIL: game exited non-zero&quot;; cat &quot;\$OUT&quot;; exit 1; \}">A crash on the way out — in the game's stop hook, or as the window closes — is caught by the
-exit code, and only three runs read it: the Linux x64 and ARM64 boots and the Windows boot, which
-also require the game to exit with code 0. Every other run ignores it — the musl and DRM runs, the
-software-rendered runs on macOS and the BSDs, the iOS simulator, the <code>lint</code> job's frame,
-<code>rmp test smoke</code> and <code>rmp test render</code> — and passes a game that crashes after
-its last frame.</p>
+<p data-fw-grep="tools/render_check.sh::test &quot;\$STATUS&quot; -eq 0 \|\| \{ echo &quot;FAIL: the game exited with status \$STATUS&quot;; exit 1; \}">A
+crash on the way out — in the game's stop hook, or as the window closes — comes after every marker,
+and only the exit code catches it. So does a leak, which LeakSanitizer reports as a sanitized debug
+build exits. These runs read the exit code, and fail on anything but 0: the Linux x64 and ARM64
+boots and their archives started from another folder, the Windows boot, the archive started on
+Alpine, the software-rendered runs on macOS and the BSDs and in the <code>lint</code> job, and
+<code>rmp test smoke</code> and <code>rmp test render</code>. The software-rendered runs and the two
+<code>rmp test</code> stages fail on a sanitizer's report as well. The rest ignore it and pass a game that crashes after its last frame: the
+software-rendered boot on Alpine, the DRM boot, the iOS simulator, and the release started from
+another folder on macOS and the BSDs.</p>
 
 <p>The markers come from <code>tests/smoke_test.h</code>, which every game carries. The share of
 pixels is the gate everywhere because GPUs and software renderers disagree on the details of a
@@ -185,17 +191,57 @@ drawn.</p>
 <li><code>linux-riscv64-glibc</code>, <code>windows-arm64</code> and
 <code>linux-arm64-glibc-drm</code> are never run.</li>
 <li>On macOS and the BSDs, what is booted is a software-rendered build of the game, not the
-executable that ships; the shipped one is checked statically. The same holds for
-<code>linux-x64-musl</code>.</li>
-<li>A binary compressed with UPX is started only on <code>linux-x64-glibc</code> and
-<code>linux-arm64-glibc</code>, whose jobs start the archive they ship. Everywhere else it is
-booted before it is compressed, if at all, and only verified with <code>upx -t</code>
-after.</li>
+executable that ships; the shipped one is checked statically.</li>
+<li data-fw-grep="tools/configure.py::&quot;upx&quot;: \{&quot;enabled&quot;: \[&quot;linux-x64-glibc&quot;, &quot;linux-arm64-glibc&quot;, &quot;linux-x64-musl&quot;,\s+&quot;linux-x64-glibc-drm&quot;\]">A
+binary compressed with UPX is started only on <code>linux-x64-glibc</code>,
+<code>linux-arm64-glibc</code>, <code>linux-x64-musl</code> and <code>linux-x64-glibc-drm</code>,
+whose jobs start the archive they ship — the four <code>[upx]</code> compresses by default. On a
+target added to <code>[upx] enabled</code> beyond those, it is only verified with
+<code>upx -t</code>.</li>
 <li>iOS is not started unless you turn the simulator test on, and Android is not started unless
 Firebase Test Lab is configured.</li>
 <li>Nothing here plays your game. A game that boots and draws and is broken from its second screen
 on passes every gate. Test your game on the platforms you ship.</li>
 </ul>
+
+<h2 id="size-budget">The size budget</h2>
+
+<p data-fw-grep="tools/size_check.py::WARN_AT = Fraction\(15, 1000\)\nFAIL_AT = Fraction\(10, 100\)">A
+release is kept as small as it can be, and without a number written down nothing would notice it
+growing by a third between two releases. So every release job — Linux, Windows, macOS, the BSDs and
+the web, and Android once per ABI of the bundle — runs <code>tools/size_check.py</code> on its
+binary as soon as it is final, and holds it to its line in <code>tools/size_budget.txt</code>: the
+size as the linker wrote it and, for a target <code>[upx]</code> compresses, the size of the copy
+that ships. Within 1.5% of the line, either way, it passes and says nothing. Past that it passes
+with a warning that names the new number, in the log and on the run's summary page, where a passing
+job's log is never read. Past 10% it fails. Over is a growth nobody wrote down; under is a stale
+line, which would let the next growth through without a word. Growing is allowed: the line is where
+it is written down, in the commit that grows it.</p>
+
+<pre data-lang="text">
+# binary               kind    unpacked    packed
+linux-x64-glibc        elf      1236560    366804  # measured at 029b2c0
+windows-x64            pe       2206720         -  # measured at 029b2c0
+</pre>
+
+<p>Each line is a binary, what kind of file it is, its size unpacked, and its size packed or
+<code>-</code> where UPX does not apply, with the commit it was measured on. Every check prints the
+line it measured in that same format, pass or fail, so one run's log is all an update needs:</p>
+
+<pre data-lang="shell">
+gh run view 12345678 --log | python3 tools/size_check.py --update -
+</pre>
+
+<p data-fw-grep="tools/rmp.py::&quot;tools/size_budget\.txt&quot;: &quot;the demo game's sizes; a game measures its own, and its CI &quot;">A
+game starts without a budget: <code>rmp new</code> does not copy the framework's, whose sizes are
+its own demo game's. A game's release jobs measure all the same, print each line and say the game
+has no budget, and the <code>lint</code> job says so too instead of failing. To start one, run the
+full matrix once — a tag, or <code>gh workflow run ci.yml -f full=true</code> — then create an empty
+<code>tools/size_budget.txt</code>, fill it from that run's log with the line above, and commit it.
+From then on the game is held to it exactly as the framework is: the <code>lint</code> job checks the
+file on every push — a line for every binary an enabled target ships, none for one nothing ships, a
+packed size exactly where <code>[upx]</code> compresses — and every release job holds its binary to
+its line.</p>
 
 <h2>What is pinned</h2>
 
@@ -207,11 +253,21 @@ pinned wherever it can be:</p>
 lint job and the itch.io upload run inside <code>ghcr.io/omardev29/raylib-build</code>, named by its
 <code>sha256</code> digest and never by a tag, which could be moved. The image carries the compilers
 and tools those jobs use — CMake, Ninja, Emscripten, the Android SDK and NDK, zig, UPX, butler,
-actionlint and shellcheck — so none of them is fetched while a job runs. Its own packages come from
-a dated Ubuntu snapshot, and the build jobs print the image's manifest as their first step, so a
-log says which toolchain produced it. What those jobs do fetch is Gradle and the Android build's
-libraries, at the versions the build files name, with Gradle checked against its checksum; they are
-cached between runs.</li>
+actionlint and shellcheck, LLVM 18 with the runtimes the sanitizers need, cppcheck, and the Python
+test tools — so none of them is fetched while a job runs. It is built for x86-64 and ARM64, each on
+a runner of its own architecture, and each is checked before the image is published. Its own
+packages come from a dated Ubuntu snapshot, and the build jobs print the image's manifest as their
+first step, so a log says which toolchain produced it.</li>
+<li id="gradle-offline" data-fw-grep=".github/workflows/_android.yml::echo &quot;offline=--offline&quot; &gt;&gt; &quot;\$GITHUB_OUTPUT&quot;"><strong>Gradle,
+from the image.</strong> The image also carries a Gradle home warmed for the framework's Gradle
+wrapper, its Android build plugin and the AdMob SDK, and the Android job runs Gradle with
+<code>--offline</code> from it: the job downloads nothing, and a library the image lacks fails the
+build at once, by name. <code>--offline</code> does not reach the wrapper, so a step first checks,
+by the wrapper's own rule, that the Gradle it asks for is in the image, and fails naming it when it
+is not. A game that adds a Gradle dependency of its own sets
+<a href="/reference/configuration.html#android-gradle_offline"><code>[android] gradle_offline = false</code></a>:
+Gradle then downloads what the image lacks, and the job says so in a warning. <code>rmp
+android</code> on your machine is never offline.</li>
 <li><strong>The runners and Xcode.</strong> Runner images by explicit label, never
 <code>-latest</code>, and on macOS an explicit Xcode version, with a step that fails and lists
 what is installed when the pinned one is gone. A label fixes the operating system, not every tool
@@ -224,8 +280,13 @@ such step.</li>
 UPX on Windows — at a fixed version, checked against its <code>sha256</code>; Pillow, which the
 Windows jobs install to make the icon, comes from PyPI with <code>pip --require-hashes</code>, so
 no other file is accepted. Chromium itself, for the web test, comes through Playwright, pinned
-by <code>package-lock.json</code>. The Alpine image the
-musl build is tested in is named by its digest.</li>
+by <code>package-lock.json</code>.</li>
+<li data-fw-grep=".github/workflows/_linux.yml::RUN_IMAGE: 'ghcr\.io/omardev29/raylib-run-alpine@sha256:[0-9a-f]{64}'"><strong>The
+Alpine the musl build is started on</strong> is the framework's own image,
+<code>ghcr.io/omardev29/raylib-run-alpine</code>, by digest: Alpine itself pinned by its digest,
+with the virtual X server, Mesa and the X libraries an Alpine desktop gives the game, and checked
+when it is built by drawing on it. The job downloads nothing into it, and every container it starts
+runs with the network off. No workflow takes an image from Docker Hub.</li>
 <li><strong>Every GitHub Action</strong>, by the full commit it resolves to, with the tag in a
 comment beside it.</li>
 </ul>
@@ -235,12 +296,17 @@ there and hands them to the others, and <code>tools/versions_check.sh</code> —
 <code>rmp test config</code> and of the lint job — fails if any two places disagree. A game keeps
 the pins it was made with; they change when the game changes them.</p>
 
-<p>The exception is the BSDs. Their virtual-machine images and package mirrors move from day to
+<p data-fw-grep=".github/workflows/_bsd.yml::sized for the arm64 VMs, which QEMU emulates on this x86-64 runner[\s\S]*?timeout-minutes: 120">The
+exception is the BSDs. Their virtual-machine images and package mirrors move from day to
 day, and neither offers a snapshot to pin to, so those jobs install whatever the mirror serves that
 day. When a BSD job fails after the rest of the run passed, and nothing you changed explains it,
-suspect the mirror first. Two other exceptions are narrow. The job that boots DRM installs the
-kernel's extra modules on its runner when the virtual display driver is missing from it, after the
-binary it tests has already been built.</p>
+suspect the mirror first. The arm64 machines are emulated on an x86-64 runner, which makes their
+jobs the slowest of a full run, and each BSD job is allowed two hours.</p>
+
+<p data-fw-grep=".github/workflows/_linux.yml::sudo apt-get install -y -qq &quot;linux-modules-extra-\$\(uname -r\)&quot;">Two
+other exceptions are narrow. The job that boots DRM installs the kernel's extra modules on its
+runner when the virtual display driver is missing from it, after the binary it tests has already
+been built: it is the one place a Linux job downloads.</p>
 
 <p data-fw-grep=".github/workflows/_web.yml::npx playwright install chromium --with-deps">And the web test installs the system libraries Chromium needs with
 <code>playwright install --with-deps</code>, which takes them from the runner's Ubuntu package
@@ -291,15 +357,18 @@ print a line starting with <code>FAIL</code> that says what they found.</p>
 <thead><tr><th>Red</th><th>What it usually means</th><th>On your machine</th></tr></thead>
 <tbody>
 <tr><td><code>config</code></td><td>The .toml is invalid, a tag build found a placeholder <code>com.example.</code> id, or the triggers of <code>ci.yml</code> are not what <code>[ci] on_push</code> writes.</td><td><code>rmp test config</code>; for the triggers, any build, then commit <code>ci.yml</code></td></tr>
-<tr><td><code>lint</code></td><td>A workflow does not lint, two pinned versions disagree, a licence is unknown, a test in <code>tests/game/</code> failed, or the software-rendered frame failed.</td><td><code>rmp test config</code>, <code>rmp test unit</code>, <code>rmp test render</code></td></tr>
+<tr><td><code>lint</code></td><td>A workflow does not lint, two pinned versions disagree, the size budget lacks a line or has a wrong one, a licence is unknown, a test in <code>tests/game/</code> failed, or the software-rendered frame failed.</td><td><code>rmp test config</code>, <code>python3 tools/size_check.py --check-file</code>, <code>rmp test unit</code>, <code>rmp test render</code></td></tr>
 <tr><td>A step that configures or generates, on a tag</td><td>The tag is not <code>vMAJOR.MINOR.PATCH</code>.</td><td><code>rmp deploy</code> checks it before tagging.</td></tr>
 <tr><td>A build step</td><td>The code does not compile on that platform's compiler.</td><td><code>rmp build release</code></td></tr>
-<tr><td>A runtime test</td><td>The game did not boot, lost an asset — missing, or there and not decodable — drew nothing, or died before the end of its frame budget — or, in the Linux x64 and ARM64 boots and the Windows boot, which read the exit code, exited with an error. The captured output is printed above the verdict.</td><td><code>rmp test smoke</code>, <code>rmp test render</code></td></tr>
+<tr><td>A runtime test</td><td>The game did not boot, lost an asset — missing, or there and not decodable — drew nothing, or died before the end of its frame budget — or, in the runs that read the exit code, exited with an error, or, in a sanitized debug build, a sanitizer reported something. The captured output, or the report, is printed above the verdict.</td><td><code>rmp test smoke</code>, <code>rmp test render</code></td></tr>
 <tr><td><em>The archive starts from any folder</em>, or <em>the release starts from any folder</em></td><td>Started away from its folder, the release did not find the <code>resources/</code> beside it; or, in <em>the release starts from any folder</em>, started first from the project folder where it was built, with no <code>resources/</code> beside it, it did not read the project's. Either way an asset failed to load, and the line starting with <code>FAIL</code> says which start it was.</td><td><code>sh tools/shipped_check.sh Ninja "" my_game</code></td></tr>
-<tr><td><em>the .exe imports nothing Windows does not ship</em>, in <code>windows / x64</code> or <code>windows / arm64</code></td><td>The <code>.exe</code> needs a DLL a player's Windows does not have — a compiler runtime linked dynamically — or lacks the icon <code>[icon] source</code> promises. The step names the DLL and how to link it in.</td><td><code>python tools/binary_check.py windows build/my_game.exe</code></td></tr>
-<tr><td><em>every slice runs on the macOS the build declares</em>, in <code>apple / macos</code></td><td>A slice of the binary asks for a newer macOS than <code>CMAKE_OSX_DEPLOYMENT_TARGET</code>; the step names the slice and the version.</td><td><code>python3 tools/binary_check.py macos build/my_game --min-os 10.15</code></td></tr>
+<tr><td><em>the .exe imports nothing Windows does not ship</em>, in <code>windows / x64</code> or <code>windows / arm64</code></td><td>The <code>.exe</code> needs a DLL a player's Windows does not have — a compiler runtime linked dynamically — or lacks the icon <code>[icon] source</code> promises. The step names the DLL and how to link it in.</td><td><code>python tools/binary_check.py windows build/release/my_game.exe</code></td></tr>
+<tr><td><em>every slice runs on the macOS the build declares</em>, in <code>apple / macos</code></td><td>A slice of the binary asks for a newer macOS than <code>CMAKE_OSX_DEPLOYMENT_TARGET</code>; the step names the slice and the version.</td><td><code>python3 tools/binary_check.py macos build/release/my_game --min-os 10.15</code></td></tr>
 <tr><td><em>It runs on older distributions than this one</em>, or in <code>linux / riscv64</code> <em>The glibc it needs, against the floor the .toml gives it</em></td><td>The Linux binary needs a newer glibc than <code>[linux] glibc</code> — or, for <code>linux-riscv64-glibc</code>, than 2.38; the step lists the symbols that ask for it.</td><td><code>tools/glibc_check.sh</code> on the binary</td></tr>
+<tr><td><em>Linked hardened</em>, in a Linux job, or <em>It needs nothing but musl</em></td><td>The release lacks something it is linked with: read-only relocations (RELRO), symbols bound at start (BIND_NOW), a stack that is not executable, or, with <code>RMP_RELEASE_PIE</code> on, position independence; or a musl binary asks for a loader or a library that is not musl's. The step says which, and the linker flag that gives it.</td><td><code>python3 tools/binary_check.py elf --pie build/release/my_game</code></td></tr>
+<tr><td><em>Within its size budget</em></td><td>A binary is more than 10% away from its line in <code>tools/size_budget.txt</code>, either way, or its line is <code>?</code>, a size nobody has measured. The step prints the line measured on this run, ready to paste. Between 1.5% and 10% it is a warning, and the job stays green.</td><td><a href="#size-budget">The size budget</a></td></tr>
 <tr><td>A BSD job, after everything else passed</td><td>Most often the package mirror. If the step <em>The VM script reached its end</em> failed, the build script stopped early without saying so.</td><td><code>sh tools/render_check.sh Ninja "" my_game</code> runs its check anywhere</td></tr>
+<tr><td><em>Gradle, from the image</em>, in <code>android / build</code></td><td>The build image does not carry the Gradle the wrapper asks for, so an offline build would have to download it; or, in the build that follows, a library the app needs is not in the image's Gradle home, and Gradle names it.</td><td>A game that added a Gradle dependency of its own: <a href="/reference/configuration.html#android-gradle_offline"><code>[android] gradle_offline = false</code></a></td></tr>
 <tr><td>The AAB check in <code>android / build</code></td><td>The bundle is signed by a key other than the one the secrets name, or its certificate has errors.</td><td><a href="/publishing/google-play.html#signing">Google Play</a></td></tr>
 <tr><td><code>release</code> skipped on a tag</td><td>A platform job or the lint job failed or was cancelled, so nothing was published.</td><td>Fix it and re-run the failed jobs.</td></tr>
 </tbody>

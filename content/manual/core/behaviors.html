@@ -469,7 +469,7 @@ class Level : public rmp::Scene {
         auto &amp;coin = spawn({ .position = { 300, 200 }, .shape = rmp::circle(6) });
         coin.add&lt;Pickup&gt;({
             .by = layer::PLAYER,
-            .on_pick = [this](rmp::Object &amp;, rmp::Object &amp;) { _coins++; },
+            .on_pick = [this](rmp::Object &amp;, rmp::Object &amp;) { ++_coins; },
         });
     }
 };

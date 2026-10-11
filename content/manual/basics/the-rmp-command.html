@@ -114,20 +114,23 @@ and only the game's own target is built, not anything else the build folder has 
 game exits, <code>rmp</code> exits with the game's code, so a crash is not reported as a
 success.</p>
 
-<p data-fw-grep="CMakeLists.txt::if\(NOT CMAKE_SYSTEM_NAME STREQUAL &quot;NetBSD&quot;\)\s+# NetBSD's linker does not process the GCC LTO bytecode stored in static"><code>rmp build</code> compiles without running and prints where the executable is.
+<p data-fw-grep="CMakeLists.txt::if\(NOT CMAKE_SYSTEM_NAME STREQUAL &quot;NetBSD&quot;\)\s+# NetBSD's linker does not process the GCC LTO bytecode stored in static"><code>rmp build</code> compiles without running and prints where the executable is:
+<code>build/debug/</code>, the folder <code>rmp run</code> builds in too.
 <code>rmp build release</code> is the build players get: optimised, with link-time optimisation
 except on NetBSD, whose linker cannot read GCC's link-time objects in a static library, and reading
 its assets from the <code>resources/</code> shipped beside it rather than from the project.
-It puts the executable in <code>build/</code> and copies nothing next to it, so started from the
+It puts the executable in <code>build/release/</code> and copies nothing next to it, so started from the
 project's root it falls back on the project's own <code>resources/</code>. Laid out the way a release
 ships it — the executable with <code>resources/</code> beside it — it finds its files from whatever
 folder it is started in, everywhere but NetBSD and OpenBSD; <a href="/manual/core/app.html#where-a-release-finds-its-files">The app</a>
 explains how.</p>
 
-<p>Debug and release share the <code>build/</code> folder. Switching between them deletes it first and
-says so, because the compiler <code>[dev] compiler</code> chose for debug is cached there and would
-otherwise carry over into the release build — and since switching build type rebuilds everything
-anyway, nothing is lost.</p>
+<p data-fw-grep="tools/rmp.py::DEBUG_DIR = &quot;build/debug&quot;\s+RELEASE_DIR = &quot;build/release&quot;">Debug and release each have a folder of their own, so switching between them rebuilds
+nothing, and the release never meets the compiler <code>[dev] compiler</code> chose for debug,
+which stays in the debug folder's cache. <code>build/</code> itself only holds those folders and is
+never a build. A <code>CMakeCache.txt</code> at its top is a build from a checkout older than that,
+and the first <code>rmp</code> command that configures removes what it left there, says so, and
+keeps the folders of the builds beside it.</p>
 
 <h3>rmp web and rmp android</h3>
 
@@ -160,15 +163,19 @@ phone. <a href="/manual/platforms/android.html">Android</a> has the rest.</p>
 <tbody>
 <tr><td><code>config</code></td><td>Validates <code>raylib_multiplatform.toml</code> the way every build does, checks that the pinned versions agree with each other, and checks every licence of everything vendored.</td></tr>
 <tr><td><code>unit</code></td><td>Builds your tests in <code>tests/game/</code> with the game and runs them with no window. With no <code>.cpp</code> there, it says so and passes. See <a href="/framework/testing.html#game-tests">Testing</a>.</td></tr>
-<tr><td><code>render</code></td><td>Builds the game a second time against raylib's software renderer, which draws into memory with no GPU and no window, runs it for ten frames, and requires that it booted with no asset failing to load, drew something, honoured <code>[window] vsync</code> and reached the end of its frames.</td></tr>
-<tr><td><code>smoke</code></td><td>Builds the game in debug, runs it for ten frames for real, and requires that it booted with no asset failing to load and put pixels on the screen.</td></tr>
+<tr><td><code>render</code></td><td>Builds the game a second time against raylib's software renderer, which draws into memory with no GPU and no window, runs it for ten frames, and requires that it exited with status 0 and no sanitizer report, booted with no asset failing to load, drew something, honoured <code>[window] vsync</code> and reached the end of its frames.</td></tr>
+<tr><td><code>smoke</code></td><td>Builds the game in debug, runs it for ten frames for real, and requires that it exited with status 0 and no sanitizer report, booted with no asset failing to load and put pixels on the screen.</td></tr>
 </tbody>
 </table>
 
-<p>These are the same checks CI runs on the targets it can start, which is why a game that passes
+<p data-fw-grep="tools/rmp.py::raise Refused\(f&quot;a sanitizer reported the run above \(exit \{got\.returncode\}\)&quot;\)\s+if got\.returncode != 0:">These are the same checks CI runs on the targets it can start, which is why a game that passes
 <code>rmp test</code> rarely surprises anyone in CI. A failed smoke stage prints the game's own output
-and one of two reasons: <samp>the game did not boot, or an asset failed to load</samp>, or
-<samp>the game booted and drew nothing</samp>.</p>
+and one of four reasons, in this order: <samp>a sanitizer reported the run above (exit …)</samp>,
+<samp>the game exited with status …</samp>, <samp>the game did not boot, or an asset failed to
+load</samp>, or <samp>the game booted and drew nothing</samp>. The exit status is read because the
+markers are printed before the game ends: a crash on the way out, or a leak that
+<a href="/manual/basics/configuration.html#sanitizers"><code>[dev] sanitize</code></a> reports at
+exit, comes after them.</p>
 
 <p>The <code>config</code> stage runs shell scripts, so on Windows it needs a bash; the one Git for
 Windows installs is the one <code>rmp</code> looks for.</p>
@@ -265,14 +272,15 @@ external, such as CMake, and saw it fail, names what failed and its exit code.</
 
 <pre data-lang="shell">
 cmake --preset debug           # configures AND generates everything from the .toml
-cmake --build build
-./build/my_game
+cmake --build --preset debug
+./build/debug/my_game
 </pre>
 
-<p>The presets a game builds with are <code>debug</code>, <code>release</code>, <code>web</code> and
-<code>memory</code>, the software-rendered build the <code>render</code> stage uses. <code>debug</code> and <code>release</code>
-share <code>build/</code>, and configuring a release where a debug configure has pinned the
-<code>[dev]</code> compiler is refused, with the instruction to run <code>rmp clean</code> first — the
-same reason <code>rmp build release</code> deletes the folder for you. A fifth,
-<code>cmake --preset lint</code>, only configures, into <code>build/lint</code>: it writes the
-compile database that clang-tidy and an editor read.</p>
+<p data-fw-grep="CMakeLists.txt::if\(_rmp_binary_dir STREQUAL _rmp_build_root\)\s+message\(FATAL_ERROR\s+&quot;build/ holds one folder per build and is not a build itself">The presets a game builds with are <code>debug</code>, <code>release</code>, <code>web</code> and
+<code>memory</code>, the software-rendered build the <code>render</code> stage uses, and each builds
+into the folder of its name under <code>build/</code>: <code>build/debug</code>,
+<code>build/release</code>, <code>build/web</code>, <code>build/memory</code>. Configuring
+<code>build/</code> itself is refused before anything else runs, and so is a release configured by
+hand into a folder where <code>[dev] compiler</code> was applied, because that compiler stays in the
+folder's cache. A fifth, <code>cmake --preset lint</code>, only configures, into
+<code>build/lint</code>: it writes the compile database that clang-tidy and an editor read.</p>
