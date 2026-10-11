@@ -2,8 +2,16 @@
 # reader, the HTML tree, the highlighter, the search index -- and the tests
 # that hold them: the property tests, the counterexamples they found, and
 # the older unit tests of the same modules (bash tests/mutation/run.sh makes
-# them count; see there). Not measured yet.
+# them count; see there).
+#
+# Measured in the framework's build image on 2026-10-11, mutmut 3.8.0, 3
+# children: 3184 mutants, 2554 detected (2531 killed, 23 timed out), 629
+# survived, 1 with no test = 80.21%. By module: cxx 78.1% (1572/2014; most
+# survivors in declaration() 218/777 and scope() 69/259), dom 82.7%
+# (401/485), highlight 82.8% (467/564), search 94.2% (114/121). About 2 h 10
+# min of mutmut, the run resumed twice after the kernel killed it (exit 137)
+# -- the reason run.sh holds it to RMP_MUTATION_MEMORY_KB now.
 kind     py
 sources  tools/rmpdocs/cxx.py tools/rmpdocs/dom.py tools/rmpdocs/highlight.py tools/rmpdocs/search.py
 tests    tests/test_cxx_property.py tests/test_dom_property.py tests/test_highlight_property.py tests/test_search_property.py tests/test_counterexamples.py tests/test_cxx.py tests/test_highlight.py tests/test_search.py
-floor    -
+floor    80

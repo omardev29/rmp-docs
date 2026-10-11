@@ -15,6 +15,7 @@
 # or ../raylib_multiplatform, as everywhere else here.
 #
 #   bash tests/mutation/run.sh run [MODULE]      mutate, run the tests, check the floor
+#   bash tests/mutation/run.sh resume [MODULE]   go on with a run that was stopped, then check
 #   bash tests/mutation/run.sh check [MODULE]    the last run against the floor again
 #   bash tests/mutation/run.sh update [MODULE]   the same, raising the floor to what it earned
 #
@@ -38,7 +39,7 @@ FLOORS="tests/mutation/floors"
 BUILD=".cache/mutation"
 
 usage() {
-  echo "usage: bash tests/mutation/run.sh run|check|update [MODULE]"
+  echo "usage: bash tests/mutation/run.sh run|resume|check|update [MODULE]"
   exit 2
 }
 
@@ -79,7 +80,7 @@ check() {
 }
 
 run() {
-  local module="$1" dir="$BUILD/$1" sources tests selects entry stems
+  local module="$1" dir="$BUILD/$1" sources tests entry stems
   if ! command -v mutmut > /dev/null 2>&1; then
     echo "FAIL: no mutmut here. mutmut 3.8.0 is in the framework's pinned build image."
     exit 1
@@ -91,12 +92,11 @@ run() {
     exit 1
   fi
   echo "== mutation: copy the tree for $module =="
-  rm -rf "$dir"
+  rm -rf "$dir" "$dir.log"
   mkdir -p "$dir"
   git ls-files -z --cached --others --exclude-standard | tar --null -T - -cf - | tar -xf - -C "$dir"
   sources=$(report "$module" --print sources)
   tests=$(report "$module" --print tests)
-  selects=$(report "$module" --print select)
   stems=""
   for entry in $sources; do
     case "$entry" in
@@ -133,16 +133,48 @@ PY
       echo "    $entry"
     done
   } > "$dir/setup.cfg"
+  mutate "$module"
+}
+
+# mutmut in the copy. A mutant with a verdict in the .meta files keeps it,
+# so `resume` after a run that was killed runs only the mutants it never got
+# to.
+#
+# Every process of it is held to RMP_MUTATION_MEMORY_KB of address space (3
+# GB): mutmut limits a mutant's CPU time and not its memory. The first run
+# here was killed twice at the same mutant, 2678 of 3184, with exit 137 --
+# the whole run, on a machine other builds share -- and with the limit a
+# mutant that grows without end meets a MemoryError instead: a test fails,
+# and the mutant is caught.
+mutate() {
+  local module="$1" dir="$BUILD/$1" selects sources
+  selects=$(report "$module" --print select)
+  sources=$(report "$module" --print sources)
   # shellcheck disable=SC2086  # one path a word
   echo "== mutation: mutmut over$(printf ' %s' $sources) =="
   # Its exit status is not the verdict -- the .meta files it wrote are, and
   # mutation_report.py fails a mutant it never got to. It is printed.
   local status=0
   # shellcheck disable=SC2086  # selects are words on purpose, and none means all
-  (cd "$dir" && RMP_FRAMEWORK="$FW" mutmut run --max-children "${CMAKE_BUILD_PARALLEL_LEVEL:-4}" $selects < /dev/null) \
-    > "$dir.log" 2>&1 || status=$?
-  tail -5 "$dir.log" | sed 's/^/  /'
+  (cd "$dir" && ulimit -v "${RMP_MUTATION_MEMORY_KB:-3000000}" \
+     && RMP_FRAMEWORK="$FW" mutmut run --max-children "${CMAKE_BUILD_PARALLEL_LEVEL:-4}" $selects < /dev/null) \
+    >> "$dir.log" 2>&1 || status=$?
+  # Its progress is one line redrawn with \r: the last few, a line each.
+  tr '\r' '\n' < "$dir.log" | grep -v '^[[:space:]]*$' | tail -3 | sed 's/^/  /'
   echo "  mutmut exited $status"
+}
+
+resume() {
+  local module="$1"
+  if [ ! -f "$BUILD/$module/setup.cfg" ]; then
+    echo "FAIL: no run of $module to resume: bash tests/mutation/run.sh run $module"
+    exit 1
+  fi
+  if ! command -v mutmut > /dev/null 2>&1; then
+    echo "FAIL: no mutmut here. mutmut 3.8.0 is in the framework's pinned build image."
+    exit 1
+  fi
+  mutate "$module"
 }
 
 [ $# -ge 1 ] && [ $# -le 2 ] || usage
@@ -152,6 +184,7 @@ FW=$(framework)
 known "$module"
 case "$command" in
   run) run "$module"; check "$module" ;;
+  resume) resume "$module"; check "$module" ;;
   check) check "$module" ;;
   update) check "$module" --update ;;
   *) usage ;;
