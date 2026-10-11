@@ -6,10 +6,11 @@ order: 70
 <h1>Macros</h1>
 
 <p class="lede">The preprocessor runs before the compiler knows what a type, a scope or a namespace
-is: a macro is text pasted into every line after it, in every file that includes it, raylib's and
-the C library's included. So the rule is short. A macro is for what nothing else in the language can
+is: a macro replaces its name on every line after it — in its file, in every file that includes it,
+and in every header included after it, raylib's and the C library's among them. So the rule is
+short. A macro is for what nothing else in the language can
 do, and everything else is a <code>constexpr</code> constant, a function or a template. Every macro
-that is written is named <code>RMP_</code>.</p>
+the framework and its examples write is named <code>RMP_</code>.</p>
 
 <p>This page is the rule as it applies to any code written here. The framework's own macros — the
 entry point, the values of the <code>.toml</code>, the said-once warning — are explained one by one
@@ -83,7 +84,7 @@ its line once, and only a macro can declare one there.</p>
 it only makes sense on one of them. That is an <code>#if</code> on a macro the platform defines:</p>
 
 <pre data-lang="cpp" data-harness="function">
-#if defined(PLATFORM_WEB)
+#if defined(PLATFORM_ANDROID)
 const int touch_target = 44;
 #else
 const int touch_target = 32;
@@ -131,12 +132,17 @@ the framework and in the examples, and by rule R5 of <code>tools/naming_check.sh
 branch of every <code>#if</code>. A vendored library's own switches keep their names, in the one file
 of the framework that configures it, and the script lists each of those by file.</p>
 
+<p>A game's own macros are a different case: <code>RMP_</code> is the framework's prefix, and a
+game's macro that took it could one day meet one of the framework's. Google's rule decides there —
+the project's own name, in capitals, as the prefix — and nothing in a game checks it.</p>
+
 <h2 id="retired">A name that no longer exists is 0</h2>
 
 <p>An <code>#if</code> on a macro nobody defines is not an error: the name is 0. When a macro is
 renamed, every test of the old name keeps compiling and quietly takes the other branch. The CMake
-option is <code>PRODUCTION_BUILD</code>, and what the code sees is RMP_PRODUCTION_BUILD; written the
-CMake way, this draws the frame rate in every build, a release included:</p>
+option is <code>PRODUCTION_BUILD</code>, and what the code sees is
+<code>RMP_PRODUCTION_BUILD</code>; written the CMake way, this draws the frame rate in every build,
+a release included:</p>
 
 <pre data-lang="cpp" data-harness="function" data-expect="gate" data-gate="naming" data-rule="R7">
 #if !PRODUCTION_BUILD
@@ -152,8 +158,8 @@ DrawFPS(10, 10);
 
 <p data-fw-grep="tools/naming_check.sh::R7  no retired name: `#if APP_SAVE_PORTABLE` after the rename is not an\s+#\s+error, it is 0">Checked
 by rule R7 of <code>tools/naming_check.sh</code>, which keeps the list of retired names, in every
-branch of the framework and the examples. For RMP_PRODUCTION_BUILD the framework goes further:
-every build system defines it, and <code>src/rmp/app.cpp</code> refuses to compile if one
+branch of the framework and the examples. For <code>RMP_PRODUCTION_BUILD</code> the framework goes
+further: every build system defines it, and <code>src/rmp/app.cpp</code> refuses to compile if one
 forgets.</p>
 
 <h2 id="names">A constant is never named like a macro</h2>
