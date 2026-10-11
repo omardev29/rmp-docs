@@ -70,8 +70,13 @@ class AgreesWithClangTidyTest(unittest.TestCase):
         cls.conf = enforcement.configuration(str(FRAMEWORK))
 
     def listed(self, source, *extra):
+        # Absolute: CI hands RMP_FRAMEWORK as a relative path ("framework"), and
+        # with cwd=FRAMEWORK a relative file is framework/framework/..., which
+        # does not exist -- clang-tidy then walks up to the root's .clang-tidy
+        # and never reads examples/.clang-tidy.
         got = subprocess.run([self.binary, "--list-checks", *snippets.tidy_flags(self.binary), *extra,
-                              str(FRAMEWORK / source)], capture_output=True, text=True, cwd=FRAMEWORK)
+                              str((FRAMEWORK / source).resolve())], capture_output=True, text=True,
+                             cwd=FRAMEWORK)
         return {line.strip() for line in got.stdout.splitlines() if line.startswith("    ")}
 
     def test_every_check_is_on_where_clang_tidy_runs_it_and_off_elsewhere(self):
