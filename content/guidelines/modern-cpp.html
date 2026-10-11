@@ -1,0 +1,544 @@
+<!--
+title: Modern C++
+description: The C++ the framework and its examples write where C would also compile — std::array, static_cast, enum class, nullptr, no varargs, fixed-width integers, ++i — and the C++20 the oldest compiler a game is built with can take.
+order: 60
+-->
+<h1>Modern C++</h1>
+
+<p class="lede">raylib is C, and the framework is C++ written on top of it. Where C++ has a way of
+saying something that knows more than C's — how long an array is, which conversion a cast means,
+which scope a name belongs to — the code here uses it, and a check holds it there. raylib's own
+types and calls stay as they are: a call into raylib is where the C++ ends, and that boundary is
+written down below wherever a rule meets it.</p>
+
+<p>Each rule says why, shows the way the framework refuses and the way it takes, and names what
+checks it and where. "The framework" is its <code>include/</code>, <code>src/</code> and
+<code>tests/</code>; the examples have a <code>.clang-tidy</code> of their own; and a game made with
+<code>rmp new</code> gets none of these checks, only the advice. <a href="/guidelines/enforcement.html">What
+checks what</a> has every rule of these pages in one table.</p>
+
+<h2 id="arrays">std::array, not a C array</h2>
+
+<p>A C array forgets its length the moment it is passed anywhere, and cannot be copied or
+returned. <code>std::array</code> knows its size, copies like any other value, and works with a
+range-for and the standard algorithms:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="modernize-avoid-c-arrays">
+int high_scores[5] = {};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;array&gt;
+
+std::array&lt;int, 5&gt; high_scores{};
+
+int best() {
+    int top = 0;
+    for (const int score : high_scores) top = score &gt; top ? score : top;
+    return top;
+}
+</pre>
+
+<p>raylib takes C arrays as a pointer and a count, and that call is the boundary: the array hands
+over <code>data()</code> and its size, converted to the <code>int</code> raylib asks for.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="#include &lt;array&gt;">
+const std::array&lt;Vector2, 3&gt; corners{ Vector2{ 0, 0 }, Vector2{ 40, 0 }, Vector2{ 20, 30 } };
+DrawTriangleFan(corners.data(), static_cast&lt;int&gt;(corners.size()), RED);
+</pre>
+
+<p>Let the compiler count when the list is the whole array. A size written by hand that is larger
+than the list compiles, and fills the rest with zeros, which no check notices; written without a
+size, the array is exactly as long as what is in it:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;array&gt;
+
+constexpr std::array LANES{ 120.0f, 240.0f, 360.0f };
+</pre>
+
+<p data-fw-grep=".clang-tidy::modernize-avoid-c-arrays\s+std::array, which knows its size">Checked by
+<code>modernize-avoid-c-arrays</code>, in the framework and in the examples.</p>
+
+<h2 id="casts">static_cast, never a C cast</h2>
+
+<p>A C cast does whatever it takes to make the types fit: a value conversion, a reinterpretation of
+the bits, a <code>const</code> thrown away. <code>static_cast</code> says which conversion was meant,
+does only that one, and is the one a reader can search for. Converting a <code>float</code> to an
+<code>int</code> is the usual case in a game, and it is the one a C cast hides best:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="modernize-avoid-c-style-cast">
+int whole_seconds(float seconds) { return (int)seconds; }
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+int whole_seconds(const float seconds) { return static_cast&lt;int&gt;(seconds); }
+</pre>
+
+<p>A conversion that cannot lose anything can be written with braces instead, which refuse to
+compile one that could. Google's guide prefers that form wherever it applies:</p>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;cstdint&gt;
+
+std::int64_t total(const int score) { return std::int64_t{ score } * 1000; }
+</pre>
+
+<p>clang-tidy parses one branch of every <code>#if</code>, the one of the machine it runs on, so a
+cast in the Android branch is invisible to a lint run on Linux. The style gate reads every
+branch:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="gate" data-gate="style" data-rule="S1">
+#if defined(PLATFORM_ANDROID)
+const int columns = (int)(GetScreenWidth() / 64.0f);
+#else
+const int columns = static_cast&lt;int&gt;(GetScreenWidth() / 64.0f);
+#endif
+DrawRectangle(0, 0, columns, columns, RED);
+</pre>
+
+<p data-fw-grep="tools/style_check.sh::S1  no C cast to an arithmetic type">Checked by
+<code>modernize-avoid-c-style-cast</code>, in the framework and in the examples, and by rule S1 of
+<code>tools/style_check.sh</code>, the <code>style</code> stage of <code>rmp test</code>, over every
+branch of the framework's and the examples' code. The plain C example and
+<code>tests/smoke_test.h</code>, which is compiled as C, are exempt: a cast is the language
+there.</p>
+
+<h2 id="enum-class">enum class</h2>
+
+<p>The members of a plain <code>enum</code> are names in the enclosing scope and turn into
+<code>int</code> without being asked: <code>LEFT</code> collides with the next enum that has a
+<code>LEFT</code>, and <code>LEFT + 3</code> compiles. An <code>enum class</code> keeps its
+members to itself, and converts only when a cast says so:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="cppcoreguidelines-use-enum-class">
+enum Direction { LEFT, RIGHT };
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+enum class Direction { LEFT, RIGHT };
+
+int step(const Direction direction) { return direction == Direction::LEFT ? -1 : 1; }
+</pre>
+
+<p>raylib's enums — <code>KEY_SPACE</code>, <code>LOG_INFO</code> — are C's, and are used as raylib
+declares them. Checked by <code>cppcoreguidelines-use-enum-class</code>, in the framework and in the
+examples.</p>
+
+<h2 id="nullptr">nullptr, never NULL or 0</h2>
+
+<p><code>NULL</code> and <code>0</code> are integers that happen to convert to a pointer, so an
+overload that takes an <code>int</code> can be chosen over the one that takes a pointer.
+<code>nullptr</code> has a type of its own and converts only to a pointer. The rule against raw
+pointers (<a href="/guidelines/pointers-and-raii.html">Pointers and RAII</a>) leaves it few places to
+appear, most of them where a C function asks for a pointer:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="modernize-use-nullptr">
+#include &lt;ctime&gt;
+
+std::time_t now() { return std::time(0); }
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;ctime&gt;
+
+std::time_t now() { return std::time(nullptr); }
+</pre>
+
+<p>Checked by <code>modernize-use-nullptr</code>, in the framework and in the examples, and
+<code>NULL</code> by rule S2 of <code>tools/style_check.sh</code>, in every branch.</p>
+
+<h2 id="varargs">No C variadic functions</h2>
+
+<p>A function declared with <code>...</code> takes anything and checks nothing: the types of what
+it reads are whatever its body says they are, and a wrong one is undefined behaviour, not an error.
+A list of values of one type is a <code>std::span</code> (or an initializer list); values of
+several types are a template:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="modernize-avoid-variadic-functions">
+#include &lt;cstdarg&gt;
+
+int sum(int count, ...) {
+    va_list values;
+    va_start(values, count);
+    int total = 0;
+    for (int i = 0; i &lt; count; ++i) total += va_arg(values, int);
+    va_end(values);
+    return total;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;span&gt;
+
+int sum(std::span&lt;const int&gt; values) {
+    int total = 0;
+    for (const int value : values) total += value;
+    return total;
+}
+</pre>
+
+<p>A <code>std::array</code>, a <code>std::vector</code> or a braced list passes to it as it is.
+<em>Calling</em> raylib's variadic functions — <code>TraceLog()</code>, <code>TextFormat()</code> —
+is the boundary, and allowed: the rule is about defining one.</p>
+
+<p data-fw-grep="src/rmp/internal.h::// NOLINTNEXTLINE\(modernize-avoid-variadic-functions\)\nvoid report_once\(const void \*site, const char \*fmt, \.\.\.\) RMP_PRINTF_FORMAT\(2, 3\);">The
+framework defines one, on purpose: the function behind its said-once warnings, which hands a
+<code>printf</code> format to <code>TraceLog()</code>. It carries a <code>NOLINT</code> with the
+reason, and a <code>format(printf)</code> attribute, so GCC and Clang check every format against
+its values as an error. <a href="/framework/why/macros.html#report-once">Macros</a> has the
+details. Checked by <code>modernize-avoid-variadic-functions</code>, in the framework and in the
+examples.</p>
+
+<h2 id="integers">int, and a fixed width when the size matters</h2>
+
+<p>How wide <code>long</code> is depends on the platform: 64 bits on 64-bit Linux and macOS, 32 on
+Windows and on the web. A game that ships to all of them has two different types under one name. <code>int</code> is the
+integer, and when a value needs a known size, <code>&lt;cstdint&gt;</code> names it:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="google-runtime-int">
+long total_score = 0;
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;cstdint&gt;
+
+std::int64_t total_score = 0;
+</pre>
+
+<p>Unsigned types are for bits — a collision mask, a generation counter that is meant to wrap — and
+not for saying a number is never negative. <code>float</code> and <code>double</code> are the
+floating-point types; <code>long double</code> is a different size on every compiler:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="google-runtime-float">
+long double elapsed = 0;
+</pre>
+
+<p>Checked by <code>google-runtime-int</code> and <code>google-runtime-float</code>, in the framework
+and in the examples. That an unsigned number is a bit pattern is a question for review.</p>
+
+<h2 id="explicit">A one-argument constructor is explicit</h2>
+
+<p>A constructor that takes one argument is also a conversion, used wherever the compiler finds
+the argument's type and wants the class: a <code>float</code> passed where
+<code>Meters</code> is expected becomes one without a word. <code>explicit</code> makes that a
+decision of the caller's:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="google-explicit-constructor">
+struct Meters {
+    Meters(float value) : value(value) {}
+    float value;
+};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+struct Meters {
+    explicit Meters(const float amount) : value(amount) {}
+    float value;
+};
+</pre>
+
+<p data-fw-grep="include/rmp/save.h::// NOLINTNEXTLINE\(google-explicit-constructor\): v\[&quot;score&quot;\] = 3; a number is a Value">The
+framework's API makes a few conversions on purpose, because without them the simple call would be
+longer: a number, a <code>bool</code> or a piece of text becomes an
+<a href="ref:rmp::Value"><code>rmp::Value</code></a>, so a save is filled the way it reads.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Value save;
+save["score"] = 3;
+save["name"] = "Omar";
+save["alive"] = true;
+</pre>
+
+<p>Each of those conversions carries a <code>NOLINT</code> with its reason on the line before it;
+<a href="/guidelines/google.html#implicit-conversions">Google's guide and this one</a> lists them.
+Checked by <code>google-explicit-constructor</code>, in the framework and in the examples.</p>
+
+<h2 id="special-members">A class that manages something says what its copies do</h2>
+
+<p>A class that writes its own destructor is managing something, and the copy the compiler writes
+for it copies the handle and not the thing: two copies, two destructors, one thing released twice.
+A class that writes one of the destructor, the copy and the move says what becomes of the
+others:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="cppcoreguidelines-special-member-functions">
+class Voice {
+public:
+    explicit Voice(const Sound sound) : _sound(sound) {}
+    ~Voice() { StopSound(_sound); }
+
+private:
+    Sound _sound;
+};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Voice {
+public:
+    explicit Voice(const Sound sound) : _sound(sound) {}
+    Voice(const Voice &amp;) = delete;
+    Voice &amp;operator=(const Voice &amp;) = delete;
+    ~Voice() { StopSound(_sound); }
+
+private:
+    Sound _sound;
+};
+</pre>
+
+<p data-fw-grep=".clang-tidy::key: cppcoreguidelines-special-member-functions\.AllowMissingMoveFunctionsWhenCopyIsDeleted\n    value: true">A
+class whose copy is deleted is not asked for its moves, which go with it, and a lone
+<code>= default</code> destructor manages nothing and is not asked for anything. Checked by
+<code>cppcoreguidelines-special-member-functions</code>, in the framework and in the examples.</p>
+
+<h2 id="auto">auto where the type is already on the line</h2>
+
+<p>Google's rule: deduce a type only when that makes the code clearer to someone who does not know
+it. A cast already names the type, so writing it again on the left says it twice:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="lint" data-check="modernize-use-auto">
+const float width = static_cast&lt;float&gt;(GetScreenWidth());
+DrawLineV(Vector2{ 0, 0 }, Vector2{ width, 0 }, RED);
+</pre>
+
+<pre data-lang="cpp" data-harness="function">
+const auto width = static_cast&lt;float&gt;(GetScreenWidth());
+DrawLineV(Vector2{ 0, 0 }, Vector2{ width, 0 }, RED);
+</pre>
+
+<p>Elsewhere the type is written: <code>const int lives = 3;</code> tells the reader something
+<code>auto</code> would make them work out. Checked by <code>modernize-use-auto</code> in the
+framework only — the examples switch the <code>modernize</code> family off, keeping only the rules
+this page names — and the rest of Google's rule is a question for review.</p>
+
+<h2 id="using">using, not typedef</h2>
+
+<p>An alias reads left to right like an assignment, and can be a template; a
+<code>typedef</code> can be neither:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="modernize-use-using">
+typedef int Score;
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+using Score = int;
+</pre>
+
+<p>Checked by <code>modernize-use-using</code>, in the framework and in the examples.</p>
+
+<h2 id="numbers">std::numbers, not a typed-in π</h2>
+
+<p>A constant typed in by hand is as precise as the hand that typed it. C++20 has them in
+<code>&lt;numbers&gt;</code>, exact to the type you ask for. raylib's <code>PI</code> is a macro,
+which is also why no constant of yours can be called that
+(<a href="/guidelines/macros.html#names">Macros</a>):</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="modernize-use-std-numbers">
+constexpr float HALF_TURN = 3.14159265f;
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;numbers&gt;
+
+constexpr float HALF_TURN = std::numbers::pi_v&lt;float&gt;;
+</pre>
+
+<p>Checked by <code>modernize-use-std-numbers</code>, in the framework and in the examples. It
+recognises a literal; a use of raylib's macro is not something it reports.</p>
+
+<h2 id="increment">++i</h2>
+
+<p>Google's rule: <code>i++</code> promises the value from before the increment, and when nothing
+reads that value the promise is noise — and, for an iterator, a copy. The prefix form says what is
+meant:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="gate" data-gate="style" data-rule="S6">
+int lives = 3;
+lives--;
+DrawText(TextFormat("lives %i", lives), 10, 10, 20, RED);
+</pre>
+
+<pre data-lang="cpp" data-harness="function">
+int lives = 3;
+--lives;
+for (int i = 0; i &lt; lives; ++i) DrawCircle(20 + (i * 30), 20, 10, RED);
+</pre>
+
+<p>Where the old value is the point, the postfix form is the right one, and the gate lets it
+be:</p>
+
+<pre data-lang="cpp" data-harness="function">
+int next_id = 1;
+const int id = next_id++;
+TraceLog(LOG_INFO, "spawned %d, next %d", id, next_id);
+</pre>
+
+<p data-fw-grep="tools/style_check.sh::S6  `\+\+i`, not `i\+\+`, where the value is not used">Checked by rule S6 of
+<code>tools/style_check.sh</code>, in every branch of the framework and the examples; this site holds
+every block on its pages to the same rule.</p>
+
+<h2 id="literals">No user-defined literals</h2>
+
+<p>Google's rule. <code>"Pong"sv</code> and <code>10ms</code> are short, and each needs a
+<code>using namespace</code> to work, which brings every other name of that namespace with it. The
+type, written out, says the same thing to a reader who has never seen the suffix:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="style" data-rule="S5">
+#include &lt;string_view&gt;
+
+using namespace std::string_view_literals;
+constexpr auto TITLE = "Pong"sv;
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;string_view&gt;
+
+constexpr std::string_view TITLE = "Pong";
+</pre>
+
+<p>Checked by rule S5 of <code>tools/style_check.sh</code>, the standard library's literals
+included, in every branch of the framework and the examples.</p>
+
+<h2 id="using-namespace">No using namespace</h2>
+
+<p>A using-directive pours a whole namespace into the file, names that arrive in a later version of
+the library included. Writing the namespace keeps every name's origin where it is used:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="google-build-using-namespace">
+#include &lt;vector&gt;
+
+using namespace std;
+
+vector&lt;int&gt; scores;
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;vector&gt;
+
+std::vector&lt;int&gt; scores;
+</pre>
+
+<p>Checked by <code>google-build-using-namespace</code>, in the framework and in the examples.</p>
+
+<h2 id="virtual-defaults">No default argument on a virtual function</h2>
+
+<p>A default argument belongs to the declaration the call is compiled against, not to the function
+that runs: called through the base class, an override gets the base's default whatever its own
+says. An overload that forwards says it once:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="google-default-arguments">
+class Shape {
+public:
+    virtual ~Shape() = default;
+    virtual void grow(float by = 1.0f) = 0;
+};
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+class Shape {
+public:
+    Shape() = default;
+    Shape(const Shape &amp;) = delete;
+    Shape &amp;operator=(const Shape &amp;) = delete;
+    virtual ~Shape() = default;
+    void grow() { grow(1.0f); }
+    virtual void grow(float by) = 0;
+};
+</pre>
+
+<p>Checked by <code>google-default-arguments</code>, in the framework and in the examples.</p>
+
+<h2 id="span-optional">std::span and std::optional instead of a pointer</h2>
+
+<p>A pointer and a count are a <code>std::span</code>, which carries both and cannot be given one
+without the other. A result that may not be there is a <code>std::optional</code>, which says so
+in its type instead of in a comment about <code>-1</code>:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="lint" data-check="custom-rmp-raw-pointer">
+int total(const int *values, int count) {
+    int sum = 0;
+    for (int i = 0; i &lt; count; ++i) sum += values[i];
+    return sum;
+}
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;optional&gt;
+#include &lt;string_view&gt;
+
+std::optional&lt;int&gt; level_number(const std::string_view name) {
+    if (name.size() != 7 || !name.starts_with("level_")) return std::nullopt;
+    return name.back() - '0';
+}
+</pre>
+
+<p><a href="/guidelines/pointers-and-raii.html">Pointers and RAII</a> has the rest: a reference that
+may be empty is an <a href="ref:rmp::Ref"><code>rmp::Ref</code></a>, and an object kept across frames
+is an <a href="ref:rmp::Handle"><code>rmp::Handle</code></a>. Checked by
+<code>custom-rmp-raw-pointer</code>, a query of the framework's own <code>.clang-tidy</code>, in the
+framework and in the examples.</p>
+
+<h2 id="designated">Designated initialisers, in declaration order</h2>
+
+<p data-fw-grep="CMakeLists.txt::are an ERROR in GCC and only a warning in Clang[\s\S]*?MSVC needs no flag: out of order is an error[\s\S]*?set\(RMP_STRICT_CXX_FLAGS -Werror=reorder-init-list\)">The
+options of every call in the API are a struct written with designated initialisers, and C++20
+wants them in the order the fields are declared. GCC and MSVC refuse them out of order; Clang only
+warns, so the framework hands every target that links it the flag that makes Clang refuse too — a
+game's included:</p>
+
+<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="declaration order">
+struct Point {
+    float x = 0;
+    float y = 0;
+};
+const Point p{ .y = 2, .x = 1 };
+DrawCircleV(Vector2{ p.x, p.y }, 4, RED);
+</pre>
+
+<pre data-lang="cpp" data-harness="function">
+struct Point {
+    float x = 0;
+    float y = 0;
+};
+const Point p{ .x = 1, .y = 2 };
+DrawCircleV(Vector2{ p.x, p.y }, 4, RED);
+</pre>
+
+<p>Checked by the compiler, with <code>-Werror=reorder-init-list</code> under Clang, everywhere: the framework, the
+examples and a game. <a href="/framework/why/designated-initialisers.html">Designated
+initialisers</a> has why the fields are ordered the way they would be written.</p>
+
+<h2 id="floor">C++20, as the oldest compiler speaks it</h2>
+
+<p data-fw-grep="tools/style_check.sh::S4  nothing newer than the floor compiler, NetBSD's GCC 10\.5, in the code a\s+#\s+game compiles">A
+game is built for every target from the same sources, and the oldest compiler among them is
+NetBSD's GCC 10.5. It takes the C++20 the framework is written in — <code>std::span</code>,
+<code>std::optional</code>, concepts through <code>requires</code>, designated initialisers,
+<code>&lt;numbers&gt;</code>, <code>constinit</code> — and not what arrived in GCC 11 and later:
+<code>&lt;format&gt;</code>, <code>&lt;source_location&gt;</code>, <code>std::bit_cast</code>,
+<code>using enum</code>, and what C++23 added. A use of one compiles on a laptop and fails on
+NetBSD, in CI:</p>
+
+<pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="style" data-rule="S4">
+#include &lt;bit&gt;
+#include &lt;cstdint&gt;
+
+std::uint32_t bits_of(const float value) { return std::bit_cast&lt;std::uint32_t&gt;(value); }
+</pre>
+
+<pre data-lang="cpp" data-harness="toplevel">
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+
+std::uint32_t bits_of(const float value) {
+    std::uint32_t bits = 0;
+    std::memcpy(&amp;bits, &amp;value, sizeof bits);
+    return bits;
+}
+</pre>
+
+<p data-fw-grep="thirdparty/FROZEN_VERSIONS.md::the C\+\+ version guard accepts `201709L`, because NetBSD's system GCC 10 reports that under `-std=c\+\+20`">The
+same compiler reports <code>__cplusplus</code> as <code>201709L</code> under
+<code>-std=c++20</code>, because C++20 was not final when it shipped: test for a feature, not for the
+version number. Checked by rule S4 of <code>tools/style_check.sh</code>, in every branch of the code
+a game compiles: <code>include/</code>, <code>src/</code> and the examples. The framework's tests
+build only on the CI image's compilers and are exempt.</p>

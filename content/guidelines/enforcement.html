@@ -1,0 +1,189 @@
+<!--
+title: What checks what
+description: Every rule of the Guidelines and the tool that holds it — a check of clang-tidy, a gate of rmp test, clang-format or the compiler — with where it holds: the framework, its examples, a game; and every check the framework switches off, with the reason.
+order: 90
+-->
+<h1>What checks what</h1>
+
+<p class="lede">A rule that only a document states lasts until the day somebody has not read the
+document. So each rule on these pages names the tool that refuses its mistake, and this page puts
+them in one table, with where each one holds: in the framework (its <code>include/</code>,
+<code>src/</code> and <code>tests/</code>), in its examples, and in a game made with
+<code>rmp new</code>. The build of this site holds the table to the framework's own configuration,
+so a check that is said to run runs.</p>
+
+<h2 id="tools">The tools</h2>
+
+<dl>
+<dt>clang-tidy, which <code>rmp lint</code> runs</dt>
+<dd data-fw-grep="tools/lint_debt.py::&quot;--experimental-custom-checks&quot;, file\]">The
+checks of the framework's <code>.clang-tidy</code> over the sources of <code>src/</code>,
+<code>tests/</code> and <code>examples/</code>, and the headers they reach, with the flags each file
+is built with. Whole families run — <code>bugprone</code>, <code>clang-analyzer</code>,
+<code>performance</code>, <code>portability</code>, <code>misc</code>, <code>modernize</code>,
+<code>readability</code> — minus what is switched off below, and the style guide's checks are named
+one by one. Two of them are queries the framework writes itself, which
+clang-tidy runs only with <code>--experimental-custom-checks</code>, and <code>rmp lint</code>
+passes it.</dd>
+<dt><code>examples/.clang-tidy</code></dt>
+<dd data-fw-grep="examples/.clang-tidy::InheritParentConfig: true">The same file for the examples,
+narrowed: it switches off the <code>modernize</code> and <code>readability</code> families, which
+push a more elaborate spelling of correct code at someone learning raylib, and takes back the ones
+that are rules of these pages. An example teaches the C++ a game should write.</dd>
+<dt>What the tree still owes</dt>
+<dd data-fw-grep="tools/lint_debt.txt::Nothing is ever added">clang-tidy's warnings that the
+framework has not yet paid are listed in <code>tools/lint_debt.txt</code>, a count per check and
+file. <code>rmp lint</code> fails on a warning the list does not owe and on a count that grew, and
+the list only shrinks. A new warning is fixed, or carries a <code>NOLINT</code> with its reason on
+the line.</dd>
+<dt>The text gates, stages of <code>rmp test</code></dt>
+<dd>What clang-tidy cannot see, because it parses one branch of every <code>#if</code> or because no
+check of its says it: <code>tools/naming_check.sh</code> (rules R1 to R8, the <code>naming</code>
+stage), <code>tools/style_check.sh</code> (S1 to S6, <code>style</code>),
+<code>tools/ownership_check.sh</code> (O1 and O2, <code>ownership</code>),
+<code>tools/pointer_check.py</code>, which reads the public headers' declarations
+(<code>pointers</code>), and <code>tools/cppcheck_check.sh</code>, a second analyser over
+<code>src/rmp</code> (<code>cppcheck</code>).</dd>
+<dt><code>.clang-format</code>, which <code>rmp fmt</code> applies</dt>
+<dd>The layout of the code. The framework's CI fails on a file it would change; in a game,
+<code>rmp fmt</code> formats and nothing checks.</dd>
+<dt>The compiler</dt>
+<dd data-fw-grep="CMakeLists.txt::target_compile_options\(\$\{target\} PRIVATE -Wall -Wextra -Wno-missing-field-initializers\)">Every
+target built from the framework's sources and a game's is compiled with <code>-Wall
+-Wextra</code> under GCC and Clang. The framework's own checks build with <code>RMP_WERROR</code>,
+which makes a warning an error; a game's warnings stay warnings unless it asks for the same.
+Designated initialisers out of order are an error everywhere.</dd>
+</dl>
+
+<h2 id="table">Rule by rule</h2>
+
+<p>"Yes" in a column says the rule is checked there; what follows it says how far. A game gets
+<code>.clang-format</code> and the compiler's flags: <code>rmp lint</code> and the text gates are
+commands of the framework's own repository, and a game chooses its own checks.</p>
+
+<table data-enforcement>
+<thead><tr><th>Rule</th><th>Checked by</th><th>Framework</th><th>Examples</th><th>A game</th></tr></thead>
+<tbody>
+<tr><td><a href="/guidelines/naming.html">Names spelled by kind</a>: types, constants, functions and variables, private members, the eight hooks</td><td><code>readability-identifier-naming</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/naming.html">A local never hides a name around it</a></td><td><code>clang-diagnostic-shadow</code>, which is <code>-Wshadow</code> given to clang-tidy</td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/naming.html">No <code>g_</code> name, no <code>kName</code>, no underscore touching a dot, no trailing underscore</a>, in every branch</td><td><code>tools/naming_check.sh</code> <code>R1</code> <code>R2</code> <code>R3</code> <code>R4</code> <code>R8</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/macros.html#prefix">Every macro starts with <code>RMP_</code></a></td><td><code>readability-identifier-naming</code>; <code>tools/naming_check.sh</code> <code>R5</code> in every branch</td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/macros.html#names">No constant named like somebody else's macro</a></td><td><code>tools/naming_check.sh</code> <code>R6</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/macros.html#retired">No retired name</a></td><td><code>tools/naming_check.sh</code> <code>R7</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/formatting.html">The layout</a>: 4 spaces, 90 columns, <code>char *p</code>, no alignment, includes in the order written</td><td><code>.clang-format</code></td><td>yes, in CI</td><td>yes, in CI</td><td>yes: <code>rmp fmt</code> formats, and nothing checks</td></tr>
+<tr><td><a href="/guidelines/const.html"><code>const</code> on every local that does not change</a>, and on what a pointer points to when nothing writes through it</td><td><code>misc-const-correctness</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/const.html"><code>const</code> on a by-value parameter in the definition, never the declaration</a></td><td><code>readability-avoid-const-params-in-decls</code>, the declaration's half</td><td>yes</td><td>no: the examples switch <code>readability</code> off</td><td>no</td></tr>
+<tr><td><a href="/guidelines/const.html">A constant at namespace scope in a header is <code>inline constexpr</code></a></td><td><code>custom-rmp-header-constant</code></td><td>yes</td><td>yes, in their own headers</td><td>no</td></tr>
+<tr><td><a href="/guidelines/pointers-and-raii.html">No raw pointer</a>, outside the C libraries' boundary</td><td><code>custom-rmp-raw-pointer</code></td><td>yes, with what <code>tools/lint_debt.txt</code> owes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/pointers-and-raii.html">No raw pointer and no C string in a declaration a game can name</a></td><td><code>tools/pointer_check.py</code>, against <code>tools/pointer_ratchet.txt</code></td><td>yes: <code>include/rmp/</code></td><td>no</td><td>no</td></tr>
+<tr><td><a href="/guidelines/pointers-and-raii.html">Nothing owned by hand</a>: no <code>new</code>, <code>delete</code>, <code>malloc</code> or <code>free</code></td><td><code>cppcoreguidelines-owning-memory</code>, <code>cppcoreguidelines-no-malloc</code>; <code>tools/ownership_check.sh</code> <code>O1</code> in <code>include/rmp/</code> and <code>src/rmp/</code></td><td>yes</td><td>yes, the clang-tidy checks</td><td>no</td></tr>
+<tr><td><a href="/guidelines/pointers-and-raii.html">raylib's <code>Load*</code> and <code>Unload*</code> only in the files that own what they make</a></td><td><code>tools/ownership_check.sh</code> <code>O2</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/pointers-and-raii.html">A <code>std::optional</code> is checked before it is read</a></td><td><code>bugprone-unchecked-optional-access</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/strings.html">A <code>std::string_view</code> never reaches a C function through <code>data()</code></a></td><td><code>bugprone-suspicious-stringview-data-usage</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#arrays"><code>std::array</code>, not a C array</a></td><td><code>modernize-avoid-c-arrays</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#casts"><code>static_cast</code>, never a C cast</a></td><td><code>modernize-avoid-c-style-cast</code>; <code>tools/style_check.sh</code> <code>S1</code> in every branch</td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#enum-class"><code>enum class</code></a></td><td><code>cppcoreguidelines-use-enum-class</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#nullptr"><code>nullptr</code>, never <code>NULL</code> or <code>0</code></a></td><td><code>modernize-use-nullptr</code>; <code>tools/style_check.sh</code> <code>S2</code> in every branch</td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#varargs">No C variadic function</a></td><td><code>modernize-avoid-variadic-functions</code></td><td>yes, but for one, with its reason</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#integers"><code>int</code>, and a fixed width when the size matters</a></td><td><code>google-runtime-int</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#integers">No <code>long double</code></a></td><td><code>google-runtime-float</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#explicit">A one-argument constructor is <code>explicit</code></a></td><td><code>google-explicit-constructor</code></td><td>yes, but for the API's deliberate conversions</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#special-members">A class that manages something says what its copies do</a></td><td><code>cppcoreguidelines-special-member-functions</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#auto"><code>auto</code> where a cast already names the type</a></td><td><code>modernize-use-auto</code></td><td>yes</td><td>no: the examples switch <code>modernize</code> off</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#using"><code>using</code>, not <code>typedef</code></a></td><td><code>modernize-use-using</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#numbers"><code>std::numbers</code>, not a typed-in constant</a></td><td><code>modernize-use-std-numbers</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#using-namespace">No <code>using namespace</code></a></td><td><code>google-build-using-namespace</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/google.html#agreement">No unnamed namespace in a header</a></td><td><code>google-build-namespaces</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/google.html#agreement">No using-declaration at global scope in a header</a></td><td><code>google-global-names-in-headers</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/google.html#agreement">No overloaded unary <code>&amp;</code></a></td><td><code>google-runtime-operator</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/google.html#agreement"><code>std::make_pair</code> deduces its types</a></td><td><code>google-build-explicit-make-pair</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#virtual-defaults">No default argument on a virtual function</a></td><td><code>google-default-arguments</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#increment"><code>++i</code> where the old value is not read</a></td><td><code>tools/style_check.sh</code> <code>S6</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#literals">No user-defined literal</a></td><td><code>tools/style_check.sh</code> <code>S5</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#floor">Nothing newer than the oldest compiler a game is built with</a></td><td><code>tools/style_check.sh</code> <code>S4</code></td><td>yes, but not in <code>tests/</code>, which build only on CI's compilers</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/google.html#todo">No <code>TODO</code>, <code>FIXME</code> or <code>XXX</code></a></td><td><code>tools/style_check.sh</code> <code>S3</code></td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td><a href="/guidelines/modern-cpp.html#designated">Designated initialisers in declaration order</a></td><td><code>-Werror=reorder-init-list</code> under Clang; GCC and MSVC refuse them anyway</td><td>yes</td><td>yes</td><td>yes</td></tr>
+<tr><td><a href="/guidelines/macros.html">A macro only for what a function cannot do</a></td><td><code>cppcoreguidelines-macro-usage</code>, told the framework's own by name</td><td>yes</td><td>yes</td><td>no</td></tr>
+<tr><td>No finding of a second analyser, and a reason beside every suppression</td><td><code>tools/cppcheck_check.sh</code></td><td>yes: <code>src/rmp/</code></td><td>no</td><td>no</td></tr>
+<tr><td>Warnings on the code we write</td><td><code>-Wall</code> <code>-Wextra</code></td><td>yes, as errors in the framework's checks</td><td>yes</td><td>yes, as warnings</td></tr>
+</tbody>
+</table>
+
+<h2 id="not-checked">Written down, not checked</h2>
+
+<p>Some rules have no tool that can tell the right way from the wrong one. They are questions a
+reviewer asks:</p>
+
+<ul>
+<li data-fw-grep="CLAUDE.md::Two rules have no check, and are review\s+questions"><code>const</code> on a by-value
+parameter in a definition — clang-tidy does not look at parameters — and <code>constexpr</code>,
+<code>consteval</code> and <code>constinit</code> wherever they apply (<a href="/guidelines/const.html">const</a>);</li>
+<li>a <code>std::array</code> given a size larger than its list, whose rest is filled with zeros
+(<a href="/guidelines/modern-cpp.html#arrays">Modern C++</a>);</li>
+<li>an unsigned type only for bits, and <code>auto</code> beyond a cast
+(<a href="/guidelines/modern-cpp.html#integers">Modern C++</a>);</li>
+<li><code>#pragma once</code> at the top of a header, and <code>&lt;filesystem&gt;</code> in
+<code>src/rmp/app.cpp</code> and <code>src/rmp/save.cpp</code> only
+(<a href="/guidelines/google.html#deviations">Google's guide</a>);</li>
+<li>everything Google's guide says that no check of these pages states.</li>
+</ul>
+
+<h2 id="off">Switched off, and why</h2>
+
+<p>Each check the framework's <code>.clang-tidy</code> switches off fights a decision the framework
+has already made, and the file says which next to it. In the same words:</p>
+
+<table>
+<thead><tr><th>Check</th><th>Why it is off</th></tr></thead>
+<tbody>
+<tr data-fw-grep=".clang-tidy::bugprone-easily-swappable-parameters\s+every \(float x, float y\) in a 2D"><td><code>bugprone-easily-swappable-parameters</code></td><td>Every <code>(float x, float y)</code> in a 2D framework, which is all of them.</td></tr>
+<tr data-fw-grep=".clang-tidy::bugprone-narrowing-conversions\s+float/int mixing is what raylib's own"><td><code>bugprone-narrowing-conversions</code></td><td><code>float</code> and <code>int</code> mixing is what raylib's own API does; the static analyser catches the cases that lose data.</td></tr>
+<tr data-fw-grep=".clang-tidy::misc-non-private-member-variables\s+the options structs"><td><code>misc-non-private-member-variables-in-classes</code></td><td>The options structs and <code>rmp::Object</code> are public data by design (<a href="/guidelines/google.html#public-data">Google's guide</a>).</td></tr>
+<tr data-fw-grep=".clang-tidy::misc-no-recursion\s+the layout walk is a tree walk"><td><code>misc-no-recursion</code></td><td>The layout walk is a tree walk.</td></tr>
+<tr data-fw-grep=".clang-tidy::misc-include-cleaner\s+wants an #include for every raylib"><td><code>misc-include-cleaner</code></td><td>It wants an <code>#include</code> for every raylib symbol, and raylib is one header.</td></tr>
+<tr data-fw-grep=".clang-tidy::misc-use-anonymous-namespace\s+`static` at file scope is the"><td><code>misc-use-anonymous-namespace</code>, <code>misc-use-internal-linkage</code></td><td><code>static</code> at file scope is the deliberate spelling: <code>main.cpp</code> is the file a newcomer reads first, and it has a plain C twin among the examples, so the two keep the same shape. Google allows either.</td></tr>
+<tr data-fw-grep=".clang-tidy::modernize-use-trailing-return-type\s+`auto f\(\) -&gt; int` is not the style"><td><code>modernize-use-trailing-return-type</code></td><td><code>auto f() -&gt; int</code> is not the style, nor Google's.</td></tr>
+<tr data-fw-grep=".clang-tidy::modernize-use-nodiscard\s+would decorate the whole API"><td><code>modernize-use-nodiscard</code></td><td>It would decorate the whole API for the few calls where it matters.</td></tr>
+<tr data-fw-grep=".clang-tidy::modernize-macro-to-enum\s+the generated RMP_\* values are macros"><td><code>modernize-macro-to-enum</code></td><td>The values the <code>.toml</code> generates are macros on purpose: the C entry point reads them too (<a href="/guidelines/macros.html#when">Macros</a>).</td></tr>
+<tr data-fw-grep=".clang-tidy::modernize-use-designated-initializers\s+suggests them inside our own"><td><code>modernize-use-designated-initializers</code></td><td>It suggests them inside the framework's implementation, where the field order is Clay's, not the framework's.</td></tr>
+<tr data-fw-grep=".clang-tidy::portability-avoid-pragma-once\s+#pragma once is the repository's"><td><code>portability-avoid-pragma-once</code></td><td><code>#pragma once</code> is the framework's decision, and every compiler it builds with supports it (<a href="/guidelines/google.html#pragma-once">Google's guide</a>).</td></tr>
+<tr data-fw-grep=".clang-tidy::performance-enum-size\s+pinning an underlying type on a"><td><code>performance-enum-size</code></td><td>Pinning an underlying type on a public enum is churn in the ABI for bytes nobody is short of.</td></tr>
+<tr data-fw-grep=".clang-tidy::readability-redundant-member-init\s+`detail::sizing size\{\};` is redundant"><td><code>readability-redundant-member-init</code></td><td>In an options struct every field shows its default, even where the default is what the type would give anyway, and one field that does not is worse.</td></tr>
+<tr data-fw-grep=".clang-tidy::readability-use-std-min-max\s+the explicit `if \(dt &gt; 0\.1f\)` clamps"><td><code>readability-use-std-min-max</code></td><td>The explicit <code>if (dt &gt; 0.1f)</code> clamps are written that way, with a comment saying why the bound is what it is.</td></tr>
+<tr data-fw-grep=".clang-tidy::readability-use-concise-preprocessor-directives\n#\s+`#if defined\(A\) \|\| defined\(B\)` and"><td><code>readability-use-concise-preprocessor-directives</code></td><td><code>#if defined(A) || defined(B)</code> and <code>#if defined(A)</code> are written the same way on purpose.</td></tr>
+<tr data-fw-grep=".clang-tidy::readability-identifier-length\s+`dt`, `t`, `o` are the vocabulary"><td><code>readability-identifier-length</code></td><td><code>dt</code>, <code>t</code> and <code>o</code> are the vocabulary.</td></tr>
+<tr data-fw-grep=".clang-tidy::readability-magic-numbers\s+it is a game; 44 is a touch target"><td><code>readability-magic-numbers</code></td><td>It is a game, and a touch target is a number: 44.</td></tr>
+<tr data-fw-grep=".clang-tidy::readability-braces-around-statements\s+single-line guards are the style"><td><code>readability-braces-around-statements</code></td><td>A guard on one line is the style, and <code>.clang-format</code> is set to keep it there (<a href="/guidelines/google.html#formatting">Google's guide</a>).</td></tr>
+<tr data-fw-grep=".clang-tidy::readability-implicit-bool-conversion\s+raylib returns int for booleans"><td><code>readability-implicit-bool-conversion</code></td><td>raylib returns <code>int</code> for booleans.</td></tr>
+<tr data-fw-grep=".clang-tidy::readability-function-cognitive-complexity\s+a render switch is one function"><td><code>readability-function-cognitive-complexity</code></td><td>A render switch is one function on purpose (<a href="/guidelines/google.html#function-length">Google's guide</a>).</td></tr>
+<tr data-fw-grep=".clang-tidy::readability-uppercase-literal-suffix\s+`1\.0f`, not `1\.0F`"><td><code>readability-uppercase-literal-suffix</code></td><td><code>1.0f</code>, not <code>1.0F</code>.</td></tr>
+<tr data-fw-grep=".clang-tidy::\s+-readability-avoid-nested-conditional-operator,\n\s+-readability-math-missing-parentheses,"><td><code>readability-avoid-nested-conditional-operator</code>, <code>readability-math-missing-parentheses</code></td><td>Switched off with the others; <code>.clang-tidy</code> gives no reason beside them.</td></tr>
+</tbody>
+</table>
+
+<p data-fw-grep="examples/.clang-tidy::-misc-unused-parameters,">And for the examples,
+<code>examples/.clang-tidy</code> switches off <code>misc-unused-parameters</code>: a hook takes
+<code>float delta</code> whether this example's <code>_update</code> uses it or not, and the
+signature is the API's. It keeps <code>readability-identifier-naming</code>,
+<code>readability-misleading-indentation</code> and <code>readability-misplaced-array-index</code>
+from the family it switches off, and these six from <code>modernize</code>, each a rule of these
+pages: <code>modernize-avoid-c-arrays</code>, <code>modernize-avoid-c-style-cast</code>,
+<code>modernize-use-nullptr</code>, <code>modernize-avoid-variadic-functions</code>,
+<code>modernize-use-std-numbers</code> and <code>modernize-use-using</code>.</p>
+
+<h2 id="debt">What the framework still owes</h2>
+
+<p>A rule that arrives after the code it judges finds the code breaking it. The framework writes
+that down instead of switching the rule off, and each list only shrinks: what clang-tidy still
+finds is <code>tools/lint_debt.txt</code>; the pointers left in its headers, each with its reason,
+are <code>tools/pointer_ratchet.txt</code>; the files allowed to own memory or raylib resources by
+hand, each with its reason, are in <code>tools/ownership_check.sh</code>; and what cppcheck may not
+say, each with its reason, is in <code>tools/cppcheck_check.sh</code> or on the line itself.</p>
+
+<h2 id="in-a-game">In a game</h2>
+
+<p>A game made with <code>rmp new</code> gets the formatter, <code>rmp fmt</code>, and the compiler's
+flags, which hold its designated initialisers to their order. None of the rest runs on its code:
+the rules are the advice the framework follows, and a game that wants to read like it can follow
+them too. <a href="/guidelines/index.html#in-a-game">What a game gets</a> says the same from the
+game's side.</p>

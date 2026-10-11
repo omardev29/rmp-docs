@@ -109,6 +109,11 @@ h2:hover .heading-anchor, h3:hover .heading-anchor, h4:hover .heading-anchor,
 .callout.warning { border-left-color: var(--warn-edge); background: var(--warn); }
 .callout.danger { border-left-color: var(--danger-edge); background: var(--danger); }
 
+/* The Guidelines' table of what checks what: the rule and its tool get the
+   width, the three columns of where it holds only what a short answer needs. */
+table[data-enforcement] td:nth-child(1) { width: 32%; }
+table[data-enforcement] td:nth-child(2) { width: 32%; }
+
 /* --- tables that may be wider than the column ----------------------------- */
 .table-wrap { overflow-x: auto; margin: 0 0 1.2em; }
 .table-wrap table { margin: 0; }

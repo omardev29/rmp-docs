@@ -108,6 +108,14 @@ trusted, because it reformats code that is already right. clang-tidy runs with
 `--experimental-custom-checks`, because the framework's `.clang-tidy` has `CustomChecks` that run
 only with it; a clang-tidy without the flag is refused rather than trusted.
 
+A page of the Guidelines that says which tool checks a rule says it in the table of
+`content/guidelines/enforcement.html`, `<table data-enforcement>`: per row the rule, what checks it
+in `<code>` (a clang-tidy check, `tools/<script>` with its rules — `tools/style_check.sh` `S6` —, a
+flag, `.clang-format`), and "yes" or "no" for the framework, the examples and a game. The
+`enforcement` gate holds each row to the framework's `.clang-tidy` and `examples/.clang-tidy`, to the
+scripts' rules and to what `rmp new` copies, both ways; and every check the framework's
+`.clang-tidy` files name, on or off, has to appear on a Guidelines page.
+
 Every block that is not shown as a mistake, on any page, and every file a tutorial writes, passes
 the framework's `tools/style_check.sh` too: `++i` where the old value is not read, no C cast, no
 `NULL`. The code on this site is held to what the framework's examples are.

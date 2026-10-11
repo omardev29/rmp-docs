@@ -704,10 +704,6 @@ class CompileTierTest(unittest.TestCase):
         self.assertNotIn("<!--said:", out)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TomlTest(unittest.TestCase):
     """Every .toml block goes through the framework's configure.py."""
 
@@ -765,3 +761,7 @@ class TomlTest(unittest.TestCase):
         problems, _ = self.build_with(
             '<pre data-lang="toml" data-config="no" data-reason="site.toml">[x]\ny = 1\n</pre>')
         self.assertEqual(problems, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

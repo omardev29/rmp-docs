@@ -1,0 +1,11 @@
+`auto in the examples` says it holds in the examples, and none of modernize-use-auto runs there
+`int, not in the framework` says no for the framework, and the framework's .clang-tidy runs google-runtime-int there
+S9 is not a rule of tools/style_check.sh
+does not run google-readability-todo, anywhere
+`clang-tidy in a game` says a game gets it, and rmp new copies none of modernize-avoid-c-arrays into one
+`Formatted, not in a game` says no for a game, and a game gets .clang-format
+neither CMakeLists.txt nor .clang-tidy's ExtraArgs pass -Wconversion
+`clang-tidy's flag in a game` says a game gets it, and rmp new copies none of -Wshadow into one
+and this one has 4
+`Nothing checks it` names no tool
+the framework's .clang-tidy names misc-no-recursion, and no Guidelines page does
