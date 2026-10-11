@@ -193,7 +193,7 @@ and for the game.</span></p>
 is not a formality. It found holes in gates that were passing: the repository check let
 through an object file whose name git quotes, the seam check read a <code>//</code> inside a string
 as a comment and missed the call after it, and the glibc check called a file that is no ELF at all
-static. Each hole is a planted case in the file now.</p>
+static. Each hole has its planted case in the file.</p>
 
 <pre data-lang="shell">
 rmp test gates
@@ -223,7 +223,8 @@ that does not parse is one warning line and exit 0, after which the check never 
 <code>tests/configure_test.py</code> shows each check of the style guide firing on a probe of the
 wrong way and staying quiet on the right one: a new query gets its probe there.</p>
 
-<p>A script is wired in five places, and each has a test that fails until it is:</p>
+<p>A script is wired in five places, and tests of the command and of the gates hold the last
+three:</p>
 
 <ol>
 <li><strong>The script</strong>, <code>tools/&lt;what&gt;_check.sh</code>. Its header says what it
