@@ -178,14 +178,10 @@ checkout is yours. On a system with SELinux, add <code>:Z</code> to the first <c
 
 <p>A plain clone instead of a worktree works the same, without the second <code>-v</code>.</p>
 
-<p data-fw-grep="tools/dev_shell.sh::exec docker run --rm -it \\\n    --user &quot;\$\(id -u\):\$\(id -g\)&quot;">With
+<p data-fw-grep="tools/dev_shell.sh::exec docker run --rm -it --init \\\n    --user &quot;\$\(id -u\):\$\(id -g\)&quot;">With
 Docker, <code>tools/dev_shell.sh</code> runs a command in the pinned image, read from the same file,
-as your user rather than as root, and with no command it opens a shell there. It runs
-<code>docker</code> without <code>--init</code>, so it is for commands that start no game. For
-<code>rmp test</code> and anything else that opens a window, use the command above with
-<code>docker</code> in place of <code>podman</code>, and the two options the script adds so that
-what the container writes is yours: <code>--user "$(id -u):$(id -g)"</code> and
-<code>-e HOME=/tmp</code>.</p>
+as your user rather than as root, with an init as the container's first process, and with no
+command it opens a shell there. With podman, use the command above.</p>
 
 <pre data-lang="shell">
 tools/dev_shell.sh bash tools/versions_check.sh

@@ -52,7 +52,7 @@ out.</p>
 
 <h2 id="the-template">The template</h2>
 
-<p><code>.github/pull_request_template.md</code> is the description every pull request starts
+<p data-fw-grep=".github/pull_request_template.md::^## What changed, and why$[\s\S]*?^## The ladder$"><code>.github/pull_request_template.md</code> is the description every pull request starts
 with. It asks for what a reviewer needs to trust the change without running it again:</p>
 
 <dl>
@@ -109,7 +109,7 @@ author has to know exists, every function in it is one more thing to read, and e
 <code>.toml</code> is a promise to every game made from the framework. So a change to either is
 Omar's decision, made on the pull request.</p>
 
-<p>The <code>api</code> job of <code>.github/workflows/ci.yml</code> holds it. It runs on pull
+<p data-fw-grep=".github/workflows/ci.yml::  api:\n    needs: config\n    if: github\.event_name == 'pull_request'">The <code>api</code> job of <code>.github/workflows/ci.yml</code> holds it. It runs on pull
 requests only — on a push, a tag or a run started by hand it does nothing and passes — and it looks
 at what the pull request changes:</p>
 

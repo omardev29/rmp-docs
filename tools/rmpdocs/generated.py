@@ -268,4 +268,30 @@ def targets_table(framework: Path) -> str:
             f"<th>Groups it is in</th></tr></thead><tbody>{body}</tbody></table>")
 
 
-GENERATED_BLOCKS = {"targets-table": targets_table}
+def size_budget_table(framework: Path) -> str:
+    """tools/size_budget.txt as a table: every binary a release ships, unpacked
+    and packed, as its line says -- the numbers the size budget holds a
+    release to, never typed into a page that goes stale at the next growth."""
+    rows = []
+    for line in (framework / "tools" / "size_budget.txt").read_text().splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        fields, _, comment = line.partition("#")
+        parts = fields.split()
+        if len(parts) != 4:
+            continue
+        name, _kind, unpacked, packed = parts
+
+        def number(v: str) -> str:
+            return f"{int(v):,}" if v.isdigit() else ("not measured yet" if v == "?" else "\u2014")
+
+        size = number(unpacked)
+        if "estimate" in comment.lower() and unpacked.isdigit():
+            size += ", an estimate"
+        rows.append(f"<tr><td><code>{html.escape(name)}</code></td><td>{html.escape(size)}</td>"
+                    f"<td>{html.escape(number(packed))}</td></tr>")
+    return ('<table><thead><tr><th>Binary</th><th>Unpacked, bytes</th><th>Packed, bytes</th></tr>'
+            f"</thead><tbody>{''.join(rows)}</tbody></table>")
+
+
+GENERATED_BLOCKS = {"targets-table": targets_table, "size-budget-table": size_budget_table}

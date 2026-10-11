@@ -212,3 +212,27 @@ class ConfigCommentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SizeBudgetTableTest(unittest.TestCase):
+    """security.html's table of what a release weighs is tools/size_budget.txt
+    itself: typed into the page, it went stale at the first growth written
+    down (seven rows at once, Stages D and E)."""
+
+    def table(self, text: str) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "tools").mkdir()
+            (Path(tmp) / "tools" / "size_budget.txt").write_text(text)
+            return generated.size_budget_table(Path(tmp))
+
+    def test_every_line_is_a_row_with_its_numbers(self):
+        got = self.table("# a comment\n\n"
+                         "linux-x64-glibc        elf      1288336    386252  # measured at x\n"
+                         "web                    wasm      511162         -  # measured at x\n"
+                         "macos                  macho          ?         -\n"
+                         "openbsd-arm64          elf       843556         -  # estimate from x\n")
+        self.assertIn("<td><code>linux-x64-glibc</code></td><td>1,288,336</td><td>386,252</td>", got)
+        self.assertIn("<td><code>web</code></td><td>511,162</td><td>—</td>", got)
+        self.assertIn("<td><code>macos</code></td><td>not measured yet</td>", got)
+        self.assertIn("<td>843,556, an estimate</td>", got)
+        self.assertEqual(got.count("<tr><td>"), 4)

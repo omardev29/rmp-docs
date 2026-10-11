@@ -96,7 +96,7 @@ rmp new --list
 
 <p>prints what a new game gets, without making one.</p>
 
-<p data-fw-grep=".github/workflows/ci.yml::      # 'true' in the framework's own repository, 'false' in a game made with\n      # `rmp new`\. This file is the same in both, byte for byte">Some
+<p data-fw-grep=".github/workflows/ci.yml::      # `rmp new`\. This file is the same in both but for the block between its\n      # \[ci\] on_push markers">Some
 files are the same in both and behave differently. <code>.github/workflows/ci.yml</code> is copied
 byte for byte, but for the block of triggers <code>[ci] on_push</code> writes; the framework's own
 jobs — its tests, its examples, its lint gates — are skipped in a game by a condition the first job

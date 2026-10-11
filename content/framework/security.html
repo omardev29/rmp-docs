@@ -149,30 +149,7 @@ measured it: unpacked, as the linker wrote it, and packed, after UPX, for the re
 packed. <code>tools/size_budget.txt</code> holds them, and every release is
 <a href="#size-budget">held to its line</a>. A game's own sizes are its own.</p>
 
-<table>
-<thead><tr><th>Binary</th><th>Unpacked, bytes</th><th>Packed, bytes</th></tr></thead>
-<tbody>
-<tr data-fw-grep="tools/size_budget.txt::^linux-x64-glibc +elf +1236560 +366804 "><td><code>linux-x64-glibc</code></td><td>1,236,560</td><td>366,804</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^linux-arm64-glibc +elf +1162896 +346808 "><td><code>linux-arm64-glibc</code></td><td>1,162,896</td><td>346,808</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^linux-riscv64-glibc +elf +962752 +391504 "><td><code>linux-riscv64-glibc</code></td><td>962,752</td><td>391,504</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^linux-x64-musl +elf +1232664 +365412 "><td><code>linux-x64-musl</code></td><td>1,232,664</td><td>365,412</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^linux-x64-glibc-drm +elf +754856 +312400 "><td><code>linux-x64-glibc-drm</code></td><td>754,856</td><td>312,400</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^linux-arm64-glibc-drm +elf +660552 +- "><td><code>linux-arm64-glibc-drm</code></td><td>660,552</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^windows-x64 +pe +2206720 +- "><td><code>windows-x64</code></td><td>2,206,720</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^windows-arm64 +pe +1312256 +- "><td><code>windows-arm64</code></td><td>1,312,256</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^macos +macho +1696392 +- "><td><code>macos</code></td><td>1,696,392</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^freebsd-x64 +elf +783848 +- "><td><code>freebsd-x64</code></td><td>783,848</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^freebsd-arm64 +elf +694632 +- "><td><code>freebsd-arm64</code></td><td>694,632</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^openbsd-x64 +elf +847040 +- "><td><code>openbsd-x64</code></td><td>847,040</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^openbsd-arm64 +elf +843556 +- +# estimate"><td><code>openbsd-arm64</code></td><td>843,556, an estimate</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^netbsd-x64 +elf +937744 +- "><td><code>netbsd-x64</code></td><td>937,744</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^web +wasm +477952 +- "><td><code>web</code></td><td>477,952</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^android/arm64-v8a +so +2327472 +- "><td><code>android/arm64-v8a</code></td><td>2,327,472</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^android/armeabi-v7a +so +1728772 +- "><td><code>android/armeabi-v7a</code></td><td>1,728,772</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^android/x86 +so +2609980 +- "><td><code>android/x86</code></td><td>2,609,980</td><td>—</td></tr>
-<tr data-fw-grep="tools/size_budget.txt::^android/x86_64 +so +2557152 +- "><td><code>android/x86_64</code></td><td>2,557,152</td><td>—</td></tr>
-</tbody>
-</table>
+<div data-generated="size-budget-table"></div>
 
 <p>The OpenBSD arm64 line is worked out from an older measurement rather than read off a build, as
 its comment in the file says, and is held to the same rule until a run replaces it.</p>
