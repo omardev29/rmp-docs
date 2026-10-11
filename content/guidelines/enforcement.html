@@ -46,7 +46,8 @@ stage), <code>tools/style_check.sh</code> (S1 to S6, <code>style</code>),
 <code>src/rmp</code> (<code>cppcheck</code>).</dd>
 <dt><code>.clang-format</code>, which <code>rmp fmt</code> applies</dt>
 <dd>The layout of the code. The framework's CI fails on a file it would change; in a game,
-<code>rmp fmt</code> formats and nothing checks.</dd>
+<code>rmp fmt</code> formats and <code>rmp fmt check</code> refuses a file it would change, when the
+game runs them: its <code>rmp test</code> and its CI do not.</dd>
 <dt>The compiler</dt>
 <dd data-fw-grep="CMakeLists.txt::target_compile_options\(\$\{target\} PRIVATE -Wall -Wextra -Wno-missing-field-initializers\)">Every
 target CMake builds from the framework's sources and a game's is compiled with <code>-Wall
@@ -71,7 +72,7 @@ commands of the framework's own repository, and a game chooses its own checks.</
 <tr><td><a href="/guidelines/macros.html#prefix">Every macro starts with <code>RMP_</code></a></td><td><code>readability-identifier-naming</code>; <code>tools/naming_check.sh</code> <code>R5</code> in every branch</td><td>yes</td><td>yes</td><td>no</td></tr>
 <tr><td><a href="/guidelines/macros.html#names">No constant named like somebody else's macro</a></td><td><code>tools/naming_check.sh</code> <code>R6</code></td><td>yes</td><td>yes</td><td>no</td></tr>
 <tr><td><a href="/guidelines/macros.html#retired">No retired name</a></td><td><code>tools/naming_check.sh</code> <code>R7</code></td><td>yes</td><td>yes</td><td>no</td></tr>
-<tr><td><a href="/guidelines/formatting.html">The layout</a>: 4 spaces, 90 columns, <code>char *p</code>, no alignment, includes in the order written</td><td><code>.clang-format</code></td><td>yes, in CI</td><td>yes, in CI</td><td>yes: <code>rmp fmt</code> formats, and nothing checks</td></tr>
+<tr><td><a href="/guidelines/formatting.html">The layout</a>: 4 spaces, 90 columns, <code>char *p</code>, no alignment, includes in the order written</td><td><code>.clang-format</code></td><td>yes, in CI</td><td>yes, in CI</td><td>yes: <code>rmp fmt</code> formats and <code>rmp fmt check</code> refuses, when the game runs them</td></tr>
 <tr><td><a href="/guidelines/const.html"><code>const</code> on every local that does not change</a>, and on what a pointer points to when nothing writes through it</td><td><code>misc-const-correctness</code></td><td>yes</td><td>yes</td><td>no</td></tr>
 <tr><td><a href="/guidelines/const.html"><code>const</code> on a by-value parameter in the definition, never the declaration</a></td><td><code>readability-avoid-const-params-in-decls</code>, the declaration's half</td><td>yes</td><td>no: the examples switch <code>readability</code> off</td><td>no</td></tr>
 <tr><td><a href="/guidelines/const.html">A constant at namespace scope in a header is <code>inline constexpr</code></a></td><td><code>custom-rmp-header-constant</code></td><td>yes</td><td>yes, in their own headers</td><td>no</td></tr>

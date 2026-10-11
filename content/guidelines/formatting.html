@@ -17,13 +17,17 @@ makes when you do not.</p>
 <thead><tr><th>Command</th><th>What it does</th><th>Where</th></tr></thead>
 <tbody>
 <tr><td><code>rmp fmt</code></td><td>formats every file in place</td><td>in the framework: <code>include/</code>, <code>src/</code>, <code>tests/</code> and <code>examples/</code>; in a game: its own <code>include/</code>, <code>src/</code> and <code>tests/</code>, and not the files that came with the framework: <code>src/rmp/</code>, <code>include/rmp/</code> and <code>tests/smoke_test.h</code></td></tr>
-<tr><td><code>rmp test fmt</code></td><td>fails on a file clang-format would change, and changes nothing</td><td>the framework, and its CI's lint job</td></tr>
+<tr><td><code>rmp fmt check</code></td><td>fails on a file clang-format would change, and changes nothing</td><td>the same files</td></tr>
+<tr><td><code>rmp test fmt</code></td><td>the same, as a stage of <code>rmp test</code></td><td>the framework, and its CI's lint job</td></tr>
 </tbody>
 </table>
 
 <p data-fw-grep="tools/rmp.py::# What `rmp fmt` formats\. A game formats its own code and not the framework's:\s+# a different clang-format would rewrite src/rmp/ for no reason of its own\.">A
 game made with <code>rmp new</code> gets the framework's <code>.clang-format</code>, so
-<code>rmp fmt</code> lays its code out the same way; nothing in its CI refuses a file that is not.
+<code>rmp fmt</code> lays its code out the same way and <code>rmp fmt check</code> refuses a file
+that is not; <span data-fw-grep="tools/rmp.py::Stage\(&quot;fmt&quot;, &quot;every file is clang-format clean&quot;, \[\(&quot;fmt-check&quot;,\)\]\),">neither the
+game's <code>rmp test</code></span> <span data-fw-grep=".github/workflows/ci.yml::- name: Everything we own is formatted\n\s+if: needs\.config\.outputs\.framework == 'true'">nor its
+CI runs them</span>.
 It leaves the framework's own sources alone because a different clang-format would rewrite them
 for no reason of the game's.</p>
 
