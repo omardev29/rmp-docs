@@ -15,9 +15,10 @@ an owner you can see, and everything that refers to it says how.</p>
 <p data-fw-grep=".clang-tidy::A pointer asks its reader whether it\n  # may be null, who owns it and how long it lives, and its type answers none\.">A
 pointer asks whoever reads it three questions — may it be null, who owns what it points at, how
 long does that live — and its type answers none of them. Each form below answers all three, so a
-signature written with them needs no comment to be used right. Google's guide allows a pointer for
-an optional argument or a result that may be missing; this framework does not, and has a type for
-each of those cases instead.</p>
+signature written with them needs no comment to be used right.
+<a href="/guidelines/google.html#pointers">Google's guide</a> allows a pointer for an optional
+argument or a result that may be missing; this framework does not, and has a type for each of
+those cases instead.</p>
 
 <h2 id="instead">What to write instead</h2>
 

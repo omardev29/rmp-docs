@@ -142,8 +142,8 @@ void draw_lives(const int lives) {
 </pre>
 
 <p data-fw-grep="tools/style_check.sh::#   S4  nothing newer than the floor compiler, NetBSD's GCC 10\.5, in the code a\n#       game compiles: &lt;format&gt;, &lt;source_location&gt;, std::bit_cast and\n#       `using enum` arrived in GCC 11-13">Not
-<code>&lt;format&gt;</code>: the oldest compiler a game is built with, NetBSD's GCC 10.5, does not
-have it. It compiles on a newer one, so <code>tools/style_check.sh</code> refuses it, in every
+<code>&lt;format&gt;</code>: <a href="/guidelines/modern-cpp.html#floor">the oldest compiler a game
+is built with</a>, NetBSD's GCC 10.5, does not have it. It compiles on a newer one, so <code>tools/style_check.sh</code> refuses it, in every
 branch of every <code>#if</code>:</p>
 
 <pre data-lang="cpp" data-harness="toplevel" data-expect="gate" data-gate="style" data-rule="S4">
