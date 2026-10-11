@@ -39,7 +39,9 @@ not picked up until a Python is there again.</p>
 <h3>A tool is not on the PATH</h3>
 
 <p><code>rmp</code> says which one: <samp>FAIL: cmake is not installed, or not on PATH</samp>. A
-game needs CMake, Ninja and a C++ compiler; on Linux, the X11 development libraries as well.</p>
+game needs CMake, Ninja and a C++ compiler; on a Linux desktop, the X11 development libraries as
+well, and on a Linux console with no desktop the DRM/KMS ones in their place —
+<a href="/manual/platforms/linux-console.html#install">Linux from a console</a> names them.</p>
 
 <h3><code>rmp</code> does nothing outside a game</h3>
 
@@ -287,6 +289,19 @@ see <a href="/manual/raylib/raylib.html#escape-is-the-games-key">Escape is the g
 <code>[linux] glibc</code>, the oldest glibc the binary may need; <code>rmp build release</code> on
 your own machine uses your machine's. See <a href="/manual/platforms/desktop.html">Desktop</a> for
 the floor, and for the targets it does not apply to.</p>
+
+<h3 id="linux-console">Linux console: a refusal before the game, a black screen, no keyboard</h3>
+
+<p data-fw-grep="tools/rmp.py::def refuse_devices\(found: Devices, exe: Path\) -&gt; None:">On a console with no
+desktop, <code>rmp run</code> builds for DRM/KMS and asks whether the game can open the screen and
+read the keyboard before it starts it; when it cannot, it refuses and says why: no card, a card a
+desktop holds, or devices you may not open — which <code>rmp run sudo</code> fixes this once, and
+the <code>video</code> and <code>input</code> groups and a new login fix for good. <code>sudo
+rmp</code> is refused on purpose: <code>rmp</code> never builds as root.
+<a href="/manual/platforms/linux-console.html#when-it-does-not-work">Linux from a console</a> has
+each case and what to do about it, a black screen and a keyboard with no mouse among them, and
+<a href="/manual/platforms/linux-console.html#terminal">how the terminal comes back</a> after a
+crash.</p>
 
 <h3>Linux on Wayland: the window has no position</h3>
 

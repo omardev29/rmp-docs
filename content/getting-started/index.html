@@ -17,12 +17,16 @@ compiler. A Linux distribution's own <code>cmake</code> package can be older tha
 older CMake stops the first build before anything is compiled: <code>cmake --version</code> says
 which one you have.</li>
 <li><strong>git</strong>, to get the framework and to keep your game in.</li>
-<li>On Linux, the X11 development libraries:</li>
+<li>On a Linux desktop, the X11 development libraries:</li>
 </ul>
 
 <pre data-lang="shell">
 sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
 </pre>
+
+<p>On a Linux console with no desktop, <code>rmp</code> builds for DRM/KMS instead, and needs the
+DRM headers in their place; <a href="/manual/platforms/linux-console.html">Linux from a
+console</a> says which, and how the game reaches the screen.</p>
 
 <h2>Install rmp</h2>
 

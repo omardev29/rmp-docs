@@ -242,7 +242,7 @@ with the <code>.toml</code>, and <code>git status</code> stays clean after a bui
 <tr><td><code>include/rmp/generated/</code></td><td>C and C++: the <code>config.h</code> that holds the <code>RMP_</code> values. See <a href="/manual/basics/headers.html#rmp-config-h">Headers</a>.</td></tr>
 <tr><td><code>raymob/generated.properties</code>, <code>raymob/app/generated/</code></td><td>Gradle: the Android properties and the manifest.</td></tr>
 <tr><td><code>ios/project.yml</code></td><td>XcodeGen: the iOS project.</td></tr>
-<tr><td><code>build/</code></td><td data-fw-grep="tools/rmp.py::BUILD_DIRS = \{\s+&quot;debug&quot;: [^\n]*\s+&quot;release&quot;: [^\n]*\s+&quot;web&quot;: ">Everything compiled, one folder per build: <code>build/debug/</code>, <code>build/release/</code>, <code>build/web/</code> for the browser, <code>build/memory/</code> for the software-rendered check.</td></tr>
+<tr><td><code>build/</code></td><td data-fw-grep="tools/rmp.py::BUILD_DIRS = \{\s+&quot;debug&quot;: [^\n]*\s+&quot;release&quot;: [^\n]*\s+&quot;debug-drm&quot;: [^\n]*\s+&quot;release-drm&quot;: [^\n]*\s+&quot;web&quot;: ">Everything compiled, one folder per build: <code>build/debug/</code>, <code>build/release/</code>, <code>build/debug-drm/</code> and <code>build/release-drm/</code> on a <a href="/manual/platforms/linux-console.html">Linux console</a>, <code>build/web/</code> for the browser, <code>build/memory/</code> for the software-rendered check.</td></tr>
 </tbody>
 </table>
 

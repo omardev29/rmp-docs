@@ -34,8 +34,10 @@ puts things, and how to remove them. Underneath, it is a clone of the framework 
 </pre>
 
 <p>Building a game also needs <a href="https://www.python.org/downloads/">Python</a> 3.11 or newer,
-<a href="https://cmake.org/">CMake</a>, Ninja and a C++ compiler on the PATH, and on Linux the X11
-development libraries; the installer lists whichever this machine lacks:</p>
+<a href="https://cmake.org/">CMake</a>, Ninja and a C++ compiler on the PATH, and on a Linux
+desktop the X11 development libraries; the installer lists whichever this machine lacks. On a Linux
+console with no desktop it lists the DRM/KMS ones instead, which
+<a href="/manual/platforms/linux-console.html">Linux from a console</a> names:</p>
 
 <pre data-lang="shell">
 sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
@@ -131,6 +133,19 @@ which stays in the debug folder's cache. <code>build/</code> itself only holds t
 never a build. A <code>CMakeCache.txt</code> at its top is a build from a checkout older than that,
 and the first <code>rmp</code> command that configures removes what it left there, says so, and
 keeps the folders of the builds beside it.</p>
+
+<h3 id="on-a-linux-console">On a Linux console</h3>
+
+<p data-fw-grep="tools/rmp.py::def preset\(self, release: bool = False\) -&gt; str:[\s\S]*?return name \+ &quot;-drm&quot; if self\.session\(\)\.drm else name">On
+a Linux console with no desktop, <code>rmp</code> builds the game for DRM/KMS — raylib's backend
+that draws straight to the screen, with no X11 and no Wayland — and says so once. Debug and
+release then go to <code>build/debug-drm</code> and <code>build/release-drm</code>, and
+<code>rmp run</code> checks that the game can open the screen and read the keyboard before it
+starts it, saying what to do when it cannot. <code>rmp run sudo</code> builds as you and starts
+only the game as root, and <code>rmp</code> itself under sudo refuses every command but
+<code>rmp help</code> and <code>rmp clean</code>. <code>RMP_DRM=1</code> or <code>0</code> in the
+environment overrides what <code>rmp</code> decides.
+<a href="/manual/platforms/linux-console.html">Linux from a console</a> has the whole of it.</p>
 
 <h3>rmp web and rmp android</h3>
 
@@ -256,7 +271,7 @@ tool to read; this site checks every <code>rmp</code> line it shows against it.<
 <tbody>
 <tr><td>0</td><td>Done, or help printed.</td></tr>
 <tr><td>1</td><td>A check failed, or a precondition did not hold and the command refused.</td></tr>
-<tr><td>2</td><td>The command line was wrong: an unknown command, a wrong argument, a framework command in a game, or no project here.</td></tr>
+<tr><td>2</td><td>The command line was wrong: an unknown command, a wrong argument, a framework command in a game, no project here, or an <code>RMP_DRM</code> that is neither <code>1</code> nor <code>0</code>.</td></tr>
 <tr><td>127</td><td data-fw-grep="rmp::needs Python 3\.11 or newer on PATH[\s\S]*?exit 127">No Python 3.11 or newer was found to run it: the launcher printed the message above and stopped.</td></tr>
 <tr><td>130</td><td>Interrupted.</td></tr>
 </tbody>
@@ -279,7 +294,9 @@ cmake --build --preset debug
 <p data-fw-grep="CMakeLists.txt::if\(_rmp_binary_dir STREQUAL _rmp_build_root\)\s+message\(FATAL_ERROR\s+&quot;build/ holds one folder per build and is not a build itself">The presets a game builds with are <code>debug</code>, <code>release</code>, <code>web</code> and
 <code>memory</code>, the software-rendered build the <code>render</code> stage uses, and each builds
 into the folder of its name under <code>build/</code>: <code>build/debug</code>,
-<code>build/release</code>, <code>build/web</code>, <code>build/memory</code>. Configuring
+<code>build/release</code>, <code>build/web</code>, <code>build/memory</code>. On a Linux console,
+<code>debug-drm</code> and <code>release-drm</code> take the place of the first two, in
+<code>build/debug-drm</code> and <code>build/release-drm</code>. Configuring
 <code>build/</code> itself is refused before anything else runs, and so is a release configured by
 hand into a folder where <code>[dev] compiler</code> was applied, because that compiler stays in the
 folder's cache. A fifth, <code>cmake --preset lint</code>, only configures, into

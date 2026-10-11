@@ -16,6 +16,9 @@ built, packaged and run, and the pages in this section are about those differenc
 <ul>
 <li><a href="/manual/platforms/desktop.html">Desktop</a> — Windows, macOS, Linux (glibc, musl,
 DRM/KMS, RISC-V) and the BSDs.</li>
+<li><a href="/manual/platforms/linux-console.html">Linux from a console</a> — on a machine with no
+desktop, <code>rmp</code> builds for DRM/KMS by itself: the screen and the keyboard from
+<code>/dev</code>, sudo or the groups, and the terminal it gives back.</li>
 <li><a href="/manual/platforms/web.html">Web</a> — Emscripten, a browser that owns the frame loop,
 memory, saves and sound.</li>
 <li><a href="/manual/platforms/android.html">Android</a> — raymob, Gradle generated from the
@@ -127,7 +130,7 @@ is.</p>
 <tr><td><code>linux-arm64-glibc</code></td><td>full</td><td>Built on an ARM64 runner, checked against the glibc floor, booted under a virtual X server; the archive unzipped and started from another folder, compressed by UPX by default.</td></tr>
 <tr><td><code>linux-x64-musl</code></td><td>full</td><td>Built; checked to be a musl binary with no glibc symbol, asking the system for musl's loader and C library and nothing else; on Alpine, a software-rendered build of it booted, and the archive's binary, compressed by UPX by default, started under a virtual X server.</td></tr>
 <tr><td><code>linux-riscv64-glibc</code></td><td>full</td><td data-fw-grep=".github/workflows/_linux.yml::  riscv64:(?:[^\n]*\n)*?\s*run: bash tools/glibc_check\.sh build/release/\$\{\{ inputs\.project_name \}\} 2\.38">Cross-compiled and checked to be a RISC-V executable; checked against its own glibc floor, 2.38, which <code>[linux] glibc</code> does not set. <span data-fw-grep=".github/workflows/_linux.yml::- name: The archive starts from any folder, under QEMU[\s\S]*?timeout 120 qemu-riscv64-static -L / ">There is no RISC-V runner, so the archive is unzipped and started from another folder under QEMU's emulation of RISC-V, compressed by UPX by default, under a virtual X server.</span></td></tr>
-<tr><td><code>linux-x64-glibc-drm</code></td><td>full</td><td>Built; checked to link libdrm and no X11 or Wayland; the archive's binary, compressed by UPX by default, booted on a virtual display the kernel provides.</td></tr>
+<tr><td><code>linux-x64-glibc-drm</code></td><td>full</td><td>Built; checked to link libdrm and no X11 or Wayland; the archive's binary, compressed by UPX by default, booted on a virtual display the kernel provides. <span data-fw-grep=".github/workflows/_linux.yml::- name: rmp run on a console -- chose DRM/KMS, built, booted">On the same display, <code>rmp run</code> run the way a <a href="/manual/platforms/linux-console.html">Linux console</a> runs it, which has to decide DRM/KMS by itself, build, check <code>/dev</code> and boot the game.</span></td></tr>
 <tr><td><code>linux-arm64-glibc-drm</code></td><td>full</td><td>Built and checked the same way. Not run: what it is for is a Raspberry Pi's own display pipeline, which a virtual display does not resemble.</td></tr>
 <tr><td><code>windows-arm64</code></td><td>full</td><td>Cross-compiled with MSVC and checked to be an ARM64 executable whose imports are all part of Windows 10. Never run.</td></tr>
 <tr><td><code>macos</code></td><td>full</td><td>Built as one binary with both architectures, and checked for both and for the oldest macOS each asks for; a software-rendered build booted, and a software-rendered release started from the project folder it was built in and from another folder.</td></tr>

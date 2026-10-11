@@ -64,6 +64,13 @@ installs it on this system: <code>apt</code>, <code>dnf</code>, <code>pacman</co
 Windows <code>winget</code>. The command is printed for you to run, as root where the system wants
 it; the installer never runs it.</p>
 
+<p data-fw-grep="tools/install.sh::if \[ -n &quot;\$console&quot; \]; then\s+drm=yes[\s\S]*?need &quot;the DRM/KMS development headers&quot;">On
+a Linux console with no desktop, <code>rmp</code> builds games for DRM/KMS, straight to the screen,
+and the installer decides the same way: there it looks for the libdrm, GBM, EGL and OpenGL ES
+headers instead of X11's, and says it is on a console.
+<a href="/manual/platforms/linux-console.html">Linux from a console</a> has the packages for each
+system, and what comes after.</p>
+
 <h2 id="where-it-puts-things">Where it puts things</h2>
 
 <table>

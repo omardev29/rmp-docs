@@ -1,0 +1,282 @@
+<!--
+title: Linux from a console
+description: On a Linux console with no desktop, rmp builds the game for DRM/KMS by itself: what decides it, the folders it builds in, what to install, the screen and the keyboard from /dev, sudo and the groups, and the terminal it gives back.
+order: 15
+-->
+<h1>Linux from a console</h1>
+
+<p class="lede">A Linux machine with no desktop — a Raspberry Pi, a server, a laptop started to a
+text login — has no X11 and no Wayland for a window to open on, and often none of their headers to
+build against. On such a console <code>rmp</code> builds the game for DRM/KMS instead: raylib's
+backend that draws straight to the screen through the kernel. There is nothing to configure.
+<code>rmp run</code>, <code>rmp build</code>, <code>rmp test</code> and <code>rmp pack</code> decide
+by themselves, and say so.</p>
+
+<h2 id="what-decides-it">What decides it</h2>
+
+<p data-fw-grep="tools/rmp.py::forced = env\.get\(DRM_ENV, &quot;&quot;\)[\s\S]*?if system != &quot;Linux&quot;:\s+return Session\(False\)\s+if env\.get\(&quot;DISPLAY&quot;\) or env\.get\(&quot;WAYLAND_DISPLAY&quot;\):\s+return Session\(False\)\s+ssh = next\(\(name for name in SSH_VARS if env\.get\(name\)\), &quot;&quot;\)[\s\S]*?if env\.get\(&quot;XDG_SESSION_TYPE&quot;\) == &quot;tty&quot;:\s+return Session\(True, &quot;XDG_SESSION_TYPE=tty&quot;\)\s+if is_virtual_console\(terminal\):">Once
+per command, before anything is configured, <code>rmp</code> asks these in order, and the first
+that answers decides:</p>
+
+<ol>
+<li data-fw-grep="tools/rmp.py::raise Usage\(f&quot;\{DRM_ENV\}=1: DRM/KMS is a Linux backend, and this is \{system\}&quot;\)"><code>RMP_DRM=1</code>
+builds for DRM/KMS and <code>RMP_DRM=0</code> for the desktop, whatever else is true. Empty is the
+same as unset. Any other value is refused rather than read as one of the two, and so is
+<code>RMP_DRM=1</code> anywhere but Linux.</li>
+<li>Not Linux: the desktop. DRM/KMS is a Linux backend.</li>
+<li><code>DISPLAY</code> or <code>WAYLAND_DISPLAY</code> is set: the desktop. There is one to open
+a window on.</li>
+<li data-fw-grep="tools/rmp.py::SSH_VARS = \(&quot;SSH_CONNECTION&quot;, &quot;SSH_CLIENT&quot;, &quot;SSH_TTY&quot;\)">Logged
+in over SSH — <code>SSH_CONNECTION</code>, <code>SSH_CLIENT</code> or <code>SSH_TTY</code> is
+set — with no display: the desktop, and a note saying so.</li>
+<li><code>XDG_SESSION_TYPE=tty</code>, which logind sets for a text login: DRM/KMS.</li>
+<li data-fw-grep="tools/rmp.py::return bool\(name\) and re\.fullmatch\(r&quot;/dev/tty\[0-9\]\+&quot;, name\) is not None">The
+terminal <code>rmp</code> runs in is a virtual console, <code>/dev/tty1</code>,
+<code>/dev/tty2</code> and so on: DRM/KMS, for a console that logind did not set up. The terminal
+is stdin's or, when stdin is not one, the controlling terminal's, so <code>rmp run &lt;
+/dev/null</code> typed on a console still counts. A terminal window, SSH and tmux are
+<code>/dev/pts/…</code> and a serial line is <code>/dev/ttyS0</code>: none of them is a virtual
+console.</li>
+<li>Anything else: the desktop. With a terminal and no display, a note says why.</li>
+</ol>
+
+<p data-fw-grep="CLAUDE.md::A console's word for itself lies twice\.\*\* logind sets\n  `XDG_SESSION_TYPE=tty` for an SSH login too, and `startx` keeps the console's\n  `tty` inside the X session it starts">The
+order is there because a console's own word for itself is wrong twice. <code>startx</code> keeps
+the console's <code>XDG_SESSION_TYPE=tty</code> inside the desktop it starts, so a display is asked
+about first. And logind calls a login over SSH a <code>tty</code> session too, while the screen of
+a machine you are logged into from elsewhere is not yours to take — so SSH comes before it. From
+SSH, <code>RMP_DRM=1</code> asks for the machine's own screen anyway:</p>
+
+<pre data-lang="shell">
+RMP_DRM=1 rmp run
+</pre>
+
+<p data-fw-grep="tools/rmp.py::return \(f&quot;\{session\.why\}: building for DRM/KMS, in \{DEBUG_DRM_DIR\} and \{RELEASE_DRM_DIR\} &quot;">When
+it builds for DRM/KMS, <code>rmp</code> says why on a line of its own:
+<samp>XDG_SESSION_TYPE=tty: building for DRM/KMS, in build/debug-drm and build/release-drm
+(RMP_DRM=0 for the desktop)</samp>.
+<span data-fw-grep="tests/rmp_test.py::class SessionTest\(unittest\.TestCase\):[\s\S]*?def test_every_combination\(self\):">The
+framework's tests walk every combination of them.</span></p>
+
+<h2 id="folders">Its own two folders</h2>
+
+<p data-fw-grep="CMakePresets.json::&quot;name&quot;: &quot;debug-drm&quot;,[\s\S]*?&quot;inherits&quot;: &quot;debug&quot;,\s+&quot;binaryDir&quot;: &quot;\$\{sourceDir\}/build/debug-drm&quot;,\s+&quot;cacheVariables&quot;: \{\s+&quot;RMP_TARGET_DRM&quot;: &quot;ON&quot;">On
+a console the debug build goes to <code>build/debug-drm</code> and the release to
+<code>build/release-drm</code>, never to <code>build/debug</code> and <code>build/release</code>.
+They are presets of their own, <code>debug-drm</code> and <code>release-drm</code>: the debug and
+release presets with <code>RMP_TARGET_DRM</code> on, which picks raylib's DRM platform. A console
+and a desktop on the same machine never share a cache, so going from one to the other rebuilds
+nothing.</p>
+
+<pre data-lang="shell">
+rmp run              # builds build/debug-drm/my_game, checks /dev, starts it
+rmp build release    # builds build/release-drm/my_game
+</pre>
+
+<p>Without <code>rmp</code>, the same presets by hand:</p>
+
+<pre data-lang="shell">
+cmake --preset debug-drm
+cmake --build --preset debug-drm
+</pre>
+
+<p data-fw-grep="tests/rmp_test.py::def test_a_console_build_never_asks_for_x11\(self\):">CMake
+never looks for X11 in either. A test configures both presets with X11 made impossible to find,
+and the desktop's preset beside them, which has to fail that way for the test to count. A
+debug build on a console is sanitized the way any debug build is, as
+<a href="/manual/basics/configuration.html#sanitizers"><code>[dev] sanitize</code></a> says.</p>
+
+<h2 id="install">What to install</h2>
+
+<p>A console build needs the development files of libdrm, GBM, EGL and OpenGL ES — what raylib's
+DRM backend draws with — and none of X11's. <a href="/getting-started/install.html">The
+installer</a> decides the way <code>rmp</code> does, and on a console it looks for those instead
+of the X11 headers and lists what is missing with the command for this system:</p>
+
+<table data-fw-grep="tools/install.sh::apt-get:drm\) say libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev ;;[\s\S]*?dnf:drm\) say libdrm-devel mesa-libgbm-devel mesa-libEGL-devel mesa-libGLES-devel ;;[\s\S]*?pacman:drm\) say libdrm mesa libglvnd ;;[\s\S]*?zypper:drm\) say libdrm-devel libgbm-devel Mesa-libEGL-devel Mesa-libGLESv2-devel ;;">
+<thead><tr><th>System</th><th>Packages</th></tr></thead>
+<tbody>
+<tr><td><code>apt</code></td><td><code>libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev</code></td></tr>
+<tr><td><code>dnf</code></td><td><code>libdrm-devel mesa-libgbm-devel mesa-libEGL-devel mesa-libGLES-devel</code></td></tr>
+<tr><td><code>pacman</code></td><td><code>libdrm mesa libglvnd</code></td></tr>
+<tr><td><code>zypper</code></td><td><code>libdrm-devel libgbm-devel Mesa-libEGL-devel Mesa-libGLESv2-devel</code></td></tr>
+</tbody>
+</table>
+
+<pre data-lang="shell">
+sudo apt install libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev
+</pre>
+
+<p data-fw-grep="tools/install.sh::say &quot;This is a Linux console with no desktop: rmp builds games for DRM/KMS here,&quot;">It
+says what it decided, too: <samp>This is a Linux console with no desktop: rmp builds games for
+DRM/KMS here,</samp> and how to build for a desktop instead. As everywhere, it prints the command
+and never runs it.</p>
+
+<h2 id="devices">The screen and the keyboard</h2>
+
+<p data-fw-grep="tools/rmp.py::# A DRM/KMS game opens the screen through /dev/dri/card\*, which it has to be\n# able to read and write and be the DRM master of">A
+DRM/KMS game opens the screen through <code>/dev/dri/card*</code>, which it has to be able to read
+and write and be the <em>DRM master</em> of: the kernel makes the first program that opens a card
+nobody else draws on its master. It reads the keyboard, the mouse and the gamepads from
+<code>/dev/input/event*</code>. Those belong to root and to a group, <code>video</code> and
+<code>input</code>, and logind lets the person at the console open the card but not read the
+keyboard. A game that cannot reach them finds out after the screen has gone black, so
+<code>rmp run</code> asks first, between the build and the start:</p>
+
+<ul>
+<li data-fw-grep="tools/rmp.py::RAYLIB_CARDS = \(&quot;dri/by-path/platform-gpu-card&quot;, &quot;dri/card1&quot;, &quot;dri/card0&quot;, &quot;dri/card2&quot;\)"><strong>No
+card.</strong> The cards that count are the ones raylib tries, in its order:
+<code>/dev/dri/by-path/platform-gpu-card</code>, then <code>card1</code>, <code>card0</code> and
+<code>card2</code> — <code>card1</code> before <code>card0</code> because on a Raspberry Pi
+<code>card0</code> is the 3D engine and <code>card1</code> the display. With none of them,
+<code>rmp run</code> refuses: no display driver with modesetting has loaded, as in a virtual
+machine without a display device or a container started without
+<code>--device /dev/dri</code>.</li>
+<li data-fw-grep="tools/rmp.py::f&quot;something else draws on the screen: it is the DRM master of \{found\.held\[0\]\}, and &quot;"><strong>A
+card something else holds.</strong> When another program is the DRM master of the card the game
+would take — a desktop on another virtual console, most likely — <code>rmp run</code> refuses:
+<samp>FAIL: something else draws on the screen: it is the DRM master of …, and a game can only take
+a screen nobody holds.</samp> Log out of that desktop or stop it. sudo is not offered, because
+root cannot take a screen from its master either.</li>
+<li data-fw-grep="tools/rmp.py::&quot;the game could not reach the screen and the keyboard from here \(DRM/KMS\):&quot;,"><strong>A
+card or an input device you cannot open.</strong> <code>rmp run</code> refuses with
+<samp>the game could not reach the screen and the keyboard from here (DRM/KMS):</samp>, lists each
+one with its owner and mode the way <code>ls -l</code> shows them, and gives the two ways out
+below.</li>
+<li data-fw-grep="tools/rmp.py::found\.notes\.append\(f&quot;there is no \{dev\}/input/event\*: the game reads the keys of the &quot;"><strong>No
+input device at all.</strong> A note, and the game starts: it reads the keys of the terminal it
+runs on, and no mouse or gamepad.</li>
+</ul>
+
+<p data-fw-grep="tools/rmp.py::# On a console the boot is on its screen, and asks what `rmp run` asks\.">The
+smoke stage of <code>rmp test</code> boots the game on the console's screen, and asks the same
+before it does.</p>
+
+<h3 id="sudo-or-groups">Two ways out: sudo once, or the groups</h3>
+
+<p data-fw-grep="tools/rmp.py::&quot;Or, once and for good, put yourself in the video and input groups, then log out&quot;,\s+&quot;and in again, and `rmp run` starts it as you, without root:&quot;,\s+f&quot;  sudo usermod -aG video,input \{user\}&quot;">Start
+the game as root this once, or put yourself in the <code>video</code> and <code>input</code>
+groups for good. A group you are added to counts from your next login, so log out and in again,
+and from then on <code>rmp run</code> starts the game as you, without root:</p>
+
+<pre data-lang="shell">
+rmp run sudo                          # this once: the game as root, the build as you
+sudo usermod -aG video,input "$USER"  # for good, then log out and in again
+</pre>
+
+<p data-fw-grep="tools/rmp.py::def start_game\(ctx: Ctx, exe: Path, env=None, capture: bool = False, sudo: bool = False\):[\s\S]*?if sudo:\s+# Root opens every node, which is what sudo is for; it does not make a\s+# card that is not there, or take one something else holds -- refused\s+# before sudo asks for a password, as for anyone\.\s+found\.blocked = \[\]"><code>rmp
+run sudo</code> builds as you, says the exact command, and starts only the game with
+<code>sudo --</code>: nothing <code>rmp</code> writes is ever root's. It asks the same questions
+first, but the last: a card that is not there, or one that something else holds, is refused
+before sudo asks for a password, because sudo fixes neither — what only root may open is what sudo
+is for.</p>
+
+<p data-fw-grep="tools/rmp.py::def cmd_run\(ctx, args\):\s+sudo = one_of\(args, \(&quot;sudo&quot;,\), &quot;&quot;\) == &quot;sudo&quot;\s+if sudo:\s+# Before the build, not after it: nothing is built for a refusal\.\s+refuse_sudo_for_a_window\(ctx\)">On
+a desktop it is refused before anything is built: a window needs no root. When <code>rmp</code> is
+root already it starts the game as it is, and on a machine with no <code>sudo</code> it refuses
+and prints the game's path, to start as root some other way. <code>rmp</code> never runs sudo
+unless you typed it.</p>
+
+<h3 id="never-as-root">Never sudo rmp</h3>
+
+<p data-fw-grep="tools/rmp.py::ROOT_COMMANDS = \{\s+&quot;help&quot;: &quot;reads nothing and writes nothing&quot;,\s+&quot;clean&quot;: &quot;removes build/, which is how a build an earlier root left goes away&quot;,\s+\}"><code>rmp</code>
+never builds as root. Under sudo — root, with <code>SUDO_USER</code> naming somebody else — every
+command but <code>rmp help</code> and <code>rmp clean</code> is refused before anything runs —
+<samp>FAIL: rmp is running as root through sudo, and would build as root: …</samp> — because
+<code>build/</code>, the files generated from the <code>.toml</code>, the sources and
+<code>.git</code> would be root's, and the next command you ran as yourself could not write them.
+<code>sudo rmp clean</code> is how what an earlier root left goes away. Root with nobody behind it
+— a container, CI — has no other user to be, and builds.</p>
+
+<h2 id="saves">Saves under sudo</h2>
+
+<p data-fw-grep="tools/rmp.py::print\(&quot;  note     as root, the game saves in root's home folder and not in yours: with&quot;\)\s+print\(&quot;           sudo's defaults, /root/\.local/share/\. The video and input groups avoid it\.&quot;\)">A
+game started with sudo is root, and saves as root. With sudo's defaults its home is root's, so
+<a href="/manual/modules/saving.html"><code>rmp::save</code></a> writes to
+<code>/root/.local/share/&lt;name&gt;/</code> and not to your folder; a sudoers that keeps your
+<code>HOME</code> gives your own folder, written as root, and
+<code>[save] portable = true</code> writes root's files next to the game. <code>rmp run
+sudo</code> says so before it starts the game.</p>
+
+<p data-fw-grep="src/rmp/console.cpp::return &quot;CONSOLE: started with sudo by &quot; \+ user \+\s+&quot;, so the game runs as root and saves as root, in &quot; \+ std::string\(saves\) \+">The
+game says it as well, once, as it starts — <samp>WARNING: CONSOLE: started with sudo by …</samp> —
+with your name, the folder it really saves in, read from the environment sudo left it, and the
+groups. In the <code>video</code> and <code>input</code> groups the game runs as you and saves where
+it always does.</p>
+
+<h2 id="terminal">The terminal comes back</h2>
+
+<p data-fw-grep="src/rmp/console.cpp::// raylib's DRM backend reads the keyboard from the terminal it was started on\n// \(InitKeyboard in rcore_drm\.c, which SUPPORT_SSH_KEYBOARD_RPI turns on\): it\n// turns off echo, line editing and Ctrl\+C">raylib's
+DRM backend reads the keyboard from the terminal the game starts on, and changes it: no echo, no
+line editing, no Ctrl+C, the terminal made non-blocking — a setting your shell shares — and a
+virtual console's keyboard put in another mode. It puts them back only from an <code>atexit</code>
+handler, which
+a crash, <code>abort()</code>, a sanitizer's report and a kill never run, and the shell after
+them would type blind, with no Ctrl+C.</p>
+
+<p data-fw-grep="src/rmp/console.cpp::// So guard_console\(\), called before InitWindow, remembers the terminal as it\n// was and puts it back on a fatal signal -- then hands the signal on, so a\n// crash is still a crash">So
+the framework puts it back however the game ends. Before the window opens it remembers the
+terminal, and puts it back on every fatal signal — then hands the signal on to whoever had it, so
+a crash is still a crash: a core dump, AddressSanitizer's report, the status your shell sees — on
+the sanitizers' way out, and at exit. <span data-fw-grep="src/rmp/console.cpp::ours\.sa_flags = SA_SIGINFO \| SA_ONSTACK;">Its
+handler runs on a stack of its own, because a stack overflow leaves none to run on.</span></p>
+
+<p data-fw-grep="tools/rmp.py::print\(f&quot;  console  the game left the terminal changed -- \{', '\.join\(changed\)\} -- &quot;">SIGKILL
+is the one ending nothing inside a process can catch, so <code>rmp run</code> also saves the
+terminal before the game and restores it after, and says when it had to: <samp>the game left the
+terminal changed -- … -- and rmp put it back</samp>. The screen needs none of this: the kernel
+gives the console its screen back when the game's last handle on the card closes, however the
+process ended.</p>
+
+<p data-fw-grep="tests/console_test.cpp::&quot;guarded, it comes back however the game ends, and the ending is the same&quot;">The
+framework's tests make a small program die each of those ways on a pseudo-terminal — an exit, a
+segmentation fault, <code>abort()</code>, SIGTERM, a trap, a division by zero, a stack overflow,
+an AddressSanitizer report — with the guard and without it, and the terminal has to come back with
+it and stay changed without. SIGKILL leaves it changed either way, which is why
+<code>rmp run</code> mends it from outside.</p>
+
+<h2 id="while-it-runs">While it runs</h2>
+
+<p data-fw-grep="src/rmp/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">Ctrl+C
+does nothing while the game runs: the terminal's signals are off. The game quits from its own
+menu, and Escape is the game's key, not a way out — see <a href="/manual/core/app.html#the-escape-key">the
+Escape key</a>.</p>
+
+<p data-fw-grep="TECHNICAL.md::Ctrl\+Alt\+F\*n\* still switches the console \(the keyboard stays in `K_XLATE`\), but the screen may\ngo on showing the game while it is the DRM master">Ctrl+Alt+F1,
+F2 and the others still switch to another virtual console, but the screen may go on showing the
+game: the kernel does not take a screen from its DRM master. To end a game that is stuck, log in on
+another console — without seeing what you type, if it comes to that — or over SSH, and end it from
+there.</p>
+
+<h2 id="when-it-does-not-work">When it does not work</h2>
+
+<table>
+<thead><tr><th>What you see</th><th>What it means</th></tr></thead>
+<tbody>
+<tr><td><code>rmp run</code> says something else draws on the screen</td><td>A desktop, or another program on the card, holds it. Log out of the desktop or stop the program; sudo does not help.</td></tr>
+<tr><td><code>rmp run</code> says there is no card</td><td>No display driver with modesetting has loaded. In a container, pass the card in with <code>--device /dev/dri</code>.</td></tr>
+<tr><td><code>rmp run</code> lists nodes under <code>/dev/dri</code> or <code>/dev/input</code></td><td>You cannot open them. <code>rmp run sudo</code> this once, or the <code>video</code> and <code>input</code> groups and a new login.</td></tr>
+<tr><td>Added to the groups, and still refused</td><td>Groups are read at login: log out and in again.</td></tr>
+<tr><td>The game reads the keyboard, and no mouse or gamepad</td><td>There is no <code>/dev/input/event*</code>; the game reads the terminal's keys.</td></tr>
+<tr><td>Over SSH, it built a game that opens a window</td><td>SSH counts as the desktop. <code>RMP_DRM=1 rmp run</code> builds for the machine's own screen.</td></tr>
+<tr><td><code>sudo rmp …</code> is refused</td><td>Run <code>rmp</code> as yourself; <code>rmp run sudo</code> gives root to the game alone.</td></tr>
+<tr data-fw-grep="CLAUDE.md::and Mesa needs \*\*`LIBGL_ALWAYS_SOFTWARE=1`\*\*, not\n  `MESA_LOADER_DRIVER_OVERRIDE=kms_swrast`, which left EGL saying only &quot;Failed\n  to initialize EGL device&quot;"><td>The screen stays black, and raylib's log says it failed to initialize the EGL device</td><td>Mesa could not draw on that card. CI's virtual display has no GPU behind it, and Mesa draws there only in software, with <code>LIBGL_ALWAYS_SOFTWARE=1</code> in the environment; a display with no GPU Mesa can drive needs the same.</td></tr>
+</tbody>
+</table>
+
+<h2 id="in-ci">What CI proves</h2>
+
+<p data-fw-grep=".github/workflows/_linux.yml::- name: rmp run on a console -- chose DRM/KMS, built, booted[\s\S]*?docker run --rm --init --network none --device /dev/dri \\\s+-v &quot;\$PWD:/work&quot; -w /work \\\s+-e XDG_SESSION_TYPE=tty \\[\s\S]*?\./rmp run &lt; /dev/null 2&gt;&amp;1\); then RC=0; else RC=\$\?; fi">The
+job that boots <code>linux-x64-glibc-drm</code> on a virtual display — vkms, a DRM device the kernel
+provides with no hardware behind it — also runs <code>rmp</code> the way a console does: in the
+build image, with the card passed in, no display, <code>XDG_SESSION_TYPE=tty</code> and
+<code>./rmp run</code>. <span data-fw-grep=".github/workflows/_linux.yml::test ! -e build/debug \|\| fail &quot;the desktop's build/debug was touched&quot;[\s\S]*?grep -q libdrm ldd\.txt[\s\S]*?fail &quot;rmp run did not check /dev before it started the game&quot;">It
+has to decide DRM/KMS by itself, build <code>build/debug-drm</code> without touching
+<code>build/debug</code>, link libdrm and no X11 or Wayland, check <code>/dev</code> before it
+starts the game, and boot it, draw and exit cleanly with no sanitizer report.</span> It runs in a
+game's CI too, when the game ships <code>linux-x64-glibc-drm</code>; only the framework's build is
+held to having been sanitized there, because a game's <code>[dev] sanitize</code> is its own.</p>
+
+<p data-fw-grep=".github/workflows/_linux.yml::# the vkms card\. In the build image, which has every DRM\n      # header; as its root, who has nobody behind it and needs no sudo for\n      # the card\. No /dev/input is handed in">What
+it cannot prove follows from where it runs: the container is root, so the groups and sudo are not
+tried, and it is given no <code>/dev/input</code>, so no real keyboard either.</p>

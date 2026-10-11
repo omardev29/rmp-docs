@@ -215,11 +215,14 @@ threading and dynamic-loading libraries every Linux has.</p>
 
 <h3>X11 and Wayland</h3>
 
-<p>To build on Linux you need the X11 development libraries:</p>
+<p>To build on a Linux desktop you need the X11 development libraries:</p>
 
 <pre data-lang="shell">
 sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
 </pre>
+
+<p>On a console with no desktop, <code>rmp</code> builds for DRM/KMS instead, and needs none of
+them: <a href="/manual/platforms/linux-console.html">Linux from a console</a>.</p>
 
 <p>By default the binary talks to X11, and on a Wayland desktop it runs through XWayland — which
 works, with one more hop, and is where fractional scaling and per-monitor DPI misbehave.
@@ -299,12 +302,21 @@ build machine's glibc, and CI prints that floor on every run. And a musl edition
 separate binary, which is why the name spells out <code>glibc</code>.</p>
 
 <p>Building one needs the libdrm, GBM, EGL and OpenGL ES development files on the machine that
-builds, and running it needs a <code>/dev/dri</code> device:</p>
+builds, and running it needs a <code>/dev/dri</code> device to draw on and the
+<code>/dev/input</code> devices to read. On a Linux console with no desktop, <code>rmp</code>
+builds this way by itself, into <code>build/debug-drm</code> and <code>build/release-drm</code>,
+and checks the devices before it starts the game:
+<a href="/manual/platforms/linux-console.html">Linux from a console</a> has all of it. Anywhere
+else, the <code>release-drm</code> preset builds the release by hand:</p>
 
 <pre data-lang="shell">
-cmake --preset release -DRMP_TARGET_DRM=ON
-cmake --build build/release
+cmake --preset release-drm
+cmake --build --preset release-drm
 </pre>
+
+<p data-fw-grep=".github/workflows/_linux.yml::run: cmake --preset release -DRMP_TARGET_DRM=ON">CI builds
+the shipped one from the <code>release</code> preset with <code>-DRMP_TARGET_DRM=ON</code>, which
+is the same build in <code>build/release</code>.</p>
 
 <p>On DRM, <code>[window] fps</code> also chooses the display mode — 144 asks for a 144 Hz mode —
 which is why the framework applies it before the window opens. Both DRM targets are in the
