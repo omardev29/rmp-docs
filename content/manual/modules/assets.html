@@ -36,7 +36,7 @@ the texture — unless something else still holds the same one.</p>
 <tbody>
 <tr><td><a href="ref:rmp::assets::load_texture"><code>load_texture(name)</code></a></td><td><a href="ref:rmp::Texture"><code>rmp::Texture</code></a></td><td>A picture on the GPU, to draw.</td></tr>
 <tr><td><a href="ref:rmp::assets::load_image"><code>load_image(name)</code></a></td><td><a href="ref:rmp::Image"><code>rmp::Image</code></a></td><td>A picture in memory, to read pixels from or make a texture out of.</td></tr>
-<tr><td><a href="ref:rmp::assets::load_font"><code>load_font(name, size)</code></a></td><td><a href="ref:rmp::Font"><code>rmp::Font</code></a></td><td>A <code>.ttf</code> or <code>.otf</code>, baked at one size.</td></tr>
+<tr><td><a href="ref:rmp::assets::load_font"><code>load_font(name, size)</code></a></td><td><a href="ref:rmp::Font"><code>rmp::Font</code></a></td><td>A <code>.ttf</code> or <code>.otf</code>, baked at one size, from 1 to 1024.</td></tr>
 <tr><td><a href="ref:rmp::assets::load_sound"><code>load_sound(name)</code></a></td><td><a href="ref:rmp::Sound"><code>rmp::Sound</code></a></td><td>A short sound, decoded into memory. Most games play sounds by name with <a href="/manual/modules/audio.html">rmp::audio</a> instead.</td></tr>
 <tr><td><a href="ref:rmp::assets::load_sheet"><code>load_sheet(name)</code></a></td><td><a href="ref:rmp::SpriteSheet"><code>rmp::SpriteSheet</code></a></td><td>An Aseprite file, with its frames and tags. See <a href="/manual/modules/sprites.html">Sprites</a>.</td></tr>
 <tr><td><a href="ref:rmp::assets::load_map"><code>load_map(name)</code></a></td><td><a href="ref:rmp::Tilemap"><code>rmp::Tilemap</code></a></td><td>A level made in LDtk or Tiled. See <a href="/manual/modules/tilemaps.html">Tilemaps</a>.</td></tr>
@@ -177,8 +177,9 @@ UnloadModel(ship);
 <p>That covers models and the files they pull in behind your back — an <code>.obj</code>'s
 <code>.mtl</code> and the textures it names — as well as shaders, fonts and textures loaded through
 raylib directly. The path has to start with the macro the build defines for the folder,
-RMP_RESOURCES_PATH: only files inside it are answered from the pack, so a save file elsewhere on
-disk that happens to share a name with a packed one is never mistaken for it.</p>
+RMP_RESOURCES_PATH: only files directly inside it are answered from the pack (it has no
+subfolders), so a save file elsewhere on disk that happens to share a name with a packed one is
+never mistaken for it.</p>
 
 <aside class="callout warning"><span class="callout-title">The exception</span><p>raylib's
 <code>LoadMusicStream()</code> opens the file itself and never sees the pack, so a song loaded
@@ -233,6 +234,7 @@ which:</p>
 <ul>
 <li><samp>ASSETS: Using resource pack … (… entries)</samp></li>
 <li><samp>ASSETS: No resource pack found, using loose files from …</samp></li>
+<li><samp>ASSETS: … is cut short or corrupt, using loose files</samp></li>
 </ul>
 
 <p><a href="ref:rmp::assets::using_pack"><code>rmp::assets::using_pack()</code></a> answers the
