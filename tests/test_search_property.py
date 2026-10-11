@@ -105,8 +105,16 @@ class VisibleTextTest(unittest.TestCase):
 
 
 NAME = st.from_regex(r"rmp::[a-z]{1,4}(::[a-z_]{1,6})?", fullmatch=True)
+# Summaries past the 140 characters build() keeps, and titles that say one
+# word often enough to pass the cap of 99: random text of up to 200
+# characters was never longer than 140 in 200 examples, and no title said a
+# word ten times -- mutmut's `summary[:141]` and `min(v, 100)` lived.
+_SAID = st.characters(exclude_categories=("Cs",))
 SUMMARY = st.tuples(st.sampled_from(["function", "class", "field", ""]),
-                    st.text(alphabet=st.characters(exclude_categories=("Cs",)), max_size=200))
+                    st.one_of(st.text(alphabet=_SAID, max_size=200),
+                              st.text(alphabet=_SAID, min_size=135, max_size=200)))
+TITLE = st.one_of(TEXT, st.tuples(st.sampled_from(["button", "rmp", "Ui"]), st.integers(8, 14)).map(
+    lambda t: " ".join([t[0]] * t[1])))
 
 
 def expected_index(made) -> dict:
@@ -130,7 +138,7 @@ def expected_index(made) -> dict:
 
 class BuildTest(unittest.TestCase):
 
-    @given(st.lists(st.tuples(TEXT, TEXT, st.lists(TEXT, max_size=24), PAGE), max_size=4),
+    @given(st.lists(st.tuples(TITLE, TEXT, st.lists(TEXT, max_size=24), PAGE), max_size=4),
            st.dictionaries(NAME, st.text(max_size=12), max_size=4),
            st.dictionaries(NAME, SUMMARY, max_size=4))
     def test_the_json_is_exactly_what_the_pages_say(self, pages, reference, summaries):
@@ -158,6 +166,16 @@ class BuildTest(unittest.TestCase):
         self.assertNotIn("and", data["index"])                # the text's: a stop word
         self.assertNotIn("b", data["index"])                  # the text's: one letter
         self.assertEqual(data["index"], expected_index([page]))
+
+    def test_the_cuts_and_the_cap_by_hand(self):
+        page = SimpleNamespace(title="rmp " * 12, url="r.html", section="", description="",
+                               toc=[(2, f"h{i}", f"heading {i}") for i in range(25)],
+                               body="<p>" + "x" * 200 + "</p>")
+        data = json.loads(search.build([page], {"rmp::f": "r.html#f"}, {"rmp::f": ("function", "y" * 200)}))
+        self.assertEqual(data["index"]["rmp"], [[0, 99]])                 # 12 x 10, capped
+        self.assertEqual(data["docs"][0]["h"], [f"heading {i}" for i in range(20)])
+        self.assertEqual(data["docs"][0]["x"], "x" * 160)
+        self.assertEqual(data["symbols"], [{"n": "rmp::f", "u": "r.html#f", "k": "function", "d": "y" * 140}])
 
 
 if __name__ == "__main__":
