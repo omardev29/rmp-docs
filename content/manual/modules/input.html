@@ -140,6 +140,25 @@ the focus, pressing a button, and backing out of a text field or an open list (s
 <a href="/manual/modules/ui.html#focus-keyboard-and-gamepad">focus, keyboard and gamepad</a>), so
 redefining <code>ui_accept</code> does not change what presses a focused button.</p>
 
+<p data-fw-grep="examples/games/01_pong/src/main.cpp::rmp::input::action\(&quot;p2_up&quot;, KEY_UP\);[\s\S]*?rmp::input::action\(&quot;move_up&quot;, KEY_W, GAMEPAD_BUTTON_LEFT_FACE_UP,\s+rmp::input::stick\(GAMEPAD_AXIS_LEFT_Y, -1\)\);">The
+four movement actions each take a letter and an arrow. Two players at one keyboard, the second on
+the arrows, means taking the arrows away from the first: define the first player's actions again
+without them, or the up arrow moves both.
+<a href="/examples/games/01_pong.html">Pong</a> does exactly that
+(<a href="fw:examples/games/01_pong/src/main.cpp#L68-L81">main.cpp</a>):</p>
+
+<pre data-lang="cpp" data-harness="members">
+void _ready() override {
+    rmp::input::action("p2_up", KEY_UP);
+    rmp::input::action("p2_down", KEY_DOWN);
+    // Player one keeps W, S, the d-pad and the stick.
+    rmp::input::action("move_up", KEY_W, GAMEPAD_BUTTON_LEFT_FACE_UP,
+                       rmp::input::stick(GAMEPAD_AXIS_LEFT_Y, -1));
+    rmp::input::action("move_down", KEY_S, GAMEPAD_BUTTON_LEFT_FACE_DOWN,
+                       rmp::input::stick(GAMEPAD_AXIS_LEFT_Y, 1));
+}
+</pre>
+
 <h2>Moving: vector and axis</h2>
 
 <p><a href="ref:rmp::input::vector"><code>rmp::input::vector()</code></a> is a direction from four
