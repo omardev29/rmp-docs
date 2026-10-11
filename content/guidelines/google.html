@@ -148,15 +148,16 @@ asks for <code>c++20</code>, and<span data-fw-grep=".github/workflows/_windows.y
 MSVC, which builds <code>windows-arm64</code>, has no GNU mode at all</span>. The code compiles
 under both.</p>
 
-<h3 id="varargs">One variadic function</h3>
+<h3 id="varargs">Two variadic functions</h3>
 
 <p data-fw-grep="src/rmp/internal.h::#define RMP_PRINTF_FORMAT\(string_index, first_to_check\) \\\n    __attribute__\(\(format\(printf, string_index, first_to_check\)\)\)">The
 framework's rule is no C variadic function (<a href="/guidelines/modern-cpp.html#varargs">Modern
-C++</a>), and it has one: the function behind its said-once warnings, which hands a
-<code>printf</code> format to raylib's <code>TraceLog()</code>. It is marked with a
-<code>format(printf)</code> attribute through a macro of the framework's internal header, so GCC and
-Clang check every format against its values, as an error. That is the form Google allows a
-nonstandard extension in: a portability wrapper, from a header the whole project uses.</p>
+C++</a>), and it has two, side by side: the functions behind its said-once warnings, which hand
+a <code>printf</code> format to raylib's <code>TraceLog()</code>, one of them with a key. Each is
+marked with a <code>format(printf)</code> attribute through a macro of the framework's internal
+header, so GCC and Clang check every format against its values, as an error. That is the form in
+which Google allows a nonstandard extension: a portability wrapper, defined once, in a header the
+framework's sources share.</p>
 
 <h3 id="statics">Statics that are not trivially destructible</h3>
 

@@ -182,11 +182,11 @@ int sum(std::span&lt;const int&gt; values) {
 <em>Calling</em> raylib's variadic functions — <code>TraceLog()</code>, <code>TextFormat()</code> —
 is the boundary, and allowed: the rule is about defining one.</p>
 
-<p data-fw-grep="src/rmp/internal.h::// NOLINTNEXTLINE\(modernize-avoid-variadic-functions\)\nvoid report_once\(const void \*site, const char \*fmt, \.\.\.\) RMP_PRINTF_FORMAT\(2, 3\);">The
-framework defines one, on purpose: the function behind its said-once warnings, which hands a
-<code>printf</code> format to <code>TraceLog()</code>. It carries a <code>NOLINT</code> with the
-reason, and a <code>format(printf)</code> attribute, so GCC and Clang check every format against
-its values as an error. <a href="/framework/why/macros.html#report-once">Macros</a> has the
+<p data-fw-grep="src/rmp/internal.h::// NOLINTNEXTLINE\(modernize-avoid-variadic-functions\)\nvoid report_once\(const void \*site, const char \*fmt, \.\.\.\) RMP_PRINTF_FORMAT\(2, 3\);\n// NOLINTNEXTLINE\(modernize-avoid-variadic-functions\)\nvoid report_once_keyed\(const void \*site, const char \*key, const char \*fmt, \.\.\.\)\n    RMP_PRINTF_FORMAT\(3, 4\);">The
+framework defines two, on purpose, side by side: the functions behind its said-once warnings,
+which hand a <code>printf</code> format to <code>TraceLog()</code>, one of them with a key. Each
+carries a <code>NOLINT</code> with the reason, and a <code>format(printf)</code> attribute, so GCC
+and Clang check every format against its values as an error. <a href="/framework/why/macros.html#report-once">Macros</a> has the
 details. Checked by <code>modernize-avoid-variadic-functions</code>, in the framework and in the
 examples.</p>
 
