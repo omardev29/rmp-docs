@@ -137,8 +137,9 @@ and the <code>lint</code> preset writes the compile database without building an
 cp ~/.local/share/rmp/.clang-tidy .
 cmake --preset lint
 clang-tidy -p build/lint --experimental-custom-checks --warnings-as-errors='*' \
+    --header-filter='.*/(include|src|tests)/.*' \
     --exclude-header-filter='.*/(include/rmp|src/rmp|thirdparty|generated|build)/.*' \
-    src/main.cpp src/scenes/*.cpp
+    $(find src tests -name '*.cpp' -not -path 'src/rmp/*')
 </pre>
 
 <ul>
@@ -153,6 +154,11 @@ it clang-tidy skips them and says nothing. The framework pins clang-tidy 22.1.8,
 <li data-fw-grep=".clang-tidy::WarningsAsErrors: ''"><code>--warnings-as-errors='*'</code> makes a finding fail the run, which is what a check is
 for. The framework's file says <code>WarningsAsErrors: ''</code> because <code>rmp lint</code>
 counts its warnings against a list of what the framework still owes.</li>
+<li data-fw-grep=".clang-tidy::HeaderFilterRegex: '\.\*/\(include/rmp\|src/rmp\|src/scenes\|src/objects\|tests\)/\.\*'"><code>--header-filter</code>
+reports the game's own headers in <code>include/</code>, <code>src/</code> and <code>tests/</code>.
+The framework's file names the folders it reports by the framework's layout, and a header in a
+game's <code>include/</code>, where the examples keep theirs, is not among them: without the flag,
+a C cast there passes in silence.</li>
 <li data-fw-grep="tools/lint_debt.txt::custom-rmp-raw-pointer\s+include/rmp/object\.h"><code>--exclude-header-filter</code>
 keeps the framework's copy in <code>include/rmp/</code> and <code>src/rmp/</code> out of the
 report: the framework answers for those files, and its lint still owes some of them a few raw
@@ -164,5 +170,8 @@ advises, writes that name in its copy's <code>MacroDefinitionPrefix</code>; with
 left there, clang-tidy refuses <code>#define PONG_SHOW(value)</code> in the game's code.</li>
 </ul>
 
-<p>clang-tidy then says nothing about the game <code>rmp new</code> writes, and refuses a C cast
-added to its main menu the way the framework's lint would.</p>
+<p>The last line hands it every source of the game's own — <code>src/</code> and
+<code>tests/</code>, without the framework's copy in <code>src/rmp/</code>. clang-tidy then says
+nothing about the game <code>rmp new</code> writes, its test included, and refuses a C cast added
+to its main menu, or to a header of its own in <code>include/</code>, the way the framework's lint
+would.</p>
