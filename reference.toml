@@ -52,6 +52,14 @@ doc = "On by default: a Linux or BSD release is linked position-independent, so 
 kind = "environment"
 read_in = ["cmake/sanitize.cmake"]
 doc = "`1` turns a sanitizer `[dev] sanitize` lists and the compiler cannot run from a warning into a failed configure. CI sets it where a debug build is a gate."
+[build_switches.RMP_TARGET_DRM]
+kind = "cmake option"
+read_in = ["CMakeLists.txt"]
+doc = "`-DRMP_TARGET_DRM=ON` builds for DRM/KMS: raylib's DRM platform, straight to the screen through the kernel, with no X11 and no Wayland. The `debug-drm` and `release-drm` presets turn it on, in `build/debug-drm` and `build/release-drm`, and `rmp` uses them on a Linux console with no desktop; the DRM targets' CI jobs pass it to the release preset."
+[build_switches.RMP_DRM]
+kind = "environment"
+read_in = ["tools/rmp.py", "tools/install.sh"]
+doc = "What `rmp` builds for on Linux, whatever it would decide by itself: `1` for DRM/KMS, as on a console with no desktop, and `0` for the desktop. Unset or empty, `rmp` decides; any other value is refused, and so is `1` anywhere but Linux. The installer reads it too, to list the headers that build needs."
 
 # Keys of the .toml that a page explains further than the framework's comment
 # can: the configuration reference links it under the key. `says` is the

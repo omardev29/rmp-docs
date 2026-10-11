@@ -83,6 +83,27 @@ class BuildSwitchesTest(unittest.TestCase):
         _table, wrong = self.one(fw, "RMP_REQUIRE_X", "environment", ["cmake/x.cmake"])
         self.assertEqual(wrong, [])
 
+    def test_an_environment_variable_a_script_or_rmp_reads_is_documented(self):
+        """A shell script reads ${X} or $X; rmp names it once, in a constant
+        it reads the environment through."""
+        fw = self.framework(**{"tools__install.sh": 'case ${RMP_X:-} in\n  1) on=yes ;;\nesac\n',
+                               "tools__other.sh": 'if [ "$RMP_X" = 1 ]; then :; fi\n',
+                               "tools__rmp.py": 'X_ENV = "RMP_X"\n\nforced = env.get(X_ENV, "")\n'})
+        _table, wrong = self.one(fw, "RMP_X", "environment",
+                                 ["tools/install.sh", "tools/other.sh", "tools/rmp.py"])
+        self.assertEqual(wrong, [])
+
+    def test_a_name_a_script_or_rmp_only_mentions_is_red(self):
+        fw = self.framework(**{"tools__install.sh": '# RMP_X=1 builds for the console\n'
+                                                     'say "set RMP_X=1 for the console"\n',
+                               "tools__rmp.py": '# RMP_X decides\nprint("RMP_X=1 decides")\n'
+                                                '    NESTED = "RMP_X"\nX_ENV = "RMP_XY"\n'})
+        _table, wrong = self.one(fw, "RMP_X", "environment", ["tools/install.sh", "tools/rmp.py"])
+        self.assertEqual(wrong, ["[build_switches] RMP_X: tools/install.sh does not read it as an "
+                                 "environment variable",
+                                 "[build_switches] RMP_X: tools/rmp.py does not read it as an "
+                                 "environment variable"])
+
     def test_a_name_only_mentioned_is_red(self):
         fw = self.framework(**{"CMakeLists.txt": "# RMP_WERROR turns them into errors\n"})
         _table, wrong = self.one(fw, "RMP_WERROR", "cmake option", ["CMakeLists.txt", "gone.cmake"])

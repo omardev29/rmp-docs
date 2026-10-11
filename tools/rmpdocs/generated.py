@@ -212,12 +212,17 @@ def build_defines_table(framework: Path, refconf: dict) -> tuple[str, list[str]]
             f"<tbody>{''.join(rows)}</tbody></table>"), wrong
 
 
-# What a name of [build_switches] looks like in the file that reads it.
+# What a name of [build_switches] looks like in the file that reads it. An
+# environment variable: CMake's $ENV{X}, C's getenv("X"), Python's
+# os.environ.get("X") or a module constant the code reads it through
+# (`DRM_ENV = "RMP_DRM"`), a workflow's `X:` and a shell script's ${X} or $X.
 SWITCH_KINDS = {
     "cmake option": ("a CMake option", lambda n: rf"\boption\(\s*{re.escape(n)}\b"),
     "environment": ("an environment variable",
                     lambda n: rf"\$ENV\{{{re.escape(n)}\}}|getenv\(\s*\"{re.escape(n)}\"|"
                               rf"environ(?:\.get\(|\[)\s*[\"']{re.escape(n)}[\"']|"
+                              rf"^[A-Z][A-Z0-9_]*\s*=\s*\"{re.escape(n)}\"\s*$|"
+                              rf"\$\{{{re.escape(n)}(?::?[-=?+][^}}]*)?\}}|\${re.escape(n)}\b|"
                               rf"^\s*{re.escape(n)}:\s"),
 }
 
