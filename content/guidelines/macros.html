@@ -136,7 +136,9 @@ of the framework that configures it, and the script lists each of those by file.
 
 <p>A game's own macros are a different case: <code>RMP_</code> is the framework's prefix, and a
 game's macro that took it could one day meet one of the framework's. Google's rule decides there —
-the project's own name, in capitals, as the prefix — and nothing in a game checks it.</p>
+the project's own name, in capitals, as the prefix. Nothing in a game checks it, and a game that
+<a href="/guidelines/index.html#switching-on-clang-tidy">switches the framework's clang-tidy on</a>
+writes its own prefix in the copy, which asks for <code>RMP_</code>.</p>
 
 <h2 id="retired">A name that no longer exists is 0</h2>
 
@@ -199,6 +201,8 @@ can include Clay and use them.</p>
 </tbody>
 </table>
 
-<p>A game gets none of these checks unless it <a href="/guidelines/index.html#switching-on-clang-tidy">switches the framework's clang-tidy on</a>. The rules are the same
-advice for its code, and
+<p>A game gets none of these checks. The two of clang-tidy's hold its code if it
+<a href="/guidelines/index.html#switching-on-clang-tidy">switches the framework's clang-tidy on</a>;
+<code>tools/naming_check.sh</code> stays in the framework. The rules are the same advice for its
+code, and
 <a href="/guidelines/enforcement.html">what checks what</a> has the whole list.</p>

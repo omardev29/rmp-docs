@@ -157,6 +157,11 @@ counts its warnings against a list of what the framework still owes.</li>
 keeps the framework's copy in <code>include/rmp/</code> and <code>src/rmp/</code> out of the
 report: the framework answers for those files, and its lint still owes some of them a few raw
 pointers.</li>
+<li data-fw-grep=".clang-tidy::key: readability-identifier-naming\.MacroDefinitionPrefix\n    value: 'RMP_'">The
+copy asks every macro defined to start with <code>RMP_</code>, the framework's prefix. A game whose
+own macros take the game's name instead, as <a href="/guidelines/macros.html#prefix">Macros</a>
+advises, writes that name in its copy's <code>MacroDefinitionPrefix</code>; with <code>'RMP_'</code>
+left there, clang-tidy refuses <code>#define PONG_SHOW(value)</code> in the game's code.</li>
 </ul>
 
 <p>clang-tidy then says nothing about the game <code>rmp new</code> writes, and refuses a C cast
