@@ -167,9 +167,10 @@ number in the project to forget to change. The desktop and web builds carry no v
 <p>A release build already drops what it does not call, at link time. Beyond that,
 <code>[raylib] disabled_modules</code> can leave out raylib's 3D models and its audio when the game
 uses neither — the shapes, textures and text cannot go, because the framework is built on them —
-and <code>[upx]</code> compresses four Linux binaries by default — <code>linux-x64-glibc</code>,
-<code>linux-arm64-glibc</code>, <code>linux-x64-musl</code> and <code>linux-x64-glibc-drm</code>,
-the ones whose compressed binary CI starts — and the others you add to it. To keep it small once it
+and <code>[upx]</code> compresses five Linux binaries by default — <code>linux-x64-glibc</code>,
+<code>linux-arm64-glibc</code>, <code>linux-x64-musl</code>, <code>linux-x64-glibc-drm</code> and
+<code>linux-riscv64-glibc</code>, the ones whose compressed binary CI starts — and the others you
+add to it. To keep it small once it
 is, write the sizes down: CI then warns when a binary moves more than 1.5% and fails past 10%. See
 <a href="/publishing/ci.html#size-budget">the size budget</a>.</p>
 

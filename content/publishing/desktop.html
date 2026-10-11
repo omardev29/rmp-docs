@@ -316,8 +316,10 @@ and not on itch.io, which has no BSD platform.</p>
 <p data-fw-grep="raylib_multiplatform.toml::1 234 656 bytes\n# down to 365 836, a 70 % cut">UPX
 compresses an executable into one that unpacks itself in memory when it starts, at the cost of a
 few milliseconds at every launch. On this framework's own game, built the way CI builds it, it
-takes <code>linux-x64-glibc</code> from 1 234 656 bytes to 365 836, 70% smaller, and
-<code>linux-x64-glibc-drm</code>, which links its graphics libraries instead of carrying them, 58%.
+takes <code>linux-x64-glibc</code> from 1 234 656 bytes to 365 836, 70% smaller,
+<code>linux-x64-glibc-drm</code>, which links its graphics libraries instead of carrying them, 58%,
+and <span data-fw-grep="raylib_multiplatform.toml::\(962 752 bytes to 391 504, measured at c0369ec\)"><code>linux-riscv64-glibc</code>
+from 962 752 bytes to 391 504, 59%</span>.
 <code>[upx]</code> says which targets get it:</p>
 
 <pre data-lang="toml" data-file="raylib_multiplatform.toml">
@@ -326,12 +328,12 @@ enabled  = ["linux"]
 disabled = ["linux-riscv64-glibc"]
 </pre>
 
-<p data-fw-grep="tools/configure.py::&quot;upx&quot;: \{&quot;enabled&quot;: \[&quot;linux-x64-glibc&quot;, &quot;linux-arm64-glibc&quot;, &quot;linux-x64-musl&quot;,\s+&quot;linux-x64-glibc-drm&quot;\]">Groups expand and <code>disabled</code> is taken away afterwards, like <code>[targets]</code>.
+<p data-fw-grep="tools/configure.py::&quot;upx&quot;: \{&quot;enabled&quot;: \[&quot;linux-x64-glibc&quot;, &quot;linux-arm64-glibc&quot;, &quot;linux-x64-musl&quot;,\s+&quot;linux-x64-glibc-drm&quot;, &quot;linux-riscv64-glibc&quot;\]">Groups expand and <code>disabled</code> is taken away afterwards, like <code>[targets]</code>.
 The groups here are <code>all</code>, <code>linux</code>, <code>windows</code> and
 <code>bsd</code>, and <code>all</code> means every target that can be compressed — not every
 target. The default is <code>linux-x64-glibc</code>, <code>linux-arm64-glibc</code>,
-<code>linux-x64-musl</code> and <code>linux-x64-glibc-drm</code>. To turn compression off, empty
-<code>enabled</code>.</p>
+<code>linux-x64-musl</code>, <code>linux-x64-glibc-drm</code> and <code>linux-riscv64-glibc</code>.
+To turn compression off, empty <code>enabled</code>.</p>
 
 <p>Each target that cannot be compressed has its own reason, and naming one, in either list, is
 an error that says it, not a setting that quietly does nothing:</p>
@@ -386,13 +388,19 @@ max_size_mb = 0
 <code>upx -t</code> before it goes into the zip. The version is pinned with a checksum in
 <code>thirdparty/FROZEN_VERSIONS.md</code>.</p>
 
-<p data-fw-grep="raylib_multiplatform.toml::THE DEFAULT IS EXACTLY THE TARGETS WHOSE PACKED BINARY CI STARTS\. Each of\n# these four jobs unzips the archive it ships">The
-default is exactly the targets whose packed binary CI starts. Each of those four jobs unzips the
+<p data-fw-grep="raylib_multiplatform.toml::THE DEFAULT IS EXACTLY THE TARGETS WHOSE PACKED BINARY CI STARTS\. Each of\n# these five jobs unzips the archive it ships">The
+default is exactly the targets whose packed binary CI starts. Each of those five jobs unzips the
 archive it ships, compressed, starts what is in it and checks it draws:
 <code>linux-x64-glibc</code> on every push, under a virtual X server; and on a full run
 <code>linux-arm64-glibc</code> on a runner of its own architecture, <code>linux-x64-musl</code> on
-Alpine under a virtual X server, and <code>linux-x64-glibc-drm</code> on a virtual DRM display. So
-a compressed binary that does not launch is a red run. Every other target is started before
+Alpine under a virtual X server, <code>linux-x64-glibc-drm</code> on a virtual DRM display, and
+<code>linux-riscv64-glibc</code> under QEMU in the build image, there being no RISC-V runner. So
+a compressed binary that does not launch is a red run.
+<span data-fw-grep="raylib_multiplatform.toml::An emulator is not a RISC-V machine\n# -- it does not model the instruction cache -- and riscv64 is in the default\n# all the same[\s\S]*?UPX's stub maps what it\n# unpacks with a fresh executable mmap, never writing and running in place\.">An
+emulator is not a RISC-V machine — it does not model the processor's instruction cache, which a
+program that writes code and then runs it depends on — and RISC-V is in the default all the same,
+because UPX's stub does not do that: it maps what it unpacks into fresh executable memory instead of
+writing it and running it in place.</span> Every other target is started before
 packaging compresses it, or as a separate software-rendered build, or not at all, so a binary
 compressed there is checked by <code>upx -t</code> and never started. UPX supports those targets; turning it on for one ships a packed binary whose launch
 nothing has seen.</p>

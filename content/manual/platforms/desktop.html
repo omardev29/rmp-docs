@@ -276,8 +276,15 @@ does not reach it. It needs <strong>glibc 2.38</strong> or newer — Ubuntu 24.0
 Fedora 39 have it; Debian 12 and Ubuntu 22.04 do not — and the <code>.toml</code>'s note on
 <code>[linux] glibc</code> says so. CI holds it to that number: its job, in the full lane, runs
 <code>tools/glibc_check.sh</code> with <code>2.38</code> and fails if the binary asks for more. It
-ships loose resources for the same reason musl does. There is no RISC-V runner to start it on, so
-CI checks that it is a RISC-V executable and goes no further.</p>
+ships loose resources for the same reason musl does.</p>
+
+<p data-fw-grep=".github/workflows/_linux.yml::- name: The archive starts from any folder, under QEMU[\s\S]*?timeout 120 qemu-riscv64-static -L / ">There
+is no RISC-V runner to start it on, so CI starts it under emulation: QEMU runs the RISC-V binary on
+the x86-64 build image, with the image's RISC-V libraries — glibc, the X libraries GLFW opens, Mesa
+— under a virtual X server, drawing with Mesa's software OpenGL. The archive is unzipped and the
+game started from another folder, compressed by UPX by default, and held to the same markers and
+exit status as every other Linux start. That proves the code, the C library and the libraries it
+opens work on RISC-V; an emulator is not a RISC-V machine, with its caches and its timing.</p>
 
 <h3>DRM/KMS: no desktop at all</h3>
 
@@ -309,13 +316,13 @@ which is why the framework applies it before the window opens. Both DRM targets 
 path, and to <code>~/.local/share/&lt;name&gt;/</code> otherwise. <code>[save] portable =
 true</code> puts them in <code>saves/</code> next to the executable.</p>
 
-<p data-fw-grep="tools/configure.py::&quot;upx&quot;: \{&quot;enabled&quot;: \[&quot;linux-x64-glibc&quot;, &quot;linux-arm64-glibc&quot;, &quot;linux-x64-musl&quot;,\s+&quot;linux-x64-glibc-drm&quot;\]"><code>[upx]</code> compresses <code>linux-x64-glibc</code>, <code>linux-arm64-glibc</code>,
-<code>linux-x64-musl</code> and <code>linux-x64-glibc-drm</code> by default — the ones whose packed
-archive CI starts, so a packed binary that would not launch is caught: on every push for
-<code>linux-x64-glibc</code>, and in the full lane for the other three, on a runner of its own
-architecture, on Alpine and on a virtual DRM display. <code>linux-riscv64-glibc</code> and
-<code>linux-arm64-glibc-drm</code> can be added to <code>[upx] enabled</code>; they are left out by
-default because nothing in CI runs them at all.</p>
+<p data-fw-grep="tools/configure.py::&quot;upx&quot;: \{&quot;enabled&quot;: \[&quot;linux-x64-glibc&quot;, &quot;linux-arm64-glibc&quot;, &quot;linux-x64-musl&quot;,\s+&quot;linux-x64-glibc-drm&quot;, &quot;linux-riscv64-glibc&quot;\]"><code>[upx]</code> compresses <code>linux-x64-glibc</code>, <code>linux-arm64-glibc</code>,
+<code>linux-x64-musl</code>, <code>linux-x64-glibc-drm</code> and <code>linux-riscv64-glibc</code>
+by default — the ones whose packed archive CI starts, so a packed binary that would not launch is
+caught: on every push for <code>linux-x64-glibc</code>, and in the full lane for the other four,
+on a runner of its own architecture, on Alpine, on a virtual DRM display and under QEMU.
+<code>linux-arm64-glibc-drm</code> can be added to <code>[upx] enabled</code>; it is left out by
+default because nothing in CI runs it at all.</p>
 
 <h2>The BSDs</h2>
 
