@@ -13,8 +13,9 @@ when the code compiles, it is <code>constexpr</code>, and the compiler works it 
 <p data-fw-grep=".clang-tidy::#   misc-const-correctness       const on every local that does not change,">Google's
 guide asks for <code>const</code> "whenever it makes sense". This framework makes it a rule
 without the "whenever": clang-tidy's <code>misc-const-correctness</code> runs over the framework,
-its tests and its examples, and nothing in them is left that it refuses. It is not about bugs, it
-is about the reader.</p>
+its tests and its examples, and nothing in them is left that it refuses<span data-fw-grep="src/rmp/object.cpp::// pointer to const; misc-const-correctness does not follow it there\.\n\s+// NOLINTNEXTLINE\(misc-const-correctness\)">
+but two lines that carry a <code>NOLINT</code> with the reason</span>. It is not
+about bugs, it is about the reader.</p>
 
 <h2 id="locals">A local that does not change</h2>
 
