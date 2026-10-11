@@ -323,13 +323,17 @@ scene says so. See <a href="/manual/core/scenes.html#what-a-scene-lets-through">
 through</a>.</li>
 </ol>
 
-<p data-fw-grep="src/rmp/ui/context.cpp::if \(this_pass\.index &lt; 0\) begin_capture_frame\(\);">The
-interface's answers come from the previous frame. <code>_update()</code> runs before anything
-draws, so it reads what the interface did last frame — one frame of tolerance, which nobody
-notices. In a game of scenes, a frame in which no scene draws any interface answers false to both,
-so a pause menu that pops while the pointer is over one of its buttons does not leave the game's
-mouse dead. The one exception is a slider being dragged, which keeps <code>wants_pointer()</code>
-true until the pointer comes up.</p>
+<p data-fw-grep="src/rmp/ui/focus.cpp::bool wants_pointer\(\) \{\n    if \(capture\.pointer_id != 0\) return true;\n    if \(detail::ui_ran_this_frame\(\) \|\| !detail::claims_complete\(\)\) \{\n        return detail::pointer_over_ui\(\);\n    \}\n    return detail::pointer_claimed_now\(\);"><code>_update()</code>
+runs before anything draws, so the interface answers it from what the last frame drew:
+<code>wants_pointer()</code> for where the pointer is now, and <code>wants_keyboard()</code> for the
+field that was typing, which still is. A finger that lands on
+a button without hovering over it first is the button's in the frame it lands, so the tap does not
+reach the game as well. A slider being dragged keeps <code>wants_pointer()</code> true wherever the
+pointer goes, until it comes up.
+<span data-fw-grep="src/rmp/ui/context.cpp::if \(this_pass\.index &lt; 0\) begin_capture_frame\(\);">In
+a game of scenes, a frame in which no scene draws any interface ends with both false, so a pause
+menu that pops while the pointer is over one of its buttons does not leave the game's mouse
+dead.</span></p>
 
 <p>For code that wants the reason and not the answer — a different cursor over the HUD, a raw read
 that should still respect the interface —

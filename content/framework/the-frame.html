@@ -360,7 +360,11 @@ does with the result.</p>
 with <a href="/reference/configuration.html#window-vsync"><code>[window] vsync</code></a> — it is
 also where the frame waits. Then the UI's frame closes: a UI that drew nothing this frame lets go
 of the pointer and the keyboard, so a pause menu that just closed under the cursor does not keep
-the game's mouse.</p>
+the game's mouse.
+<span data-fw-grep="src/rmp/ui/context.cpp::void end_frame\(\) \{\n    if \(!frame\.marked\) return;\n    if \(frame\.prepared\) \{\n        end_focus_frame\(\);\n        reveal_focus\(\);">And
+when the focus has just moved, with its ring showing, onto a control a scroll area has clipped
+away, the area is scrolled to show it — here, once every scene has drawn and the frame knows where
+everything is.</span></p>
 
 <h2 id="deferred">6. Apply what was deferred</h2>
 

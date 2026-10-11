@@ -361,12 +361,20 @@ but not where it has clipped its rows away. A click on a panel's background is t
 does not fall through to the game behind it. Plain text with nothing behind it is the exception, on
 purpose: a score drawn over the game does not stop the game being clicked through it.</p>
 
-<p data-fw-grep="src/rmp/ui/context.cpp::if \(this_pass\.index &lt; 0\) begin_capture_frame\(\);">Each
-frame's answer stands until the next frame's first <code>begin()</code>, so they read the same in
-<code>_update()</code> and on the line after <code>end()</code>. In a game of scenes, a frame in which
-no scene calls <code>begin()</code> answers false to both — a pause menu that pops while the pointer
-is over one of its buttons does not leave the game's mouse dead — except that a slider being dragged
-keeps <code>wants_pointer()</code> true until the pointer comes up. A game that reads its
+<p data-fw-grep="src/rmp/ui/focus.cpp::bool wants_pointer\(\) \{\n    if \(capture\.pointer_id != 0\) return true;\n    if \(detail::ui_ran_this_frame\(\) \|\| !detail::claims_complete\(\)\) \{\n        return detail::pointer_over_ui\(\);\n    \}\n    return detail::pointer_claimed_now\(\);">Both
+can be asked before anything draws — in <code>_update()</code>, or above <code>begin()</code> — and
+on the line after <code>end()</code>. Until the frame's first <code>begin()</code>,
+<code>wants_pointer()</code> answers for where the pointer is now, against what the last frame
+drew, so a finger that lands on a button without hovering over it first is the button's from the
+frame it lands in, and the tap does not reach the game too; <code>wants_keyboard()</code> answers
+for the field that was typing, which still is. From the frame's first <code>begin()</code> on,
+both answer for what this frame draws.</p>
+
+<p data-fw-grep="src/rmp/ui/context.cpp::if \(this_pass\.index &lt; 0\) begin_capture_frame\(\);">In
+a game of scenes, a frame in which no scene calls <code>begin()</code> ends with both false — a
+pause menu that pops while the pointer is over one of its buttons does not leave the game's mouse
+dead — except that a slider being dragged keeps <code>wants_pointer()</code> true until the
+pointer comes up. A game that reads its
 actions by name through <code>rmp::input</code> rarely calls them, because such a read already asks
 them — the subject of <a href="/manual/modules/input.html#who-hears-a-press">who hears a press</a>.
 Wherever the game reads raylib's input directly, they are the check:</p>
@@ -409,6 +417,14 @@ scale = clamp(min(window width / [window] width, window height / [window] height
 worse than what is left over: the tighter side wins and the interface stays on screen. The clamp stops
 the two absurd ends, a window too small to read and a monitor that turns a button into a
 billboard.</p>
+
+<p data-fw-grep="examples/ui/04_settings/src/main.cpp::// Two columns, so that the whole screen fits the window it opens in --\n\s+// \[window\] in the \.toml, 800x450\. In one column Apply was below the\n\s+// bottom edge">What
+the scale cannot do is fit a screen that does not fit at the size you design for. It keeps the
+proportions, so a control laid out below the bottom edge at 800×450 is below it at 1920×1080 as
+well, where nobody can see it or click it. A screen with more on it than that is laid out in two
+columns, as the settings example is, or put in a
+<a href="/manual/modules/ui-layout.html#scrolling">scroll area</a>, which the keyboard and the
+gamepad scroll by moving the focus.</p>
 
 <p>Text follows the same scale: it is drawn at the pixel size the layout asks for, its size in design
 units times the scale. raylib's built-in font is a small bitmap stretched to that size; a font of

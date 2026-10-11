@@ -364,8 +364,14 @@ unnamed ones, as a grid is — so one that shares a screen with areas that come 
 
 <p>What is scrolled out of view cannot be clicked: only the part of a control inside the area takes
 the pointer, and the area itself — its empty part included — is the interface's, so a drag inside it
-scrolls the list instead of reaching the game. Moving the focus with the keyboard or a gamepad does
-not scroll the area, so a control reached that way can be out of view.</p>
+scrolls the list instead of reaching the game.</p>
+
+<p data-fw-grep="src/rmp/ui/context.cpp::void reveal_focus\(\) \{\n    const uint32_t id = focused_id\(\);\n    if \(id == 0 \|\| id == revealed\.id \|\| !focus_visible\(\)\) return;[\s\S]*?// Innermost first">The
+keyboard and the gamepad scroll it too, by moving the focus. When the focus lands on a control the
+area has clipped away, and its ring is showing, the area moves just far enough to show the
+control — and a list inside a scrolling page shows its row first, then the page shows the list. It
+happens once for each move of the focus, so the wheel or a finger can take the list somewhere else
+afterwards without being pulled back to it.</p>
 
 <h2>Images and progress bars</h2>
 
