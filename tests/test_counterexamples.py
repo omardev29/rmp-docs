@@ -171,6 +171,33 @@ class SerializeCounterexamples(unittest.TestCase):
         self.refused(dom.el("_"), "cannot be written as the name")
         self.refused(dom.el("p", {"a b": "c"}), "cannot be written as the name")
 
+    def test_each_refusal_names_the_line(self):
+        """What the html gate reports as the page's line: the node's own, or,
+        for a text or a child with none, the element it is in."""
+        def at(line, node):
+            node.line = line
+            return node
+
+        cases = [
+            (at(5, dom.Comment("a-->b")), 5),
+            (dom.el("script", None, at(7, dom.Text("</script>"))), 7),
+            (at(6, dom.el("script", None, "</script>")), 6),
+            (at(6, dom.el("script", None, "<!--")), 6),
+            (at(9, dom.el("textarea", None, at(8, dom.Comment("x")))), 8),
+            (at(9, dom.el("textarea", None, dom.el("b"))), 9),
+            (at(10, dom.el("br", None, "x")), 10),
+            (at(11, dom.el("path", {"/": ""}, "x")), 11),
+            (at(12, dom.el("p", {"/": ""})), 12),
+            (at(13, dom.el("_")), 13),
+        ]
+        for node, line in cases:
+            with self.subTest(node=node, line=line):
+                root = dom.el("#root")
+                root.append(node)
+                with self.assertRaises(dom.HtmlError) as caught:
+                    dom.serialize(root)
+                self.assertEqual(caught.exception.line, line, caught.exception.message)
+
 
 class ParseCounterexamples(unittest.TestCase):
     """test_dom_property.ParseTest: markup a browser repairs in silence is an
@@ -202,6 +229,8 @@ class ParseCounterexamples(unittest.TestCase):
         self.says('<p><!DOCTYPE<p id="end">end</p>', f'<!DOCTYPE<p id="end"> {ignored}')
         self.says("<p>x</p><!doctype html>", f"<!doctype html> {ignored}")
         self.says("<!doctype html><!doctype html>", f"<!doctype html> {ignored}")
+        # First, and still not HTML's: a browser takes its mode from it.
+        self.says("<!doctype xml>", f"<!doctype xml> {ignored}")
         self.says("<!doctype html>\n<p>x</p>")
         self.says("\n  <!DOCTYPE  HTML>")
 
@@ -211,6 +240,12 @@ class ParseCounterexamples(unittest.TestCase):
                   "<p> has an attribute called '<p'")
         self.says('<img src=x<p id="end">', """'<img src=x<p id="end">': a < inside a tag, where a quote or a > is missing""")
         self.says('<a title="a<b" href=x>y</a>')
+
+    def test_a_tag_whose_name_is_no_element_s(self):
+        # A browser makes an element called `a&b` of it, and serialize() could
+        # not write it back.
+        self.says("<a&b>x</a&b>", "<a&b> is not an element's name")
+        self.says('<p"x>y</p"x>', """<p"x> is not an element's name""")
 
     def test_what_was_said_before(self):
         self.says("<p class=a class=b>x</p>", "<p> has the attribute 'class' twice")
