@@ -87,8 +87,10 @@ can never be what trips <code>[dev] strict</code>.</p>
 <p>A read gives the fallback whenever the Value is not of the type asked for. Types are not
 converted: a number is not a bool, and <code>"7"</code> is not 7. <code>as_int()</code> cuts a
 number towards zero and clamps it to the range of an <code>int</code>, so an edited save holding a
-number too big for one cannot overflow anything. <code>as_string()</code> returns a view that is
-valid while the Value is alive and unchanged; copy it into a <code>std::string</code> to keep it.</p>
+number too big for one cannot overflow anything. <code>as_float()</code> clamps to the range of a
+<code>float</code> the same way, so a finite number never reads as an infinity.
+<code>as_string()</code> returns a view that is valid while the Value is alive and unchanged; copy it
+into a <code>std::string</code> to keep it.</p>
 
 <h3>A write that cannot land</h3>
 
@@ -135,10 +137,10 @@ the game.</p>
 slot is a file of its own, so a game with three save slots, settings and a best score uses five
 names. Anything else — a path above all — is refused and said once.</p>
 
-<p>A Value that could not be read back is refused too, rather than written and lost: one nested
-deeper than 64 levels, or with a NUL character in a string or a key. A number that is not finite
-— a NaN, an infinity — is written as nothing, and reads back as the default, which is what it meant
-anyway.</p>
+<p>A Value that could not be read back is refused too, rather than written and lost: more than
+64 lists and objects inside each other, a NUL character in a string or a key, or a number that is not
+finite — a NaN or an infinity, which JSON cannot hold. A file holding a number too large for a
+double, such as <code>1e400</code>, is not a save at all: <code>read()</code> says <code>UNREADABLE</code>.</p>
 
 <p>A write flushes the file to the disk, so it is a thing to do at a checkpoint, on a menu, when a
 level ends — not every frame.</p>
