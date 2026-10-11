@@ -113,6 +113,34 @@ class BuildSwitchesTest(unittest.TestCase):
         self.assertTrue(refconf["build_switches"])
 
 
+class ConfigSeeTest(unittest.TestCase):
+    """reference.toml [config_see]: a key the configuration reference links to
+    the page that explains it further. One for a key the .toml does not have
+    is red, like every decision in reference.toml about a name that is gone."""
+
+    ROWS = [{"key": "dev.sanitize", "comment": "What a Debug build is instrumented with."}]
+
+    def test_an_entry_is_a_link_under_its_key(self):
+        see, wrong = generated.config_see(self.ROWS, {"config_see": {"dev.sanitize": {
+            "href": "/manual/basics/configuration.html#sanitizers", "says": "what it catches"}}})
+        self.assertEqual(wrong, [])
+        self.assertEqual(see, {"dev.sanitize": ("/manual/basics/configuration.html#sanitizers",
+                                                "what it catches")})
+
+    def test_a_key_the_toml_does_not_have_is_red(self):
+        _see, wrong = generated.config_see(self.ROWS, {"config_see": {"dev.sanitise": {
+            "href": "/x.html", "says": "y"}}})
+        self.assertEqual(wrong, ['[config_see."dev.sanitise"]: the .toml has no key dev.sanitise'])
+
+    def test_an_entry_says_where_and_what(self):
+        for spec in ({"href": "https://example.com/", "says": "y"}, {"href": "/x.html", "says": " "},
+                     "/x.html"):
+            with self.subTest(spec=spec):
+                _see, wrong = generated.config_see(self.ROWS, {"config_see": {"dev.sanitize": spec}})
+                self.assertEqual(len(wrong), 1)
+                self.assertIn("an href inside the site", wrong[0])
+
+
 class ConfigCommentTest(unittest.TestCase):
     """reference.toml [config_comment]: the configuration reference shows the
     framework's comment for every key, and an entry here replaces one that is

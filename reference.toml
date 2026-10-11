@@ -53,6 +53,13 @@ kind = "environment"
 read_in = ["cmake/sanitize.cmake"]
 doc = "`1` turns a sanitizer `[dev] sanitize` lists and the compiler cannot run from a warning into a failed configure. CI sets it where a debug build is a gate."
 
+# Keys of the .toml that a page explains further than the framework's comment
+# can: the configuration reference links it under the key. `says` is the
+# link's text; the links gate checks the page and its anchor exist.
+[config_see."dev.sanitize"]
+href = "/manual/basics/configuration.html#sanitizers"
+says = "what each sanitizer catches and costs, and what configure.py refuses, with its reason"
+
 # Keys of the .toml whose comment in the framework's own .toml describes what the
 # framework at FRAMEWORK_REF does not do. The configuration reference shows
 # `comment` in its place, and only while the framework's comment still starts

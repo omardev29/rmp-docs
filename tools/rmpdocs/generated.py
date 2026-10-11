@@ -73,10 +73,33 @@ def config_comments(rows: list[dict], refconf: dict) -> list[str]:
     return wrong
 
 
+def config_see(rows: list[dict], refconf: dict) -> tuple[dict, list[str]]:
+    """reference.toml [config_see."section.key"]: a page that says more about
+    a key than its comment can -- what it catches, what configure.py refuses,
+    with the refusal shown. {key: (href, says)}, and what is wrong: a key the
+    .toml does not have, or an entry without both. The link itself is the
+    links gate's, like every link of the site."""
+    keys = {r["key"] for r in rows}
+    out, wrong = {}, []
+    for key, spec in refconf.get("config_see", {}).items():
+        where = f'[config_see."{key}"]'
+        if key not in keys:
+            wrong.append(f"{where}: the .toml has no key {key}")
+            continue
+        if not isinstance(spec, dict) or not str(spec.get("href", "")).startswith("/") \
+                or not str(spec.get("says", "")).strip():
+            wrong.append(f"{where}: an href inside the site (/...) and what the page says (says)")
+            continue
+        out[key] = (spec["href"], spec["says"].strip())
+    return out, wrong
+
+
 def configuration_page(framework: Path, refconf: dict | None = None,
                        wrong: list | None = None) -> tuple[str, str, str]:
     rows = run_json(framework, "tools/configure.py", "--print-schema")
     problems = config_comments(rows, refconf or {})
+    see, see_wrong = config_see(rows, refconf or {})
+    problems += see_wrong
     if wrong is not None:
         wrong.extend(problems)
     sections: dict[str, list[dict]] = {}
@@ -110,6 +133,9 @@ def configuration_page(framework: Path, refconf: dict | None = None,
             out.append(f'<div class="entity-meta">{" ".join(meta)}</div>')
             if k["comment"]:
                 out.append(prose.to_html(k["comment"]))
+            if k["key"] in see:
+                href, says = see[k["key"]]
+                out.append(f'<p>See <a href="{html.escape(href)}">{prose.inline(says)}</a>.</p>')
             out.append("</section>")
     return ("reference/configuration.html", "Configuration", "\n".join(out))
 
