@@ -641,13 +641,12 @@ the one file the property tests cannot link, the runner's. They are on
 <code>tests/property/waivers.txt</code>, a list that only shrinks. Every reader is fuzzed: the
 save file, the LDtk and Tiled maps, Aseprite sheets, the resource pack and the names the loaders
 are given.</li>
-<li data-fw-grep="tests/mutation/floors/pack.txt::^floor +85$"><strong>Mutation testing on part of
-the framework.</strong> Of the framework's C++, the save file and <code>rmp::Value</code>,
-<code>rmp::random</code>, the maps, collision, objects, and the whole of loading — the pack, the
-loaders, the resource table — have a mutation score held to a floor. The scene stack, input,
-behaviours, audio, the camera, sprites and the interface have their module and no score yet: their
-floors are measured once by the weekly run. <a href="#coverage">Coverage</a> says which lines the
-tests run; for those, nothing yet says how many mistakes in those lines the tests would miss.</li>
+<li data-fw-grep="tests/mutation/floors/console.txt::^floor +-$"><strong>The console and the core without a
+mutation score.</strong> Every module of the framework's C++ and of its tools has a mutation score
+held to a floor, measured by the weekly run, but two: the console's terminal guard and the small
+core of reports, globals and ads. Their shards lose GitHub's runner before they finish, and until
+the reason is found nothing says how many mistakes in those lines the tests would miss —
+<a href="#coverage">coverage</a> says which ones run.</li>
 <li><strong>No reading of how a Windows, macOS or BSD release was linked.</strong> The BSD releases are hardened
 like Linux's, Fortify aside, and the Windows ones by their linker's defaults, and nothing reads it
 back out of the binary: <code>binary_check.py windows</code> reads what an <code>.exe</code>
