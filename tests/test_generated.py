@@ -236,3 +236,115 @@ class SizeBudgetTableTest(unittest.TestCase):
         self.assertIn("<td><code>macos</code></td><td>not measured yet</td>", got)
         self.assertIn("<td>843,556, an estimate</td>", got)
         self.assertEqual(got.count("<tr><td>"), 4)
+
+
+class VersionsTableTest(unittest.TestCase):
+    """framework/maintaining/dependencies.html lists every pin of the
+    ```versions block of thirdparty/FROZEN_VERSIONS.md, read as
+    tools/versions_check.sh reads it: a pin typed into a page goes stale at
+    the first bump."""
+
+    def framework(self, text: str) -> Path:
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "thirdparty").mkdir()
+        (tmp / "thirdparty" / "FROZEN_VERSIONS.md").write_text(text)
+        return tmp
+
+    def test_every_key_is_a_row_and_nothing_outside_the_block_is(self):
+        fw = self.framework("# Frozen\n\nagp 1.0 is not a pin here\n\n```versions\n# key value\n"
+                            "# Android, as one set.\nagp                 8.13.2\r\n"
+                            "gradle              8.14.5\n\n# Tools.\nzig 0.16.0\n```\n\nzig 9.9\n")
+        rows = generated.versions_block(fw)
+        self.assertEqual([(k, v) for k, v, _c in rows], [("agp", "8.13.2"), ("gradle", "8.14.5"), ("zig", "0.16.0")])
+        self.assertEqual(rows[0][2], "key value Android, as one set.")
+        self.assertEqual(rows[1][2], rows[0][2])
+        self.assertEqual(rows[2][2], "Tools.")
+        table = generated.versions_table(fw)
+        self.assertEqual(table.count("<tr><td>"), 3)
+        self.assertIn("<td><code>agp</code></td><td><code>8.13.2</code></td>", table)
+        self.assertNotIn("9.9", table)
+
+    def test_a_digest_is_shortened_and_says_so(self):
+        digest = "ab" * 32
+        table = generated.versions_table(self.framework(f"```versions\nbuild_image_digest sha256:{digest}\n"
+                                                        f"sha256_rres {digest}\n```\n"))
+        self.assertIn(f"<code>sha256:{digest[:16]}…</code>", table)
+        self.assertIn(f"<code>{digest[:16]}…</code>", table)
+        self.assertNotIn(digest, table)
+
+    def test_the_real_block_holds_the_keys_the_pages_name(self):
+        import os
+        fw = Path(os.environ.get("RMP_FRAMEWORK", DOCS.parent / "raylib_multiplatform"))
+        if not (fw / "thirdparty" / "FROZEN_VERSIONS.md").is_file():
+            self.skipTest("no framework next to rmp-docs")
+        keys = {k for k, _v, _c in generated.versions_block(fw)}
+        for key in ("build_image_digest", "run_alpine_digest", "agp", "gradle", "xcode", "llvm", "mull",
+                    "zig", "emscripten", "clang_format", "apt_snapshot", "hypothesis"):
+            self.assertIn(key, keys)
+
+
+class DependencyMapTest(unittest.TestCase):
+    """framework/maintaining/dependencies.html's map of which files name each
+    dependency, read from the tree: a file is in it because its regex finds
+    the dependency there, and only then."""
+
+    def framework(self, files: dict) -> Path:
+        tmp = Path(tempfile.mkdtemp())
+        for rel, text in files.items():
+            (tmp / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tmp / rel).write_text(text)
+        return tmp
+
+    def uses(self, fw: Path, docs: Path | None = None) -> dict:
+        return {dep[0]: by for dep, by in generated.dependency_uses(generated.map_texts(fw, docs))}
+
+    def test_a_file_is_counted_where_it_sits_with_how_often(self):
+        fw = self.framework({"src/rmp/ui/a.cpp": "Clay_BeginLayout(); Clay_EndLayout();\n",
+                             "tests/ui_test.cpp": "#include <clay.h>\n",
+                             "tools/rmp.py": "nothing\n",
+                             "thirdparty/clay/clay.h": "Clay_X Clay_Y\n",
+                             "thirdparty/clay/PATCHES.md": "Clay_SizeContainers\n"})
+        clay = self.uses(fw)["Clay"]
+        self.assertEqual(clay["Product code"], [("src/rmp/ui/a.cpp", 2)])
+        self.assertEqual(clay["Tests"], [("tests/ui_test.cpp", 1)])
+        self.assertEqual(clay["Docs, pins and config"], [("thirdparty/clay/PATCHES.md", 1)])
+        self.assertNotIn("Tools and gates", clay)
+
+    def test_a_vendored_library_does_not_use_itself_and_assets_are_not_read(self):
+        fw = self.framework({"thirdparty/raylib/src/rcore.c": "rlgl.h raylib.h\n",
+                             "thirdparty/FROZEN_VERSIONS.md": "thirdparty/raylib\n",
+                             "examples/x/resources/a.ldtk": "raylib.h\n"})
+        raylib = self.uses(fw)["raylib"]
+        self.assertEqual(raylib, {"Docs, pins and config": [("thirdparty/FROZEN_VERSIONS.md", 1)]})
+
+    def test_angle_is_a_word_and_not_part_of_triangles(self):
+        fw = self.framework({"src/rmp/a.cpp": "rlBegin(RL_TRIANGLES); DrawTriangle();\n",
+                             "ios/README.md": "ANGLE gives iOS its EGL\n"})
+        ios = self.uses(fw)["raylib-iOS"]
+        self.assertNotIn("Product code", ios)
+        self.assertEqual(ios["Build projects"], [("ios/README.md", 1)])
+
+    def test_this_sites_pages_count_but_not_the_maintaining_pages(self):
+        fw = self.framework({"src/main.cpp": "\n"})
+        docs = self.framework({"content/manual/ui.html": "<p>Clay_BeginLayout</p>",
+                               "content/framework/maintaining/dependencies.html": "<p>Clay_X Clay_Y</p>"})
+        clay = self.uses(fw, docs)["Clay"]
+        self.assertEqual(clay, {"This site": [("manual/ui.html", 1)]})
+
+    def test_the_map_links_every_dependency_to_its_entry(self):
+        fw = self.framework({"src/rmp/save.cpp": "cJSON_Parse\n"})
+        got = generated.dependency_map(fw, None)
+        for dep in generated.DEPENDENCIES:
+            anchor = generated.dep_anchor(dep[0])
+            self.assertIn(f'href="#{anchor}"', got)
+            self.assertIn(f'id="{anchor}"', got)
+        self.assertIn("<code>src/rmp/save.cpp</code>&#160;(1)", got)
+        self.assertEqual(generated.dep_anchor("The build image"), "dep-the-build-image")
+
+    def test_every_regex_finds_something_in_the_real_framework(self):
+        import os
+        fw = Path(os.environ.get("RMP_FRAMEWORK", DOCS.parent / "raylib_multiplatform"))
+        if not (fw / "CMakeLists.txt").is_file():
+            self.skipTest("no framework next to rmp-docs")
+        for name, by in self.uses(fw).items():
+            self.assertTrue(by, f"{name}: no file of the framework names it -- a regex that matches nothing")

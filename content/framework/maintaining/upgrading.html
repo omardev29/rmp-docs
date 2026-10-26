@@ -1,0 +1,292 @@
+<!--
+title: Upgrading a dependency
+description: A playbook for each dependency of the framework — where its version is held, what has to move with it, the patches to carry over, the checks that will go red and what is re-recorded afterwards.
+order: 50
+-->
+<h1>Upgrading a dependency</h1>
+
+<p class="lede">Every dependency below is pinned, so none of them has to move until there is a
+reason: a store's requirement, a runner that no longer has the pinned version, a bug upstream has
+fixed, a feature a game needs. When there is one, this page says what the upgrade touches. Each
+entry gives where the version is, what moves with it, what to expect red, and what is recorded
+again afterwards.</p>
+
+<h2 id="the-rules">The rules of every upgrade</h2>
+
+<ul>
+<li><strong>One dependency per pull request.</strong> Two at once cannot be told apart when a run
+goes red.</li>
+<li><strong>The pin and every copy of it in the same commit.</strong> <code>rmp test config</code>
+runs <code>tools/versions_check.sh</code>, which names a copy that was left behind.</li>
+<li><strong>A gate that goes red is information.</strong> It is answered by fixing the code, or by
+re-measuring a number the dependency really changed, with the reason written down. A floor is never
+lowered and a list that only shrinks never grows to make a bump pass (<code>CLAUDE.md</code>,
+"Never weaken a gate to get green").</li>
+<li><strong>The full matrix once, at the end.</strong> A debug lane on the families the dependency
+touches while working (<a href="/framework/contributing/ci.html#more">CI</a>), the whole matrix
+before merging.</li>
+<li><strong>The docs after.</strong> A page of this site that names a version or a behaviour that
+moved is fixed in the same stretch of work, and <code>FRAMEWORK_REF</code> bumped.</li>
+</ul>
+
+<h2 id="vendored">The vendored code</h2>
+
+<h3 id="raylib">raylib</h3>
+
+<dl>
+<dt>Where</dt>
+<dd><code>thirdparty/raylib</code>, a committed copy of a release; <code>RAYLIB_VERSION</code> in
+<code>thirdparty/raylib/src/raylib.h</code> says which.</dd>
+<dt>The patches</dt>
+<dd data-fw-grep="thirdparty/raylib/PATCHES.md::each one is\ncommented `PATCHED \(raylib_multiplatform\)` at its site\.">Every
+change is a row of <code>thirdparty/raylib/PATCHES.md</code> and is commented
+<code>PATCHED (raylib_multiplatform)</code> at its site. Each row says what to do with it: the
+backports are dropped once the new release has them; the build-system and backend fixes are
+re-applied; the fixes of our own are re-applied unless upstream has fixed it — and for those, a
+test says which. Copy the new release over the old one, then walk the table, top to bottom.</dd>
+<dt>What holds the patches</dt>
+<dd><code>EscapeIsTheGamesKeyTest</code> scans every backend for a key that closes the window
+without being the exit key; <code>DrmCardProbeTest</code> reads the DRM card probe;
+<code>tests/rlsw_test.cpp</code> calls the software renderer's texture lookup at its edges;
+<code>tests/configure_test.py</code> compares raylib's platform list with the branches that select
+them. A patch that was lost turns one of them red.</dd>
+<dt>What moves with it</dt>
+<dd>raylib-cpp, whose version follows raylib's; the raylib-iOS fork, which is its own copy of raylib
+and should be the same release, or a game can call a function iOS does not have; the vendored
+libraries inside raylib (GLFW, miniaudio, the software renderer), which come with it.</dd>
+<dt>Expect red</dt>
+<dd>The render hash (<code>tests/fixtures/render_hash.txt</code>) and the e2e shots, if anything
+drawn changed; the size lines; <code>tools/ownership_check.sh</code>, which reads raylib's
+<code>Load*</code> and <code>Unload*</code> names from <code>raylib.h</code> live; this site's
+<code>names</code> gate, which checks every raylib function a page names against the headers.</dd>
+<dt>Re-record</dt>
+<dd>The render hash with <code>rmp test render-update</code>, the e2e goldens with
+<code>rmp test e2e-update</code> in the image, every changed picture looked at; a moved golden is
+<code>behaviour-approved</code>.</dd>
+<dt>Licence</dt>
+<dd>raylib stays modified: <code>PATCHES.md</code> stays, rewritten for the new release, and
+<code>THIRD_PARTY_LICENSES.md</code> says the version.</dd>
+</dl>
+
+<h3 id="clay">Clay</h3>
+
+<dl>
+<dt>Where</dt>
+<dd><code>thirdparty/clay/clay.h</code>, one committed file; two patches in its
+<code>PATCHES.md</code>, both commented at the site: the C++ version guard (NetBSD's GCC 10 reports
+an older C++ under <code>-std=c++20</code>) and the two sizing loops that froze on a layout too
+large for a float.</dd>
+<dt>Why it is expensive</dt>
+<dd>Clay is before 1.0, its API moves between minor versions, and every file under
+<code>src/rmp/ui/</code> uses it. The facts the UI depends on — one id scheme, strings Clay keeps by
+pointer, the rectangle Clay emits after an image, a floating element that captures the pointer, the
+way it measures text a word at a time — are verified one by one in the
+<code>rmp-ui-internals</code> skill, and each has to be checked again on the new version.</dd>
+<dt>Expect red</dt>
+<dd><code>tests/ui_layout_test.cpp</code> and the UI's other tests, <code>tests/property/ui_text_prop.cpp</code>,
+every e2e shot of a menu.</dd>
+<dt>When</dt>
+<dd>Only for a fix a game needs. The frozen copy has no deadline: it is C, in one file.</dd>
+</dl>
+
+<h3 id="parsers">cute_tiled, cute_aseprite, cJSON, rres</h3>
+
+<p>The four readers of files a game loads. Each one is fed bytes it should not trust, so each one
+has a fuzz target in <code>tests/fuzz/</code> and a committed corpus under
+<code>tests/fuzz/corpus/</code>; after an upgrade, <code>rmp test fuzz</code> replays every committed
+input under the sanitizers, and the nightly campaign searches further.</p>
+
+<dl>
+<dt>cute_tiled</dt>
+<dd>Patched and hardened: the six <code>default:</code> branches skip a key the parser does not
+know (a map saved by a recent Tiled has many), and every reader stops at the end of its input. Each
+site is <code>/* rmp patch */</code> and a row of <code>thirdparty/cute_tiled/PATCHES.md</code>.
+<code>tests/fixtures/map_modern.json</code> is rejected by the unpatched parser and accepted by
+ours: if it fails after an upgrade, the patch was lost.</dd>
+<dt>cute_aseprite</dt>
+<dd>Unmodified, pinned by <code>sha256_cute_aseprite</code>; the new hash is the one
+<code>tools/license_db.py</code> prints. <code>prepare_aseprite()</code> in
+<code>src/rmp/aseprite.cpp</code> walks every chunk before cute_aseprite sees the bytes, so a new
+chunk type is the thing to read the changelog for.</dd>
+<dt>cJSON</dt>
+<dd>Unmodified, <code>sha256_cjson</code>. <code>src/rmp/cjson_impl.c</code> sets its nesting
+limit to the save format's maximum depth and deliberately does not turn on its locale support; the
+save code writes numbers itself and parses under the C locale. Run <code>tools/test_locales.sh</code>
+after an upgrade.</dd>
+<dt>rres</dt>
+<dd>Unmodified, <code>sha256_rres</code> over every file, <code>external/</code> included — the
+compression and the encryption <code>rmp::save</code> seals saves with. A change in the encryption
+changes what an old save reads as, and the save tests are what notice: a player's saves must
+still open after the upgrade.</dd>
+</dl>
+
+<h3 id="raymob">raymob</h3>
+
+<p>Android's native glue, in C under <code>thirdparty/raymob</code> and in Java under
+<code>raymob/app/src</code>. Every patch is marked <code>[rmp patch]</code> and listed in
+<code>thirdparty/raymob/PATCHES.md</code>: a heap overflow, a bound check that checked nothing, a
+detach of the game's own thread, the JNI discipline the C side follows, and a key release sent as a
+second press. <code>RaymobJniDisciplineTest</code> fails on a call that skips the helpers. Upgrade
+only for a reason; the Android build and Firebase Test Lab are the proof.</p>
+
+<h3 id="raylib-ios">raylib-iOS and ANGLE</h3>
+
+<p>The iOS backend is a submodule, <code>thirdparty/raylib-ios</code>, pinned to a commit of the fork
+under the same account. It is the dependency most likely to be forced: a new Xcode or a new iOS SDK
+can need a change in it, and its upstream is one person's port. To move it:</p>
+
+<pre data-lang="shell">
+git -C thirdparty/raylib-ios fetch origin
+git -C thirdparty/raylib-ios checkout COMMIT
+git add thirdparty/raylib-ios
+</pre>
+
+<p>A fix of your own goes to the fork first, as a commit there, and the submodule then points at
+it. The row in <code>thirdparty/FROZEN_VERSIONS.md</code>'s table and the licence rows — ANGLE's
+included — follow. The iOS simulator job is the proof; an App Store build is the real one.</p>
+
+<h3 id="test-libraries">doctest and RapidCheck</h3>
+
+<p>Pinned by content (<code>sha256_doctest</code>, <code>sha256_rapidcheck</code>). doctest ships
+with every game's tests; RapidCheck is the framework's only. RapidCheck's own doctest integration
+does not compile, and <code>tests/property/check.h</code> is the few lines that replace it: an
+upgrade checks those still match.</p>
+
+<h2 id="android">The Android set</h2>
+
+<p data-fw-grep="thirdparty/FROZEN_VERSIONS.md::- The Android versions are a compatibility \*\*set\*\*, not independent knobs: AGP\n  8\.13 requires Gradle">SDK
+levels, build tools, NDK, AGP, Gradle and JDK move together: AGP's version decides the Gradle
+it needs and the highest API it supports. The keys are the <code>android_*</code> ones,
+<code>agp</code>, <code>gradle</code> and <code>gradle_sha256</code>, and the files are
+<code>raymob/app/build.gradle</code>, <code>raymob/build.gradle</code> and
+<code>raymob/gradle/wrapper/gradle-wrapper.properties</code>. The image carries the SDK and a Gradle
+home warmed for the set, so this is <a href="/framework/maintaining/build-image.html#android-bump">the
+Android bump</a>, in both repositories.</p>
+
+<aside class="callout warning"><span class="callout-title">AGP 9</span>
+<p data-fw-grep="thirdparty/FROZEN_VERSIONS.md::Do not move to AGP 9 without first rewriting\n  `raymob/app/build.gradle`: Gradle 9 removes `gradle\.buildFinished` and AGP 9\n  removes `applicationVariants`, and that module uses both\.">Do
+not move to AGP 9 without rewriting <code>raymob/app/build.gradle</code> first: Gradle 9 removes
+<code>gradle.buildFinished</code>, AGP 9 removes <code>applicationVariants</code>, and that file
+uses both. That rewrite is the largest single piece of Android work ahead.</p></aside>
+
+<p>AdMob's SDK, <code>play_services_ads</code>, can move on its own: an AAR built against a lower
+SDK works under a higher one. It is still in the warmed Gradle home, so a new version is an image
+too.</p>
+
+<h2 id="apple">Xcode and the macOS runner</h2>
+
+<p data-fw-grep=".github/workflows/_apple.yml::echo &quot;FAIL: Xcode \$\{XCODE_VERSION\} is not installed on this runner\. Available:&quot;">The
+keys are <code>macos_runner</code> and <code>xcode</code>. The Apple jobs select Xcode by version,
+and a step fails, listing what the runner has, when the pinned one is gone — GitHub keeps a few
+Xcode versions per runner image and removes old ones. That failure is the signal to bump: pick a
+version the runner lists, run the debug lane on <code>macos</code> and <code>ios</code>, and look at
+the canary, which already builds with the newest one. XcodeGen and the macOS Ninja are downloaded
+by version and <code>sha256</code> (<code>xcodegen</code>, <code>ninja_mac</code> and their hashes),
+never from Homebrew.</p>
+
+<h2 id="windows">Windows</h2>
+
+<ul>
+<li><code>windows_runner</code> is the runner label. The compiler that builds the
+<code>.exe</code> comes with it, pinned by nobody (<a href="/framework/maintaining/how-it-fits.html#families">the
+warning</a>).</li>
+<li><code>mesa</code> and <code>mesa_sha256</code>: the software OpenGL the Windows render test runs
+on. Test only; the release zip is checked not to carry it.</li>
+<li data-fw-grep="thirdparty/FROZEN_VERSIONS.md::One per Python\n# the runner can have \(tomllib needs 3\.11\), win_amd64">Pillow:
+one hash per Python version the runner can have. When the runner's Python moves to a version with
+no hash in the block, the install refuses and the icon step fails: add that version's
+<code>win_amd64</code> wheel hash, from PyPI, as a new <code>pillow_sha256_cp3XX_win_amd64</code>
+key.</li>
+<li><code>upx_sha256_win64</code>, with the UPX version.</li>
+</ul>
+
+<h2 id="clang-tools">clang-format and clang-tidy</h2>
+
+<p data-fw-grep="thirdparty/FROZEN_VERSIONS.md::# The formatter and the linter\. Pinned because a different minor version of\n# clang-format reformats files that were already formatted">The
+keys are <code>clang_format</code> and <code>clang_tidy</code>, and the image's
+<code>CLANG_TOOLS_VERSION</code>. A new clang-format reformats files that were already right, and a
+new clang-tidy finds warnings nobody owed. So the bump is three commits, in one pull request:</p>
+
+<ol>
+<li>The versions, in the image and in the framework.</li>
+<li><code>rmp fmt</code> over the whole tree, alone in its commit, so the review can skip it.</li>
+<li>Every new clang-tidy warning fixed, or carried with a <code>NOLINT</code> that names the check
+and says why;
+<code>tools/lint_debt.txt</code> only goes down (<code>bash tools/lint.sh debt</code> lowers it,
+nothing adds to it). Read every automatic fix: <code>misc-const-correctness</code>'s have been
+wrong. Check that the <code>CustomChecks</code> still run: they need
+<code>--experimental-custom-checks</code>, and a query that no longer parses is one warning line and
+nothing else; <code>ClangTidyGuidelineTest</code> shows each firing on a probe.</li>
+</ol>
+
+<p>This site's Guidelines compile their examples through the same clang-tidy, and its
+<code>enforcement</code> gate reads the framework's <code>.clang-tidy</code>: a check that was
+renamed or removed shows there too.</p>
+
+<h2 id="image-tools">The tools inside the image</h2>
+
+<dl>
+<dt>Emscripten</dt>
+<dd><code>EMSDK_COMMIT</code> and <code>EMSCRIPTEN_VERSION</code> in the image, <code>emscripten</code>
+in the framework. A new one can change the web build's size, its JavaScript, and what
+<code>web-backends.yml</code> fingerprints for each backend: run it by hand. Never add
+<code>ASYNCIFY</code> back to get a <code>while</code> loop (<code>CLAUDE.md</code>, "Web has no
+<code>while</code> loop").</dd>
+<dt>zig</dt>
+<dd>In the image (<code>ZIG_VERSION</code>, its hashes, and <code>ZIG_WARM_GLIBC</code>, which must
+be the <code>[linux] glibc</code> default), and in the framework as <code>zig</code> and
+<code>zig_sha256_*</code>, which <code>tools/linux_build.sh</code> uses when it downloads it on a
+laptop. zig is before 1.0 and changes its command line between versions; the script is what
+moves.</dd>
+<dt>CMake and Ninja</dt>
+<dd>The image's <code>CMAKE_VERSION</code> and <code>NINJA_VERSION</code>, the <code>cmake</code> and
+<code>ninja_linux</code> keys. The framework asks for CMake 3.30 or newer; Android's CMake is the
+SDK's own, <code>android_sdk_cmake</code>.</dd>
+<dt>UPX</dt>
+<dd>The image's <code>UPX_VERSION</code>, and <code>upx</code> with its three hashes. Every packed
+size line moves.</dd>
+<dt>LLVM and Mull</dt>
+<dd>Together or not at all: <a href="/framework/maintaining/build-image.html#llvm-bump">the LLVM
+bump</a>. The coverage floors and every mutation floor are measured again.</dd>
+<dt>cppcheck</dt>
+<dd>From the apt snapshot. A newer one finds new things; the rule is zero findings in
+<code>src/rmp</code>, and a suppression says why on its line.</dd>
+<dt>actionlint and shellcheck</dt>
+<dd>actionlint by version and hash, shellcheck from apt. actionlint reads no shell without
+shellcheck: the image's smoke check proves both run.</dd>
+<dt>butler</dt>
+<dd>By version and hash; itch.io's publishing only.</dd>
+</dl>
+
+<h2 id="ci-pins">CI's own pins</h2>
+
+<dl>
+<dt>GitHub Actions</dt>
+<dd data-fw-grep="tests/configure_test.py::class ActionsArePinnedByShaTest\(unittest\.TestCase\):">Every
+<code>uses:</code> is a full commit with its tag in a comment, and a test fails on one that is not.
+Dependabot proposes their bumps monthly, in both repositories. Merge them: an action whose runtime
+GitHub deprecates stops running on its own date, pinned or not.</dd>
+<dt>The Linux runner labels</dt>
+<dd><code>ubuntu-24.04</code> and <code>ubuntu-24.04-arm</code> are written in the workflows, not in
+the <code>versions</code> block. When GitHub retires them, every occurrence moves in one commit,
+in this site's workflows too. The jobs run in the image, so what changes is the host: Docker, the
+kernel the DRM job loads vkms into.</dd>
+<dt>The BSDs</dt>
+<dd data-fw-grep="tools/configure.py::# The BSD matrix legs, keyed by target id\. The OS version is not here: it comes\n# from FROZEN_VERSIONS\.md">The
+<code>freebsd</code>, <code>openbsd</code> and <code>netbsd</code> keys are read by the generator
+when it makes the BSD matrix. An old release loses its package mirror: move to a release
+<code>cross-platform-actions</code> supports, which can mean bumping that action too. The BSD
+targets are best effort, and a failure there after a green fast lane is a platform-specific bug
+fixed once.</dd>
+<dt>Playwright</dt>
+<dd><code>package.json</code> and <code>package-lock.json</code>; Dependabot's npm pull requests.
+The browser it downloads is keyed to its version.</dd>
+</dl>
+
+<h2 id="finding-out">Finding out what is newer</h2>
+
+<p data-fw-grep=".github/scripts/upstream_report.py::CHECKS: list\[tuple\[str, str, callable\]\] = \[\n    \(&quot;android_ndk&quot;">The
+canary's upstream report says what is newer than the pins it knows how to ask about: the NDK, AGP,
+Gradle, Mesa, the macOS Ninja and XcodeGen. It never fails a build; it is information. Everything
+else — raylib, Clay, Emscripten, zig, LLVM, the clang tools — is looked up by hand, and only when
+there is a reason to upgrade.</p>

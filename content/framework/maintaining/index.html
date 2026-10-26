@@ -1,0 +1,110 @@
+<!--
+title: Maintaining
+description: How to keep the framework alive for years with one person: every moving part and where it is pinned, the build image, Python, upgrading each dependency, the yearly round the stores impose, and what to keep so it still builds in decades.
+order: 85
+-->
+<h1>Maintaining</h1>
+
+<p class="lede">These pages are for whoever keeps the framework working after it is written: the
+person who bumps a dependency, rebuilds the build image, answers a store's new requirement, or
+comes back to the repository after a year away and needs it to build again. Contributing says how
+to make a change; Maintaining says what changes on its own, where every version is held, and what
+to do about each one.</p>
+
+<p>The framework is built to need little: every dependency it compiles is a copy in the repository,
+every tool CI uses is pinned to a version and a checksum, and a check fails when two places that
+hold the same version disagree. Pinning stops the world from breaking a build. It does not stop
+the world from moving, and the pages here are about the places where it moves anyway.</p>
+
+<h2 id="pages">The pages</h2>
+
+<dl>
+<dt><a href="/framework/maintaining/how-it-fits.html">How it all fits</a></dt>
+<dd>The framework as a system: the repositories, the command, the generator, the build systems,
+the toolchain of each family of targets, the workflows and the image, and what each one reads from
+the others.</dd>
+<dt><a href="/framework/maintaining/dependencies.html">Every dependency</a></dt>
+<dd>Each library, tool, SDK and service the framework depends on, where its version is held, what
+checks it, and a map, read from the tree, of every file that names it.</dd>
+<dt><a href="/framework/maintaining/build-image.html">The build image</a></dt>
+<dd>What is in <code>ghcr.io/omardev29/raylib-build</code> and the Alpine run image, how they are
+built, verified and published, and every step of a bump, in order.</dd>
+<dt><a href="/framework/maintaining/python.html">Python</a></dt>
+<dd>What Python the framework needs and why, the parts that are standard library only and the
+parts that are not, and how the image's hash-locked test tools are updated.</dd>
+<dt><a href="/framework/maintaining/upgrading.html">Upgrading a dependency</a></dt>
+<dd>A playbook per dependency: where its version is, what else has to move with it, the patches to
+carry over, the gates that will go red, and what is re-recorded afterwards.</dd>
+<dt><a href="/framework/maintaining/yearly.html">The yearly round</a></dt>
+<dd>What forces a change even when nobody touches the code: the stores' requirements, the runner
+images GitHub retires, the BSD releases, the scheduled workflows that stop by themselves.</dd>
+<dt><a href="/framework/maintaining/long-term.html">Ten years and more</a></dt>
+<dd>What rots first and what lasts, what to archive so a desktop build still works with no network
+and no GitHub, and how to run the framework with one person and little time.</dd>
+</dl>
+
+<h2 id="in-short">In short</h2>
+
+<table>
+<thead><tr><th>What</th><th>Moves on its own?</th><th>What it costs</th></tr></thead>
+<tbody>
+<tr><td>The C and C++ code, raylib and the vendored libraries</td><td>No: they are copies in the
+repository</td><td>Nothing until you choose to upgrade one. A new compiler can bring new
+warnings.</td></tr>
+<tr><td>The Linux, web and Android toolchain</td><td>No: one image, named by its digest</td><td>A
+rebuild when you want a newer tool; the image itself stays usable as long as a copy of it
+exists.</td></tr>
+<tr><td>The Windows and macOS runners, Xcode</td><td>Yes: GitHub retires runner images and the Xcode
+versions on them</td><td>A pin bump when a pin disappears, every year or two.</td></tr>
+<tr><td>Android: SDK, NDK, AGP, Gradle</td><td>Yes: Google Play raises the target API every
+year</td><td>A bump of the whole set, and an image rebuilt for it, once a year to keep
+publishing.</td></tr>
+<tr><td>iOS: Xcode, the raylib-iOS fork, ANGLE</td><td>Yes: the App Store requires a recent
+Xcode</td><td>A new Xcode, and the fork made to build with it, once a year to keep
+publishing.</td></tr>
+<tr><td>The BSDs</td><td>Yes: their package mirrors are rolling and old releases lose
+them</td><td>A version bump when a release ages out; best effort.</td></tr>
+<tr><td>Python</td><td>Slowly: the generator and <code>rmp</code> use the standard library
+only</td><td>Little. The test tools in the image are a lock regenerated with the image.</td></tr>
+<tr><td>GitHub Actions</td><td>Yes: actions are pinned by commit, but runtimes are
+deprecated</td><td>Dependabot's monthly pull requests, read and merged.</td></tr>
+</tbody>
+</table>
+
+<p>The order in which the cost arrives is the order of the list: the desktop builds keep working
+for years with no change at all; the stores ask for a change every year whether the game changed
+or not. <a href="/framework/maintaining/yearly.html">The yearly round</a> puts dates on it.</p>
+
+<h2 id="where-versions-live">Where every version lives</h2>
+
+<p data-fw-grep="tools/versions_check.sh::# So the docs are the source of truth here, and they are executable\. The\n# ```versions block in thirdparty/FROZEN_VERSIONS\.md is parsed, and every value\n# is compared against the file that actually controls it\.">One
+file holds the list: the <code>versions</code> block of <code>thirdparty/FROZEN_VERSIONS.md</code>.
+It is not documentation that can drift: <code>tools/versions_check.sh</code> parses it and compares
+every value with the file that really controls it — the Gradle files, the Gradle wrapper, every
+workflow that names the image — and, inside the build image, with the manifest the image carries.
+<code>rmp test config</code> runs it. A bump starts there, and the check names every other place
+that has to follow.</p>
+
+<p>The table below is that block, read from the framework at the commit this site documents:</p>
+
+<div data-generated="versions-table"></div>
+
+<p>What the block does not hold is in the table under it in the same file: raylib, Clay, raylib-cpp,
+doctest and raymob are pinned by being committed, the raylib-iOS fork by its submodule commit,
+Playwright by <code>package-lock.json</code>, and every GitHub Action by the full commit it resolves
+to. <a href="/framework/maintaining/dependencies.html">Every dependency</a> goes through all of
+them.</p>
+
+<h2 id="before">Before a maintenance session</h2>
+
+<ol>
+<li>Read <a href="/framework/contributing/setup.html">Setting up</a> if the machine is new: Python
+3.11 or newer, CMake, Ninja, the pinned clang tools, and Docker or podman for the image.</li>
+<li>Run <code>rmp test</code> on an untouched <code>main</code> first. A red before you change
+anything is the world having moved, and the stage that is red says where.</li>
+<li>Look at the last canary run and its upstream report: it says what is newer than every pin, and
+what breaks with it (<a href="/framework/maintaining/yearly.html#canary">the canary</a>).</li>
+<li>Open issues labelled <code>nightly-finding</code> come first, as in any other session.</li>
+<li>One dependency per pull request. A bump that moves two things at once cannot be bisected when
+the matrix goes red twenty minutes later.</li>
+</ol>

@@ -1,0 +1,235 @@
+<!--
+title: The build image
+description: What the build image and the Alpine run image hold, how they are built, verified and published, every step of a bump in order — the Android one included, where the image and the framework point at each other — and what moves in the framework afterwards.
+order: 30
+-->
+<h1>The build image</h1>
+
+<p class="lede">One image carries the whole toolchain of every Linux, web and Android job, so that
+a job downloads nothing and a green run means the same toolchain built it as last time. It lives
+in its own repository, <a href="https://github.com/omardev29/raylib-build-image">raylib-build-image</a>,
+and the framework names it by digest. This page is how to keep it: what is in it, how a new one is
+made and published, and the order of every step that pins it.</p>
+
+<h2 id="two-images">Two images</h2>
+
+<table>
+<thead><tr><th>Image</th><th>Built from</th><th>Runs</th><th>Pinned in the framework by</th></tr></thead>
+<tbody>
+<tr><td><code>ghcr.io/omardev29/raylib-build</code></td><td><code>Dockerfile</code>, with <code>python/</code>, <code>smoke/</code> and <code>verify/</code>; workflow <code>docker-image.yaml</code></td><td>every Linux, web and Android job, the framework's own jobs, this site's CI; amd64 and arm64</td><td><code>build_image_digest</code></td></tr>
+<tr><td><code>ghcr.io/omardev29/raylib-run-alpine</code></td><td><code>alpine/</code>; workflow <code>alpine-image.yaml</code></td><td>the musl build, started on Alpine; amd64 only</td><td><code>run_alpine_digest</code></td></tr>
+</tbody>
+</table>
+
+<p>The two workflows never rebuild each other: a change under <code>alpine/</code> publishes only the
+Alpine image, a change to the rest only the build image.</p>
+
+<h2 id="frozen">What frozen means here</h2>
+
+<table>
+<thead><tr><th>Layer</th><th>Pinned by</th></tr></thead>
+<tbody>
+<tr><td>The base</td><td><code>ubuntu:24.04</code> by digest, the <code>UBUNTU_DIGEST</code> argument</td></tr>
+<tr><td>Every apt package</td><td>every source rewritten to <code>snapshot.ubuntu.com</code> at <code>APT_SNAPSHOT</code>, so an install resolves to the same bytes on any day</td></tr>
+<tr><td>Every download</td><td>a <code>sha256</code> beside its version: CMake, Ninja, zig, UPX, butler, actionlint, Mull, the Android command-line tools</td></tr>
+<tr><td>Emscripten</td><td>emsdk fetched by commit, <code>EMSDK_COMMIT</code>, never by tag</td></tr>
+<tr><td>The Python test tools</td><td>the hash lock (<a href="/framework/maintaining/python.html#lock">Python</a>)</td></tr>
+<tr><td>The Gradle home</td><td>warmed by building the framework at <code>GRADLE_WARM_COMMIT</code>, and proven offline before the image is published</td></tr>
+</tbody>
+</table>
+
+<p>Every version is an <code>ARG</code> at the top of the <code>Dockerfile</code>: one place to bump.
+Rebuilding the same <code>Dockerfile</code> gives the same contents, but not the same digest — the
+image records when it was built — which does not matter, because the framework pins the digest of
+the one that was published and verified.</p>
+
+<h2 id="manifest">The manifest</h2>
+
+<p data-fw-grep="tools/versions_check.sh::IMAGE_MANIFEST=/etc/raylib-build-image\.json">The image
+writes <code>/etc/raylib-build-image.json</code>: every pinned version, and the architecture. The
+versions of what came from apt or pip — LLVM, cppcheck, Mull, the Python test tools — are read from
+the installed tool, not copied from an argument, so the manifest says what is in the image. Every
+container job prints it first, so a red log says which toolchain produced it, and
+<code>tools/versions_check.sh</code>, run inside the image, compares it with the framework's
+<code>versions</code> block: a framework that asks for an SDK the image does not have fails there,
+not twenty minutes into Gradle.</p>
+
+<h2 id="checked">Checked before it is published</h2>
+
+<p>Two checks, and each has to do the job of the tool, not print its version:</p>
+
+<ul>
+<li><strong>The smoke check</strong>, a step of the <code>Dockerfile</code> itself, invokes every
+tool a CI job invokes. From <code>smoke/</code> it builds, runs, merges and reports a profiled
+binary; makes cppcheck refuse an out-of-bounds write and accept clean C++20; has ASan, UBSan and
+LSan each stop the mistake it exists for; runs libFuzzer for a hundred runs; makes Mull report the
+one mutant <code>smoke/mull.c</code> leaves alive; and makes mutmut kill the one mutant only a
+Hypothesis property can kill. A broken image fails to build.</li>
+<li><strong>The verify script</strong>, <code>verify/image.sh</code>, runs in the image that was
+just built, on a runner of its own architecture, and checks the manifest's architecture is the
+one asked for.</li>
+</ul>
+
+<p>The architectures are not the same image: arm64 has no Android SDK, no riscv64 libraries, an
+empty Gradle home, and no actionlint or butler, because the NDK's host tools are x86-64 only and
+those jobs run on amd64. The manifest leaves those keys out on arm64 rather than fake them.</p>
+
+<h2 id="publishing">How it is published</h2>
+
+<table>
+<thead><tr><th>Event in the image repository</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><td>A pull request</td><td>both architectures built and verified, nothing pushed</td></tr>
+<tr><td>A manual run on a branch other than <code>main</code></td><td>the same: built, verified, nothing pushed — not even <code>:latest</code>, which the canary floats to</td></tr>
+<tr><td>A push to <code>main</code> that changes the <code>Dockerfile</code>, <code>python/</code>, <code>smoke/</code>, <code>verify/</code> or the workflow</td><td>each architecture built on a runner of its own (<code>ubuntu-24.04</code>, <code>ubuntu-24.04-arm</code>), pushed by digest, pulled back and verified at that digest; then one job makes the multi-architecture list of the two, checks it holds exactly those two, tags it with the commit, only then moves <code>:latest</code>, and writes the list's digest to the run's summary</td></tr>
+</tbody>
+</table>
+
+<p>The layer cache goes to a registry tag, <code>:buildcache</code>, not to the Actions cache:
+the image is around ten gigabytes, past what a repository's Actions cache holds. Both packages
+must stay public: the framework's jobs, and the jobs of every game made from it, pull them with
+their own token.</p>
+
+<h2 id="bump">A bump, step by step</h2>
+
+<p>Any change to the image — a newer tool, a new package, a newer snapshot — goes the same way.</p>
+
+<ol>
+<li><strong>In the image repository</strong>, change the <code>ARG</code> (and its
+<code>sha256</code>), on a branch. For a new apt package, add it to the install list; for a new
+snapshot, change <code>APT_SNAPSHOT</code>, and check the two Python pins apt owns
+(<a href="/framework/maintaining/python.html#lock">the lock</a>).</li>
+<li><strong>Build it on the branch</strong> with a manual run: both architectures built and
+verified, nothing published. Or build it locally:
+<pre data-lang="shell">
+docker build -t raylib-build .
+docker run --rm -e EXPECT_ARCH=amd64 -v "$PWD/verify:/verify:ro" raylib-build bash -l /verify/image.sh
+</pre></li>
+<li><strong>Try the framework in it before publishing</strong>: in a checkout of the framework,
+the whole ladder in the local image (<a href="/framework/contributing/setup.html#a-checkout-for-the-image">a
+checkout of its own</a>), with <code>tools/versions_check.sh</code> told nothing yet — it will
+report the drift you are about to fix, which proves it is reading the new manifest.</li>
+<li><strong>Merge to the image repository's <code>main</code></strong>. The workflow publishes,
+and the summary of that run gives the list's digest. Never pin <code>:latest</code>; never pin
+the digest of one architecture's image.</li>
+<li><strong>In the framework</strong>, on a branch, replace the digest everywhere it is written and
+change every key that moved:
+<pre data-lang="shell">
+OLD=$(sed -nE 's/^build_image_digest +//p' thirdparty/FROZEN_VERSIONS.md)
+NEW=sha256:...    # from the image run's summary
+grep -rl "$OLD" .github/workflows thirdparty/FROZEN_VERSIONS.md | xargs sed -i "s/$OLD/$NEW/g"
+bash tools/versions_check.sh
+</pre>
+The digest is in <code>ci.yml</code> (<code>PINNED_IMAGE</code>), in <code>web-backends.yml</code>,
+three times in <code>deep.yml</code> — a job's <code>container:</code> cannot read a variable — and
+in <code>thirdparty/FROZEN_VERSIONS.md</code>; <code>tools/versions_check.sh</code> fails while any
+two disagree. This site follows by itself: its CI reads the image from the framework's
+<code>ci.yml</code> at <code>FRAMEWORK_REF</code>.</li>
+<li><strong>Run what the image is exact about</strong>, in the new image: <code>rmp test</code>,
+<code>rmp test examples</code>, <code>rmp test coverage</code>, and the size lines from a release
+build. <a href="#after">What moves</a> says what to expect.</li>
+<li><strong>The pull request</strong> says what moved in the image, what moved in the framework
+because of it, and what was re-recorded. Once the image repository's verify workflow is green on
+both architectures, the pull request that pins an image a card of the plan builds merges on a
+review by an agent that did not write it (<code>CLAUDE.md</code>, "What does not wait for
+him").</li>
+</ol>
+
+<h3 id="android-bump">The Android bump: two repositories, in order</h3>
+
+<p>The image's Gradle home is warmed by building the framework's Android project at
+<code>GRADLE_WARM_COMMIT</code>, and the Android job builds offline from it. So a change to Gradle,
+AGP, the SDK levels or AdMob's version needs a framework commit that the image is built from, and
+an image the framework then pins:</p>
+
+<ol>
+<li>In the framework, on a branch: the new set in <code>raymob/app/build.gradle</code>,
+<code>raymob/build.gradle</code> and <code>raymob/gradle/wrapper/gradle-wrapper.properties</code>
+(with the wrapper's <code>sha256</code>), and the same values in the <code>versions</code> block.
+Push it. The Android job of that branch fails offline, because the image does not have the new
+dependencies yet; that is expected.</li>
+<li>In the image repository: <code>GRADLE_WARM_COMMIT</code> set to that commit, and the SDK, NDK
+and build tools arguments set to the same values. The build warms the home from it, with AdMob on
+and off, and proves both builds offline from a clean tree before it can publish.</li>
+<li>Publish, take the digest, and pin it on the same framework branch. Its Android job is green
+now, and <code>tools/versions_check.sh</code> holds the framework's Gradle files, its
+<code>versions</code> block and the image's manifest to one set.</li>
+</ol>
+
+<p>The warm commit has to stay fetchable for as long as anyone may rebuild the image: the build
+fetches it from the framework's repository by its full hash. A commit a pull request carries stays
+reachable on GitHub through the pull request's own ref, even after its branch is deleted; a commit
+of a branch pushed without one, and then deleted or rewritten, does not. Open the pull request
+before the image is built, or point the next image's warm commit at the merged commit on
+<code>main</code>.</p>
+
+<h3 id="llvm-bump">The LLVM bump</h3>
+
+<p>LLVM is held where it is by Mull, which is built for one LLVM release and refused by the image
+for any other (<code>MULL_LLVM_VERSION</code>). Moving LLVM means a Mull for it, and the
+<code>-18</code> in the names of the tools the <code>Dockerfile</code>, the manifest step and the
+framework's coverage and mutation scripts call — <code>llvm-config-18</code>,
+<code>mull-runner-18</code>, the clang plugin's path. If no Mull exists for the LLVM wanted, the
+choice is between keeping LLVM and dropping mutation of the C++ from the image; that is Omar's.</p>
+
+<h3 id="base-bump">A new Ubuntu</h3>
+
+<p>The largest bump: the base digest, the snapshot, the package names that changed between
+releases, the two Python pins apt owns, the system compilers, and the <code>ubuntu</code> key —
+which the manifest step writes as a literal, not from an argument. The image's Python moves with
+it, so the lock is regenerated. Do it alone, in its own pull request, with a full matrix after.</p>
+
+<h2 id="after">What moves in the framework after a bump</h2>
+
+<table>
+<thead><tr><th>Changed in the image</th><th>What can go red</th><th>What to do</th></tr></thead>
+<tbody>
+<tr><td>GCC or Clang</td><td>new warnings (the framework builds its checks with warnings as errors); the e2e shots and the render hash, if the code generation changed a float</td><td>fix the warning in the code; a moved shot is re-recorded in the image with <code>rmp test e2e-update</code>, every picture looked at, and a moved golden needs <code>behaviour-approved</code></td></tr>
+<tr><td>zig, UPX, any compiler</td><td>the size budget, past 1.5 % a warning and past 10 % a failure</td><td>the new lines from the release run, <code>tools/size_check.py --update</code>, with the reason in the pull request</td></tr>
+<tr><td>GCC's headers</td><td>the cost of each public header, <code>tools/header_budget.txt</code></td><td>the new numbers from <code>tools/header_cost.py</code>, run in the image</td></tr>
+<tr><td>LLVM</td><td>the coverage floors (another release counts lines differently) and the mutation floors</td><td>raise with <code>tools/coverage_check.sh --update</code>; a floor that has to come down is a hand edit a reviewer reads, never a script's</td></tr>
+<tr><td>clang-format, clang-tidy</td><td>files that were formatted, warnings nobody owed</td><td><a href="/framework/maintaining/upgrading.html#clang-tools">their own bump</a></td></tr>
+<tr><td>Emscripten</td><td>the web build, its size line, the web boot test</td><td>a full web run, and the web size line</td></tr>
+<tr><td>The Android set</td><td>the Android build, offline</td><td><a href="#android-bump">the Android bump</a></td></tr>
+<tr><td>The apt snapshot</td><td>any of the above at once</td><td>a snapshot bump is every package's bump: do it alone</td></tr>
+</tbody>
+</table>
+
+<h2 id="alpine">The Alpine run image</h2>
+
+<p>The musl build is started on Alpine, twice: the headless build, which renders the golden frame,
+and the archive a player downloads, under <code>xvfb-run</code> on Mesa's llvmpipe. The image is
+Alpine by digest with exactly those packages and nothing else — no compiler, no Python — and a
+small GLX program, built against the same Alpine, that opens every library GLFW opens, makes a
+context, insists the renderer is llvmpipe and reads two drawn pixels back. The build runs it, and
+<code>alpine/verify/image.sh</code> runs it again on the built image, with <code>--init</code> and
+no network as the framework runs it, before anything is published.</p>
+
+<p>Its packages are not pinned to versions, because Alpine keeps one version per package per
+release branch and deletes the one it replaces; there is no snapshot service to point at. What CI
+runs is frozen by the digest. A rebuild installs whatever its branch has that day, and the image's
+<code>/etc/raylib-run-alpine.json</code> lists every installed package with its version, so two
+builds can be compared line by line.</p>
+
+<p data-fw-grep="thirdparty/FROZEN_VERSIONS.md::^run_alpine_digest +sha256:[0-9a-f]{64}">It is
+pinned in two places, <code>RUN_IMAGE</code> in <code>_linux.yml</code>'s <code>musl-x64-run</code>
+job and <code>run_alpine_digest</code> in <code>thirdparty/FROZEN_VERSIONS.md</code>, and
+<code>tools/versions_check.sh</code> fails while they disagree. A bump is a push to
+<code>alpine/</code> on the image repository's <code>main</code>, which builds it, verifies it at
+its digest and only then tags it. Locally:</p>
+
+<pre data-lang="shell">
+docker build -t raylib-run-alpine alpine/
+docker run --rm --init --network none -e EXPECT_ARCH=amd64 \
+    -v "$PWD/alpine/verify:/verify:ro" raylib-run-alpine sh /verify/image.sh
+</pre>
+
+<p>When the Alpine release it is built on stops getting fixes, move the base to a newer release by
+digest, and run the musl jobs; nothing else depends on which Alpine it is.</p>
+
+<h2 id="keep-a-copy">Keep a copy</h2>
+
+<p>The published image is the toolchain. Rebuilding it depends on a dozen outside addresses still
+serving the same bytes — the Ubuntu snapshot above all — and some of them will not, one day. Keep
+every digest the framework has pinned in a place of your own:
+<a href="/framework/maintaining/long-term.html#archive">Ten years and more</a> has the commands.</p>

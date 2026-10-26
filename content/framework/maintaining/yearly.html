@@ -1,0 +1,92 @@
+<!--
+title: The yearly round
+description: What forces a change to the framework even when nobody touches its code — the stores' yearly requirements, the runner images and Xcode versions GitHub retires, the BSD releases, the scheduled workflows that stop by themselves — and a checklist to go through once a year.
+order: 60
+-->
+<h1>The yearly round</h1>
+
+<p class="lede">A pinned build does not change by itself. What changes is around it: a store that
+will not accept an app built with last year's SDK, a runner that no longer has the Xcode the
+framework pins, a BSD release whose packages are gone. None of them breaks the code. Each of them
+breaks a job, or a publication, on a date somebody else chose.</p>
+
+<h2 id="what-forces">What forces a change</h2>
+
+<table>
+<thead><tr><th>What</th><th>How often</th><th>What breaks if nothing is done</th><th>Where to act</th></tr></thead>
+<tbody>
+<tr><td>Google Play's target API level</td><td>every year, near the end of the summer</td><td data-fw-grep="TECHNICAL.md::\*\*API 36 from 2026-08-31\*\*">a new app or an update is refused by the Play Console; the build still works</td><td><a href="/framework/maintaining/upgrading.html#android">the Android set</a>, and <a href="/framework/maintaining/build-image.html#android-bump">the Android bump</a></td></tr>
+<tr><td>The App Store's required Xcode and SDK</td><td>every year, in the spring</td><td>an upload is refused; the build still works</td><td><a href="/framework/maintaining/upgrading.html#apple">Xcode</a>, and the <a href="/framework/maintaining/upgrading.html#raylib-ios">raylib-iOS fork</a> if the new SDK needs it</td></tr>
+<tr><td>Xcode versions on GitHub's macOS runners</td><td>a few per runner image, old ones removed</td><td>the Apple jobs fail at the step that selects Xcode, naming what the runner has</td><td><code>xcode</code>; <code>macos_runner</code> when the image itself is retired</td></tr>
+<tr><td>GitHub's runner images</td><td>every year or two, announced ahead</td><td>a job whose label no longer exists never starts</td><td><code>windows_runner</code>, <code>macos_runner</code>, and the Linux labels in the workflows</td></tr>
+<tr><td>Node runtimes for actions</td><td>every year or two</td><td>an action on a retired runtime stops running</td><td>Dependabot's pull requests</td></tr>
+<tr><td>BSD releases</td><td>OpenBSD about twice a year, FreeBSD and NetBSD less often</td><td>the release's package mirror goes, and that BSD job cannot install its packages</td><td><code>freebsd</code>, <code>openbsd</code>, <code>netbsd</code></td></tr>
+<tr><td>The Python on the Windows runners</td><td>when the runner image moves</td><td>no Pillow hash for that Python, so the icon step refuses the install</td><td><a href="/framework/maintaining/upgrading.html#windows">a new <code>pillow_sha256_*</code> key</a></td></tr>
+<tr><td>Signing credentials</td><td>Apple's certificates and profiles every year; Android's upload key never</td><td>an Apple upload is refused; a lost Android upload key cannot be replaced without Play's help</td><td>the store's console; the repository's secrets, never the <code>.toml</code></td></tr>
+</tbody>
+</table>
+
+<p>Desktop Linux, the web and the BSDs' code have no store and no yearly gate. A Linux release
+built years ago still starts on a new distribution: it asks for an old glibc on purpose, and glibc
+keeps its old symbols.</p>
+
+<h2 id="canary">The canary</h2>
+
+<p data-fw-grep=".github/workflows/canary.yml::# Freezing protects you from change; it does not tell you change happened\.">Pinning
+hides that the world moved. Every Monday the framework's repository runs the same reusable
+workflows as CI against the floating versions — the image's <code>:latest</code>, the newest macOS
+and Windows runners, the newest Xcode and Mesa — and its report leads with what moved between the
+pin and what it found, then the error. A red canary is the yearly round arriving early: it says
+which pin will break, before anyone needs to publish.</p>
+
+<p>After a red canary, <code>autofix.yml</code> starts an agent on the failing family's own runner
+that proposes a fix as a draft pull request. It can change the <code>versions</code> block, not the
+workflows — the token it has cannot push to <code>.github/workflows</code> — which is why every
+floating pin lives in <code>thirdparty/FROZEN_VERSIONS.md</code>. Its pull request is a proposal;
+it goes through review like any other.</p>
+
+<aside class="callout warning"><span class="callout-title">Scheduled workflows stop</span>
+<p data-fw-grep=".github/workflows/canary.yml::# Mondays 04:00 UTC\. GitHub disables cron after 60 days of repository\n    # inactivity">GitHub
+disables a repository's scheduled workflows after 60 days with no activity in it. A framework left
+alone for a season stops running its canary, its nightly campaign and this site's daily drift
+check, and nothing says so. When you come back, re-enable them in the repository's Actions tab, and
+run the canary by hand first: it says what moved while nobody was looking.</p></aside>
+
+<h2 id="checklist">Once a year</h2>
+
+<ol>
+<li><strong>Read the last canary run</strong> and its upstream report: what is newer than every
+pin, and what fails with it.</li>
+<li><strong>The Android set</strong>, if a game is to be published or updated on Google Play in the
+coming year: the target API the Play Console asks for, and the AGP, Gradle and NDK that support it.
+One pull request in each repository, <a href="/framework/maintaining/build-image.html#android-bump">in
+order</a>.</li>
+<li><strong>Xcode</strong>, if the App Store's requirement moved: the new version on the pinned
+runner, or the runner that has it; the iOS simulator job; the fork, if it needs a change.</li>
+<li><strong>The runner labels</strong> GitHub has announced it will retire.</li>
+<li><strong>Dependabot's pull requests</strong> for actions and Playwright, in both repositories,
+merged once their runs are green.</li>
+<li><strong>The BSD releases</strong>, when a pinned one has lost its packages.</li>
+<li><strong>The full matrix</strong> once, after the bumps, on <code>main</code>:
+<code>gh workflow run ci.yml -f full=true</code>. A release tagged from it is a known-good point to
+come back to.</li>
+<li><strong>Archive</strong> the image digests pinned that year
+(<a href="/framework/maintaining/long-term.html#archive">Ten years and more</a>).</li>
+</ol>
+
+<p>Everything else waits for a reason. A dependency that is old and works is not a task.</p>
+
+<h2 id="per-platform">What each family costs</h2>
+
+<table>
+<thead><tr><th>Family</th><th>A year with no change to the code</th></tr></thead>
+<tbody>
+<tr><td>Linux, all of it</td><td>nothing, while the image exists and the runner label does</td></tr>
+<tr><td>Web</td><td>nothing; browsers keep running old WebAssembly and WebGL</td></tr>
+<tr><td>Windows</td><td>a runner label every year or two; the compiler on it floats</td></tr>
+<tr><td>macOS</td><td>an Xcode pin, often once a year</td></tr>
+<tr><td>Android</td><td>the Android set and an image, once a year, to keep publishing</td></tr>
+<tr><td>iOS</td><td>an Xcode, and sometimes the fork, once a year, to keep publishing</td></tr>
+<tr><td>The BSDs</td><td>a release bump when one ages out; best effort</td></tr>
+</tbody>
+</table>

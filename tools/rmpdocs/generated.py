@@ -4,6 +4,7 @@
     reference/commands.html        every rmp command (rmp.py help --json)
     the defines table on reference/macros.html       (configure.py --print-defines)
     the targets table a page asks for                (configure.py --print-targets-table)
+    the pinned versions and the dependency map       (FROZEN_VERSIONS.md, and every tracked file)
 
 Run, not parsed: what the tool prints is what the tool does.
 """
@@ -294,4 +295,208 @@ def size_budget_table(framework: Path) -> str:
             f"</thead><tbody>{''.join(rows)}</tbody></table>")
 
 
-GENERATED_BLOCKS = {"targets-table": targets_table, "size-budget-table": size_budget_table}
+def versions_block(framework: Path) -> list[tuple[str, str, str]]:
+    """The ```versions block of thirdparty/FROZEN_VERSIONS.md as (key, value,
+    the comment above it), in order: the comment is the run of # lines that
+    came before the key, and holds for every key up to the next comment."""
+    rows, inside, comment, fresh = [], False, [], False
+    for line in (framework / "thirdparty" / "FROZEN_VERSIONS.md").read_text(encoding="utf-8").splitlines():
+        line = line.rstrip("\r")
+        if line.strip() == "```versions":
+            inside = True
+            continue
+        if not inside:
+            continue
+        if line.strip() == "```":
+            break
+        text = line.strip()
+        if not text:
+            continue
+        if text.startswith("#"):
+            if not fresh:
+                comment, fresh = [], True
+            comment.append(text.lstrip("#").strip())
+            continue
+        fresh = False
+        key, _, value = text.partition(" ")
+        rows.append((key, value.strip(), " ".join(comment)))
+    return rows
+
+
+def versions_table(framework: Path) -> str:
+    """Every pin of the ```versions block, as tools/versions_check.sh reads it:
+    the one list a bump changes first, never retyped into a page."""
+    body = []
+    for key, value, _comment in versions_block(framework):
+        shown = value
+        digest = re.fullmatch(r"(sha256:)?([0-9a-f]{64})", value)
+        if digest:
+            shown = (digest.group(1) or "") + digest.group(2)[:16] + "…"
+        body.append(f"<tr><td><code>{html.escape(key)}</code></td><td><code>{html.escape(shown)}</code></td></tr>")
+    return ('<table><thead><tr><th>Key</th><th>Pinned to</th></tr></thead>'
+            f"<tbody>{''.join(body)}</tbody></table>")
+
+
+# Every dependency the framework has, what it is, where its version is held,
+# and the regex that means a file uses it. The map on
+# framework/maintaining/dependencies.html is read from the tracked files at
+# FRAMEWORK_REF with these, so "if I change X, what else do I look at?" is
+# answered by the tree and not by a list typed once.
+DEPENDENCIES = (
+    ("raylib", "the window, input, audio and renderer; a modified copy", "the committed files, and PATCHES.md",
+     r"\b(?:raylib\.h|raymath\.h|rlgl\.h|rlsw\.h|rcore_\w+)\b|thirdparty/raylib(?![\w-])"),
+    ("raylib-cpp", "the math types only: vectors, matrices, rectangles, colours", "the committed files",
+     r"raylib-cpp|\braylib::\w"),
+    ("raymob", "Android's native glue and its Java side; patched", "the committed files, and PATCHES.md",
+     r"raymob|Raymob|AdmobBridge|NativeLoader|GetAndroidApp"),
+    ("raylib-iOS", "the iOS backend, UIKit and EGL through ANGLE; a fork of a fork", "the submodule's commit",
+     r"raylib-ios|raylib-iOS|rcore_ios|\bANGLE\b|libEGL\.xcframework"),
+    ("Clay", "the UI's layout engine, used only under src/rmp/ui/", "the committed file, and PATCHES.md",
+     r"\bclay\.h|\bClay_\w+|\bCLAY_\w+|thirdparty/clay"),
+    ("cute_tiled", "the Tiled map reader; patched and hardened", "the committed file, and PATCHES.md",
+     r"cute_tiled"),
+    ("cute_aseprite", "the Aseprite reader", "sha256_cute_aseprite", r"cute_aseprite"),
+    ("cJSON", "JSON, for saves and LDtk", "sha256_cjson", r"\bcJSON"),
+    ("rres", "the resource pack, its compression and its encryption", "sha256_rres",
+     r"\brres\b|rres\.h|rres-raylib|rres_pack"),
+    ("doctest", "the unit test framework, shipped with every game's tests", "sha256_doctest", r"doctest"),
+    ("RapidCheck", "the C++ property tests; the framework's only", "sha256_rapidcheck",
+     r"rapidcheck|RapidCheck|\bRC_ASSERT\b"),
+    ("Android build stack", "Gradle, AGP, the SDK, the NDK and AdMob's SDK", "android_*, agp, gradle, play_services_ads",
+     r"gradle|Gradle|android_ndk|android_platform|android_build_tools|play_services_ads|\bAGP\b|\bagp\b"),
+    ("Apple toolchain", "Xcode, XcodeGen and the macOS runner", "xcode, xcodegen, macos_runner",
+     r"\bXcode\b|xcodebuild|xcode-select|XcodeGen|xcodegen|\bmacos-\d+"),
+    ("Emscripten", "the web build's compiler", "emscripten, and the image's emsdk commit",
+     r"[Ee]mscripten|EMSCRIPTEN|emsdk|\bemcc\b|\bemcmake\b"),
+    ("zig", "the Linux cross-compiler that sets the glibc floor", "zig, zig_sha256_*", r"\bzig\b"),
+    ("The build image", "every Linux, web and Android job's toolchain", "build_image_digest",
+     r"raylib-build(?![\w-])|build_image_digest|raylib-build-image|dev_shell\.sh|PINNED_IMAGE"),
+    ("LLVM test tools", "coverage, the sanitizers' runtimes, libFuzzer and Mull", "llvm, mull",
+     r"\bMull\b|mull-runner|compiler-rt|llvm-cov|llvm-profdata|libFuzzer|\bllvm-\d+"),
+    ("clang-format and clang-tidy", "the formatter and the linter", "clang_format, clang_tidy",
+     r"clang-format|clang-tidy|clang_format|clang_tidy"),
+    ("Python test tools", "Hypothesis, mutmut and pytest", "hypothesis, mutmut, pytest",
+     r"\bhypothesis\b|Hypothesis|\bmutmut\b|\bpytest\b"),
+    ("Pillow", "the icons: the .ico, Android's and iOS's", "pillow, pillow_sha256_*", r"\bPIL\b|Pillow|\bpillow\b"),
+    ("PyYAML", "the workflow checks read the YAML with it", "the image's apt snapshot", r"\byaml\b|PyYAML"),
+    ("Playwright", "the web boot test's browser", "package-lock.json", r"[Pp]laywright"),
+    ("BSD virtual machines", "FreeBSD, OpenBSD and NetBSD, started by cross-platform-actions",
+     "freebsd, openbsd, netbsd", r"cross-platform-actions|\bfreebsd\b|\bopenbsd\b|\bnetbsd\b"),
+)
+
+MAP_SKIP_PREFIXES = ("tests/fuzz/corpus/", "tests/fuzz/regressions/", "tests/e2e/golden/",
+                     "tests/mutation/floors/", "thirdparty/")
+MAP_SKIP_SUFFIXES = (".png", ".jpg", ".ico", ".icns", ".ttf", ".wav", ".ogg", ".mp3", ".qoa", ".aseprite",
+                     ".rres", ".zip", ".jar", ".a", ".ldtk", ".tmj", ".bin", ".gz")
+MAP_KEEP = ("thirdparty/FROZEN_VERSIONS.md",)
+MAP_CATEGORIES = ("Product code", "Build projects", "Tools and gates", "Tests", "CI", "Examples",
+                  "Docs, pins and config", "This site", "Other")
+DOCS_ROOT = Path(__file__).resolve().parents[2]
+
+
+def dep_anchor(name: str) -> str:
+    """The id of a dependency's entry in the map: "dep-" and its name, lower case, dashed."""
+    return "dep-" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def map_category(path: str) -> str:
+    """Where a tracked file sits, in the words of the map's columns."""
+    if path.startswith(("src/", "include/")):
+        return "Product code"
+    if path.startswith("examples/"):
+        return "Examples"
+    if path.startswith("tests/"):
+        return "Tests"
+    if path.startswith("tools/"):
+        return "Tools and gates"
+    if path.startswith(".github/"):
+        return "CI"
+    if path in ("CMakeLists.txt", "CMakePresets.json") or path.startswith(("cmake/", "raymob/", "ios/")):
+        return "Build projects"
+    if path.endswith((".md", ".toml", ".txt")):
+        return "Docs, pins and config"
+    return "Other"
+
+
+def tracked_files(root: Path) -> list[str]:
+    """The files git tracks under root, or, out of a checkout, every file."""
+    got = subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True, text=True)
+    if got.returncode == 0 and got.stdout.strip():
+        return got.stdout.splitlines()
+    return sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file() and ".git" not in p.parts)
+
+
+def map_texts(framework: Path, docs: Path | None) -> dict[str, str]:
+    """Path -> text of every file the map reads: the framework's own files (a
+    vendored library's are not users of it, but the pins are), and this site's
+    pages but the ones about the map, which name everything on purpose."""
+    texts = {}
+    for rel in tracked_files(framework):
+        if rel.endswith(MAP_SKIP_SUFFIXES) or (rel.startswith(MAP_SKIP_PREFIXES) and rel not in MAP_KEEP
+                                               and not rel.endswith("/PATCHES.md")):
+            continue
+        try:
+            texts[rel] = (framework / rel).read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+    if docs is not None and (docs / "content").is_dir():
+        for page in sorted((docs / "content").rglob("*.html")):
+            rel = page.relative_to(docs).as_posix()
+            if rel.startswith("content/framework/maintaining/"):
+                continue
+            texts["rmp-docs:" + rel] = page.read_text(encoding="utf-8", errors="ignore")
+    return texts
+
+
+def dependency_uses(texts: dict[str, str]) -> list[tuple[tuple, dict[str, list[tuple[str, int]]]]]:
+    """For each dependency, its files by category, the most mentions first."""
+    out = []
+    for dep in DEPENDENCIES:
+        pattern = re.compile(dep[3])
+        by_cat: dict[str, list[tuple[str, int]]] = {}
+        for rel, text in texts.items():
+            n = len(pattern.findall(text))
+            if not n:
+                continue
+            if rel.startswith("rmp-docs:"):
+                by_cat.setdefault("This site", []).append((rel.removeprefix("rmp-docs:content/"), n))
+            else:
+                by_cat.setdefault(map_category(rel), []).append((rel, n))
+        for files in by_cat.values():
+            files.sort(key=lambda f: (-f[1], f[0]))
+        out.append((dep, by_cat))
+    return out
+
+
+def dependency_map(framework: Path, docs: Path | None = DOCS_ROOT) -> str:
+    """framework/maintaining/dependencies.html's map: per dependency, how many
+    files of each kind name it, then every one of them with how often."""
+    uses = dependency_uses(map_texts(framework, docs))
+    columns = ("Product code", "Build projects", "Tools and gates", "Tests", "CI", "Examples")
+    head = "".join(f"<th>{c}</th>" for c in columns)
+    summary = []
+    for dep, by_cat in uses:
+        docs_n = len(by_cat.get("Docs, pins and config", [])) + len(by_cat.get("This site", []))
+        cells = "".join(f"<td>{len(by_cat.get(c, []))}</td>" for c in columns)
+        summary.append(f'<tr><td><a href="#{dep_anchor(dep[0])}">{html.escape(dep[0])}</a></td>'
+                       f"{cells}<td>{docs_n}</td></tr>")
+    detail = []
+    for dep, by_cat in uses:
+        items = []
+        for cat in MAP_CATEGORIES:
+            files = by_cat.get(cat)
+            if not files:
+                continue
+            names = ", ".join(f"<code>{html.escape(f)}</code>&#160;({n})" for f, n in files)
+            items.append(f"<li><strong>{cat}</strong> ({len(files)}): {names}</li>")
+        total = sum(len(v) for v in by_cat.values())
+        detail.append(f'<details class="source" id="{dep_anchor(dep[0])}"><summary>{html.escape(dep[0])}'
+                      f"<small>{total} files</small></summary>"
+                      f"<p>{html.escape(dep[1])}. Its version: {html.escape(dep[2])}.</p>"
+                      f"<ul>{''.join(items) or '<li>no file names it</li>'}</ul></details>")
+    return (f'<table><thead><tr><th>Dependency</th>{head}<th>Docs</th></tr></thead>'
+            f"<tbody>{''.join(summary)}</tbody></table>" + "".join(detail))
+
+
+GENERATED_BLOCKS = {"targets-table": targets_table, "size-budget-table": size_budget_table,
+                    "versions-table": versions_table, "dependency-map": dependency_map}

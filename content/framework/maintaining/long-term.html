@@ -1,0 +1,165 @@
+<!--
+title: Ten years and more
+description: What in the framework lasts and what rots, what a desktop Linux build needs decades from now, what to archive so it still builds with no network and no GitHub, and how to keep the whole thing going with one person and little time.
+order: 70
+-->
+<h1>Ten years and more</h1>
+
+<p class="lede">The framework is meant to be usable long after anyone works on it every day, on
+desktop Linux above all. This page is about that horizon: which parts last because of what they
+are, which parts rot on a schedule or by accident, what has to be kept somewhere of your own, and
+how much of the machinery around the code one person needs to run.</p>
+
+<h2 id="what-lasts">What lasts</h2>
+
+<dl>
+<dt>The source</dt>
+<dd>C++20 for the framework, C for raylib and the libraries it vendors. Compilers keep accepting
+the standard a project asks for: <code>CMAKE_CXX_STANDARD</code> is 20, written down, so a newer
+compiler's default does not change what the code means. The libraries are committed, not fetched:
+nothing has to still exist upstream.</dd>
+<dt>The build</dt>
+<dd data-fw-grep="CMakeLists.txt::^cmake_minimum_required\(VERSION 3\.30\)">CMake with a recent
+minimum, 3.30, so the policies it relies on are new ones that later versions keep; no
+<code>FetchContent</code>, no package manager. And a generator that uses Python's standard library
+only (<a href="/framework/maintaining/python.html">Python</a>).</dd>
+<dt>The binaries already shipped</dt>
+<dd>A Linux release asks for an old glibc on purpose, through zig, and glibc keeps its old symbols;
+it opens X11 and OpenGL through the system's libraries. On a Wayland desktop it runs through
+XWayland, and <code>[linux] wayland = true</code> builds GLFW's Wayland backend in as well. On a
+machine with no desktop at all there is the DRM target. A web build is WebAssembly and WebGL, which
+browsers do not drop.</dd>
+<dt>The knowledge</dt>
+<dd>The reasons are written beside the code: <code>CLAUDE.md</code> (the rules and every mistake
+that has cost time once, with how it was found), the skills under <code>.claude/skills/</code>,
+<code>TECHNICAL.md</code>, the comments at each patch site, every <code>PATCHES.md</code>, and this
+site, checked against the code.</dd>
+</dl>
+
+<h2 id="what-rots">What rots</h2>
+
+<table>
+<thead><tr><th>How</th><th>What</th><th>What to do about it</th></tr></thead>
+<tbody>
+<tr><td>On a schedule</td><td>the stores' SDK requirements; GitHub's runner images, Xcode versions and action runtimes; BSD releases</td><td><a href="/framework/maintaining/yearly.html">the yearly round</a></td></tr>
+<tr><td>By an outside service going</td><td>the Ubuntu snapshot, the release assets, PyPI and Maven files the image was built from; <code>ghcr.io</code>; GitHub itself</td><td><a href="#archive">archive</a>: the image already holds every one of those files</td></tr>
+<tr><td>Without a pin at all</td><td>the BSDs' package mirrors; the Windows runner's compiler; the Alpine packages of a rebuild</td><td>expect a red that nobody caused there first</td></tr>
+<tr><td>Slowly, from inside</td><td>the gates that read other files as text — a workflow's step names, a vendored file's lines, a tool's output — and the floors measured with one toolchain</td><td>a gate that is wrong is fixed in the gate, with the test that shows it was wrong</td></tr>
+<tr><td>When nobody looks</td><td>the scheduled workflows, which GitHub turns off after 60 days without activity</td><td>turn them back on, and run the canary first</td></tr>
+</tbody>
+</table>
+
+<h2 id="decades">A desktop Linux build, decades from now</h2>
+
+<p>Two ways to build, and both should keep working:</p>
+
+<h3 id="with-the-image">With the archived image</h3>
+
+<p>Exact: the same compilers, the same libraries, the same checks CI ran, bit for bit. It needs a
+container engine that can still run an x86-64 or arm64 Linux image, and the archive below. Load it,
+then run the ladder in it as <a href="/framework/contributing/setup.html#a-checkout-for-the-image">Setting
+up</a> describes, with <code>--network=none</code>: nothing in it needs the network.</p>
+
+<h3 id="with-the-system">With the system's own tools</h3>
+
+<p>What will exist then: the distribution's compiler, CMake and Python. The framework needs</p>
+
+<ul>
+<li>a C and C++20 compiler, GCC or Clang;</li>
+<li>CMake 3.30 or newer and Ninja;</li>
+<li>Python 3.11 or newer, with nothing installed;</li>
+<li>the X11 and OpenGL development headers — Wayland's too with <code>[linux] wayland = true</code>,
+or libdrm, gbm, EGL and GLES for the DRM target.</li>
+</ul>
+
+<p>Then a clone and <code>rmp build release</code>. That binary asks for the glibc of the machine
+that built it; for one that also starts on older distributions, build it as CI does, with
+<code>tools/linux_build.sh</code>, which uses zig to aim at the floor <code>[linux] glibc</code> sets.
+What can go wrong is small and visible: a new
+compiler's warning in a framework check built with warnings as errors (a game's build is not); a
+deprecation in CMake; a Python that removed a module. Each one is a red with a line number, not a
+mystery. What will not match is exactness: the e2e shots and the coverage floors were measured in
+the image, and are reported, not enforced, outside it.</p>
+
+<aside class="callout"><span class="callout-title">Try it before you need it</span>
+<p>The image path is proved every day by CI. The system path is proved by nothing, and it is the one
+that will be left. Once a year, build and run <code>rmp test</code> in a container of the newest
+release of a mainstream distribution, with its own packages — the canary's job for the far future.
+A red there is the cheapest one you will ever fix.</p></aside>
+
+<h2 id="archive">What to archive</h2>
+
+<p>Keep these in a place you control, outside GitHub, and add to it every time a pin moves:</p>
+
+<ol>
+<li><strong>Every image the framework has pinned</strong>, with its index, so its digest still
+means the same bytes. <code>skopeo</code> copies a multi-architecture image to a file and back
+without changing a digest:
+<pre data-lang="shell">
+DIGEST=$(sed -nE 's/^build_image_digest +//p' thirdparty/FROZEN_VERSIONS.md)
+skopeo copy --all --preserve-digests \
+    "docker://ghcr.io/omardev29/raylib-build@$DIGEST" \
+    "oci-archive:raylib-build-${DIGEST#sha256:}.tar"
+</pre>
+The same for <code>run_alpine_digest</code> and <code>ghcr.io/omardev29/raylib-run-alpine</code>.
+Each build image is around ten gigabytes per architecture; they compress well. To serve one again,
+copy it back to any registry with the same command reversed, and point the digest's places at that
+registry.</li>
+<li><strong>Every repository, whole</strong>: <code>git clone --mirror</code> of the framework, the
+image repository, this site, and the raylib-iOS fork the submodule points at — a commit only the
+fork has is the one thing no other copy holds.</li>
+<li><strong>The signing material</strong>: the Android upload keystore and its passwords, Apple's
+certificates. They are not in any repository, on purpose; a lost Android upload key cannot be
+replaced by you.</li>
+<li><strong>A released build of each game</strong>, every target, as the release attached it: the
+proof of what worked, to compare against.</li>
+</ol>
+
+<p>The image is the important one. It is the only copy of every file it was built from that sits
+in one place: the Ubuntu packages at that snapshot, CMake, zig, Emscripten, the Android SDK and
+NDK, the Gradle home, LLVM and Mull, the locked Python tools. With it, every Linux, web and Android
+build can be repeated with no network; without it, a rebuild depends on every one of those
+addresses serving the same bytes years later.</p>
+
+<h2 id="without-github">Without GitHub</h2>
+
+<p>The workflows are GitHub's format and run only there. Everything they check, though, is a stage
+of <code>rmp test</code> or a script under <code>tools/</code> that runs on a laptop or in the
+image: every stage has a step in CI, and a test holds the two to each other. So if GitHub's CI went
+away, the checks would not: the ladder in the image is the same set, run by hand. What would be
+lost is what only a hosted runner gives — macOS and Windows machines, the BSD virtual machines, the
+scheduled campaign — and the installer's and this site's addresses.</p>
+
+<h2 id="one-person">With one person</h2>
+
+<p>The framework was built by many agents at once, and its rules and gates are what let them work
+without stepping on each other. One person keeping it alive needs less of that machinery each day,
+but not less of the gates: they are what make a change safe to merge after a year away, when
+nobody remembers the caveat that a gate encodes. What changes is how much of it runs, and when.</p>
+
+<table>
+<thead><tr><th>A change to</th><th>Run</th></tr></thead>
+<tbody>
+<tr><td>anything</td><td><code>rmp fmt check</code>, <code>rmp lint</code>, <code>rmp test</code></td></tr>
+<tr><td>the public API, an example, a scene, the input or the UI</td><td>and <code>rmp test examples</code>, in the image</td></tr>
+<tr><td>something that parses, casts or frees</td><td>and <code>rmp test sanitize</code>; a parser, <code>rmp test fuzz</code></td></tr>
+<tr><td>the framework's code under <code>src/rmp</code></td><td>and <code>rmp test coverage</code>, in the image</td></tr>
+<tr><td>a dependency or the image</td><td>all of it, and the full matrix once</td></tr>
+</tbody>
+</table>
+
+<p>Three things make the time go furthest:</p>
+
+<ul>
+<li><strong>Few, large maintenance sessions.</strong> Once a year, the round; otherwise, a dependency
+only when a game needs it. Every bump between them is risk with no game asking for it.</li>
+<li><strong>The nightly issues first.</strong> The campaign opens one issue per new signature, with
+the command that replays it. One found and fixed is a crash a player never meets.</li>
+<li><strong>Best effort where it is written down.</strong> The BSDs are best effort; a red BSD job
+after a green fast lane is a platform-specific bug, fixed once, and never a reason to hold the rest.
+What a target ships, or dropping one, is Omar's decision and nobody else's.</li>
+</ul>
+
+<p>And when a gate is wrong — a test that reads a workflow's text after the text moved for a good
+reason — fix the gate, with the test that shows it was wrong. A gate turned off to get green stops
+protecting the next person, who after a year away is you.</p>

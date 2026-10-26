@@ -1,0 +1,147 @@
+<!--
+title: Python
+description: Where the framework runs Python, why 3.11 is the floor, which parts are standard library only and which are not, how the build image's hash-locked test tools are regenerated, and what a new Python can break.
+order: 40
+-->
+<h1>Python</h1>
+
+<p class="lede">Every build of every game runs Python: CMake calls the generator on each configure,
+and <code>rmp</code> is a Python program. That makes Python look like the riskiest dependency the
+framework has. It is not, because the part every build runs uses nothing but Python's standard
+library. The packages that are hard to keep pinned belong to the test campaign, inside the build
+image, and a game never runs them.</p>
+
+<h2 id="where">Where Python runs</h2>
+
+<table>
+<thead><tr><th>What</th><th>When</th><th>Needs</th></tr></thead>
+<tbody>
+<tr><td><code>tools/configure.py</code>, the generator</td><td>every CMake configure, and before every Gradle and Xcode build</td><td>the standard library; Pillow for the icons, if it is there</td></tr>
+<tr><td><code>tools/rmp.py</code>, behind <code>rmp</code></td><td>every command</td><td>the standard library</td></tr>
+<tr><td>The gates in <code>tools/</code> written in Python, and the Python inside the shell gates</td><td><code>rmp test</code>, the lint job</td><td>the standard library; PyYAML for the workflow check</td></tr>
+<tr><td>The tests of the tools, <code>tests/*_test.py</code></td><td><code>rmp test</code></td><td>the standard library; PyYAML for a few</td></tr>
+<tr><td>The property tests, <code>tests/*_property_test.py</code></td><td><code>rmp test property</code>, and every night</td><td>Hypothesis</td></tr>
+<tr><td>Mutation testing of the Python</td><td><code>rmp test mutation</code>, every Sunday</td><td>mutmut, which drives pytest</td></tr>
+<tr><td>The asset makers, <code>tools/make_example_art.py</code> and <code>tools/make_platformer_assets.py</code></td><td>by hand, when an example's art is remade</td><td>Pillow</td></tr>
+<tr><td>CI's own scripts, <code>.github/scripts/</code></td><td>the canary and its report</td><td>the standard library</td></tr>
+</tbody>
+</table>
+
+<h2 id="floor">Why 3.11</h2>
+
+<p data-fw-grep="tools/rmp.py::Written for Python 3\.11\+, and kept parseable by 3\.8 so that an older Python\ngets the sentence below instead of a SyntaxError\.">The
+<code>.toml</code> is read with <code>tomllib</code>, which Python has had since 3.11, so that is
+the floor. <code>tools/rmp.py</code> is kept parseable by 3.8, so an older Python prints a sentence
+saying which version it is instead of a syntax error.</p>
+
+<p data-fw-grep="cmake/find_python.cmake::foreach\(_tpl_name python3 python3\.14 python3\.13 python3\.12 python3\.11 python py\)">CMake
+does not take the first Python it finds. <code>cmake/find_python.cmake</code> asks each name in
+turn — <code>python3</code>, then the versioned names, then <code>python</code> and
+<code>py</code> — to import <code>tomllib</code>, and takes the first that can: on Windows
+<code>python3.exe</code> is often the Store's stub, and macOS's own <code>python3</code> is older than
+3.11. The versioned names stop at the newest Python that existed when the list was written; a newer
+one is found through <code>python3</code>, which is what every system installs it as. Add its
+versioned name to the list, and to the POSIX launcher's, which is the same, when one is
+released.</p>
+
+<h2 id="stdlib">Standard library only</h2>
+
+<p data-fw-grep="tools/configure.py::Standard library only\. `tomllib` is 3\.11\+, which the CI image \(3\.12\) and every\nsupported dev machine have\. Pillow is used for icons and is optional">The
+generator says it in its first lines: standard library only, Pillow optional. The rule is what
+lets a game made today configure on a Python of years from now without a package manager. The
+standard library modules it and <code>rmp</code> use are core ones — <code>tomllib</code>,
+<code>json</code>, <code>re</code>, <code>pathlib</code>, <code>subprocess</code>,
+<code>argparse</code>, <code>hashlib</code>, <code>struct</code>, <code>shutil</code> — and the
+POSIX ones, <code>fcntl</code>, <code>pwd</code> and <code>grp</code>, imported inside the
+functions that only run on Linux, as <code>winreg</code> is inside the ones that only run on
+Windows.</p>
+
+<aside class="callout"><span class="callout-title">Keeping it so</span>
+<p>Python removes old standard library modules after a deprecation of a few releases. None the
+build uses is on that path. When a new Python is released, run <code>rmp test configure</code> and
+<code>rmp test rmp</code> under it: those are the generator's and the command's own tests, and they
+need nothing installed.</p></aside>
+
+<h2 id="packages">The packages that are not</h2>
+
+<table>
+<thead><tr><th>Package</th><th>Used for</th><th>In the build image</th><th>On a laptop without it</th></tr></thead>
+<tbody>
+<tr><td>Pillow</td><td>the icons: the Windows <code>.ico</code>, Android's launcher icons, iOS's; the asset makers</td><td>from apt, at the snapshot's version</td><td data-fw-grep="tools/configure.py::Returns False without complaining when Pillow is missing: the icon is\n    cosmetic, and no build should fail over it\.">no icon is made, and the build goes on. The Windows jobs install it by hash
+(<code>pillow</code> and its <code>pillow_sha256_*</code> keys)</td></tr>
+<tr><td>PyYAML</td><td>the workflow check, and the tests that read a workflow as YAML</td><td>from apt</td><td data-fw-grep="tools/workflow_check.sh::print\(&quot;FAIL: PyYAML is missing INSIDE the build image, so this check cannot run\.&quot;\)">skipped,
+and said; inside the image a missing PyYAML fails instead</td></tr>
+<tr><td>Hypothesis</td><td>the Python properties</td><td>from the lock</td><td>each property module says so and is skipped; CI requires it, so a skip there is a failure</td></tr>
+<tr><td>mutmut and pytest</td><td>mutation testing of the Python</td><td>from the lock</td><td>the mutation stage fails: it runs only in the image</td></tr>
+<tr><td>clang-format, clang-tidy</td><td>formatting and linting; they are Python wheels that carry the binaries</td><td>from PyPI, by version</td><td><code>pip install clang-format==… clang-tidy==…</code> at the <code>clang_format</code> version (<a href="/framework/contributing/setup.html#clang-tools">Setting up</a>)</td></tr>
+</tbody>
+</table>
+
+<p>The clang tools are pinned by version and not by hash: the image installs them with
+<code>pip install</code> and the version, and <code>tools/versions_check.sh</code> compares the
+binary on <code>PATH</code> with the pin. A wheel republished under the same version would not be
+noticed. That is the one Python install in the image without a hash.</p>
+
+<h2 id="lock">The image's lock</h2>
+
+<p>The image's test tools come from two files in the image repository:
+<code>python/requirements-ci.in</code>, the top-level pins, and
+<code>python/requirements-ci.txt</code>, the lock made from it by <code>python/lock.py</code>, which
+the image installs with <code>--require-hashes --only-binary=:all:</code>. The lock pins the whole
+graph with <code>==</code> and keeps, for each package, the hash of every wheel pip can pick for the
+image's CPython on both of its architectures — downloaded and hashed by <code>lock.py</code> and
+checked against the digest PyPI publishes.</p>
+
+<p>Three things make it harder than a plain lock, and each is why a regeneration fails:</p>
+
+<ol>
+<li><strong>Two pins belong to apt.</strong> PyYAML and Pygments are installed by apt (Pygments as
+a dependency of cppcheck), and pip cannot uninstall a Debian package, so the lock pins them to the
+exact versions the apt snapshot has. Move the snapshot and those two may move: read the new
+versions from the image (<code>dpkg -s python3-yaml python3-pygments</code>) and put them in
+<code>requirements-ci.in</code> before locking. Everything that depends on them is held back with
+them — that is why mutmut's interface library is not at its newest.</li>
+<li><strong>Wheels only, for two architectures.</strong> A release that has no wheel for aarch64,
+or that only ships a source archive, cannot be locked. <code>lock.py</code> refuses it; pin the
+newest release that has both.</li>
+<li><strong>It is made inside the image.</strong> The interpreter the lock is for is the image's,
+so <code>lock.py</code> runs in a build of the image, with the network, and pip-tools in a
+throw-away virtual environment. The command is in its docstring and in the image's README.</li>
+</ol>
+
+<h3 id="updating-the-tools">Updating Hypothesis, mutmut or pytest</h3>
+
+<ol>
+<li>In the image repository, change the version in <code>python/requirements-ci.in</code>.</li>
+<li>Regenerate the lock inside the current image:
+<pre data-lang="shell">
+docker run --rm -v "$PWD":/w -w /w ghcr.io/omardev29/raylib-build:latest sh -c '
+    apt-get update -qq &amp;&amp; apt-get install -y -qq python3-venv &gt;/dev/null &amp;&amp;
+    python3 -m venv /tmp/v &amp;&amp; /tmp/v/bin/pip install -q pip-tools==7.6.2 &amp;&amp;
+    /tmp/v/bin/python python/lock.py'
+</pre></li>
+<li>Read the diff of <code>python/requirements-ci.txt</code>: every package that moved is a
+change in what the tests run.</li>
+<li>Build the image (<a href="/framework/maintaining/build-image.html#bump">the build image</a>),
+whose smoke check runs a Hypothesis property and a mutmut mutant before it publishes.</li>
+<li>In the framework, the same versions in the <code>hypothesis</code>, <code>mutmut</code> and
+<code>pytest</code> keys of <code>thirdparty/FROZEN_VERSIONS.md</code>, and the new digest.</li>
+<li>Run the properties and one mutation shard in the new image. A new Hypothesis can find a
+counterexample the old one never generated: that is a bug found, and it is fixed in the code.</li>
+</ol>
+
+<h2 id="the-site">This site's Python</h2>
+
+<p>This site is built by one standard library script, <code>build.py</code> in its
+<code>tools</code> folder, with the same floor. Its property tests need Hypothesis and its browser checks a hash-pinned requirements
+file of their own, beside them in its tests; neither is needed to build the site.</p>
+
+<h2 id="if-it-rots">If the test tools stop installing</h2>
+
+<p>They are a test campaign, not the build. If, years from now, mutmut or Hypothesis no longer
+installs on any Python the image can carry, the generator, <code>rmp</code>, every gate that is
+standard library only and every game are untouched: what stops is the properties of the tools and
+the mutation scores of the Python. Keep the last image that has them, by its digest, for the day a
+change needs them, and run the rest of the ladder on a newer one. What the floors and the waivers
+mean is in <a href="/framework/contributing/properties-fuzzing-mutation.html">Properties, fuzzing and
+mutation</a>.</p>

@@ -1,0 +1,147 @@
+<!--
+title: Every dependency
+description: Every library, toolchain, SDK, runner, Python and Node package and outside service the framework depends on — how each one is pinned, what checks the pin, and a map, read from the tree, of every file that names it.
+order: 20
+-->
+<h1>Every dependency</h1>
+
+<p class="lede">Everything the framework needs that it did not write, grouped by how it reaches a
+build, with the way each one is pinned and the check that holds the pin. The last section is a map
+of every file that names each dependency, made from the framework's tracked files when this site
+is built: the answer to "if I change this, what else do I look at?".</p>
+
+<h2 id="kinds-of-pin">The kinds of pin</h2>
+
+<table>
+<thead><tr><th>Pinned by</th><th>Means</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td>Being committed</td><td>The files in the repository are the version. Nothing to fetch, nothing that can disappear.</td><td>raylib, raylib-cpp, Clay, cute_tiled, raymob, doctest, and the rest of <code>thirdparty/</code></td></tr>
+<tr><td>Its content's <code>sha256</code></td><td>A committed copy that must not change without its licence row saying it is modified: <code>tools/license_db.py</code> recomputes the hash.</td><td>cute_aseprite, cJSON, rres, doctest, RapidCheck (the <code>sha256_*</code> keys)</td></tr>
+<tr><td>A version and a checksum</td><td>A file fetched by address and refused unless its bytes hash to the pinned value.</td><td>everything the image downloads; zig and UPX outside it, Ninja, XcodeGen, Mesa, Pillow</td></tr>
+<tr><td>A digest</td><td>An image named by its content. A tag can be moved; a digest cannot.</td><td>the build image, the Alpine run image, the image's Ubuntu base</td></tr>
+<tr><td>A commit</td><td>A full commit hash, never a tag.</td><td>every GitHub Action, the raylib-iOS submodule, emsdk inside the image, the framework commit the image warms Gradle from</td></tr>
+<tr><td>A snapshot</td><td>Every apt source of the image points at <code>snapshot.ubuntu.com</code> at one timestamp.</td><td>every package the image installs with apt</td></tr>
+<tr><td>A lock</td><td>Every package of the graph with <code>==</code> and the hash of every file.</td><td>the image's Python test tools; Playwright's <code>package-lock.json</code></td></tr>
+<tr><td>A label</td><td>A name the provider resolves; it changes under you when the provider updates it.</td><td>the runner images (<code>ubuntu-24.04</code>, <code>windows_runner</code>, <code>macos_runner</code>) and the BSDs' package mirrors</td></tr>
+</tbody>
+</table>
+
+<p>The last row is the weak one, and the only one that moves without a commit. Every other pin
+changes only when someone changes it.</p>
+
+<h2 id="vendored">The code that is compiled in</h2>
+
+<p>These are part of every game, or of its tests. All of them are C or C++ that builds with any
+C++20 compiler and needs nothing at run time but the platform itself.</p>
+
+<table>
+<thead><tr><th>Component</th><th>Version</th><th>Pin and patches</th><th>What it costs to upgrade</th></tr></thead>
+<tbody>
+<tr><td data-fw-grep="thirdparty/FROZEN_VERSIONS.md::\| raylib \| 6\.0\.0 \| Vendored snapshot committed under `thirdparty/raylib/`">raylib, in <code>thirdparty/raylib</code></td><td>6.0.0</td><td>committed; modified, every change in <code>thirdparty/raylib/PATCHES.md</code> and commented <code>PATCHED (raylib_multiplatform)</code> at its site</td><td>High: the patches carried over or dropped one by one, and raylib's own libraries (GLFW, miniaudio, the software renderer) with it. The render hash and the e2e shots can move.</td></tr>
+<tr><td>raylib-cpp, in <code>thirdparty/raylib-cpp</code></td><td data-fw-grep="thirdparty/FROZEN_VERSIONS.md::\| raylib-cpp \| 6\.0\.3 \|">6.0.3, the math types only</td><td>committed; <code>PATCHES.md</code></td><td>Low; it follows raylib's version.</td></tr>
+<tr><td>raylib-iOS, in <code>thirdparty/raylib-ios</code></td><td data-fw-grep="thirdparty/FROZEN_VERSIONS.md::\| raylib-iOS \| tag `6\.0\.3-iOS` \(commit `29ce933d`\) \|">tag <code>6.0.3-iOS</code></td><td>a submodule pinned to a commit of the fork under the same account; ANGLE comes with it</td><td>High, and the one most likely to be forced: a new Xcode can need a new fork.</td></tr>
+<tr><td>raymob, in <code>thirdparty/raymob</code> and <code>raymob/</code></td><td>a committed snapshot</td><td>committed; patched, <code>[rmp patch]</code> at each site and <code>PATCHES.md</code></td><td>Medium: C and Java, every patch re-applied.</td></tr>
+<tr><td>Clay, in <code>thirdparty/clay</code></td><td data-fw-grep="thirdparty/FROZEN_VERSIONS.md::\| Clay \| 0\.14 \(patched">0.14</td><td>committed; two patches in <code>PATCHES.md</code></td><td>High: Clay is before 1.0 and its API moves between minor versions; every file of <code>src/rmp/ui/</code> uses it.</td></tr>
+<tr><td>cute_tiled</td><td>a committed snapshot</td><td>committed; patched and hardened for any bytes, every site <code>/* rmp patch */</code></td><td>High for little gain: the patches are most of what makes it safe.</td></tr>
+<tr><td>cute_aseprite</td><td>a committed snapshot</td><td><code>sha256_cute_aseprite</code>, unmodified</td><td>Low; the fuzz corpus says whether the new one is as safe.</td></tr>
+<tr><td>cJSON</td><td data-fw-grep="thirdparty/FROZEN_VERSIONS.md::\| cJSON \| 1\.7\.19 \(tag `v1\.7\.19`">1.7.19</td><td><code>sha256_cjson</code>, unmodified</td><td>Low.</td></tr>
+<tr><td>rres, with its compression and encryption</td><td>an upstream commit</td><td><code>sha256_rres</code>, unmodified, <code>external/</code> included</td><td>Low, but the encryption is what <code>rmp::save</code> seals with: a change there changes every save.</td></tr>
+<tr><td>doctest</td><td data-fw-grep="thirdparty/FROZEN_VERSIONS.md::\| doctest \| 2\.5\.0 \|">2.5.0</td><td><code>sha256_doctest</code></td><td>Low. It ships with every game's tests.</td></tr>
+<tr><td>RapidCheck</td><td>an upstream commit</td><td><code>sha256_rapidcheck</code>; the framework's only, stripped by <code>rmp new</code></td><td>Low.</td></tr>
+</tbody>
+</table>
+
+<p>There is no reason to upgrade any of these on a schedule. Each one is upgraded when a game needs
+something the new version has, or when a bug is found that upstream has fixed — and many of those
+fixes are carried as backports already. <a href="/framework/maintaining/upgrading.html#raylib">Upgrading
+raylib</a> and the entries after it say how.</p>
+
+<h2 id="image-toolchain">The toolchain inside the build image</h2>
+
+<p>Every one of these is a row of the <code>versions</code> block, compared with the manifest the
+image carries by <code>tools/versions_check.sh</code> when it runs inside the image.</p>
+
+<table>
+<thead><tr><th>Tool</th><th>Key</th><th>What uses it</th></tr></thead>
+<tbody>
+<tr><td>Ubuntu, and every apt package</td><td><code>ubuntu</code>, <code>apt_snapshot</code></td><td>GCC and Clang for the native builds, the X11, Wayland, GL and DRM headers, Xvfb, QEMU, the cross compilers, Python and PyYAML</td></tr>
+<tr><td>CMake, Ninja</td><td><code>cmake</code>, <code>ninja_linux</code></td><td>every build; the framework asks for CMake 3.30 or newer</td></tr>
+<tr><td>zig</td><td><code>zig</code></td><td>the Linux releases, for their glibc floor; the musl build</td></tr>
+<tr><td>Emscripten</td><td><code>emscripten</code></td><td>the web build</td></tr>
+<tr><td>The Android SDK, NDK, build tools and the SDK's CMake</td><td><code>android_*</code></td><td>the Android build, amd64 only</td></tr>
+<tr><td>Gradle and AGP, and a Gradle home warmed for them</td><td><code>gradle</code>, <code>agp</code>, <code>play_services_ads</code></td><td>the Android build, offline</td></tr>
+<tr><td>LLVM with compiler-rt, and Mull</td><td><code>llvm</code>, <code>mull</code></td><td>coverage, the sanitizers' runtimes, libFuzzer, mutation testing. Mull is built per LLVM release, which is what holds LLVM where it is.</td></tr>
+<tr><td>cppcheck</td><td><code>cppcheck</code></td><td>the static analysis stage</td></tr>
+<tr><td>clang-format, clang-tidy</td><td><code>clang_format</code>, <code>clang_tidy</code></td><td>the lint and tidy jobs; installed from PyPI at that exact version</td></tr>
+<tr><td>Hypothesis, mutmut, pytest</td><td><code>hypothesis</code>, <code>mutmut</code>, <code>pytest</code></td><td>the Python property tests and mutation testing; <a href="/framework/maintaining/python.html">Python</a></td></tr>
+<tr><td>UPX</td><td><code>upx</code></td><td>packing the Linux releases</td></tr>
+<tr><td>actionlint and shellcheck</td><td><code>actionlint</code></td><td>the workflow checks; actionlint reads no shell without shellcheck</td></tr>
+<tr><td>butler</td><td><code>butler</code></td><td>publishing to itch.io</td></tr>
+</tbody>
+</table>
+
+<h2 id="runners">The runners and what they bring</h2>
+
+<table>
+<thead><tr><th>Where</th><th>Key</th><th>Pinned</th><th>Floats</th></tr></thead>
+<tbody>
+<tr><td>Linux jobs</td><td>— (the label <code>ubuntu-24.04</code>, and <code>ubuntu-24.04-arm</code>)</td><td>everything that matters, inside the image</td><td>the host kernel, Docker, the runner's own tools; the DRM job's kernel module comes from Ubuntu's archive</td></tr>
+<tr><td>Windows</td><td><code>windows_runner</code></td><td>Mesa for the render test and Pillow, by checksum; UPX</td><td>the compiler that builds the <code>.exe</code>, and MSVC (<a href="/framework/maintaining/how-it-fits.html#families">the warning</a>)</td></tr>
+<tr><td>macOS and iOS</td><td><code>macos_runner</code>, <code>xcode</code></td><td>Xcode, selected by version with a step that fails when it is gone; Ninja and XcodeGen by checksum, never Homebrew</td><td>the runner image itself, and what Apple's tools do on it</td></tr>
+<tr><td>The BSDs</td><td><code>freebsd</code>, <code>openbsd</code>, <code>netbsd</code></td><td>the release of each system</td><td>the virtual machine's disk image and every package, installed from a rolling mirror</td></tr>
+</tbody>
+</table>
+
+<h2 id="python-node">Python and Node</h2>
+
+<dl>
+<dt>Python, 3.11 or newer</dt>
+<dd>Every build needs it: CMake runs the generator on every configure. The generator,
+<code>rmp</code> and most tools use the standard library only. What is not standard library is
+optional on a laptop: Pillow for the icons, PyYAML for one workflow check, Hypothesis for the
+Python properties. <a href="/framework/maintaining/python.html">Python</a> has all of it.</dd>
+<dt>Node, for the web test only</dt>
+<dd><code>package.json</code> names Playwright and pngjs, locked by <code>package-lock.json</code>
+and installed with <code>npm ci</code>; the browser Playwright downloads is keyed to its version.
+Dependabot proposes their bumps monthly. Nothing a game ships uses Node.</dd>
+</dl>
+
+<h2 id="services">The outside services</h2>
+
+<p>What has to exist outside the repository, and what stops if it does not:</p>
+
+<table>
+<thead><tr><th>Service</th><th>What uses it</th><th>If it goes</th></tr></thead>
+<tbody>
+<tr><td>GitHub: repositories, Actions, Pages</td><td>everything CI does; the installer's address; this site</td><td>CI, the installer and the site stop. A clone still builds the desktop game.</td></tr>
+<tr><td><code>ghcr.io</code></td><td>serving both images, by digest</td><td>every Linux, web and Android job stops until an archived copy is pushed to another registry (<a href="/framework/maintaining/long-term.html#archive">archive it</a>).</td></tr>
+<tr><td><code>snapshot.ubuntu.com</code></td><td>rebuilding the build image</td><td>the image cannot be rebuilt at that snapshot; the published one keeps working.</td></tr>
+<tr><td>GitHub release assets, <code>ziglang.org</code>, <code>dl.google.com</code>, PyPI, Google's Maven, the itch.io broth</td><td>rebuilding the image; zig and UPX on a laptop; the Windows and macOS jobs' downloads</td><td>the rebuild, or that job, fails at the checksum or the download, never with a different file.</td></tr>
+<tr><td>Docker Hub</td><td>only the image's Ubuntu base, by digest, when it is rebuilt; no workflow pulls from it</td><td>a rebuild needs the base from somewhere else.</td></tr>
+<tr><td>The BSD projects' mirrors</td><td>the BSD jobs</td><td>those jobs, which are best effort.</td></tr>
+<tr><td>Google Play, the App Store, itch.io, Firebase</td><td>publishing</td><td>publishing to that store.</td></tr>
+<tr><td>Anthropic's API</td><td>the autofix agent, and the agents that work on the framework</td><td>nothing builds from it.</td></tr>
+</tbody>
+</table>
+
+<h2 id="pins">Every pin, as the framework holds it</h2>
+
+<p>The <code>versions</code> block of <code>thirdparty/FROZEN_VERSIONS.md</code>, read when this site
+is built. A long digest is cut to its first sixteen characters.</p>
+
+<div data-generated="versions-table"></div>
+
+<h2 id="map">What names each dependency</h2>
+
+<p>For each dependency, how many files of each kind name it, and then every one of those files
+with how often. It is a regular expression over the framework's tracked files (the vendored copy
+itself left out, its <code>PATCHES.md</code> and the pins kept) and over this site's pages, run when
+the site is built, so it is true of the commit this site documents. A count is where to look, not a
+verdict: a file that names Gradle once in a comment is in it beside the file that builds with
+it.</p>
+
+<div data-generated="dependency-map"></div>
+
+<p>The regular expressions are <code>DEPENDENCIES</code> in <code>generated.py</code>, the module
+of this site's build that makes the table; a test there fails on one that matches nothing in the
+framework. A new dependency gets its line in the same pull request that adds it.</p>

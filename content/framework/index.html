@@ -1,6 +1,6 @@
 <!--
 title: The framework
-description: How raylib_multiplatform is put together — its layers, one frame in order, the config pipeline, how it is tested, its licences — why it is built the way it is, and how to work on it.
+description: How raylib_multiplatform is put together — its layers, one frame in order, the config pipeline, how it is tested, its licences — why it is built the way it is, how to work on it, and how to keep it alive for years.
 order: 1
 -->
 <h1>The framework</h1>
@@ -70,3 +70,11 @@ itself, a person or an agent: setting up a machine and the build image, the repo
 new game is copied from, the rules with their reasons, writing tests, the verification ladder, CI,
 pull requests and the approval a change to the API needs, and keeping this site true to the
 code.</p>
+
+<h2 id="maintaining">Keeping it alive</h2>
+
+<p><a href="/framework/maintaining/index.html">Maintaining</a> is for whoever keeps the framework
+building after it is written: the framework as a system of repositories, generators, toolchains and
+images; every dependency, where its version is held and every file that names it; the build image
+and how a new one is made; Python; a playbook for upgrading each dependency; the changes the stores
+and GitHub force every year; and what to archive so a desktop build still works in decades.</p>

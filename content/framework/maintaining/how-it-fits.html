@@ -1,0 +1,202 @@
+<!--
+title: How it all fits
+description: The framework as a system — its repositories, the rmp command, the generator, CMake, Gradle and Xcode, the toolchain of every family of targets, the workflows and the build image — and what each part reads from the others.
+order: 10
+-->
+<h1>How it all fits</h1>
+
+<p class="lede"><a href="/framework/architecture.html">Architecture</a> is the game's side: the
+layers a frame goes through. This page is the maintainer's side: the repositories, the programs
+that turn a checkout into a binary for each target, and the places where one part reads a version
+or a file from another. When something breaks after years of nobody touching it, the break is at
+one of these joints.</p>
+
+<h2 id="repositories">The repositories</h2>
+
+<figure class="diagram">
+<svg class="rmp-fit" viewBox="0 0 640 330" role="group" aria-labelledby="fit-title">
+  <title id="fit-title">The repositories and what each one pins in the others</title>
+  <style>
+.rmp-fit text { font-family: var(--font-ui); fill: var(--text); }
+.rmp-fit .box { fill: var(--bg-raised); stroke: var(--border-strong); }
+.rmp-fit .main { stroke: var(--accent); stroke-width: 2; }
+.rmp-fit .name { font-size: 13px; font-weight: 700; }
+.rmp-fit .sub { font-size: 10.5px; fill: var(--text-muted); }
+.rmp-fit .edge { stroke: var(--text-muted); stroke-width: 1.3; fill: none; marker-end: url(#fit-arrow); }
+.rmp-fit .label { font-size: 10px; fill: var(--text-muted); }
+.rmp-fit marker path { fill: var(--text-muted); }
+  </style>
+  <defs><marker id="fit-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+  <rect class="box main" x="170" y="128" width="300" height="64" rx="6"/>
+  <text class="name" x="320" y="154" text-anchor="middle">raylib_multiplatform</text>
+  <text class="sub" x="320" y="172" text-anchor="middle">the framework, and what a game is copied from</text>
+  <rect class="box" x="10" y="16" width="190" height="56" rx="6"/>
+  <text class="name" x="105" y="40" text-anchor="middle">raylib-build-image</text>
+  <text class="sub" x="105" y="57" text-anchor="middle">the build image, the Alpine run image</text>
+  <rect class="box" x="440" y="16" width="190" height="56" rx="6"/>
+  <text class="name" x="535" y="40" text-anchor="middle">rmp-docs</text>
+  <text class="sub" x="535" y="57" text-anchor="middle">this site</text>
+  <rect class="box" x="10" y="252" width="190" height="56" rx="6"/>
+  <text class="name" x="105" y="276" text-anchor="middle">raylib-iOS (fork)</text>
+  <text class="sub" x="105" y="293" text-anchor="middle">the iOS backend, a submodule</text>
+  <rect class="box" x="440" y="252" width="190" height="56" rx="6"/>
+  <text class="name" x="535" y="276" text-anchor="middle">a game</text>
+  <text class="sub" x="535" y="293" text-anchor="middle">a copy made by rmp new</text>
+  <path class="edge" d="M250,127 C230,105 190,88 160,74"/>
+  <text class="label" x="222" y="96" text-anchor="start">pins its digest</text>
+  <path class="edge" d="M60,73 C60,125 110,152 167,158"/>
+  <text class="label" x="14" y="112" text-anchor="start">warms Gradle</text>
+  <text class="label" x="14" y="124" text-anchor="start">from a commit</text>
+  <path class="edge" d="M535,73 C535,100 490,118 450,127"/>
+  <text class="label" x="545" y="104" text-anchor="start">FRAMEWORK_REF</text>
+  <path class="edge" d="M240,193 C210,222 170,238 140,251"/>
+  <text class="label" x="200" y="236" text-anchor="end">submodule commit</text>
+  <path class="edge" d="M400,193 C430,222 470,238 500,251"/>
+  <text class="label" x="440" y="236" text-anchor="start">copied at a version</text>
+</svg>
+<figcaption>Every arrow is a pin: a digest, a commit, or a copy. None of them moves unless someone
+moves it.</figcaption>
+</figure>
+
+<dl>
+<dt><a href="https://github.com/omardev29/raylib_multiplatform">raylib_multiplatform</a></dt>
+<dd>The framework: the library, the vendored libraries under <code>thirdparty/</code>, the tools,
+the tests, the examples, the workflows. A game is not a fork of it but a copy of the files
+<code>INCLUDE</code> in <code>tools/rmp.py</code> lists, made by <code>rmp new</code>; from then on
+the game keeps the framework it was made with, and only <code>rmp update</code>, run on purpose,
+moves it.</dd>
+<dt><a href="https://github.com/omardev29/raylib-build-image">raylib-build-image</a></dt>
+<dd>Two images: <code>ghcr.io/omardev29/raylib-build</code>, the toolchain of every Linux, web and
+Android job, and <code>ghcr.io/omardev29/raylib-run-alpine</code>, the Alpine the musl build is
+started on. The framework pins both by digest. The build image's Gradle home is warmed by building
+the framework's Android project at a commit the image names, so the two repositories point at each
+other: <a href="/framework/maintaining/build-image.html#android-bump">an Android bump</a> moves
+them in a set order.</dd>
+<dt><a href="https://github.com/omardev29/raylib-iOS">raylib-iOS</a></dt>
+<dd>raylib has no iOS backend of its own. The framework's comes from a fork of a third party's port,
+kept under the same account so that the commit it pins cannot vanish with somebody else's
+repository; <code>thirdparty/raylib-ios</code> is the submodule, used by the iOS target only.</dd>
+<dt><a href="https://github.com/omardev29/rmp-docs">rmp-docs</a></dt>
+<dd>This site, made of HTML fragments and of the framework's headers by one Python script, and
+checked against the framework at the commit in its <code>FRAMEWORK_REF</code> file. Its CI runs
+in the build image the framework pins at that commit, read from the framework's
+<code>ci.yml</code>, so the site never keeps a digest of its own. A daily workflow checks the
+site against the framework's newest commit and keeps one issue open while they disagree.</dd>
+</dl>
+
+<p>Plans and the record of what was decided live in a fourth repository of documents, checked out
+around the framework on Omar's machine and beside it in the cloud; the framework's
+<code>CLAUDE.md</code> says where. Nothing builds from it.</p>
+
+<h2 id="the-path">From a checkout to a binary</h2>
+
+<ol>
+<li><strong>The launcher.</strong> <code>rmp</code> (POSIX sh), <code>rmp.ps1</code> and
+<code>rmp.cmd</code> do one thing: find a Python that is 3.11 or newer and hand it
+<code>tools/rmp.py</code> and every argument. Everything <code>rmp</code> does is in that one
+file.</li>
+<li data-fw-grep="cmake/configure_hook.cmake::# Run tools/configure\.py, so `cmake --preset debug` is the only command a user\n# ever needs after editing raylib_multiplatform\.toml\."><strong>The
+generator.</strong> <code>tools/configure.py</code> reads <code>raylib_multiplatform.toml</code>,
+refuses anything wrong with the line it is on, and writes what every build system reads. CMake
+runs it on every configure, before <code>project()</code>, because the project's own name comes
+out of it; Gradle and XcodeGen never run CMake, so their jobs run it first.
+<a href="/framework/config-pipeline.html">The config pipeline</a> has every file it writes.</li>
+<li><strong>CMake.</strong> <code>CMakePresets.json</code> holds the presets a build is named
+by — debug and release, their DRM twins, web, the headless memory build and the lint build.
+<code>CMakeLists.txt</code> adds raylib from <code>thirdparty/raylib</code>, compiles the
+framework once into the static <code>rmp</code> library, and links the game and every example
+against it. The files under <code>cmake/</code> are what it includes: the hook that runs the
+generator, the Python it looks for, the sanitizers' probe, the riscv64 toolchain, the game's
+resources and tests.</li>
+<li><strong>Gradle and Xcode.</strong> Android builds through <code>raymob/</code>, whose
+<code>raymob/app/src/main/cpp/CMakeLists.txt</code> compiles the same sources with the NDK;
+iOS through an Xcode project XcodeGen makes from what the generator writes. Neither reads the
+top-level <code>CMakeLists.txt</code>, which is why a header path goes on four lists, not one
+(<code>CLAUDE.md</code>, "A vendored header goes on FOUR include lists").</li>
+<li><strong>Packaging.</strong> A release is packed by the release job of each family: UPX on the
+Linux targets whose packed binary CI starts, the resources bundled into one
+<code>resources.rres</code>, <code>LICENSES.txt</code> generated from
+<code>THIRD_PARTY_LICENSES.md</code>, and <code>tools/size_check.py</code> holding every binary to
+its line in <code>tools/size_budget.txt</code>.</li>
+</ol>
+
+<p data-fw-grep="tools/configure.py::Standard library only\. `tomllib` is 3\.11\+">Nothing in that path
+downloads anything: there is no <code>FetchContent</code>, no package manager and no submodule
+but iOS's. A clone, a Python of 3.11 or newer, CMake, Ninja and a compiler build the desktop game.
+The generator uses Python's standard library only; Pillow, when it is there, makes the icons.</p>
+
+<h2 id="families">Who builds each family</h2>
+
+<table>
+<thead><tr><th>Family</th><th>Compiler</th><th>Where CI builds it</th><th>Pinned by</th></tr></thead>
+<tbody>
+<tr><td>Linux, glibc</td><td>zig's clang, aiming at the glibc floor of <code>[linux] glibc</code>, through <code>tools/linux_build.sh</code></td><td>inside the build image, x64 on <code>ubuntu-24.04</code>, arm64 on <code>ubuntu-24.04-arm</code></td><td>the image digest; <code>zig</code></td></tr>
+<tr><td>Linux, musl</td><td>zig, for musl</td><td>inside the build image; started on the Alpine run image</td><td>both digests</td></tr>
+<tr><td>Linux, riscv64</td><td>the image's <code>riscv64-linux-gnu</code> GCC, <code>cmake/toolchain-riscv64-linux.cmake</code></td><td>inside the build image, started under QEMU there</td><td>the image digest</td></tr>
+<tr><td>Linux, DRM</td><td>the image's own compiler: zig cannot link libdrm, gbm and EGL</td><td>inside the build image; started on vkms on a bare runner</td><td>the image digest</td></tr>
+<tr><td>Web</td><td>Emscripten</td><td>inside the build image</td><td><code>emscripten</code>, and the image's emsdk commit</td></tr>
+<tr><td>Android</td><td>the NDK's clang, through Gradle</td><td>inside the build image, amd64, offline</td><td>the image digest, the Android set</td></tr>
+<tr><td>Windows</td><td>the compiler CMake finds first on the runner</td><td>on the <code>windows_runner</code> runner image</td><td>the runner label only: see below</td></tr>
+<tr><td>macOS and iOS</td><td>Apple's clang from the pinned Xcode</td><td>on the <code>macos_runner</code> runner image</td><td><code>xcode</code>, <code>xcodegen</code>, <code>ninja_mac</code></td></tr>
+<tr><td>The BSDs</td><td>each system's own compiler</td><td>in a virtual machine started by <code>cross-platform-actions</code></td><td><code>freebsd</code>, <code>openbsd</code>, <code>netbsd</code>; their package mirrors are rolling</td></tr>
+</tbody>
+</table>
+
+<aside class="callout warning"><span class="callout-title">Not pinned</span>
+<p data-fw-grep=".github/workflows/_windows.yml::# The compiler that builds the shipped \.exe is whichever one CMake finds\n      # first on the runner's PATH -- today the runner's MinGW GCC, which moves\n      # with the runner image and is pinned by nobody\.">The
+compiler that builds the shipped Windows <code>.exe</code> is whichever one CMake finds first on
+the runner's PATH — the runner's MinGW GCC — and it moves with the runner image. The job reads it
+back from the CMake cache and prints it, so a failure can be matched to a compiler afterwards, but
+nothing holds it still. The MSVC that checks the examples compile floats the same way. On
+Windows, a red run that nobody caused is the first thing to suspect it of.</p></aside>
+
+<h2 id="ci">The workflows</h2>
+
+<p><code>ci.yml</code> is the entry point. Its <code>config</code> job runs the generator and turns
+the enabled targets into a matrix per family, then calls one reusable workflow per family —
+<code>_linux.yml</code>, <code>_web.yml</code>, <code>_windows.yml</code>, <code>_android.yml</code>,
+<code>_apple.yml</code>, <code>_bsd.yml</code> — beside the framework's own jobs: lint, tidy, the
+examples, the e2e scripts, the new game, coverage, the deterministic deep tests, the docs and the
+API gate. A tag adds the release, which gathers what every family packed, and the itch.io job
+after it; a full run with Android enabled adds Firebase Test Lab.
+<a href="/framework/contributing/ci.html">CI</a> says what each push runs.</p>
+
+<p>Three more run on their own, on the framework's repository only:</p>
+
+<ul>
+<li data-fw-grep=".github/workflows/deep.yml::    - cron: '0 3 \* \* \*'     # nightly: fuzz and properties">
+<code>deep.yml</code>, every night (fuzzing, random seeds) and every Sunday (mutation), opening
+an issue labelled <code>nightly-finding</code> per new failure;</li>
+<li><code>canary.yml</code>, every Monday: the same reusable workflows against the floating
+versions — the image's <code>:latest</code>, the newest runners, Xcode and Mesa — and a report of
+what is newer than every pin;</li>
+<li><code>autofix.yml</code>, after a red canary: an agent on the broken family's own runner that
+proposes a fix as a draft pull request.</li>
+</ul>
+
+<p><code>web-backends.yml</code> builds the web game once per <code>[web] backend</code> and checks
+each build is the backend it asked for; it runs by hand and on a push that changes the files that
+choose the backend.</p>
+
+<h2 id="image">The image, in the middle</h2>
+
+<p data-fw-grep="tools/versions_check.sh::# Every container job must pin the same digest, and it must be the declared one\.">The
+build image is the joint most things go through. Every Linux, web and Android job, the lint and
+tidy jobs, the examples and their scripts, coverage, the deep tests, the new game and this site's
+own CI run inside it, at the one digest the framework names in <code>ci.yml</code>, in
+<code>web-backends.yml</code>, three times in <code>deep.yml</code> and in
+<code>thirdparty/FROZEN_VERSIONS.md</code>. Exactness lives there too: the e2e shots are compared
+pixel for pixel, and the coverage floors and header costs are held, only inside it, because they
+were measured there. <a href="/framework/maintaining/build-image.html">The build image</a> says
+what is in it and how to make a new one.</p>
+
+<h2 id="gates">The gates around it</h2>
+
+<p>Around the code sits a set of checks about as large as the code: <code>tools/</code> holds a
+gate per rule (naming, style, ownership, pointers, headers, licences, versions, workflows,
+portability, shell patterns, seams, sizes), and <code>tests/</code> holds tests of the tests — each
+gate seen red on a planted mistake, the campaign's own rules, the workflows read as text. They are
+what lets an agent or a person change one file without reading every other one. They are also
+code to maintain: a renamed step in a workflow, a new compiler warning, a moved line in a vendored
+file can turn one red with nothing wrong in the game. <a href="/framework/maintaining/upgrading.html">Upgrading
+a dependency</a> lists, for each bump, which of them to expect.</p>
