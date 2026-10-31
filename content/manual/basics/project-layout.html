@@ -78,6 +78,14 @@ next file added to the framework — a gate, a test fixture, a maintenance scrip
 into every game and nothing would say so. The framework's own tests make every file it tracks be
 classified as one or the other, so a new file forces the question.</p>
 
+<p data-fw-grep="tools/rmp.py::\(setting_in\(&quot;dev&quot;, &quot;c_compiler&quot;\), assign\(&quot;auto&quot;\)\)">Some
+of what a game gets is not what the framework itself uses. Its <code>[dev] sanitize</code> is
+empty, and its <code>[dev] c_compiler</code> is <code>"auto"</code>: on x86-64 Linux, with tcc
+installed, the C of its debug builds — raylib and the libraries it bundles — is compiled by tcc, many
+times faster (<a href="/manual/basics/configuration.html#tcc">c_compiler</a>). And it gets the
+<a href="/getting-started/install.html#in-a-container">development container</a>, so it can be
+opened in one with nothing installed.</p>
+
 <h2>The folder</h2>
 
 <p>This is the top of a new game. The comments say whose each entry is.</p>

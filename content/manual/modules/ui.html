@@ -29,9 +29,59 @@ dropdowns and text fields, which write straight into your variables.</li>
 breakpoints and fonts.</li>
 </ul>
 
+<h2>Two ways to write it</h2>
+
+<p>The same interface can be written two ways, and a game uses either, or both on one screen. The
+<strong>simple</strong> way is a call each frame that draws the control and answers what happened to
+it — nothing to keep, nothing to set up. The <strong>full</strong> way keeps each widget as a member
+of your scene, the way a Godot scene keeps its nodes: set up once, with its text, its look, its
+sounds and what to run when it is clicked, hovered or focused, and shown each frame where it goes.
+Both are drawn by the same code, so they lay out, navigate and look the same:</p>
+
+<div class="modes">
+<figure>
+<pre data-lang="cpp" data-harness="function" data-given="void play(); void quit();">
+rmp::ui::begin();
+if (rmp::ui::button("Play")) play();
+if (rmp::ui::button("Quit")) quit();
+rmp::ui::end();
+</pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members" data-given="void play(); void quit();">
+rmp::ui::Button start{ .text = "Play", .on_click = [] { play(); } };
+rmp::ui::Button leave{ .text = "Quit", .on_click = [] { quit(); } };
+
+void _draw() override {
+    rmp::ui::begin();
+    start.show();
+    leave.show();
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: widgets you keep</figcaption>
+</figure>
+</div>
+
+<p>Start with the simple way; it is what most screens need. Reach for the full way when a screen is
+designed rather than written — a shop whose every button has its own picture, a dialog that shakes
+when the password is wrong, an item that plays a sound when the pointer reaches it. Every control has
+both: <code>button()</code> and <a href="ref:rmp::ui::Button"><code>Button</code></a>,
+<code>text()</code> and <a href="ref:rmp::ui::Label"><code>Label</code></a>, <code>image()</code> and
+<a href="ref:rmp::ui::Image"><code>Image</code></a>, <code>panel()</code> and
+<a href="ref:rmp::ui::Panel"><code>Panel</code></a>, <code>checkbox()</code> and
+<a href="ref:rmp::ui::Checkbox"><code>Checkbox</code></a>, <code>slider()</code> and
+<a href="ref:rmp::ui::Slider"><code>Slider</code></a>, <code>dropdown()</code> and
+<a href="ref:rmp::ui::Dropdown"><code>Dropdown</code></a>, <code>text_input()</code> and
+<a href="ref:rmp::ui::TextInput"><code>TextInput</code></a>, <code>progress()</code> and
+<a href="ref:rmp::ui::ProgressBar"><code>ProgressBar</code></a>. The pages that follow show each
+control both ways, side by side; <a href="/manual/modules/ui-controls.html#widgets-you-keep">widgets
+you keep</a> has every field and callback of the full one.</p>
+
 <h2>Immediate mode</h2>
 
-<p>There are no widget objects. A call to <a href="ref:rmp::ui::button"><code>button()</code></a>
+<p>In the simple way there are no widget objects. A call to <a href="ref:rmp::ui::button"><code>button()</code></a>
 both draws the button for this frame and answers whether it was pressed, and the next frame asks
 again. What persists from one frame to the next is your data; what is rebuilt every frame is the
 picture. So a menu that depends on the game's state is an <code>if</code>, and a label that changes
@@ -140,11 +190,37 @@ frame it is pressed: the pointer released over it, having been pressed on it —
 let go, and nothing happens — or, while it has the focus, Enter, Space or the gamepad's bottom face
 button. It reads the way it looks:</p>
 
+<div class="modes">
+<figure>
 <pre data-lang="cpp" data-harness="function" data-given="void start_game(); void delete_save(); static bool has_save = false;">
-if (rmp::ui::button("Start", { .style = rmp::ui::Variant::PRIMARY })) start_game();
-if (rmp::ui::button("Delete save", { .style = rmp::ui::Variant::DANGER, .enabled = has_save }))
+if (rmp::ui::button("Start", { .style = rmp::ui::Variant::PRIMARY }))
+    start_game();
+if (rmp::ui::button("Delete save",
+                    { .style = rmp::ui::Variant::DANGER, .enabled = has_save }))
     delete_save();
 </pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members" data-given="void start_game(); void delete_save(); static bool has_save = false;">
+rmp::ui::Button start{ .text = "Start",
+                       .variant = rmp::ui::Variant::PRIMARY,
+                       .on_click = [] { start_game(); } };
+rmp::ui::Button erase{ .text = "Delete save",
+                       .variant = rmp::ui::Variant::DANGER,
+                       .on_click = [] { delete_save(); } };
+
+void _draw() override {
+    erase.enabled = has_save;
+    rmp::ui::begin();
+    start.show();
+    erase.show();
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: widgets you keep</figcaption>
+</figure>
+</div>
 
 <p><a href="ref:rmp::ui::ButtonOptions"><code>ButtonOptions</code></a> has four fields, written in
 this order:</p>
@@ -187,11 +263,36 @@ theme</a>; neither changes a line of a menu written the simple way.</p>
 <p><a href="ref:rmp::ui::text"><code>rmp::ui::text</code></a> draws a string, in one of the theme's
 colours, at one of its sizes:</p>
 
+<div class="modes">
+<figure>
 <pre data-lang="cpp" data-harness="function">
 rmp::ui::text("Game over", { .size = rmp::ui::Size::LARGE });
-rmp::ui::text("Progress since the last save is lost.", { .color = rmp::ui::ColorRole::MUTED });
-rmp::ui::text("v1.0.2", { .color = rmp::ui::ColorRole::MUTED, .size = 14, .wrap = false });
+rmp::ui::text("Progress since the last save is lost.",
+              { .color = rmp::ui::ColorRole::MUTED });
+rmp::ui::text("v1.0.2", { .color = rmp::ui::ColorRole::MUTED,
+                          .size = 14, .wrap = false });
 </pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members">
+rmp::ui::Label title{ .text = "Game over", .size = rmp::ui::Size::LARGE };
+rmp::ui::Label lost{ .text = "Progress since the last save is lost.",
+                     .color = rmp::ui::ColorRole::MUTED };
+rmp::ui::Label version{ .text = "v1.0.2", .color = rmp::ui::ColorRole::MUTED,
+                        .size = 14, .wrap = false };
+
+void _draw() override {
+    rmp::ui::begin();
+    title.show();
+    lost.show();
+    version.show();
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: widgets you keep</figcaption>
+</figure>
+</div>
 
 <p><a href="ref:rmp::ui::TextOptions"><code>TextOptions</code></a> is
 <a href="ref:rmp::ui::TextOptions::color"><code>color</code></a> — a

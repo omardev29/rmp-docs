@@ -170,6 +170,68 @@ const std::string intro(bytes.begin(), bytes.end());
 <p>It reads from the pack in a release exactly as the other loaders do. The Aseprite and map
 loaders are built on it.</p>
 
+<h2>JSON: load_value</h2>
+
+<p>Tuning numbers, a table of items, the lines of a dialogue: a JSON file in
+<code>resources/</code> is read into an <a href="ref:rmp::Value"><code>rmp::Value</code></a>, the
+same value a <a href="/manual/modules/saving.html">save</a> is, with
+<a href="ref:rmp::assets::load_value"><code>load_value()</code></a>. It reads from the pack in a
+release like every loader, and a file that is not there, or is not JSON, is an empty Value and a
+failed load, said once.</p>
+
+<pre data-lang="cpp" data-harness="function">
+const rmp::Value tuning = rmp::assets::load_value("tuning.json");
+const float speed = tuning["player"]["speed"].as_float(200);
+const int lives = tuning["lives"].as_int(3);
+</pre>
+
+<h2>Hot reload</h2>
+
+<p>A Value read with <code>load_value()</code> remembers its file, and so does a texture read with
+<code>load_texture()</code>. While a Debug build runs on the desktop,
+<a href="ref:rmp::Value::changed"><code>changed()</code></a> says when that file is different from
+what was read — a number tuned, a sprite redrawn and saved in any editor — and
+<a href="ref:rmp::Value::reload"><code>reload()</code></a> reads it again. Nothing is read behind
+the game's back: the game asks, and decides when.</p>
+
+<pre data-lang="cpp" data-harness="members">
+rmp::Value tuning = rmp::assets::load_value("tuning.json");
+rmp::Texture hero = rmp::assets::load_texture("hero.png");
+float speed = 200;
+
+void _update(float) override {
+    if (tuning.changed()) tuning.reload();
+    if (hero.changed()) hero.reload();
+    speed = tuning["speed"].as_float(200);
+}
+</pre>
+
+<ul>
+<li><strong><code>changed()</code> is for every frame.</strong> It compares two numbers. The files
+themselves are looked at by the framework at most four times a second, the first time something
+asks after a quarter of a second has gone by: their size and modification time, and their bytes
+only when one of those moved — so an editor that saves the same contents again is no change.</li>
+<li><strong><code>reload()</code> of a texture is in place.</strong> The texture is loaded again
+into the slot every handle to it shares, so the copies a sprite or a picture made draw the new one
+too, and <code>changed()</code> is false again for all of them. A Value reloads only itself: two
+Values read from one file are two copies, and each reloads on its own.</li>
+<li><strong>A file half saved is not a change made.</strong> A file that is not JSON now, or a
+picture that does not decode, leaves the Value or the texture as it was; <code>reload()</code>
+returns <code>false</code> and <code>changed()</code> stays true, so the next frame tries again.
+A file that is gone for a moment — an editor writes a new one and renames it over the old — is no
+change until it is back.</li>
+<li><strong>Only the desktop's Debug build watches.</strong> A release reads its resources from
+the pack, which does not change; a phone and a browser have no file anyone edits. There, and with
+the pack open in a Debug build (<code>rmp pack</code>), <code>changed()</code> is always
+<code>false</code> and costs nothing.</li>
+<li><strong>What has no file never changes.</strong> A Value made in code, read from a save, or
+taken out of another — <code>tuning["enemy"]</code> copied into a Value of its own — answers
+<code>false</code>, and its <code>reload()</code> does nothing. A copy of the whole Value is the
+same file.</li>
+</ul>
+
+<p>Only JSON and textures reload. Code does not: a change to the C++ is a new build.</p>
+
 <h2>Plain raylib works too</h2>
 
 <p>The <code>rmp::assets</code> functions are the short way, not the only one. When a pack is in

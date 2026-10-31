@@ -94,7 +94,8 @@ def rmp_problem(words: list[str], help_data: dict, examples: set[str]) -> str | 
     elif slot.isupper():
         ok = True
     else:
-        ok = arg == slot or (command == "new" and arg == "--list")
+        # [release|windows]: any one of the words.
+        ok = arg in slot.split("|") or (command == "new" and arg == "--list")
     return None if ok else f"`rmp {command}` does not take {arg!r}"
 
 

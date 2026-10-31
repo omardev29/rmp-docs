@@ -174,7 +174,7 @@ first, but the last: a card that is not there, or one that something else holds,
 before sudo asks for a password, because sudo fixes neither — what only root may open is what sudo
 is for.</p>
 
-<p data-fw-grep="tools/rmp.py::def cmd_run\(ctx, args\):\s+sudo = one_of\(args, \(&quot;sudo&quot;,\), &quot;&quot;\) == &quot;sudo&quot;\s+if sudo:\s+# Before the build, not after it: nothing is built for a refusal\.\s+refuse_sudo_for_a_window\(ctx\)">On
+<p data-fw-grep="tools/rmp.py::def cmd_run\(ctx, args\):[\s\S]*?sudo = one_of\(args, \(&quot;sudo&quot;,\), &quot;&quot;\) == &quot;sudo&quot;\s+if sudo:\s+# Before the build, not after it: nothing is built for a refusal\.\s+refuse_sudo_for_a_window\(ctx\)">On
 a desktop it is refused before anything is built: a window needs no root. When <code>rmp</code> is
 root already it starts the game as it is, and on a machine with no <code>sudo</code> it refuses
 and prints the game's path, to start as root some other way. <code>rmp</code> never runs sudo

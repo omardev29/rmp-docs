@@ -34,19 +34,19 @@ is not affiliated with or endorsed by the raylib project, and ships a modified c
 licence asks three things, and the second is the one that matters here: an altered version must
 be plainly marked as altered, and not presented as the original.</p>
 
-<p data-fw-grep="thirdparty/raylib/PATCHES.md::# This is a MODIFIED copy of raylib 6\.0\.0">So it is
+<p data-fw-grep="thirdparty/raylib/PATCHES.md::# This is a MODIFIED copy of raylib 6\.2">So it is
 marked. <a href="fw:thirdparty/raylib/PATCHES.md"><code>thirdparty/raylib/PATCHES.md</code></a>
-says in its first line that the copy is modified, and lists every change by file, line and
-reason: build-system and platform-selection changes, so the windowing backend can be chosen from
-the <code>.toml</code>; two lines that make the Win32 and DRM backends obey
-<code>SetExitKey()</code>; one that makes Android's EGL ask for the OpenGL ES version raylib was
-compiled for; fixes taken from upstream, three frees in <code>raudio.c</code> and the scissor
-of the software renderer in <code>thirdparty/raylib/src/external/rlsw.h</code>;
-<span data-fw-grep="thirdparty/raylib/PATCHES.md::`sw_texture_sample_nearest` clamps the texel it reads to the texture: u or v of exactly 1 is the edge texel, not one past it\. Our own fix: upstream master samples the same way">and
-one fix of the framework's own, which upstream does not have: the same renderer's nearest-texel
-lookup is clamped to the texture, so the far edge of a texture reads its last texel and not the
-one past it.</span> Each change is also commented at its site, and no document of the framework
-may describe its raylib as unchanged.</p>
+says in its first line that the copy is modified, and lists every change by file, line, where it
+comes from and why. The copy is raylib 6.2 as raylib_cmake_template carries it — raylib's own fixes
+from after 6.2 brought back, and the gaps its security audit left closed — and the framework's
+patches on top: build-system and platform-selection changes, so the windowing backend can be chosen
+from the <code>.toml</code>; one that makes Android's EGL ask for the OpenGL ES version raylib was
+compiled for; the DRM backend's card probe, Escape on its terminal and no flow control;
+<span data-fw-grep="thirdparty/raylib/PATCHES.md::`sw_texture_sample_nearest` clamps the texel it reads to the texture \| `sw_saturate\(\)` gives 1\.0 at the far edge">and
+one fix of the framework's own in the software renderer, which upstream does not have: its
+nearest-texel lookup is clamped to the texture, so the far edge of a texture reads its last texel
+and not the one past it.</span> Each change is also commented at its site, and no document of the
+framework may describe its raylib as unchanged.</p>
 
 <h2 id="components">Everything it carries</h2>
 
@@ -69,8 +69,8 @@ which platforms it reaches, and where its licence text is. The main ones:</p>
 <tr><td>tiny-AES-c, for an encrypted pack</td><td>Unlicense</td><td>unmodified</td><td>every platform</td></tr>
 <tr><td>raymob, the Android glue</td><td>MIT</td><td>modified</td><td>Android only</td></tr>
 <tr><td>raylib-iOS and ANGLE</td><td>zlib; BSD-3</td><td>unmodified</td><td>iOS only</td></tr>
-<tr><td>what raylib bundles: GLFW, miniaudio, the stb libraries, the decoders and loaders</td><td>zlib, MIT, public domain and similar</td><td>unmodified</td><td>where raylib uses them</td></tr>
-<tr data-fw-grep="THIRD_PARTY_LICENSES.md::# backport of upstream's scissor fix and a texel clamp of our own, both named\n# in raylib's PATCHES\.md\), and its row says yes"><td>rlsw, raylib's software renderer</td><td>MIT</td><td>modified: a fix taken from upstream, and one of the framework's own</td><td>every platform</td></tr>
+<tr><td>the rest of what raylib bundles: GLFW, miniaudio, the stb libraries, the decoders and loaders</td><td>zlib, MIT, public domain and similar</td><td>unmodified</td><td>where raylib uses them</td></tr>
+<tr data-fw-grep="THIRD_PARTY_LICENSES.md::PATCHES\.md, and their rows say yes: rlsw \(a texel clamp of our own\), RGFW\n# \(minigamepad\.h's ABS_PROFILE\) and tinyobj_loader_c \(upstream's face fix from\n# after 6\.2\)"><td>rlsw, raylib's software renderer; RGFW; tinyobj_loader_c</td><td>MIT; zlib; MIT</td><td>modified: a fix of the framework's own; the gamepad code on older kernel headers; raylib's own OBJ face fix, newer than the release</td><td>rlsw and tinyobj_loader_c everywhere, RGFW on the desktop</td></tr>
 <tr data-fw-grep="THIRD_PARTY_LICENSES.md::\*\*doctest\*\* \(Viktor Kirilov, MIT\) is compiled into `unit_test` and into\n  `game_test`, a game's own tests in `tests/game/`, neither of which is ever\n  shipped"><td>doctest</td><td>MIT</td><td>unmodified</td><td>nowhere: the tests only, the framework's and a game's own</td></tr>
 <tr data-fw-grep="THIRD_PARTY_LICENSES.md::^rapidcheck +thirdparty/rapidcheck +BSD-2 +- +no +none [\s\S]*?\*\*rapidcheck\*\* \(Emil Eriksson, BSD-2-Clause\)[\s\S]*?The framework's alone: `rmp new` leaves it out of a game"><td>RapidCheck</td><td>BSD-2</td><td>unmodified</td><td>nowhere: the framework's property tests only, and left out of a game</td></tr>
 </tbody>

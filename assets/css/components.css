@@ -130,6 +130,16 @@ figure > figcaption {
 }
 .diagram svg { display: block; width: 100%; height: auto; }
 
+/* --- the same thing written two ways, side by side ------------------------ */
+.modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0 1rem;
+  margin: 0 0 1.1em;
+}
+.modes > figure { min-width: 0; margin: 0; }
+.modes > figure > pre { margin-bottom: 0; }
+
 /* --- the reference -------------------------------------------------------- */
 .entity {
   margin: 0 0 2.2rem;

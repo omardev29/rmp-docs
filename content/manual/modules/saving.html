@@ -70,6 +70,11 @@ key, and assigning <code>rmp::Value{}</code> to a key amounts to the same: a key
 and a key that is not there read the same everywhere, in <code>size()</code>, in
 <code>contains()</code>, in <code>==</code> and in the file.</p>
 
+<p>A Value can also come from a JSON file of your game's: <a
+href="/manual/modules/assets.html#json-load_value"><code>rmp::assets::load_value()</code></a>, which
+remembers the file, so a Debug build can <a href="/manual/modules/assets.html#hot-reload">reload</a>
+it while the game runs.</p>
+
 <h3>Reading never creates anything</h3>
 
 <p>Reading through <code>[]</code> walks the tree and returns what is there, or nothing. It does

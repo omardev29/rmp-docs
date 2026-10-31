@@ -584,17 +584,17 @@ which do nothing anywhere but Android.</p>
 <p>Under the core is <a href="https://www.raylib.com/">raylib</a> 6.0, vendored in
 <code>thirdparty/raylib</code>. The copy is modified, and says so: the zlib licence requires an
 altered copy to be plainly marked, and <a href="fw:thirdparty/raylib/PATCHES.md">its
-<code>PATCHES.md</code></a> lists every change. Most are build-system and platform-selection
-patches, so the windowing backend can be chosen from the <code>.toml</code>. Two lines make the
-Win32 and DRM backends obey <code>SetExitKey()</code>, so that Escape stays the game's key on
-every backend; one makes Android's EGL ask for the OpenGL ES version raylib was compiled for.
-Three frees in <code>raudio.c</code> and the scissor of the software renderer,
-<code>thirdparty/raylib/src/external/rlsw.h</code>, are fixes backported from upstream.
-<span data-fw-grep="thirdparty/raylib/PATCHES.md::Under `src/external/` --\nthe libraries raylib bundles -- there are two changes, both to its software\nrenderer: such a backport, and that fix of our own\.">One
-more is the framework's own, in the same renderer, which upstream does not have: its
-nearest-texel lookup is clamped to the texture, so the far edge of a texture reads its last texel
-and not the one past it. Those two are the only changes among the libraries raylib
-bundles.</span>
+<code>PATCHES.md</code></a> lists every change. It is raylib 6.2 as raylib_cmake_template carries
+it — with raylib's own fixes from after 6.2 and the gaps its security audit left closed — with the
+framework's patches on top. Most of those are build-system and platform-selection patches, so the
+windowing backend can be chosen from the <code>.toml</code>; one makes Android's EGL ask for the
+OpenGL ES version raylib was compiled for, and the DRM backend's card probe, Escape on its terminal
+and its flow control are fixed.
+<span data-fw-grep="thirdparty/raylib/PATCHES.md::Under `src/external/`\s+--\s+the libraries raylib bundles\s+--\s+three files\s+are changed: `rlsw\.h`, `tinyobj_loader_c\.h` and `RGFW/deps/minigamepad\.h`\.">Among
+the libraries raylib bundles, three files are changed: the software renderer's nearest-texel
+lookup is clamped to the texture, a fix of the framework's own that upstream does not have, so the
+far edge of a texture reads its last texel and not the one past it; the OBJ loader takes raylib's
+face fix from after 6.2; and RGFW's gamepad code builds on older kernel headers.</span>
 <a href="/framework/licences.html">Licences</a> has the rest.</p>
 
 <p data-fw-grep="tools/configure.py::- framework: \.\./thirdparty/raylib-ios/raylib\.xcframework">The

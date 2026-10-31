@@ -224,14 +224,46 @@ layout in <code>.box</code> and the look after it:</p>
 </tbody>
 </table>
 
+<div class="modes">
+<figure>
 <pre data-lang="cpp" data-harness="function">
-rmp::ui::panel({ .box = { .width = 260, .height = 70 }, .border = rmp::ui::current_theme().border },
+rmp::ui::panel({ .box = { .width = 260, .height = 70 },
+                 .border = rmp::ui::current_theme().border },
                [&amp;] {
                    rmp::ui::center([&amp;] {
-                       rmp::ui::text("nothing here", { .color = rmp::ui::ColorRole::MUTED });
+                       rmp::ui::text("nothing here",
+                                     { .color = rmp::ui::ColorRole::MUTED });
                    });
                });
 </pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members">
+rmp::ui::Panel empty{
+    .box = { .width = 260, .height = 70 },
+    .style = { .border = GRAY, .border_width = 1 },
+};
+
+void _draw() override {
+    rmp::ui::begin();
+    empty.show([&amp;] {
+        rmp::ui::center([&amp;] {
+            rmp::ui::text("nothing here",
+                          { .color = rmp::ui::ColorRole::MUTED });
+        });
+    });
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: a widget you keep</figcaption>
+</figure>
+</div>
+
+<p>In the framework's themes a panel sits on a soft shadow, and fades and rises into place the first
+frame it is drawn — see <a href="/manual/modules/ui-style.html#styles">styles</a> for that look and
+how to take it away. A kept <a href="ref:rmp::ui::Panel"><code>Panel</code></a> can also be clicked,
+and styles everything inside it: <a href="/manual/modules/ui-controls.html#panel">Panel</a>.</p>
 
 <h2>Centring and layers</h2>
 
@@ -395,6 +427,29 @@ interface instead of shrinking into nothing on a big screen.
 </tbody>
 </table>
 
+<div class="modes">
+<figure>
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::Texture portrait;">
+rmp::ui::image(portrait, { .width = 96, .height = 96 });
+</pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members" data-given="static rmp::Texture portrait;">
+rmp::ui::Image face{ .picture = portrait,
+                     .width = 96, .height = 96,
+                     .on_click = [] { TraceLog(LOG_INFO, "hi"); } };
+
+void _draw() override {
+    rmp::ui::begin();
+    face.show();
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: a widget you keep</figcaption>
+</figure>
+</div>
+
 <p>What it draws is any <a href="ref:rmp::ui::Picture"><code>rmp::ui::Picture</code></a>: an
 <a href="ref:rmp::Texture"><code>rmp::Texture</code></a>, a part of one, the frame an
 <a href="ref:rmp::Sprite"><code>rmp::Sprite</code></a> shows, a slice of an Aseprite file, a
@@ -418,10 +473,33 @@ rmp::ui::image(minimap.texture, { .width = 160, .height = 160 });
 <p><a href="ref:rmp::ui::progress"><code>rmp::ui::progress</code></a> is a bar, filled to a fraction
 from 0 to 1 — clamped, so a health of -5 draws empty rather than going wrong:</p>
 
+<div class="modes">
+<figure>
 <pre data-lang="cpp" data-harness="function" data-given="static float health = 0.72f; static float mana = 0.35f;">
 rmp::ui::progress(health, { .width = 180 });
-rmp::ui::progress(mana, { .width = 180, .height = 8, .fill = SKYBLUE });
+rmp::ui::progress(mana, { .width = 180, .height = 8,
+                          .fill = SKYBLUE });
 </pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members" data-given="static float health = 0.72f; static float mana = 0.35f;">
+rmp::ui::ProgressBar health_bar{ .width = 180 };
+rmp::ui::ProgressBar mana_bar{ .width = 180, .height = 8,
+                               .fill = SKYBLUE };
+
+void _draw() override {
+    health_bar.value = health;
+    mana_bar.value = mana;
+    rmp::ui::begin();
+    health_bar.show();
+    mana_bar.show();
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: a widget you keep</figcaption>
+</figure>
+</div>
 
 <p><a href="ref:rmp::ui::ProgressOptions"><code>ProgressOptions</code></a>:
 <a href="ref:rmp::ui::ProgressOptions::width"><code>width</code></a> (0 fills the space available),

@@ -514,9 +514,11 @@ build image, by digest</dt>
 examples and their scripts, the coverage, the deep tests, the new game, the documentation — run
 inside <code>ghcr.io/omardev29/raylib-build</code>, named by its <code>sha256</code> digest in
 <code>thirdparty/FROZEN_VERSIONS.md</code> and in every workflow that runs in it —
-<code>ci.yml</code>, <code>web-backends.yml</code> and <code>deep.yml</code>;
-<span data-fw-grep="tools/versions_check.sh::WORKFLOWS=\$\(find \.github/workflows -name '\*\.yml' ! -name 'canary\.yml'\)">
-<code>tools/versions_check.sh</code> reads every workflow and fails if any two disagree</span>, or if
+<code>ci.yml</code>, <code>web-backends.yml</code> and <code>deep.yml</code> — and in the
+development container, <code>.devcontainer/devcontainer.json</code>;
+<span data-fw-grep="tools/versions_check.sh::WORKFLOWS=\$\(find \.github/workflows -name '\*\.yml' ! -name 'canary\.yml'\s+find \.devcontainer -name 'devcontainer\.json'">
+<code>tools/versions_check.sh</code> reads every workflow and the container and fails if any two
+disagree</span>, or if
 <code>:latest</code> appears outside the canary.
 <span data-fw-grep="tools/versions_check.sh::IMAGE_MANIFEST=/etc/raylib-build-image\.json">Inside
 the image it also compares every pinned tool with the image's own manifest.</span> The image is

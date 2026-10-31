@@ -337,6 +337,43 @@ the software render check in a game's own CI is one, booting the game for a few 
 read <code>[dev]</code> exactly as yours do. So with <code>strict = true</code>, a warning the game
 triggers while CI boots it aborts the game and fails the check.</p>
 
+<h3 id="tcc">[dev] c_compiler: the C of a debug build, compiled by tcc</h3>
+
+<p data-fw-grep="tools/configure.py::C_COMPILERS = \{&quot;same&quot;, &quot;tcc&quot;, &quot;auto&quot;\}">Most
+of what a debug build compiles is not your game. It is raylib and what it bundles — GLFW, miniaudio,
+the image and font decoders — and all of it is C. The Tiny C Compiler compiles C many times faster
+than GCC or Clang: on x86-64 Linux, a clean debug build of raylib takes a fraction of a second with
+it instead of seconds. <code>c_compiler</code> picks the compiler of a debug build's C, while its C++
+— your game and the framework — keeps <code>compiler</code>'s:</p>
+
+<table>
+<thead><tr><th>Value</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>"same"</code></td><td>The C compiler that goes with <code>compiler</code>. The framework's own <code>.toml</code> says this.</td></tr>
+<tr><td><code>"auto"</code></td><td><code>tcc</code> when it is installed, on x86-64 Linux; the same as <code>"same"</code> anywhere else, saying which it took. What <code>rmp new</code> writes into a game.</td></tr>
+<tr><td><code>"tcc"</code></td><td>tcc, and configuring fails when it is not installed.</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="toml">
+[dev]
+c_compiler = "auto"
+</pre>
+
+<p><code>"tcc"</code> is refused anywhere but Linux, and with <code>compiler = "mingw"</code> or
+<code>"msvc"</code>, by <code>configure.py</code>, with the line. A tcc build links with GNU ld,
+whatever <code>linker</code> says, and its C is never sanitized — tcc has no sanitizers; the C++ is,
+when <code>sanitize</code> asks. That is why the framework keeps <code>"same"</code>: every line of
+its debug builds runs under the sanitizers. A tcc that writes no debugging information or unwinding
+tables is not enough: the build image carries tcc 0.9.28rc, built from one commit of its
+repository; your distribution's tcc may be older.</p>
+
+<p data-fw-grep="CMakeLists.txt::message\(STATUS &quot;=== C\+\+ compiler: ">Every
+configure of CMake — <code>rmp run</code>, <code>rmp build</code>, <code>rmp test</code>, and every
+CI job that runs CMake itself (Gradle keeps the Android build's to itself) — prints the C compiler, the C++ compiler and the linker it was given, each with its path and
+version, at the top of its log: <samp>=== C compiler:</samp>, <samp>=== C++ compiler:</samp> and
+<samp>=== Linker:</samp>. Which one compiled what is never a guess.</p>
+
 <h3 id="sanitizers">[dev] sanitize: a debug build that checks memory</h3>
 
 <p data-fw-grep="tools/configure.py::SANITIZERS = \{&quot;address&quot;, &quot;undefined&quot;\}">A test sees what
@@ -359,7 +396,7 @@ width, a float cast to an int it does not fit, a misaligned or null access. Chea
 sanitize = ["address", "undefined"]
 </pre>
 
-<p data-fw-grep="tools/configure.py::&quot;dev&quot;: \{&quot;compiler&quot;: &quot;clang&quot;, &quot;linker&quot;: &quot;auto&quot;, &quot;strict&quot;: False, &quot;sanitize&quot;: \[\]\}">A
+<p data-fw-grep="tools/configure.py::&quot;dev&quot;: \{&quot;compiler&quot;: &quot;clang&quot;, &quot;c_compiler&quot;: &quot;same&quot;, &quot;linker&quot;: &quot;auto&quot;, &quot;strict&quot;: False,\s+&quot;sanitize&quot;: \[\]\}">A
 game starts with <code>sanitize = []</code>, none: turning them on is its author's choice. The
 framework lists both, so every debug build of its own — the library, the examples and every test —
 runs under them. Release, web, Android and iOS builds never read the key.</p>

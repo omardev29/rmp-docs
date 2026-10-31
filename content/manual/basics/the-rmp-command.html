@@ -106,6 +106,7 @@ rmp run               # build (debug) and play
 rmp test              # the .toml, the pins, the licences, a frame drawn, a boot
 rmp build release     # the release build
 rmp web               # or: rmp android
+rmp package           # the zip a release ships, made here
 rmp help              # every command; rmp help &lt;command&gt; explains one, with examples
 </pre>
 
@@ -167,6 +168,69 @@ target.</p>
 debug APK with Gradle — which needs the Android SDK and NDK — and prints every APK it finds, marking
 the one it has just written. <code>adb install -r</code> with that path puts it on a connected
 phone. <a href="/manual/platforms/android.html">Android</a> has the rest.</p>
+
+<h3 id="windows-from-linux">rmp build windows and rmp run windows</h3>
+
+<p data-fw-grep="tools/rmp.py::WINDOWS_DIRS = \{&quot;mingw&quot;: &quot;build/windows&quot;, &quot;clang-cl&quot;: &quot;build/windows-clang-cl&quot;\}">On
+Linux, <code>rmp build windows</code> builds the release <code>.exe</code> for 64-bit Windows,
+without a Windows machine: with MinGW-w64, into <code>build/windows/</code>. <code>rmp build windows
+clang-cl</code> builds it with clang-cl and lld-link instead, into
+<code>build/windows-clang-cl/</code>, against Microsoft's own C runtime and Windows SDK — the same
+ones Visual Studio links — which is closer to what a Windows machine builds.</p>
+
+<pre data-lang="shell">
+rmp build windows            # build/windows/my_game.exe, by MinGW-w64
+rmp build windows clang-cl   # the same with clang-cl, against Microsoft's runtime
+rmp run windows              # built, then started under Wine
+</pre>
+
+<p>Microsoft's runtime and SDK cannot be handed out by anyone but Microsoft, so neither the
+framework nor its build image carries them. The first <code>rmp build windows clang-cl</code> asks
+you to accept Microsoft's licence for them, and once you type <code>yes</code>, xwin downloads them
+from Microsoft into <code>~/.xwin</code> (about 800 MB; <code>XWIN_DIR</code> puts them elsewhere),
+once. Not on a terminal, it refuses instead of asking, unless
+<code>RMP_ACCEPT_MICROSOFT_LICENSE=1</code> says you accept it. The runtime it fetches is the newest
+your clang-cl can compile.</p>
+
+<p><code>rmp run windows</code> builds the <code>.exe</code> and starts it under Wine, which is a
+quick look and not a proof: Wine is not Windows. The build image has MinGW-w64, clang-cl, lld-link,
+xwin and Wine (on x86-64; there is no Wine for x86 programs on ARM). On a Linux machine of your own,
+MinGW-w64 is the <code>mingw-w64</code> package, clang-cl and lld-link come with LLVM, and xwin is
+<code>cargo install --locked xwin</code>. On Windows, <code>rmp build release</code> already builds
+the <code>.exe</code>, and <code>rmp build windows</code> says so.</p>
+
+<h3>rmp package</h3>
+
+<p><code>rmp package</code> makes, on your machine, the archive a release job would upload, into
+<code>build/package/</code>: the release build, packed with UPX where <code>[upx]</code> asks, the
+resource pack, and <code>LICENSES.txt</code>, zipped. For when you ship by hand — an upload to itch,
+a zip for a friend, a build for a store — without a tag and a CI run.</p>
+
+<pre data-lang="shell">
+rmp package                  # build/package/my_game-linux-x64-glibc.zip: this machine's target
+rmp package windows          # build/package/my_game-windows-x64.zip, made on Linux
+rmp package windows clang-cl # the same with clang-cl: my_game-windows-x64-clang-cl.zip
+rmp package web              # build/package/my_game-web.zip: the page, ready to upload
+rmp package android          # build/package/my_game-android.aab and .apk, signed
+</pre>
+
+<p><code>rmp package android</code> builds the release bundle — what Google Play takes — and a release
+APK, what a phone installs from a file, both signed with your upload key. It reads the key from the
+same four variables CI does, and refuses, naming each one missing, when they are not set:</p>
+
+<pre data-lang="shell">
+export ANDROID_KEYSTORE_FILE=~/keys/upload.jks
+export ANDROID_KEYSTORE_PASSWORD=...
+export ANDROID_KEY_ALIAS=upload
+export ANDROID_KEY_PASSWORD=...
+rmp package android
+</pre>
+
+<p>The keystore never goes in the <code>.toml</code> or the repository. CI checks the command is
+what it ships: the web job makes the zip with <code>rmp package web</code> as well and compares the
+two file by file, and the Android job signs with <code>rmp package android</code> and verifies both
+files' signatures. <a href="/publishing/google-play.html">Google Play</a> says how to make an upload
+key.</p>
 
 <h3>rmp test</h3>
 

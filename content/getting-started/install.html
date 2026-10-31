@@ -145,6 +145,21 @@ replaces it. <code>rmp update</code> then updates that clone.</p>
 act on the framework the <code>rmp</code> you typed belongs to, wherever you type them. A game's own
 copy refuses them: it is not the framework on your PATH, and it is never updated.</p>
 
+<h2 id="in-a-container">In a container, nothing installed</h2>
+
+<p data-fw-grep=".devcontainer/devcontainer.json::&quot;image&quot;: &quot;ghcr.io/omardev29/raylib-build@sha256:">The
+framework, and every game <code>rmp new</code> makes, carries a development container:
+<code>.devcontainer/devcontainer.json</code>. It is the build image CI runs in, pinned by the same
+digest — every compiler, tool and library <code>rmp</code> uses, tcc, MinGW-w64, clang-cl and Wine
+included — with a light desktop on top for the game's window. In VS Code, <em>Dev Containers: Reopen
+in Container</em>; in a GitHub Codespace it is what starts. <code>rmp run</code>,
+<code>rmp test</code> and <code>rmp build windows</code> work at once, with nothing installed on
+your machine but the editor and Docker.</p>
+
+<p>The desktop is a page in the browser: open the forwarded port 6080 and type the password
+<code>vscode</code>, and the game's window is there. It draws with the CPU, not your graphics card,
+which is plenty for a 2D game and slow for a heavy 3D one.</p>
+
 <h2 id="uninstall">Uninstalling</h2>
 
 <p>Nothing is installed anywhere else, so removing it is deleting what the table above lists. On

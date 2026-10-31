@@ -213,7 +213,7 @@ given the same: a <code>NOLINT</code> and a reason someone reviewing it can acce
 <h3 id="todo">No TODO, with or without a name</h3>
 
 <p data-fw-grep="tools/style_check.sh::S3  no `TODO`, `FIXME` or `XXX`: a comment says what IS; a plan goes in\s+#\s+the plan">Google
-asks for <code>TODO(name)</code>, so that a TODO can be traced to someone. The framework has no
+asks for a TODO with a name in brackets after it, so that it can be traced to someone. The framework has no
 TODO at all: a comment says what is, and what is to be done goes in the plan, where somebody reads
 it. Checked by rule S3 of <code>tools/style_check.sh</code>, which also refuses <code>FIXME</code>
 and <code>XXX</code>, in the framework and the examples.</p>

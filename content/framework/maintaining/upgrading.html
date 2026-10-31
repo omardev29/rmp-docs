@@ -38,9 +38,10 @@ moved is fixed in the same stretch of work, and <code>FRAMEWORK_REF</code> bumpe
 <dd><code>thirdparty/raylib</code>, a committed copy of a release; <code>RAYLIB_VERSION</code> in
 <code>thirdparty/raylib/src/raylib.h</code> says which.</dd>
 <dt>The patches</dt>
-<dd data-fw-grep="thirdparty/raylib/PATCHES.md::each one is\ncommented `PATCHED \(raylib_multiplatform\)` at its site\.">Every
-change is a row of <code>thirdparty/raylib/PATCHES.md</code> and is commented
-<code>PATCHED (raylib_multiplatform)</code> at its site. Each row says what to do with it: the
+<dd data-fw-grep="thirdparty/raylib/PATCHES.md::with this framework's own on top, commented\n`PATCHED \(raylib_multiplatform\)`\. Every change is at its site">Every
+change is a row of <code>thirdparty/raylib/PATCHES.md</code>, which says where it comes from, and is
+commented at its site: <code>PATCHED (raylib_cmake_template)</code> for the template's, whose copy
+this is, and <code>PATCHED (raylib_multiplatform)</code> for the framework's own. Each row says what to do with it: the
 backports are dropped once the new release has them; the build-system and backend fixes are
 re-applied; the fixes of our own are re-applied unless upstream has fixed it — and for those, a
 test says which. Copy the new release over the old one, then walk the table, top to bottom.</dd>

@@ -357,10 +357,25 @@ rmp::ui::set_theme(theme);
 </tbody>
 </table>
 
-<p>All of them are empty in <code>theme_dark()</code> and <code>theme_light()</code>, and so are the
-theme's <a href="ref:rmp::ui::Theme::sounds"><code>sounds</code></a> and
-<a href="ref:rmp::ui::Theme::motion"><code>motion</code></a>: a game that sets none of this draws
-exactly what it drew before styles existed, pixel for pixel.</p>
+<p>Two of them are not empty in <code>theme_dark()</code> and <code>theme_light()</code>, and they
+are the framework's own look. <code>styles.button</code> grows a button 3 % under the pointer, gives
+it 3 % while it is held, and sits it on a soft shadow; <code>styles.panel</code> puts a panel on a
+deeper shadow and fades it in, rising 10 design units, over 0.18 seconds the first frame it is drawn
+— an overlay's panel included, so a pause menu arrives instead of appearing. The light theme's
+shadows are the same, fainter. There is never a text shadow by default. The other seven are empty,
+and so are the theme's <a href="ref:rmp::ui::Theme::sounds"><code>sounds</code></a> and
+<a href="ref:rmp::ui::Theme::motion"><code>motion</code></a>: silent.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::Theme theme = rmp::ui::theme_dark();
+theme.styles.button.shadow.reset();         // buttons with no shadow, still growing
+theme.styles.panel = {};                    // panels as flat and still as text
+rmp::ui::set_theme(theme);
+</pre>
+
+<p>A <code>Style{}</code> is empty, so <code>theme.styles.panel = {}</code> takes the whole look of
+panels away. <code>theme.styles = {}</code> is not that: it is a new <code>Styles</code>, which has
+the framework's look in it again.</p>
 
 <h3>A look for everything inside a container</h3>
 
@@ -575,9 +590,10 @@ rmp::ui::Label title{ .text = "Game over",
 
 <h2>Motion</h2>
 
-<p>A <a href="ref:rmp::ui::Motion"><code>Motion</code></a> is movement, and the framework's themes
-leave all of it off: a button that grows under the pointer is a choice of style, and a game that
-wants it says so. Nothing here moves the <em>layout</em>. A control is drawn bigger, lifted or
+<p>A <a href="ref:rmp::ui::Motion"><code>Motion</code></a> is movement. The framework's themes have
+a little of it, in <a href="#styles">their styles</a>: buttons grow under the pointer and give when
+pressed, and panels fade and rise in. Anything more is a choice of style, and a game that wants it
+says so. Nothing here moves the <em>layout</em>. A control is drawn bigger, lifted or
 sliding, with everything inside it, but it is laid out — and clicked — where it always was.</p>
 
 <pre data-lang="cpp" data-harness="function">

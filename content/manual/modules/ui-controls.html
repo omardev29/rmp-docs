@@ -79,10 +79,34 @@ two controls that share a label on a screen that changes.</li>
 its row is clicked, or when it is pressed — Enter, Space, the bottom face button — while it has the
 focus. It returns <code>true</code> on the frame it flipped:</p>
 
+<div class="modes">
+<figure>
 <pre data-lang="cpp" data-harness="function" data-given="static bool light = false;">
 if (rmp::ui::checkbox("Light theme", light))
-    rmp::ui::set_theme(light ? rmp::ui::theme_light() : rmp::ui::theme_dark());
+    rmp::ui::set_theme(light ? rmp::ui::theme_light()
+                             : rmp::ui::theme_dark());
 </pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members">
+rmp::ui::Checkbox light{
+    .text = "Light theme",
+    .on_change = [](bool on) {
+        rmp::ui::set_theme(on ? rmp::ui::theme_light()
+                              : rmp::ui::theme_dark());
+    },
+};
+
+void _draw() override {
+    rmp::ui::begin();
+    light.show();
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: a widget you keep</figcaption>
+</figure>
+</div>
 
 <p>The box is filled with the theme's <code>primary</code> and carries a dot when the value is
 <code>true</code>, and is the theme's <code>surface</code> inside a <code>border</code> when it is
@@ -98,11 +122,38 @@ does not have. Its size is the theme's
 <p><a href="ref:rmp::ui::slider"><code>rmp::ui::slider</code></a> sets a <code>float</code> between a
 minimum and a maximum:</p>
 
+<div class="modes">
+<figure>
 <pre data-lang="cpp" data-harness="function" data-given="static float music = 0.8f; static float sensitivity = 0.35f;">
 if (rmp::ui::slider("Music", music, 0.0f, 1.0f))
     rmp::audio::set_volume(rmp::audio::Bus::MUSIC, music);
-rmp::ui::slider("Sensitivity", sensitivity, 0.0f, 1.0f, { .step = 0.05f });
+rmp::ui::slider("Sensitivity", sensitivity, 0.0f, 1.0f,
+                { .step = 0.05f });
 </pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members">
+rmp::ui::Slider music{
+    .text = "Music",
+    .value = 0.8f,
+    .on_change = [](float v) {
+        rmp::audio::set_volume(rmp::audio::Bus::MUSIC, v);
+    },
+};
+rmp::ui::Slider sensitivity{ .text = "Sensitivity",
+                             .value = 0.35f, .step = 0.05f };
+
+void _draw() override {
+    rmp::ui::begin();
+    music.show();
+    sensitivity.show();
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: a widget you keep</figcaption>
+</figure>
+</div>
 
 <ul>
 <li><strong>With the pointer</strong>, press on the rail and drag: the value follows where the
@@ -142,10 +193,33 @@ Nothing is drawn when <code>max</code> is not above <code>min</code>.</p>
 <p><a href="ref:rmp::ui::dropdown"><code>rmp::ui::dropdown</code></a> picks one string of a list.
 The value it writes is an index into that list:</p>
 
+<div class="modes">
+<figure>
 <pre data-lang="cpp" data-harness="function" data-given="static int quality = 1; void apply_quality(int);">
-if (rmp::ui::dropdown("Quality", quality, { "Low", "Medium", "High", "Ultra" }))
+if (rmp::ui::dropdown("Quality", quality,
+                      { "Low", "Medium", "High", "Ultra" }))
     apply_quality(quality);
 </pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members" data-given="void apply_quality(int);">
+rmp::ui::Dropdown quality{
+    .text = "Quality",
+    .items = { "Low", "Medium", "High", "Ultra" },
+    .selected = 1,
+    .on_change = [](int index) { apply_quality(index); },
+};
+
+void _draw() override {
+    rmp::ui::begin();
+    quality.show();
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: a widget you keep</figcaption>
+</figure>
+</div>
 
 <p>The list can be written in place, as there, or kept somewhere — a <code>std::array</code>, a
 <code>std::vector</code> or a plain array of <code>std::string_view</code> — and handed over as
@@ -182,10 +256,31 @@ and <a href="ref:rmp::ui::DropdownOptions::id"><code>id</code></a>. Two dropdown
 <p><a href="ref:rmp::ui::text_input"><code>rmp::ui::text_input</code></a> edits a
 <code>std::string</code> of yours, in UTF-8:</p>
 
+<div class="modes">
+<figure>
 <pre data-lang="cpp" data-harness="function">
 static std::string name;
-rmp::ui::text_input("Name", name, { .placeholder = "your name", .max_length = 16 });
+rmp::ui::text_input("Name", name,
+                    { .placeholder = "your name",
+                      .max_length = 16 });
 </pre>
+<figcaption>Simple: a call each frame</figcaption>
+</figure>
+<figure>
+<pre data-lang="cpp" data-harness="members">
+rmp::ui::TextInput name{ .text = "Name",
+                         .placeholder = "your name",
+                         .max_length = 16 };
+
+void _draw() override {
+    rmp::ui::begin();
+    name.show(); // what is typed is name.value
+    rmp::ui::end();
+}
+</pre>
+<figcaption>Full: a widget you keep</figcaption>
+</figure>
+</div>
 
 <p data-fw-grep="src/rmp/ui/controls.cpp::bool utf8_append\(std::string &amp;text, int codepoint, int max_length\) \{[\s\S]*?const bool control = codepoint &lt; 0x20 \|\| \(codepoint &gt;= 0x7F &amp;&amp; codepoint &lt; 0xA0\);">While
 the field is typing — which is not the same as having the focus; see

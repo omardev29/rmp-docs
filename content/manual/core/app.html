@@ -276,10 +276,10 @@ overwritten. A game that wants a key to quit says so where it reads its keys, an
 if (IsKeyPressed(KEY_ESCAPE)) rmp::app::quit();
 </pre>
 
-<p data-fw-grep="thirdparty/raylib/PATCHES.md::the Win32 backend closes on `CORE\.Input\.Keyboard\.exitKey` instead of on `KEY_ESCAPE` by name">The
-framework's copy of raylib is patched where a backend did not go through the exit key: the Win32
-backend closes on the exit key and not on Escape by name, and the DRM backend's terminal keyboard
-hands a lone Escape to the game instead of to the exit check. Both patches are listed in
+<p data-fw-grep="thirdparty/raylib/PATCHES.md::a lone ESC byte on the terminal is `KEY_ESCAPE`, not the exit key's slot">Every
+backend goes through the exit key: raylib 6.2's Win32 backend closes on it and not on Escape by
+name, and the framework's copy of raylib is patched where the DRM backend did not — its terminal
+keyboard hands a lone Escape to the game instead of to the exit check, a patch listed in
 <code>thirdparty/raylib/PATCHES.md</code>.</p>
 
 <h2>The way out</h2>
