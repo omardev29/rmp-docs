@@ -177,6 +177,13 @@ width less the padding. Its height is at least the theme's
 <a href="ref:rmp::ui::Theme::min_touch_size"><code>min_touch_size</code></a> — 44 design units, a
 target a thumb can hit — scaled with its type size.</p>
 
+<p>A button that is a picture — an icon, a slot, a "Play" the artist drew — is
+<a href="/manual/modules/ui-style.html#an-image-you-can-press"><code>rmp::ui::image_button</code></a>,
+pressed the same way. A screen where every button has its own look, icon, sounds and callbacks is
+easier with <a href="/manual/modules/ui-controls.html#widgets-you-keep">widgets you keep</a>, and a
+look for every button of the game is <a href="/manual/modules/ui-style.html#styles">a style in the
+theme</a>; neither changes a line of a menu written the simple way.</p>
+
 <p><a href="ref:rmp::ui::text"><code>rmp::ui::text</code></a> draws a string, in one of the theme's
 colours, at one of its sizes:</p>
 
@@ -801,6 +808,9 @@ scrolling list, and a tooltip on every item.</li>
 a column on a narrow screen.</li>
 <li><a href="/examples/ui/08_overlay.html">Overlay</a> — a pause menu pushed and blurred, and a dialog
 drawn by the game scene itself.</li>
+<li><a href="/examples/ui/09_skinned.html">Skinned</a> — a shop drawn by an artist: nine-slice skins
+from one Aseprite file, icons by slice name, an animated sprite, shadows, outlines, a font of its
+own, motion, sounds and the widgets you keep, each with its callbacks.</li>
 </ul>
 
 <p>The main menu of the first one is the whole idea in one file:</p>

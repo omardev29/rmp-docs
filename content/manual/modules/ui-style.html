@@ -1,16 +1,16 @@
 <!--
 title: Interface style
-description: Themes as plain data, variants that say what a button means, sizes as steps of a type scale, colour transitions, breakpoints for the shape of a layout, and the font the interface draws with.
+description: Themes as plain data, variants that say what a button means, sizes as steps of a type scale, colour transitions, breakpoints for the shape of a layout, styles per widget, pictures, nine-slices and skins, shadows and outlines, motion, sounds, and the fonts the interface draws with.
 order: 25
 -->
 <h1>Interface style</h1>
 
-<p class="lede">No button, line of text or control in <code>rmp::ui</code> takes a colour. A
-control says what it <em>means</em> — primary, danger, a muted line of text — and how important it
-is — small, medium, large — and the theme decides what that looks like. Restyling a game is then
-one theme, and no call site is revisited. The few colours a call can be given belong to boxes and
-pictures — a panel's background and border, a progress bar's fill and track, an image's tint — and
-a panel or a bar left without one takes the theme's.</p>
+<p class="lede">A control in <code>rmp::ui</code> says what it <em>means</em> — primary, danger, a
+muted line of text — and how important it is — small, medium, large — and the theme decides what
+that looks like. Restyling a game is then one theme, and no call site is revisited. When one widget,
+or one screen, has to look like nothing else — a shop drawn by an artist, a title with an outline,
+a button that grows under the pointer — a <a href="#styles">style</a> says so for that widget and
+everything inside it, over the theme, and the simple calls stay as they are.</p>
 
 <pre data-lang="cpp" data-harness="function">
 rmp::ui::button("Start game", { .style = rmp::ui::Variant::PRIMARY, .size = rmp::ui::Size::LARGE });
@@ -195,8 +195,10 @@ and a checkbox's box fills in instead of switching. There is nothing to opt into
 <code>transition</code>, the time a change takes. A control seen for the first time starts at the
 colour it should have, so nothing fades in from nowhere.</p>
 
-<p><strong>Only colour moves.</strong> Nothing about the layout is animated, so a control is always
-exactly where it was drawn and an animation can never make the player miss what they aimed at.
+<p><strong>A transition moves only colour.</strong> Nothing about the layout is animated, so a
+control is always exactly where it was drawn and an animation can never make the player miss what
+they aimed at. A style's <a href="#motion">motion</a> — growing under the pointer, a panel sliding
+in — moves the drawing and never the layout either, and is off unless a game asks for it.
 <code>transition = 0</code> turns it off — every control takes its new colour on the frame it
 changes — which is what a "reduce motion" setting does:</p>
 
@@ -255,10 +257,412 @@ interface that should change shape with the window wants <code>"none"</code> or
 machine. <a href="/examples/ui/07_responsive.html">The responsive example</a> turns a sidebar and its
 content from a row into a column as the window is resized.</p>
 
+<h2>Styles</h2>
+
+<p>A <a href="ref:rmp::ui::Style"><code>rmp::ui::Style</code></a> is how <em>one</em> thing looks: a
+button, a panel, a line of text. Every field is optional, and a field left unset is taken from around
+it. A widget you <a href="/manual/modules/ui-controls.html#widgets-you-keep">keep</a> has one in
+its <code>style</code> field:</p>
+
+<pre data-lang="cpp" data-harness="function">
+const rmp::ui::Style gold{
+    .background = GOLD,
+    .radius = 0,
+    .shadow = rmp::ui::Shadow{},
+    .text = BLACK,
+    .text_outline = rmp::ui::TextOutline{ .color = WHITE },
+};
+rmp::ui::Button buy{ .text = "Buy", .style = gold };
+</pre>
+
+<p>The fields are written in the order they are declared — C++20 requires it of designated
+initialisers — and they are declared in the order you would think of them: the box, its spacing,
+its text, and how it feels.</p>
+
+<table>
+<thead><tr><th>Field</th><th>Type</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Style::background"><code>background</code></a></td><td><code>Color</code></td><td>The fill of the box. On a button, a checkbox, a dropdown or a field, the hover and press colours are worked out from it — a little lighter, a little darker — unless the next two give them.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::background_hover"><code>background_hover</code></a></td><td><code>Color</code></td><td>The fill under the pointer. Given without a <code>background</code>, it is used alone over the theme's fill.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::background_press"><code>background_press</code></a></td><td><code>Color</code></td><td>The fill while held down; alone too, like the one above.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::background_disabled"><code>background_disabled</code></a></td><td><code>Color</code></td><td>The fill when <code>enabled</code> is false.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::skin"><code>skin</code></a></td><td><a href="ref:rmp::ui::Skin"><code>Skin</code></a></td><td>Pictures instead of the fill, one per state. See <a href="#skins">skins</a>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::tint"><code>tint</code></a></td><td><code>Color</code></td><td>Multiplies the colours of a skin or an image; <code>WHITE</code> leaves them as drawn.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::border"><code>border</code></a></td><td><code>Color</code></td><td>The outline's colour, drawn when <code>border_width</code> is above 0.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::border_width"><code>border_width</code></a></td><td><code>float</code></td><td>The outline's width in design units; 0 draws none.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::radius"><code>radius</code></a></td><td><code>float</code></td><td>The corners, in design units; 0 is square.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::shadow"><code>shadow</code></a></td><td><a href="ref:rmp::ui::Shadow"><code>Shadow</code></a></td><td>A soft shadow under the box. See <a href="#shadows-and-outlines">shadows and outlines</a>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::padding_x"><code>padding_x</code></a></td><td><code>float</code></td><td>Inside, left and right, in design units. On a panel it is its padding all round.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::padding_y"><code>padding_y</code></a></td><td><code>float</code></td><td>Inside, above and below.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::gap"><code>gap</code></a></td><td><code>float</code></td><td>Between the children of a container.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::text"><code>text</code></a></td><td><code>Color</code></td><td>The colour of its text, over the role a call gives it.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::text_disabled"><code>text_disabled</code></a></td><td><code>Color</code></td><td>The same, when <code>enabled</code> is false.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::font"><code>font</code></a></td><td><a href="ref:rmp::Font"><code>rmp::Font</code></a></td><td>A font you loaded. The interface draws with that font's <em>file</em>; see <a href="#fonts">fonts</a>. An empty one is inherited.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::font_size"><code>font_size</code></a></td><td><code>float</code></td><td>What <code>Size::MEDIUM</code> is here, in design units. <code>SMALL</code> and <code>LARGE</code> follow it, in proportion.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::text_outline"><code>text_outline</code></a></td><td><a href="ref:rmp::ui::TextOutline"><code>TextOutline</code></a></td><td>An outline around every letter.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::text_shadow"><code>text_shadow</code></a></td><td><a href="ref:rmp::ui::TextShadow"><code>TextShadow</code></a></td><td>A copy of the text under it, offset.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::motion"><code>motion</code></a></td><td><a href="ref:rmp::ui::Motion"><code>Motion</code></a></td><td>How it moves under the pointer, as it appears and when it shakes. See <a href="#motion">motion</a>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Style::sounds"><code>sounds</code></a></td><td><a href="ref:rmp::ui::Sounds"><code>Sounds</code></a></td><td>A sound per event. See <a href="#sounds">sounds</a>.</td></tr>
+</tbody>
+</table>
+
+<p>Every field but <code>font</code> and <code>sounds</code> is a <code>std::optional</code>, and
+"unset" is what it says: not 0, not black. <code>font</code> is unset when it is an empty handle, and
+each sound of <code>sounds</code> is an optional of its own.</p>
+
+<h3>Where a style comes from</h3>
+
+<p>A field a widget's own style leaves unset is looked for, in this order, and the first that sets it
+wins:</p>
+
+<ol>
+<li>the widget's own <code>style</code>;</li>
+<li>the <code>children</code> style of the <a href="ref:rmp::ui::Panel"><code>Panel</code></a>s it is
+inside, the nearest first;</li>
+<li>the theme's style for its kind of widget, <a href="ref:rmp::ui::Theme::styles"><code>Theme::styles</code></a>;</li>
+<li>the theme's own colours and metrics, as the rest of this page describes them.</li>
+</ol>
+
+<p>Inside a widget, <a href="ref:rmp::ui::current_theme"><code>current_theme()</code></a> answers
+with the theme as that style changes it, so every widget reads its style the way it already read
+the theme, and a style can do nothing the theme could not do on its own but for one widget.</p>
+
+<h3>One style for every widget of a kind</h3>
+
+<p><a href="ref:rmp::ui::Theme::styles"><code>Theme::styles</code></a> holds one
+<code>Style</code> for each kind of widget. What is set there is how every widget of that kind looks
+before its own style — the ones written the simple way, <code>rmp::ui::button("Play")</code>,
+included. A skinned game is then one theme, and its menus stay three lines:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::ui::NineSlice frame;">
+rmp::ui::Theme theme = rmp::ui::current_theme();
+theme.styles.button.skin = rmp::ui::Skin{ .normal = frame };
+theme.styles.button.text = WHITE;
+theme.styles.panel.shadow = rmp::ui::Shadow{};
+rmp::ui::set_theme(theme);
+</pre>
+
+<table>
+<thead><tr><th>Field of <code>styles</code></th><th>Under</th></tr></thead>
+<tbody>
+<tr><td><code>button</code></td><td><code>button()</code>, <code>image_button()</code>, <code>Button</code></td></tr>
+<tr><td><code>label</code></td><td><code>text()</code>, <code>Label</code></td></tr>
+<tr><td><code>image</code></td><td><code>image()</code>, <code>Image</code></td></tr>
+<tr><td><code>panel</code></td><td><code>panel()</code>, <code>Panel</code></td></tr>
+<tr><td><code>checkbox</code></td><td><code>checkbox()</code>, <code>Checkbox</code></td></tr>
+<tr><td><code>slider</code></td><td><code>slider()</code>, <code>Slider</code></td></tr>
+<tr><td><code>dropdown</code></td><td><code>dropdown()</code>, <code>Dropdown</code></td></tr>
+<tr><td><code>text_input</code></td><td><code>text_input()</code>, <code>TextInput</code></td></tr>
+<tr><td><code>progress</code></td><td><code>progress()</code>, <code>ProgressBar</code></td></tr>
+</tbody>
+</table>
+
+<p>All of them are empty in <code>theme_dark()</code> and <code>theme_light()</code>, and so are the
+theme's <a href="ref:rmp::ui::Theme::sounds"><code>sounds</code></a> and
+<a href="ref:rmp::ui::Theme::motion"><code>motion</code></a>: a game that sets none of this draws
+exactly what it drew before styles existed, pixel for pixel.</p>
+
+<h3>A look for everything inside a container</h3>
+
+<p>A kept <a href="ref:rmp::ui::Panel"><code>Panel</code></a> has two styles, the way a Godot
+container has its own theme override and one for its children:
+<a href="ref:rmp::ui::Panel::style"><code>style</code></a> is how the panel itself looks, and
+<a href="ref:rmp::ui::Panel::children"><code>children</code></a> is a style every widget inside it
+inherits, however deep. Panels nest, and the nearest one's wins:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::Font title;">
+rmp::ui::Panel shop{
+    .style = { .background = DARKBROWN, .shadow = rmp::ui::Shadow{} },
+    .children = { .text = GOLD, .font = title },
+};
+shop.show([] {
+    rmp::ui::text("Shop");
+    rmp::ui::button("Buy");
+});
+</pre>
+
+<p>With <a href="ref:rmp::ui::Panel::background"><code>background = false</code></a> a panel is a bare
+row or column — no fill of its own unless its style gives one, no padding unless asked — that still
+styles its children: a way to give one part of a screen a font or a colour without drawing a box.</p>
+
+<h3>A number that is no number</h3>
+
+<p data-fw-grep="src/rmp/ui/look.cpp::float usable\(float v, float fallback, float lo, float hi, std::string_view what\) \{">A
+length, a time or a scale that is not a finite number in its range — a NaN from a division by zero,
+a radius of minus four — is drawn the way no style would draw it, and said once:
+<samp>UI: a Style's … of … is not from … to …; … is used</samp>. A negative length is 0 without a
+word: a border of -4 is no border.</p>
+
+<h2>Pictures</h2>
+
+<p>Everything in the interface that shows an image — <code>image()</code>, an icon on a button, a
+skin behind a button or a panel, the fill of a bar — takes an
+<a href="ref:rmp::ui::Picture"><code>rmp::ui::Picture</code></a>, and a picture is made from whatever
+you have, without naming it:</p>
+
+<table>
+<thead><tr><th>From</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td>an <a href="ref:rmp::Texture"><code>rmp::Texture</code></a></td><td>The whole texture.</td></tr>
+<tr><td><code>{ texture, Rectangle{ … } }</code></td><td>A part of it: an atlas, a sheet laid out by hand.</td></tr>
+<tr><td>an <a href="ref:rmp::Sprite"><code>rmp::Sprite</code></a></td><td>What the sprite shows now: its texture, or its sheet's current frame. A snapshot: make one each frame to see it move, or keep an <a href="ref:rmp::ui::Image"><code>Image</code></a>, which plays it.</td></tr>
+<tr><td>a <a href="ref:rmp::ui::NineSlice"><code>NineSlice</code></a></td><td>A picture that stretches by its middle. See below.</td></tr>
+<tr><td><a href="ref:rmp::ui::slice"><code>slice(sheet, name)</code></a></td><td>A slice of an Aseprite file, by its name.</td></tr>
+</tbody>
+</table>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::Texture logo; static rmp::Texture atlas; static rmp::Sprite hero;">
+rmp::ui::image(logo);
+rmp::ui::image({ atlas, Rectangle{ 32, 0, 16, 16 } });
+rmp::ui::image(hero);
+</pre>
+
+<p>A picture holds counted handles to what it shows, so the texture stays loaded for as long as a
+picture that shows it exists — through the end of the frame that draws it — and a temporary is
+safe. <a href="ref:rmp::ui::Picture::empty"><code>empty()</code></a> is true when there is nothing to
+draw: no texture, or one that did not load; an empty picture draws nothing and takes no room.
+<a href="ref:rmp::ui::Picture::size"><code>size()</code></a> is its size in pixels of the source, and
+<a href="ref:rmp::ui::Picture::sliced"><code>sliced()</code></a> is true when it has nine-slice
+margins. Its fields are public — <a href="ref:rmp::ui::Picture::texture"><code>texture</code></a>,
+<a href="ref:rmp::ui::Picture::sheet"><code>sheet</code></a>,
+<a href="ref:rmp::ui::Picture::source"><code>source</code></a>, the margins
+<a href="ref:rmp::ui::Picture::left"><code>left</code></a>,
+<a href="ref:rmp::ui::Picture::top"><code>top</code></a>,
+<a href="ref:rmp::ui::Picture::right"><code>right</code></a>,
+<a href="ref:rmp::ui::Picture::bottom"><code>bottom</code></a> and
+<a href="ref:rmp::ui::Picture::slice_scale"><code>slice_scale</code></a> — but one of the
+constructors normally sets them.</p>
+
+<h3>Nine-slices</h3>
+
+<p>A <a href="ref:rmp::ui::NineSlice"><code>NineSlice</code></a> is the classic "9-patch": four
+margins cut the picture into a three-by-three grid, and it is drawn stretched to any box with its
+corners at their own size, its edges stretched along one axis and its middle along both. One small
+frame becomes a button of any length:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::Texture ui_art;">
+const rmp::ui::NineSlice frame{ .texture = ui_art,
+                                .source = { 0, 0, 24, 24 },
+                                .left = 8,
+                                .top = 8,
+                                .right = 8,
+                                .bottom = 8,
+                                .scale = 3 };
+rmp::ui::Button play{ .text = "Play", .style = { .skin = rmp::ui::Skin{ .normal = frame } } };
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::NineSlice::texture"><code>texture</code></a></td><td>empty</td><td>The picture.</td></tr>
+<tr><td><a href="ref:rmp::ui::NineSlice::sheet"><code>sheet</code></a></td><td>empty</td><td>Or an Aseprite sheet's texture, when <code>texture</code> is empty.</td></tr>
+<tr><td><a href="ref:rmp::ui::NineSlice::source"><code>source</code></a></td><td>all of it</td><td>The part of the texture to cut, in pixels.</td></tr>
+<tr><td><a href="ref:rmp::ui::NineSlice::left"><code>left</code></a>, <a href="ref:rmp::ui::NineSlice::top"><code>top</code></a>, <a href="ref:rmp::ui::NineSlice::right"><code>right</code></a>, <a href="ref:rmp::ui::NineSlice::bottom"><code>bottom</code></a></td><td>0</td><td>The margins, in pixels of the source.</td></tr>
+<tr><td><a href="ref:rmp::ui::NineSlice::scale"><code>scale</code></a></td><td>0, which is 1</td><td>How big one source pixel is drawn, in design units, so the corners grow with the interface's scale like everything else. Pixel art wants a whole number.</td></tr>
+</tbody>
+</table>
+
+<p>A box smaller than its corners shrinks the corners together rather than letting them overlap.
+All four margins 0 is a picture that simply stretches.</p>
+
+<h3>Slices of an Aseprite file</h3>
+
+<p>An artist marks the parts of an <code>.aseprite</code> with the slice tool and names them: an
+icon of an atlas, the frame of a button. <a href="ref:rmp::ui::slice"><code>slice(sheet, name)</code></a>
+is the part of the first frame the slice covers, as a picture, and one with "9-Slices" ticked in
+Aseprite comes with its margins, so it is already a nine-slice.
+<a href="ref:rmp::ui::nine_slice"><code>nine_slice(sheet, name)</code></a> is the same slice as a
+<code>NineSlice</code>, to change its scale or keep it:</p>
+
+<pre data-lang="cpp" data-harness="function">
+static const rmp::SpriteSheet icons = rmp::assets::load_sheet("skin.aseprite");
+rmp::ui::image(rmp::ui::slice(icons, "coin"));
+rmp::ui::NineSlice frame = rmp::ui::nine_slice(icons, "button");
+frame.scale = 3;
+</pre>
+
+<p>A name the sheet does not have is an empty picture, and said once:
+<samp>UI: rmp::ui::…(sheet, "…"): the sheet has no slice by that name</samp>. A slice without
+9-slices asked for as one stretches whole, and says
+<samp>UI: rmp::ui::nine_slice(sheet, "…"): the slice has no 9-slices; it stretches whole</samp>. The
+slices themselves are in the sheet's <a href="ref:rmp::SheetData::slices"><code>SheetData::slices</code></a>;
+<a href="/manual/modules/sprites.html#slices">sprites</a> says what is read from the file.</p>
+
+<h3>An image you can press</h3>
+
+<p><a href="ref:rmp::ui::image_button"><code>rmp::ui::image_button</code></a> is a button that is a
+picture: an icon, an inventory slot, a "Play" drawn by the artist. It is pressed and focused like
+<code>button()</code>, and wears <code>theme.styles.button</code> — its skin behind the picture, its
+sounds:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::Texture gear; void open_settings();">
+if (rmp::ui::image_button(gear)) open_settings();
+if (rmp::ui::image_button(gear, { .width = 64, .height = 64, .id = "settings" })) open_settings();
+</pre>
+
+<p><a href="ref:rmp::ui::ImageButtonOptions"><code>ImageButtonOptions</code></a>:
+<a href="ref:rmp::ui::ImageButtonOptions::width"><code>width</code></a> and
+<a href="ref:rmp::ui::ImageButtonOptions::height"><code>height</code></a> in design units, 0 for
+the picture's own size;
+<a href="ref:rmp::ui::ImageButtonOptions::enabled"><code>enabled</code></a>; and
+<a href="ref:rmp::ui::ImageButtonOptions::id"><code>id</code></a>, since a picture has no label to be
+told apart by — without one, unnamed image buttons are told apart by their order. It has no padding
+around it and no minimum height, except on Android and iOS, where it is still as tall as a thumb needs.</p>
+
+<h2>Skins</h2>
+
+<p>A <a href="ref:rmp::ui::Skin"><code>Skin</code></a> is pictures instead of a flat fill, one per
+state. Only <a href="ref:rmp::ui::Skin::normal"><code>normal</code></a> is needed: a state without
+its own picture shows <code>normal</code>, changed the way the colours of that state would be —
+lit under the pointer, darker while held, grey and faded when disabled. Give the others when the
+artist drew them:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::ui::NineSlice up; static rmp::ui::NineSlice down;">
+const rmp::ui::Style wooden{ .skin = rmp::ui::Skin{ .normal = up, .press = down } };
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Shown</th><th>When it is missing</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Skin::normal"><code>normal</code></a></td><td>at rest</td><td>no skin at all: the theme's fill</td></tr>
+<tr><td><a href="ref:rmp::ui::Skin::hover"><code>hover</code></a></td><td>under the pointer</td><td><code>normal</code>, drawn a second time on top, faintly, to light it</td></tr>
+<tr><td><a href="ref:rmp::ui::Skin::press"><code>press</code></a></td><td>held down</td><td><code>normal</code>, darker</td></tr>
+<tr><td><a href="ref:rmp::ui::Skin::disabled"><code>disabled</code></a></td><td><code>enabled = false</code></td><td><code>normal</code>, grey and a little transparent</td></tr>
+<tr><td><a href="ref:rmp::ui::Skin::focus"><code>focus</code></a></td><td>with the keyboard or gamepad focus</td><td><code>normal</code>; the focus ring is drawn either way</td></tr>
+</tbody>
+</table>
+
+<p>The picture <em>is</em> the box: a skinned button has no flat fill over it or under it, and its
+style's <code>tint</code> multiplies it. On an image, the skin is a frame behind the picture, as far
+in as the style's padding.</p>
+
+<h2>Shadows and outlines</h2>
+
+<p>A <a href="ref:rmp::ui::Shadow"><code>Shadow</code></a> under a box is drawn as a few rounded
+rectangles, each fainter than the last, outwards. That reads as blurred on every target — the
+software renderer and OpenGL ES 2.0 included — and costs a handful of rectangles:</p>
+
+<pre data-lang="cpp" data-harness="function">
+const rmp::ui::Style card{ .shadow = rmp::ui::Shadow{ .offset = { 0, 6 }, .blur = 12 } };
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Shadow::offset"><code>offset</code></a></td><td><code>{ 0, 4 }</code></td><td>Where it falls, in design units: down a little, as light from above.</td></tr>
+<tr><td><a href="ref:rmp::ui::Shadow::blur"><code>blur</code></a></td><td>8</td><td>How far it fades out past the box; 0 is one hard shadow.</td></tr>
+<tr><td><a href="ref:rmp::ui::Shadow::spread"><code>spread</code></a></td><td>0</td><td>How much bigger than the box it is before it fades.</td></tr>
+<tr><td><a href="ref:rmp::ui::Shadow::color"><code>color</code></a></td><td>black at 90 of 255</td><td>Its colour at the box.</td></tr>
+</tbody>
+</table>
+
+<p>Text has two of its own. A <a href="ref:rmp::ui::TextOutline"><code>TextOutline</code></a> draws
+copies of the text around it, so a title reads over any background —
+<a href="ref:rmp::ui::TextOutline::width"><code>width</code></a> in design units (1 by default; keep
+it from 1 to 3, every copy is drawn), <a href="ref:rmp::ui::TextOutline::color"><code>color</code></a>
+black. A <a href="ref:rmp::ui::TextShadow"><code>TextShadow</code></a> is one copy under it —
+<a href="ref:rmp::ui::TextShadow::offset"><code>offset</code></a> <code>{ 1, 2 }</code> design units,
+<a href="ref:rmp::ui::TextShadow::color"><code>color</code></a> black at 160 of 255. A box's own
+outline is <code>border</code> and <code>border_width</code>.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::Label title{ .text = "Game over",
+                      .size = rmp::ui::Size::LARGE,
+                      .style = { .text = GOLD,
+                                 .text_outline = rmp::ui::TextOutline{ .width = 2 },
+                                 .text_shadow = rmp::ui::TextShadow{} } };
+</pre>
+
+<h2>Motion</h2>
+
+<p>A <a href="ref:rmp::ui::Motion"><code>Motion</code></a> is movement, and the framework's themes
+leave all of it off: a button that grows under the pointer is a choice of style, and a game that
+wants it says so. Nothing here moves the <em>layout</em>. A control is drawn bigger, lifted or
+sliding, with everything inside it, but it is laid out — and clicked — where it always was.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::Theme theme = rmp::ui::current_theme();
+theme.styles.button.motion = rmp::ui::Motion{ .hover_scale = 1.05f, .press_scale = 0.95f };
+theme.styles.panel.motion = rmp::ui::Motion{ .appear = 0.25f, .appear_offset = 24 };
+rmp::ui::set_theme(theme);
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Motion::hover_scale"><code>hover_scale</code></a></td><td>1</td><td>How big under the pointer: 1.05 is 5 % bigger.</td></tr>
+<tr><td><a href="ref:rmp::ui::Motion::press_scale"><code>press_scale</code></a></td><td>1</td><td>How big while held: 0.95 is 5 % smaller.</td></tr>
+<tr><td><a href="ref:rmp::ui::Motion::hover_lift"><code>hover_lift</code></a></td><td>0</td><td>How far it rises under the pointer, in design units, its shadow falling further below it: a card lifting off the table.</td></tr>
+<tr><td><a href="ref:rmp::ui::Motion::speed"><code>speed</code></a></td><td>0.12</td><td>Seconds hover and press take to get there.</td></tr>
+<tr><td><a href="ref:rmp::ui::Motion::appear"><code>appear</code></a></td><td>0</td><td>Seconds a box takes to fade in the first frame it is drawn; 0, it is simply there. Panels and overlays are what it is for.</td></tr>
+<tr><td><a href="ref:rmp::ui::Motion::appear_offset"><code>appear_offset</code></a></td><td>0</td><td>How far below it starts as it appears, in design units, sliding up.</td></tr>
+<tr><td><a href="ref:rmp::ui::Motion::appear_scale"><code>appear_scale</code></a></td><td>1</td><td>How big it starts as it appears, growing to 1.</td></tr>
+<tr><td><a href="ref:rmp::ui::Motion::shake"><code>shake</code></a></td><td>0.4</td><td>Seconds a <code>shake()</code> lasts.</td></tr>
+<tr><td><a href="ref:rmp::ui::Motion::shake_strength"><code>shake_strength</code></a></td><td>8</td><td>How far side to side it shakes, in design units, dying away.</td></tr>
+</tbody>
+</table>
+
+<p>A shake is a kept widget's <code>shake()</code> — "that did not work": a wrong password, a coin
+you do not have. It needs no <code>Motion</code> to be set: the defaults above shake. Hover and press
+follow the same clock as the scenes, so a script that plays the game sees the same frames every
+run.</p>
+
+<h2>Sounds</h2>
+
+<p>A <a href="ref:rmp::ui::Sounds"><code>Sounds</code></a> names a sound for each thing a control
+does, by the name <a href="ref:rmp::audio::play"><code>rmp::audio::play()</code></a> takes —
+<code>"click"</code> is <code>click.wav</code>, <code>click.ogg</code>… in <code>resources/</code>. In
+the theme, every control makes them; in a style, one widget does, or everything inside a
+panel:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::Theme theme = rmp::ui::current_theme();
+theme.sounds.hover = "hover";
+theme.sounds.click = "click";
+theme.sounds.volume = 0.6f;
+rmp::ui::set_theme(theme);
+rmp::ui::Button quiet{ .text = "Back", .style = { .sounds = { .hover = "" } } };
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Plays when</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Sounds::hover"><code>hover</code></a></td><td>the pointer arrives on a control</td></tr>
+<tr><td><a href="ref:rmp::ui::Sounds::press"><code>press</code></a></td><td>the pointer goes down on it</td></tr>
+<tr><td><a href="ref:rmp::ui::Sounds::release"><code>release</code></a></td><td>…and comes up</td></tr>
+<tr><td><a href="ref:rmp::ui::Sounds::click"><code>click</code></a></td><td>it is pressed: the pointer, Enter, the gamepad's A button</td></tr>
+<tr><td><a href="ref:rmp::ui::Sounds::focus"><code>focus</code></a></td><td>the keyboard or gamepad focus arrives</td></tr>
+<tr><td><a href="ref:rmp::ui::Sounds::change"><code>change</code></a></td><td>a checkbox, slider, dropdown or text field changes its value</td></tr>
+<tr><td><a href="ref:rmp::ui::Sounds::open"><code>open</code></a></td><td>a dropdown opens its list</td></tr>
+<tr><td><a href="ref:rmp::ui::Sounds::close"><code>close</code></a></td><td>…and closes it</td></tr>
+<tr><td><a href="ref:rmp::ui::Sounds::shake"><code>shake</code></a></td><td>a widget's <code>shake()</code> starts</td></tr>
+<tr><td><a href="ref:rmp::ui::Sounds::volume"><code>volume</code></a></td><td>not a sound: 0 to 1, for all of them; 1 when nothing sets it</td></tr>
+</tbody>
+</table>
+
+<p>Each one is inherited on its own, like every field of a style, so an <strong>empty name is
+silence</strong>: <code>.hover = ""</code> turns off a hover sound the theme or a panel set. Unset is
+"whatever is around it"; empty is "nothing".</p>
+
+<p>A name is a <a href="ref:rmp::ui::SoundName"><code>SoundName</code></a>, written as a string — a
+literal, a <code>std::string</code> or a <code>std::string_view</code>, copied — with
+<a href="ref:rmp::ui::SoundName::view"><code>view()</code></a> to read it,
+<a href="ref:rmp::ui::SoundName::empty"><code>empty()</code></a> for silence and <code>==</code> to
+compare it with a string. It is a type of its own for one reason: writing one is what brings
+<code>rmp::audio</code>'s player and its decoders into the game. A game whose interface names no sound
+links none of them.</p>
+
+<p>Every sound goes through <code>rmp::audio</code>, so it follows the
+<a href="/manual/modules/audio.html">mixer's</a> sound-effect volume and master volume, and a sound
+that is missing says so once, as any <code>play()</code> does. Anything else that should happen on an
+event — a vibration, a particle — is
+<a href="/manual/modules/ui-controls.html#events"><code>on_event()</code></a>.</p>
+
 <h2>Fonts</h2>
 
-<p>The interface draws all its text in one font, named by <code>[ui] font</code>, at sizes measured
-from <code>[ui] font_size</code>.</p>
+<p>The interface draws its text in one global font unless a style gives another. The global font
+starts as <code>[ui] font</code>, at sizes measured from <code>[ui] font_size</code>; that is only
+where the game starts, and it can change at any time.</p>
 
 <p>Text is drawn at the pixel size the layout asks for: its size in design units — a step or a
 number — times the <a href="/manual/modules/ui.html#scale-and-design-units">scale</a>.</p>
@@ -274,20 +678,57 @@ font = "ui.ttf"
 font_size = 24
 </pre>
 
-<p data-fw-grep="src/rmp/ui/context.cpp::constexpr int FONT_FACES = 8;">It is loaded through
-<a href="ref:rmp::assets::load_font"><code>rmp::assets::load_font</code></a>, so it works the same
-loose in <code>resources/</code> and packed in a release. A font file is only sharp at the size it was
-rasterised at, so the interface rasterises it once for every pixel size it draws — <code>SMALL</code>,
-<code>MEDIUM</code>, <code>LARGE</code> and every number, each times the scale — and keeps each of
-those faces until the interface shuts down. Text is then drawn from a face made at exactly its size,
-so it stays sharp at any scale. Eight faces are kept at once; a ninth size makes room by
-letting go of the face used longest ago, never of one drawn in the same frame, whose glyphs may still
-be waiting to be drawn. A frame that draws more than eight sizes draws the extra ones from the
-nearest face, stretched.</p>
+<p><code>font_size</code> is the medium step in design units, a whole number from 6 to 200; the small
+and large steps start at 0.8 and 1.4 times it.</p>
+
+<h3>Changing it while the game runs</h3>
+
+<p><a href="ref:rmp::ui::set_font"><code>set_font()</code></a> changes the global font: by its name in
+<code>resources/</code>, or from a font the game loaded — the interface takes that font's file and
+bakes it itself. <code>""</code>, an empty font or one that failed to load is raylib's built-in one.
+<a href="ref:rmp::ui::font_name"><code>font_name()</code></a> says which it is now. A language with
+other letters, an accessibility setting for a plainer face:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static bool dyslexia_friendly = true;">
+rmp::ui::set_font(dyslexia_friendly ? "plain.ttf" : "ui.ttf");
+</pre>
+
+<h3>A font for one widget</h3>
+
+<p><a href="ref:rmp::ui::Style::font"><code>Style::font</code></a> gives one widget, or everything in a
+panel, a font of its own: one the game loaded with
+<a href="ref:rmp::assets::load_font"><code>rmp::assets::load_font</code></a>. The size it was loaded
+at does not matter. The interface draws with that font's <em>file</em>, baked by itself at every
+size it draws, so a title at 48 and a caption at 14 in the same font are both sharp:</p>
+
+<pre data-lang="cpp" data-harness="function">
+static const rmp::Font title = rmp::assets::load_font("title.ttf", 32);
+rmp::ui::Label heading{ .text = "Chapter one",
+                        .size = rmp::ui::Size::LARGE,
+                        .style = { .font = title } };
+</pre>
+
+<h3>Every letter, on demand</h3>
+
+<p data-fw-grep="src/rmp/ui/context.cpp::constexpr std::size_t MOST_GLYPHS = 8192;">A font file is a set of
+outlines, and drawing it means baking the letters it needs into a texture first. The interface bakes
+a letter the first time a text uses it — Spanish, Polish, Russian, Japanese, whatever the file has —
+and then bakes the face again with it, before the frame is drawn. Latin-1 and Latin Extended-A are
+there from the start. A game that draws more than 8192 different letters with one font draws the ones
+past that as <code>?</code>, and says so once:
+<samp>UI: more than … different letters drawn with a [ui] font; the ones past that are drawn as '?'</samp>.</p>
+
+<p data-fw-grep="src/rmp/ui/context.cpp::constexpr int FONT_FACES = 16;">It is loaded through
+<code>rmp::assets</code>, so it works the same loose in <code>resources/</code> and packed in a release.
+A font file is only sharp at the size it was rasterised at, so the interface rasterises it once for
+every pixel size it draws — <code>SMALL</code>, <code>MEDIUM</code>, <code>LARGE</code> and every
+number, each times the scale, for every font in use — and keeps each of those faces until the
+interface shuts down. Text is then drawn from a face made at exactly its size, so it stays sharp at
+any scale. Sixteen faces are kept at once; one more makes room by letting go of the face used
+longest ago, never of one drawn in the same frame, whose glyphs may still be waiting to be drawn. A
+frame that draws more than sixteen sizes draws the extra ones from the nearest face of the same font,
+stretched.</p>
 
 <p>A font file that is missing or cannot be read does not switch the interface off: it falls back to
 the built-in font and says so once,
-<samp>UI: [ui] font '…' could not be loaded; using the built-in font</samp>.</p>
-
-<p><code>font_size</code> is the medium step in design units, a whole number from 6 to 200; the small
-and large steps start at 0.8 and 1.4 times it.</p>
+<samp>UI: font '…' could not be loaded; using the built-in font</samp>.</p>

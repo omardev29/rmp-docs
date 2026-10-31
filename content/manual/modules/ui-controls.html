@@ -1,13 +1,15 @@
 <!--
 title: Interface controls
-description: Checkboxes, sliders, dropdowns and text fields: each takes your variable by reference, writes to it, and says on which frame it changed.
+description: Checkboxes, sliders, dropdowns and text fields that take your variable by reference; the widgets you keep, Godot style, with their own style and callbacks; and the events every control sends.
 order: 24
 -->
 <h1>Interface controls</h1>
 
 <p class="lede">Four controls own a value: a checkbox, a slider, a dropdown and a text field. Each
 one takes <em>your</em> variable, by reference, and writes to it, and that is the whole of their
-state model — there is no widget object holding a copy, and nothing to keep in sync.</p>
+state model — there is no widget object holding a copy, and nothing to keep in sync. For a screen
+designed widget by widget there are also <a href="#widgets-you-keep">widgets you keep</a>, each with
+its own style and callbacks, and every control sends <a href="#events">events</a>.</p>
 
 <pre data-lang="cpp" data-harness="function" data-given="struct Settings { bool fullscreen = false; float music = 0.5f; int quality = 1; std::string name = &quot;Player&quot;; }; static Settings settings;">
 rmp::ui::begin();
@@ -252,3 +254,314 @@ it is applied.</p>
 <pre data-lang="shell">
 rmp example 04_settings
 </pre>
+
+<h2>Widgets you keep</h2>
+
+<p>Everything above is immediate: a call each frame, and nothing to keep. That is the simple way, and
+the three-function menu stays exactly that. A screen that is <em>designed</em> rather than written —
+each button with its own look, an icon, its sounds, and something to run when it is clicked, hovered
+or focused — is easier to read as objects you keep, the way a Godot scene keeps its nodes: members of
+your scene, set up once with designated initialisers, and shown each frame where they go.</p>
+
+<pre data-lang="cpp" data-harness="members" data-given="struct GameScene : rmp::Scene {};">
+rmp::ui::Button play{
+    .text = "Play",
+    .variant = rmp::ui::Variant::PRIMARY,
+    .style = { .shadow = rmp::ui::Shadow{} },
+    .on_click = [this] { change&lt;GameScene&gt;(); },
+};
+rmp::ui::Button quit{ .text = "Quit", .on_click = [] { rmp::app::quit(); } };
+
+void _draw() override {
+    rmp::ui::begin();
+    play.show();
+    quit.show();
+    rmp::ui::end();
+}
+</pre>
+
+<p><code>show()</code> puts the widget in the layout like the immediate call of the same name —
+between <code>begin()</code> and <code>end()</code>, in a row, a column, a panel — and is drawn by the
+same code, so it lays out, navigates and is hit-tested exactly as that call is. The callbacks run
+inside <code>show()</code>, on the frame the thing happened, in the order it happened. A widget that
+is kept and not shown is not on screen and hears nothing.</p>
+
+<ul>
+<li><strong>Every field can change between frames.</strong> <code>play.text = "Continue";</code> and
+the next <code>show()</code> draws it.</li>
+<li><strong>It cannot be copied.</strong> Its callbacks are
+<a href="ref:rmp::Callback"><code>rmp::Callback</code></a>s, which hold lambdas that capture what they
+like, a <code>std::unique_ptr</code> too, and cannot be copied; keep the widget where it lives.</li>
+<li><strong>It remembers what it is doing</strong> in <code>ours</code>, a
+<a href="ref:rmp::ui::KeptState"><code>KeptState</code></a> —
+<a href="ref:rmp::ui::KeptState::hovered"><code>hovered</code></a>,
+<a href="ref:rmp::ui::KeptState::pressed"><code>pressed</code></a>,
+<a href="ref:rmp::ui::KeptState::focused"><code>focused</code></a> and the
+<a href="ref:rmp::ui::KeptState::shakes"><code>shakes</code></a> not yet started. It is public only so
+the widget stays a struct you can write with designated initialisers; read it with the methods
+<code>hovered()</code>, <code>pressed()</code> and <code>focused()</code>.</li>
+<li><strong><code>shake()</code></strong> shakes it side to side by its style's
+<a href="/manual/modules/ui-style.html#motion"><code>Motion</code></a>, plays its <code>shake</code>
+sound and sends <a href="ref:rmp::ui::EventKind::SHAKE"><code>EventKind::SHAKE</code></a>: "that did
+not work". It starts at the next <code>show()</code>.</li>
+<li><strong><code>style</code></strong> is its own <a href="/manual/modules/ui-style.html#styles">style</a>,
+over everything around it, and <strong><code>id</code></strong> is the
+<a href="/manual/modules/ui.html#labels-are-ids">same id</a> the immediate calls take.</li>
+</ul>
+
+<p>The callbacks, each one optional — an empty one is not called:</p>
+
+<table>
+<thead><tr><th>Callback</th><th>Runs when</th><th>On</th></tr></thead>
+<tbody>
+<tr><td><code>on_click</code></td><td>it was clicked: released on it after a press on it, or Enter or the gamepad's A with the focus</td><td><code>Button</code>, <code>Label</code>, <code>Image</code>, <code>Panel</code></td></tr>
+<tr><td><code>on_hover</code></td><td>the pointer arrived on it</td><td>all nine</td></tr>
+<tr><td><code>on_unhover</code></td><td>…and left</td><td>all nine</td></tr>
+<tr><td><code>on_press</code></td><td>the pointer went down on it</td><td><code>Button</code>, <code>Image</code>, <code>Panel</code></td></tr>
+<tr><td><code>on_release</code></td><td>…and came up, on it or not</td><td><code>Button</code>, <code>Image</code>, <code>Panel</code></td></tr>
+<tr><td><code>on_focus</code></td><td>the keyboard or gamepad focus arrived</td><td><code>Button</code> and the four value controls</td></tr>
+<tr><td><code>on_blur</code></td><td>…and left</td><td><code>Button</code> and the four value controls</td></tr>
+<tr><td><code>on_change</code></td><td>its value changed, with the new value</td><td><code>Checkbox</code> (<code>bool</code>), <code>Slider</code> (<code>float</code>), <code>Dropdown</code> (<code>int</code>, the index), <code>TextInput</code> (<code>std::string_view</code>, the text)</td></tr>
+</tbody>
+</table>
+
+<p>A pointer that arrives on a button gives it the focus too, so moving onto one and clicking it runs
+<code>on_hover</code>, <code>on_focus</code>, <code>on_press</code>, <code>on_release</code> and
+<code>on_click</code>, over as many frames as the player took. <code>show()</code> also returns what
+the immediate call would — <code>true</code> on the frame it was clicked, or changed — so
+<code>if (play.show())</code> works as well as <code>on_click</code>.</p>
+
+<h3>Button</h3>
+
+<p><a href="ref:rmp::ui::Button"><code>rmp::ui::Button</code></a>: text, an icon, or both.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::Texture gear_icon; void open_settings();">
+rmp::ui::Button settings{ .text = "Settings",
+                          .icon = gear_icon,
+                          .icon_size = 24,
+                          .on_click = [] { open_settings(); } };
+rmp::ui::Button tool{ .icon = gear_icon, .icon_above = true, .id = "tool" };
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Button::text"><code>text</code></a></td><td>""</td><td>The label; empty for a button that is only its icon.</td></tr>
+<tr><td><a href="ref:rmp::ui::Button::icon"><code>icon</code></a></td><td>none</td><td>A <a href="/manual/modules/ui-style.html#pictures">picture</a> before the label, or alone.</td></tr>
+<tr><td><a href="ref:rmp::ui::Button::icon_size"><code>icon_size</code></a></td><td>0</td><td>The icon's height in design units; 0 is the label's type size, or the picture's own height when there is no label.</td></tr>
+<tr><td><a href="ref:rmp::ui::Button::icon_above"><code>icon_above</code></a></td><td><code>false</code></td><td><code>true</code> puts the icon over the label, as a toolbar tile.</td></tr>
+<tr><td><a href="ref:rmp::ui::Button::variant"><code>variant</code></a></td><td><code>NORMAL</code></td><td>What it means, as <code>ButtonOptions::style</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Button::size"><code>size</code></a></td><td>the theme's</td><td>A step or design units, as <code>ButtonOptions::size</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Button::width"><code>width</code></a>, <a href="ref:rmp::ui::Button::height"><code>height</code></a></td><td>0</td><td>Above 0, a fixed size in design units; 0, sized as <code>button()</code> is.</td></tr>
+<tr><td><a href="ref:rmp::ui::Button::enabled"><code>enabled</code></a></td><td><code>true</code></td><td><code>false</code>: disabled colours, no press, no focus.</td></tr>
+<tr><td><a href="ref:rmp::ui::Button::id"><code>id</code></a></td><td>""</td><td>Only for two buttons with one label.</td></tr>
+<tr><td><a href="ref:rmp::ui::Button::style"><code>style</code></a></td><td>empty</td><td>Its look.</td></tr>
+<tr><td><code>on_click</code>, <code>on_hover</code>, <code>on_unhover</code>, <code>on_press</code>, <code>on_release</code>, <code>on_focus</code>, <code>on_blur</code></td><td>empty</td><td>See the table above.</td></tr>
+</tbody>
+</table>
+
+<p><a href="ref:rmp::ui::Button::show"><code>show()</code></a> is <code>true</code> on the frame it
+was clicked; <a href="ref:rmp::ui::Button::hovered"><code>hovered()</code></a>,
+<a href="ref:rmp::ui::Button::pressed"><code>pressed()</code></a> and
+<a href="ref:rmp::ui::Button::focused"><code>focused()</code></a> say what it is doing now. An
+icon-only button has no padding and is the size of its picture, as
+<a href="/manual/modules/ui-style.html#an-image-you-can-press"><code>image_button()</code></a> is.</p>
+
+<h3>Label</h3>
+
+<p><a href="ref:rmp::ui::Label"><code>rmp::ui::Label</code></a> is text as <code>text()</code> draws
+it, with a style of its own — a title in another font, with an outline — and clickable when it has an
+<code>on_click</code>:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::Label credits{ .text = "Credits",
+                        .color = rmp::ui::ColorRole::MUTED,
+                        .on_click = [] { rmp::ui::notify("Made with raylib"); } };
+</pre>
+
+<p>Its fields: <a href="ref:rmp::ui::Label::text"><code>text</code></a>;
+<a href="ref:rmp::ui::Label::color"><code>color</code></a>, a <code>ColorRole</code> used when the style
+sets no text colour; <a href="ref:rmp::ui::Label::size"><code>size</code></a> and
+<a href="ref:rmp::ui::Label::wrap"><code>wrap</code></a>, as <code>TextOptions</code> has them;
+<a href="ref:rmp::ui::Label::id"><code>id</code></a>; <a href="ref:rmp::ui::Label::style"><code>style</code></a>;
+and <code>on_click</code>, <code>on_hover</code>, <code>on_unhover</code>.
+<a href="ref:rmp::ui::Label::show"><code>show()</code></a> is <code>true</code> on the frame it was
+clicked, and <a href="ref:rmp::ui::Label::hovered"><code>hovered()</code></a> says whether the
+pointer is on it.</p>
+
+<h3>Image</h3>
+
+<p><a href="ref:rmp::ui::Image"><code>rmp::ui::Image</code></a> is a picture with a style — a frame
+behind it, a shadow, a tint — that can be clicked. With a
+<a href="ref:rmp::ui::Image::sprite"><code>sprite</code></a> that has a sheet, it plays the sprite's
+animation, one step of the game's clock every <code>show()</code>:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::Image coin{ .sprite = rmp::Sprite{ .sheet = rmp::assets::load_sheet("coin.aseprite") },
+                     .width = 32,
+                     .height = 32 };
+coin.sprite.play("spin");
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Image::picture"><code>picture</code></a></td><td>none</td><td>What it shows, unless <code>sprite</code> has a texture or a sheet.</td></tr>
+<tr><td><a href="ref:rmp::ui::Image::sprite"><code>sprite</code></a></td><td>none</td><td>An animated picture, advanced every <code>show()</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Image::grow"><code>grow</code></a></td><td><code>false</code></td><td>Fill the space available, as <code>ImageOptions::grow</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::Image::width"><code>width</code></a>, <a href="ref:rmp::ui::Image::height"><code>height</code></a></td><td>0</td><td>Above 0, a fixed size in design units; 0, the picture's own.</td></tr>
+<tr><td><a href="ref:rmp::ui::Image::enabled"><code>enabled</code></a></td><td><code>true</code></td><td><code>false</code>: never clicked.</td></tr>
+<tr><td><a href="ref:rmp::ui::Image::id"><code>id</code></a></td><td>""</td><td>Its id; images have no label to go by.</td></tr>
+<tr><td><a href="ref:rmp::ui::Image::style"><code>style</code></a></td><td>empty</td><td>Tint, a skin behind it, a shadow, a border.</td></tr>
+<tr><td><code>on_click</code>, <code>on_hover</code>, <code>on_unhover</code>, <code>on_press</code>, <code>on_release</code></td><td>empty</td><td>See above.</td></tr>
+</tbody>
+</table>
+
+<p><a href="ref:rmp::ui::Image::show"><code>show()</code></a> is <code>true</code> on the frame it was
+clicked; <a href="ref:rmp::ui::Image::hovered"><code>hovered()</code></a> and
+<a href="ref:rmp::ui::Image::pressed"><code>pressed()</code></a> say what it is doing.</p>
+
+<h3>Panel</h3>
+
+<p><a href="ref:rmp::ui::Panel"><code>rmp::ui::Panel</code></a> is a container with a look of its own,
+<a href="ref:rmp::ui::Panel::style"><code>style</code></a>, and a look for everything inside it,
+<a href="ref:rmp::ui::Panel::children"><code>children</code></a> — see
+<a href="/manual/modules/ui-style.html#a-look-for-everything-inside-a-container">a look for everything
+inside a container</a>. Its <code>show()</code> takes what goes inside it, as <code>panel()</code>
+does, and it is clickable as a whole when it has an <code>on_click</code>: an inventory slot, a
+card.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void equip(int slot);">
+rmp::ui::Panel slot{ .box = { .width = 64, .height = 64 },
+                     .id = "slot-1",
+                     .style = { .background = DARKGRAY },
+                     .on_click = [] { equip(1); } };
+slot.show([] { rmp::ui::text("Sword"); });
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Panel::row"><code>row</code></a></td><td><code>false</code></td><td>Its children left to right; <code>false</code>, top to bottom.</td></tr>
+<tr><td><a href="ref:rmp::ui::Panel::box"><code>box</code></a></td><td>fit</td><td>Its layout — sizing, padding, gap, alignment — as <code>panel()</code> takes it.</td></tr>
+<tr><td><a href="ref:rmp::ui::Panel::background"><code>background</code></a></td><td><code>true</code></td><td><code>false</code>: a bare row or column, with no fill unless its style gives one, that still styles its children.</td></tr>
+<tr><td><a href="ref:rmp::ui::Panel::id"><code>id</code></a></td><td>""</td><td>Its id: one per clickable panel, so each is told apart.</td></tr>
+<tr><td><a href="ref:rmp::ui::Panel::style"><code>style</code></a>, <a href="ref:rmp::ui::Panel::children"><code>children</code></a></td><td>empty</td><td>Its look, and the look of everything inside it.</td></tr>
+<tr><td><code>on_click</code>, <code>on_hover</code>, <code>on_unhover</code>, <code>on_press</code>, <code>on_release</code></td><td>empty</td><td>See above.</td></tr>
+</tbody>
+</table>
+
+<p><a href="ref:rmp::ui::Panel::show"><code>show(body)</code></a> lays it out with <code>body</code>
+inside it and is <code>true</code> on the frame it was clicked;
+<a href="ref:rmp::ui::Panel::hovered"><code>hovered()</code></a> and
+<a href="ref:rmp::ui::Panel::pressed"><code>pressed()</code></a> say what it is doing.</p>
+
+<h3>Checkbox, Slider, Dropdown, TextInput</h3>
+
+<p>The four value controls, each holding its own value instead of writing to yours. Their fields are
+the immediate control's options, plus the value and the callbacks:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::Checkbox fullscreen{ .text = "Fullscreen", .on_change = [](bool on) { (void)on; } };
+rmp::ui::Slider music{ .text = "Music",
+                       .value = 0.5f,
+                       .step = 0.1f,
+                       .on_change = [](float v) {
+                           rmp::audio::set_volume(rmp::audio::Bus::MUSIC, v);
+                       } };
+rmp::ui::Dropdown quality{ .text = "Quality",
+                           .items = { "Low", "Medium", "High" },
+                           .selected = 1 };
+rmp::ui::TextInput name{ .text = "Name", .placeholder = "Your name", .max_length = 16 };
+</pre>
+
+<table>
+<thead><tr><th>Widget</th><th>Its value</th><th>Its other fields</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::Checkbox"><code>Checkbox</code></a></td><td><a href="ref:rmp::ui::Checkbox::checked"><code>checked</code></a> (<code>false</code>)</td><td><a href="ref:rmp::ui::Checkbox::text"><code>text</code></a>, <a href="ref:rmp::ui::Checkbox::enabled"><code>enabled</code></a>, <a href="ref:rmp::ui::Checkbox::id"><code>id</code></a>, <a href="ref:rmp::ui::Checkbox::style"><code>style</code></a></td></tr>
+<tr><td><a href="ref:rmp::ui::Slider"><code>Slider</code></a></td><td><a href="ref:rmp::ui::Slider::value"><code>value</code></a> (0), kept from <a href="ref:rmp::ui::Slider::min"><code>min</code></a> (0) to <a href="ref:rmp::ui::Slider::max"><code>max</code></a> (1)</td><td><a href="ref:rmp::ui::Slider::text"><code>text</code></a>, <a href="ref:rmp::ui::Slider::step"><code>step</code></a>, <a href="ref:rmp::ui::Slider::width"><code>width</code></a>, <a href="ref:rmp::ui::Slider::show_value"><code>show_value</code></a>, <a href="ref:rmp::ui::Slider::enabled"><code>enabled</code></a>, <a href="ref:rmp::ui::Slider::id"><code>id</code></a>, <a href="ref:rmp::ui::Slider::style"><code>style</code></a></td></tr>
+<tr><td><a href="ref:rmp::ui::Dropdown"><code>Dropdown</code></a></td><td><a href="ref:rmp::ui::Dropdown::selected"><code>selected</code></a> (0), an index into <a href="ref:rmp::ui::Dropdown::items"><code>items</code></a></td><td><a href="ref:rmp::ui::Dropdown::text"><code>text</code></a>, <a href="ref:rmp::ui::Dropdown::width"><code>width</code></a>, <a href="ref:rmp::ui::Dropdown::enabled"><code>enabled</code></a>, <a href="ref:rmp::ui::Dropdown::id"><code>id</code></a>, <a href="ref:rmp::ui::Dropdown::style"><code>style</code></a></td></tr>
+<tr><td><a href="ref:rmp::ui::TextInput"><code>TextInput</code></a></td><td><a href="ref:rmp::ui::TextInput::value"><code>value</code></a> (""), what is typed</td><td><a href="ref:rmp::ui::TextInput::text"><code>text</code></a> (its label), <a href="ref:rmp::ui::TextInput::placeholder"><code>placeholder</code></a>, <a href="ref:rmp::ui::TextInput::max_length"><code>max_length</code></a>, <a href="ref:rmp::ui::TextInput::width"><code>width</code></a>, <a href="ref:rmp::ui::TextInput::enabled"><code>enabled</code></a>, <a href="ref:rmp::ui::TextInput::id"><code>id</code></a>, <a href="ref:rmp::ui::TextInput::style"><code>style</code></a></td></tr>
+</tbody>
+</table>
+
+<p>Each has <code>on_change</code> with the new value, <code>on_hover</code>,
+<code>on_unhover</code>, <code>on_focus</code> and <code>on_blur</code>. Each one's <code>show()</code>
+is <code>true</code> on a frame its value changed, and <code>hovered()</code> and
+<code>focused()</code> say what it is doing. What every field means is what the immediate control's
+option of the same name means, above.</p>
+
+<h3>ProgressBar</h3>
+
+<p><a href="ref:rmp::ui::ProgressBar"><code>rmp::ui::ProgressBar</code></a> is a bar with a look of its
+own: the style is the track's — its background, its skin — and
+<a href="ref:rmp::ui::ProgressBar::fill"><code>fill</code></a> and
+<a href="ref:rmp::ui::ProgressBar::fill_picture"><code>fill_picture</code></a> are the bar's. A
+nine-slice as the fill stretches with the bar and keeps its ends:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static rmp::ui::NineSlice bar_art; static float health = 0.7f;">
+rmp::ui::ProgressBar hp{ .value = health, .width = 200, .fill_picture = bar_art };
+hp.show();
+</pre>
+
+<table>
+<thead><tr><th>Field</th><th>Default</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::ProgressBar::value"><code>value</code></a></td><td>0</td><td>From 0 to 1, clamped.</td></tr>
+<tr><td><a href="ref:rmp::ui::ProgressBar::width"><code>width</code></a></td><td>0</td><td>In design units; 0 fills the space available.</td></tr>
+<tr><td><a href="ref:rmp::ui::ProgressBar::height"><code>height</code></a></td><td>-1</td><td>-1 is from the type size.</td></tr>
+<tr><td><a href="ref:rmp::ui::ProgressBar::radius"><code>radius</code></a></td><td>-1</td><td>-1 is round ends.</td></tr>
+<tr><td><a href="ref:rmp::ui::ProgressBar::fill"><code>fill</code></a></td><td>none</td><td>The bar's colour; none is the theme's <code>primary</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::ProgressBar::fill_picture"><code>fill_picture</code></a></td><td>none</td><td>The filled part as a picture, tinted by the style's <code>tint</code>.</td></tr>
+<tr><td><a href="ref:rmp::ui::ProgressBar::id"><code>id</code></a>, <a href="ref:rmp::ui::ProgressBar::style"><code>style</code></a></td><td></td><td>As every other.</td></tr>
+<tr><td><code>on_hover</code>, <code>on_unhover</code></td><td>empty</td><td>A bar is never pressed.</td></tr>
+</tbody>
+</table>
+
+<p><a href="ref:rmp::ui::ProgressBar::show"><code>show()</code></a> returns nothing, and
+<a href="ref:rmp::ui::ProgressBar::hovered"><code>hovered()</code></a> says whether the pointer is on
+it: what a bar's tooltip needs.</p>
+
+<h2>Events</h2>
+
+<p>Everything a control does, as it happens, is an <a href="ref:rmp::ui::Event"><code>Event</code></a>:
+the pointer arriving and leaving, a press, a click, the focus coming and going, a value changing.
+The <a href="/manual/modules/ui-style.html#sounds">sounds</a> of the theme and of a style play on
+these; <a href="ref:rmp::ui::on_event"><code>on_event()</code></a> is one hook for everything else —
+a vibration on a phone, a particle, a counter for achievements. Every control sends them, the ones
+written as <code>rmp::ui::button("Play")</code> too:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="static int clicks = 0;">
+rmp::ui::on_event([](const rmp::ui::Event &amp;e) {
+    if (e.kind == rmp::ui::EventKind::CLICK) ++clicks;
+});
+</pre>
+
+<p>An event has three fields: <a href="ref:rmp::ui::Event::kind"><code>kind</code></a>, what happened;
+<a href="ref:rmp::ui::Event::widget"><code>widget</code></a>, a
+<a href="ref:rmp::ui::WidgetKind"><code>WidgetKind</code></a> — <code>BUTTON</code>,
+<code>LABEL</code>, <code>IMAGE</code>, <code>PANEL</code>, <code>CHECKBOX</code>, <code>SLIDER</code>,
+<code>DROPDOWN</code>, <code>TEXT_INPUT</code> or <code>PROGRESS</code>; and
+<a href="ref:rmp::ui::Event::name"><code>name</code></a>, the control's label, or its id when it has
+one, valid during the call only.</p>
+
+<table>
+<thead><tr><th><a href="ref:rmp::ui::EventKind"><code>EventKind</code></a></th><th>When</th></tr></thead>
+<tbody>
+<tr><td><code>HOVER</code></td><td>the pointer arrived on it</td></tr>
+<tr><td><code>UNHOVER</code></td><td>…and left</td></tr>
+<tr><td><code>PRESS</code></td><td>the pointer went down on it</td></tr>
+<tr><td><code>RELEASE</code></td><td>the pointer came up after a <code>PRESS</code>, on it or not</td></tr>
+<tr><td><code>CLICK</code></td><td>it was pressed: released on it, or Enter or the A button with the focus</td></tr>
+<tr><td><code>FOCUS</code></td><td>the keyboard or gamepad focus arrived</td></tr>
+<tr><td><code>BLUR</code></td><td>…and left</td></tr>
+<tr><td><code>CHANGE</code></td><td>a checkbox, slider, dropdown or text field changed its value</td></tr>
+<tr><td><code>OPEN</code></td><td>a dropdown opened its list</td></tr>
+<tr><td><code>CLOSE</code></td><td>…and closed it</td></tr>
+<tr><td><code>SHAKE</code></td><td>a kept widget's <code>shake()</code> started</td></tr>
+</tbody>
+</table>
+
+<p>An event's sound plays first, then the hook. There is one hook: setting it again replaces it, and
+<code>rmp::ui::on_event({})</code> turns it off. A kept widget's own callbacks run in its
+<code>show()</code>, after the hook has heard the same thing.</p>

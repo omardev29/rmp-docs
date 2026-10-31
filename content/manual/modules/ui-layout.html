@@ -395,20 +395,24 @@ interface instead of shrinking into nothing on a big screen.
 </tbody>
 </table>
 
-<p>The <code>Texture2D</code> is copied on the way in, so the struct may be a temporary — but what is
-copied is a handle to something on the GPU, so the texture itself has to stay loaded until
-<code>end()</code> has drawn the frame. Keep it in an <a href="ref:rmp::Texture"><code>rmp::Texture</code></a>
-that outlives the screen, and pass that:</p>
+<p>What it draws is any <a href="ref:rmp::ui::Picture"><code>rmp::ui::Picture</code></a>: an
+<a href="ref:rmp::Texture"><code>rmp::Texture</code></a>, a part of one, the frame an
+<a href="ref:rmp::Sprite"><code>rmp::Sprite</code></a> shows, a slice of an Aseprite file, a
+nine-slice. <a href="/manual/modules/ui-style.html#pictures">Pictures</a> says how each is made. A
+picture holds counted handles, so the texture stays loaded until <code>end()</code> has drawn the
+frame, and a temporary is safe:</p>
 
-<pre data-lang="cpp" data-harness="scene" data-given="static rmp::Texture icon;">
-rmp::ui::image(icon, { .width = 40, .height = 40 });
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::image(rmp::assets::load_texture("icon.png"), { .width = 40, .height = 40 });
 </pre>
 
-<p>A temporary <code>rmp::Texture</code> does not compile there, on purpose: it would unload the
-texture at the end of the line, long before <code>end()</code> draws it.</p>
+<p>A raylib <code>Texture2D</code> is taken too, for a texture the game made itself — a render
+texture, an image it generated. It is copied on the way in, but what is copied is a handle to
+something on the GPU, so that texture has to stay loaded until <code>end()</code> has drawn the
+frame:</p>
 
-<pre data-lang="cpp" data-harness="function" data-expect="error" data-error="deleted">
-rmp::ui::image(rmp::assets::load_texture("icon.png"));
+<pre data-lang="cpp" data-harness="scene" data-given="static RenderTexture2D minimap;">
+rmp::ui::image(minimap.texture, { .width = 160, .height = 160 });
 </pre>
 
 <p><a href="ref:rmp::ui::progress"><code>rmp::ui::progress</code></a> is a bar, filled to a fraction
@@ -427,6 +431,11 @@ the height, for round ends), <a href="ref:rmp::ui::ProgressOptions::fill"><code>
 <a href="ref:rmp::ui::ProgressOptions::track"><code>track</code></a> (the theme's
 <code>primary</code> and <code>surface</code> unless set), and
 <a href="ref:rmp::ui::ProgressOptions::id"><code>id</code></a>.</p>
+
+<p>A bar drawn by the artist — a filled part that is a picture, its ends kept round by a
+nine-slice — is a kept <a href="ref:rmp::ui::ProgressBar"><code>rmp::ui::ProgressBar</code></a> with
+a <a href="ref:rmp::ui::ProgressBar::fill_picture"><code>fill_picture</code></a>; see
+<a href="/manual/modules/ui-controls.html#widgets-you-keep">widgets you keep</a>.</p>
 
 <h2>Naming a container</h2>
 

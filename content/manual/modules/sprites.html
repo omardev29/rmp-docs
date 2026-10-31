@@ -211,6 +211,35 @@ clock, so they do not flap in step unless they started together. The packed text
 all the frames together; a GPU has a largest texture it accepts, which a long animation of large
 frames can reach.</p>
 
+<h3>Slices</h3>
+
+<p data-fw-grep="src/rmp/animation_internal.h::inline constexpr std::size_t MAX_SLICES = 256;">An artist
+marks parts of the canvas with Aseprite's slice tool and names them: the icons of an atlas, the frame
+of a button. They are read with the pictures, into the sheet's
+<a href="ref:rmp::SheetData::slices"><code>slices</code></a>, in the file's order, up to 256 of them.
+Each <a href="ref:rmp::SheetSlice"><code>rmp::SheetSlice</code></a> has its
+<a href="ref:rmp::SheetSlice::name"><code>name</code></a>; its
+<a href="ref:rmp::SheetSlice::bounds"><code>bounds</code></a>, in pixels of the packed texture,
+already moved to where its frame is; and, when "9-Slices" is ticked for it in Aseprite,
+<a href="ref:rmp::SheetSlice::nine"><code>nine</code></a> set and its middle in
+<a href="ref:rmp::SheetSlice::center"><code>center</code></a>, relative to the bounds.
+<a href="ref:rmp::SheetData::slice"><code>slice(name)</code></a> finds one —
+the first, when two share a name — or an empty one, and
+<a href="ref:rmp::SheetData::slice_count"><code>slice_count()</code></a> says how many there are.</p>
+
+<pre data-lang="cpp" data-harness="function">
+const rmp::SpriteSheet skin = rmp::assets::load_sheet("skin.aseprite");
+const rmp::SheetSlice &amp;coin = skin.raw().slice("coin");
+const Rectangle where = coin.bounds;
+(void)where;
+</pre>
+
+<p>A slice is read where its first key is: a slice that moves from frame to frame is where it starts.
+One that does not lie inside the canvas, or does not read whole, is left out, and the pictures load
+all the same: a slice is never a reason to refuse a file. The interface takes slices by name as
+pictures and nine-slices: <a href="/manual/modules/ui-style.html#slices-of-an-aseprite-file">slices
+of an Aseprite file</a>.</p>
+
 <h3>Directions from movement</h3>
 
 <p>The <a href="ref:rmp::behavior::TopDown"><code>rmp::behavior::TopDown</code></a> behavior

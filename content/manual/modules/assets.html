@@ -70,6 +70,14 @@ subfolder in <code>resources/</code> warns about it for that reason.</p>
 identifies it: <code>load_font("ui.ttf", 16)</code> and <code>load_font("ui.ttf", 32)</code> are two
 fonts, two textures. Ask for the size you draw at.</p>
 
+<p data-fw-grep="src/rmp/assets.cpp::for \(int c = 160; c &lt;= 383; \+\+c\) v\.push_back\(c\);">A font is baked with
+the letters most languages written in the Latin alphabet need: printable ASCII, Latin-1 (ñ, á, ü, ç,
+¿, ¡, £, °), Latin Extended-A (the Polish, Czech, Hungarian, Turkish, Baltic and Croatian letters),
+and the dashes, curly quotes, bullet, ellipsis, euro and trademark sign a translated line uses. A
+letter outside that set is drawn as <code>?</code> by raylib's text functions. The interface does
+not have that limit: it bakes every letter its text uses, on demand — see
+<a href="/manual/modules/ui-style.html#every-letter-on-demand">every letter, on demand</a>.</p>
+
 <h2>The handles</h2>
 
 <p data-fw-grep="include/rmp/assets.h::using SpriteSheet = detail::Resource&lt;SheetData, detail::ResourceKind::SHEET&gt;;"><code>rmp::Texture</code>, <code>rmp::Image</code>, <code>rmp::Font</code> and

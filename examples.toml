@@ -20,6 +20,7 @@
 "ui/06_style" = { play = true }
 "ui/07_responsive" = { play = true }
 "ui/08_overlay" = { play = true }
+"ui/09_skinned" = { play = true }
 "scenes/01_stack" = { play = true }
 "scenes/02_stretch" = { play = true }
 "input/01_actions" = { play = true }
