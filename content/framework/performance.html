@@ -1,6 +1,6 @@
 <!--
 title: Performance
-description: What the framework costs over raylib, what it saves, and how it compares with raylib and OpenGL by hand.
+description: What the framework costs over raylib and what it saves: the abstractions that compile to nothing, the few that cost a call, how the map, the collisions, the UI and the build keep a frame and a binary small, and how it compares with raylib and with OpenGL by hand.
 order: 55
 -->
 <h1>Performance</h1>
@@ -71,6 +71,8 @@ move-only on purpose, so it carries none of <code>std::function</code>'s copying
 <li><strong>A handle</strong> (<code>rmp::Handle</code>, <code>rmp::Ref</code>) checks a slot and
 a generation number before it hands you the object: two loads and a compare, in exchange for never
 reading an object that was destroyed.</li>
+<li><strong><code>obj.get&lt;B&gt;()</code></strong> looks for a behavior by type among the few an
+object carries. Keep the result in a local if you ask for it many times in one hook.</li>
 <li><strong>An action by name</strong> (<code>rmp::input::pressed("jump")</code>) is a lookup in a
 small table, so the same name works for a key, a button and a touch.</li>
 </ul>
@@ -101,6 +103,18 @@ Fast objects use a swept test, so they cannot pass through a wall between two fr
 in one arena reserved once; every string the UI is given in a frame goes into a bump arena that is
 reset at the next <code>begin()</code>. A menu redrawn every frame makes no heap allocation. Fonts
 are baked once per size, and a glyph is added to the atlas only the first time a text uses it.</p>
+
+<h3 id="clock">One clock</h3>
+
+<p>The framework reads the time once per frame and hands the same <code>delta</code> to every scene,
+object and UI animation. Nothing asks the operating system for the time again in the middle of a
+frame.</p>
+
+<h3 id="watch">Hot reload that costs a bool</h3>
+
+<p>In a debug build on the desktop, the files a game asked to watch are checked at most every
+0.25 s, by size and time; their bytes are read only when one of those moved. Asking
+<code>changed()</code> every frame reads a flag.</p>
 
 <h2 id="binary">The binary</h2>
 

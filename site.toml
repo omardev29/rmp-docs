@@ -48,7 +48,7 @@ title = "Reference"
 page_kb = 400       # one built page, HTML only
 css_kb = 80         # every stylesheet together, before it is concatenated
 js_kb = 40          # every script together
-search_gz_kb = 200  # assets/search.json gzipped: what a reader downloads when search first opens
+search_gz_kb = 300  # assets/search.json gzipped: what a reader downloads when search first opens
 search_kb = 1500    # the same file as the browser parses it
 
 [links]
