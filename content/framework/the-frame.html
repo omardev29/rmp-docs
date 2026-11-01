@@ -313,7 +313,7 @@ frame is opened with <code>BeginDrawing()</code> and cleared. The colour is the
 drawn, because everything above it is drawn over it; when that is <code>BLANK</code>, the
 default, the clear colour is the UI theme's background.</p>
 
-<p data-fw-grep="src/rmp/scene.cpp::const Camera2D camera = scene\.camera\.raylib\(\);[\s\S]*?if \(clip\) BeginScissorMode\(clip-&gt;x, clip-&gt;y, clip-&gt;width, clip-&gt;height\);\s+if \(window\) BeginMode2D\(camera\);\s+scene\.map\.draw\(\);\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);\s+if \(clip\) EndScissorMode\(\);[\s\S]*?set_pass_camera\(camera\);[\s\S]*?scene\._draw\(\);">Then
+<p data-fw-grep="src/rmp/scene.cpp::const Camera2D camera = scene\.camera\.raylib\(\);[\s\S]*?if \(clip\) BeginScissorMode\(clip-&gt;x, clip-&gt;y, clip-&gt;width, clip-&gt;height\);\s+if \(window\) \{\s+BeginMode2D\(camera\);[\s\S]*?scene\.map\.draw\(rmp::tilemap::detail::visible_area\([\s\S]*?\}\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);\s+if \(clip\) EndScissorMode\(\);[\s\S]*?set_pass_camera\(camera\);[\s\S]*?scene\._draw\(\);">Then
 the scenes draw, bottom up, from the lowest one the stack shows
 (<a href="ref:rmp::Scene::draws_below"><code>draws_below</code></a>). Each one, in this order:</p>
 
@@ -324,7 +324,8 @@ follows is drawn in world units — fitted to the window the way
 letterboxes, the world is also cut to the game's area, so the bars around it keep the clear
 colour.</li>
 <li><strong>The map</strong>, under everything, because it is the level the objects stand
-on.</li>
+on — only the tiles that reach into what the camera shows
+(<a href="/manual/modules/tilemaps.html">Tilemaps</a>).</li>
 <li><strong>The objects</strong> that are alive and visible, sorted by
 <a href="ref:rmp::Object::layer"><code>layer</code></a> and, within a layer, in the order they
 were spawned. Each one draws its sprite, or its shape when it has no sprite, then its behaviors'

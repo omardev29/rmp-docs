@@ -12,6 +12,7 @@
 "games/05_endless_runner" = { play = true }
 "games/06_tetris" = { play = true }
 "games/07_platformer" = { play = true }
+"games/08_dungeon" = { play = true }
 "ui/01_menu" = { play = true }
 "ui/02_layout" = { play = true }
 "ui/03_clay_direct" = { play = true }

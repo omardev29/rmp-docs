@@ -85,7 +85,7 @@ is <a href="/examples/games/07_platformer.html">the platformer</a>'s camera. Wor
 the window every frame, from <code>GetScreenHeight()</code>, is the stretch's job already: under
 <code>letterbox</code> or <code>expand</code> it would be done twice, and the world drawn too big.</p>
 
-<p data-fw-grep="src/rmp/scene.cpp::if \(clip\) BeginScissorMode\(clip-&gt;x, clip-&gt;y, clip-&gt;width, clip-&gt;height\);\s+if \(window\) BeginMode2D\(camera\);\s+scene\.map\.draw\(\);\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);\s+if \(clip\) EndScissorMode\(\);">Under
+<p data-fw-grep="src/rmp/scene.cpp::if \(clip\) BeginScissorMode\(clip-&gt;x, clip-&gt;y, clip-&gt;width, clip-&gt;height\);\s+if \(window\) \{\s+BeginMode2D\(camera\);[\s\S]*?scene\.map\.draw\(rmp::tilemap::detail::visible_area\([\s\S]*?\}\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);\s+if \(clip\) EndScissorMode\(\);">Under
 <code>letterbox</code> the map and the objects are cut to the game's area, so the bars keep the clear
 colour whatever stands past the edge of the design, and a pointer on a bar is outside the world. The
 scene's own <code>_draw()</code> is not cut: the interface lays itself out inside the area on its

@@ -1,6 +1,6 @@
 <!--
 title: Behaviors
-description: A behavior is a plain struct that makes an object move or act a certain way: adding, reading and removing them, the catalogue in rmp::behavior, and writing your own.
+description: A behavior is a plain struct that makes an object move or act a certain way: adding, reading, pausing and removing them, the catalogue in rmp::behavior, configuring them from the editor, and writing your own.
 order: 50
 -->
 <h1>Behaviors</h1>
@@ -56,6 +56,8 @@ and one of the framework's are the same kind of thing, added, read and removed t
 <tr><td><a href="ref:rmp::Object::get"><code>get&lt;B&gt;()</code></a></td><td>The object's <code>B</code>, as an <a href="ref:rmp::Ref"><code>rmp::Ref</code></a>: empty when it has none.</td></tr>
 <tr><td><a href="ref:rmp::Object::has"><code>has&lt;B&gt;()</code></a></td><td>Whether it has one.</td></tr>
 <tr><td><a href="ref:rmp::Object::remove"><code>remove&lt;B&gt;()</code></a></td><td>Takes it off, running its <code>_end</code> if it has one.</td></tr>
+<tr><td><a href="ref:rmp::Object::enable"><code>enable&lt;B&gt;(on)</code></a></td><td>Pauses it with <code>false</code> and resumes it with <code>true</code>, keeping its fields and its <code>ours</code>.</td></tr>
+<tr><td><a href="ref:rmp::Object::enabled"><code>enabled&lt;B&gt;()</code></a></td><td>Whether it has one and it is not paused.</td></tr>
 </tbody>
 </table>
 
@@ -83,6 +85,21 @@ never what anybody means, and <code>get()</code> could only ever return one of t
 <code>_ready</code> at once and its first <code>_update</code> on the next frame. One removed from
 inside an <code>_update</code> — its own included, which is what a one-shot effect does — is taken off
 without costing any other behavior its turn in that frame.</p>
+
+<p id="enable">A paused behavior gets no hooks — no <code>_update</code>, <code>_late_update</code>,
+<code>_draw</code> or <code>_collision</code> — until it is enabled again; it still gets its
+<code>_end</code> when it is removed or the object dies. It is how one behavior takes over from
+another for a while without either losing where it was: a <code>Chase</code> pauses the
+<code>Patrol</code> it interrupts, and a <code>StateMachine</code>'s states say which behaviors run
+while each is on. Pausing a behavior the object has not got does nothing, and adding one again
+replaces it with an enabled one.</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;guard = spawn({ .size = { 16, 16 } });
+guard.add&lt;rmp::behavior::Patrol&gt;();
+guard.enable&lt;rmp::behavior::Patrol&gt;(false);   // stands still, and remembers where it was going
+if (!guard.enabled&lt;rmp::behavior::Patrol&gt;()) guard.enable&lt;rmp::behavior::Patrol&gt;();
+</pre>
 
 <p>When the object is destroyed, its own <code>_end()</code> runs first and then each behavior's
 <code>_end</code>, while everything the object owns is still there.</p>
@@ -159,9 +176,16 @@ the way you pushed it; a <code>Follow</code> chases the handle you give it; and 
 behaviors read the input actions you name, or the standard ones when you name none —
 <a href="/examples/input/01_actions.html">the actions example</a> shows how one is defined.</p>
 
-<p>Some things are deliberately not in the catalogue, because they are already in it: a patrol is a
-<code>Tween</code> of a position with <code>ping_pong</code> on, a magnet is a <code>Follow</code>,
-and dragging is an object's <a href="ref:rmp::Object::on_drag"><code>on_drag</code></a>.</p>
+<p>The catalogue is the pieces a game would otherwise write again: moving like a character
+(<code>TopDown</code>, <code>Platformer</code>, <code>Runner</code>), moving on its own
+(<code>Ball</code>, <code>Projectile</code>, <code>Follow</code>, <code>Tween</code>,
+<code>Patrol</code>, <code>Orbit</code>, <code>Pathfind</code>, <code>Chase</code>), the places and
+things a level is made of (<code>Area</code>, <code>Hitbox</code>, <code>Collectible</code>,
+<code>Shooter</code>, <code>Spawner</code>, <code>Timer</code>, <code>Lifespan</code>,
+<code>Health</code>), and the rest (<code>GridSnap</code>, <code>Parallax</code>,
+<code>Animator</code>, <code>Draggable</code>, <code>StateMachine</code>). A Tetris piece, a
+formation of invaders and a paddle are not in it: each of those is a game with another name on
+it.</p>
 
 <h2>The catalogue</h2>
 
@@ -274,7 +298,9 @@ shot.add&lt;rmp::behavior::Projectile&gt;({ .speed = 600 });
 <p><a href="ref:rmp::behavior::Projectile"><code>Projectile</code></a> travels the way it was pushed,
 at <code>speed</code> — or at whatever velocity it was given, when <code>speed</code> is 0 — and is
 destroyed when it leaves its bounds and, with <code>destroy_on_hit</code>, when it touches anything it
-collides with. Which things those are is its layers' business.</p>
+collides with. Which things those are is its layers' business. With <code>destroy_on_wall</code> it
+is destroyed too when its centre is in a solid cell of the map, which an object that is not
+<code>solid</code> otherwise passes through.</p>
 
 <h3>Follow</h3>
 
@@ -425,8 +451,333 @@ the starting <code>hp</code> unless set, and does nothing after death.</p>
 <a href="/manual/core/collision.html#layers-and-masks">collision layers</a> whose touch costs
 <code>damage_on_hit</code> points, so contact damage is one field instead of an <code>if</code> at the
 top of every <code>_collision()</code>. A <code>Health</code> with nothing in <code>hurt_by</code> is a
-counter that only <code>damage()</code> reduces. <a href="/examples/games/04_top_down.html">The top-down
+counter that only <code>damage()</code> reduces. An object that carries a <a href="#hitbox"><code>Hitbox</code></a>
+is never counted by <code>hurt_by</code>: the Hitbox decides, so one touch never costs twice. <a href="/examples/games/04_top_down.html">The top-down
 game</a> gives its player a <code>TopDown</code> and a <code>Health</code> hurt by the enemies.</p>
+
+<h3 id="area">Area</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="namespace layer { constexpr unsigned PLAYER = 1u &lt;&lt; 0; }">
+auto &amp;door = spawn({ .position = { 400, 200 }, .size = { 32, 48 } });
+door.collision_layer = 0;
+door.collision_mask = layer::PLAYER;
+door.add&lt;rmp::behavior::Area&gt;({
+    .on_enter = [](rmp::Object &amp;, rmp::Object &amp;who) { TraceLog(LOG_INFO, "welcome"); (void)who; },
+    .on_exit = [](rmp::Object &amp;, rmp::Object &amp;) { TraceLog(LOG_INFO, "goodbye"); },
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Area"><code>Area</code></a> is a region that says who comes and
+goes: a trigger, a door's sensor, a pit, a shop counter. It sees exactly what its object collides
+with — its collider and its <a href="/manual/core/collision.html#layers-and-masks">layers</a> — and
+whether the object is <code>solid</code> is the object's business (a trigger is not, the default).
+Each moment is told with the area and the other object:</p>
+
+<table>
+<thead><tr><th>Callback</th><th>When</th></tr></thead>
+<tbody>
+<tr><td><code>on_enter</code></td><td>The first frame the other touches it.</td></tr>
+<tr><td><code>on_stay</code></td><td>Every frame after that it still does.</td></tr>
+<tr><td><code>on_exit</code></td><td>The frame after the first one it no longer does.</td></tr>
+<tr><td><code>on_inside</code></td><td>Its collider is wholly inside the area's, from a frame it was not.</td></tr>
+<tr><td><code>on_outside</code></td><td>It is no longer wholly inside: part of it is out, or it left. A jump from wholly inside to gone is <code>on_outside</code> and then <code>on_exit</code>.</td></tr>
+</tbody>
+</table>
+
+<p><code>overlapping()</code> is who touched it in the last collision pass, as
+<a href="ref:rmp::Handle">handles</a>, and <code>contains(other)</code> asks about one object. An
+object destroyed while it touches the area leaves <code>overlapping()</code> and is told nothing:
+it is gone, and there is no object to hand over.</p>
+
+<h3 id="hitbox">Hitbox</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="namespace layer { constexpr unsigned PLAYER = 1u &lt;&lt; 0, TRAP = 1u &lt;&lt; 3; }">
+auto &amp;spikes = spawn({ .position = { 300, 300 }, .size = { 32, 8 } });
+spikes.collision_layer = layer::TRAP;
+spikes.add&lt;rmp::behavior::Hitbox&gt;({ .damage = 1, .hits = layer::PLAYER, .knockback = 250 });
+</pre>
+
+<p><a href="ref:rmp::behavior::Hitbox"><code>Hitbox</code></a> is what hurts: a sword's swing, a
+spike, a bullet, an explosion. On touching an object with a <code>Health</code> on one of the layers
+it <code>hits</code>, it calls that Health's <code>damage()</code> — the invulnerable window,
+<code>on_damage</code> and the one death all apply — and pushes it away by <code>knockback</code>
+(an impulse, away from the hitbox). <code>destroy_on_hit</code> discards it after its first hit,
+landed or not, which is a bullet; <code>once_per_target</code> hits each object once at most, which
+is one swing of a sword; <code>on_hit</code> is told the hitbox and who it hurt, when the damage
+landed.</p>
+
+<p>A Hitbox decides for itself, so a Health's <code>hurt_by</code> does not count an object that has
+one: one touch never costs twice. <code>hurt_by</code> is the quick way for plain contact damage; a
+Hitbox is the way when the damage, the push or the rule belongs to what hurts.</p>
+
+<h3 id="collectible">Collectible</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="namespace layer { constexpr unsigned PLAYER = 1u &lt;&lt; 0; } static int coins = 0;">
+auto &amp;coin = spawn({ .position = { 200, 200 }, .shape = rmp::circle(5) });
+coin.add&lt;rmp::behavior::Collectible&gt;({
+    .collected_by = layer::PLAYER,
+    .sound = "coin",
+    .magnet = 40,
+    .on_collect = [](rmp::Object &amp;, rmp::Object &amp;) { ++coins; },
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Collectible"><code>Collectible</code></a> is a coin, a key, a heart.
+Touched by an object on a layer of <code>collected_by</code>, it calls <code>on_collect</code> once,
+plays <code>sound</code> through <a href="/manual/modules/audio.html"><code>rmp::audio</code></a>,
+stops colliding, and vanishes — it rises, grows and fades for <code>vanish_seconds</code> — before it
+is destroyed. Within <code>magnet</code> units of a collector it flies to it at
+<code>magnet_speed</code> first. What a pickup is worth is the game's: <code>on_collect</code> is
+where it counts, and there is no counter of the framework's to keep in step with yours.
+<code>collected()</code> says whether it has been picked up.</p>
+
+<h3 id="shooter">Shooter</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static rmp::Handle&lt;rmp::Object&gt; player_handle;">
+auto &amp;turret = spawn({ .position = { 400, 120 }, .size = { 16, 16 } });
+turret.add&lt;rmp::behavior::Shooter&gt;({
+    .automatic = true,
+    .every = 1.2f,
+    .target = player_handle,
+    .range = 220,
+    .speed = 180,
+    .count = 3,
+    .spread = 30,
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Shooter"><code>Shooter</code></a> fires: while its
+<code>action</code> is held, on its own every <code>every</code> seconds with
+<code>automatic</code>, or at a <code>target</code> — and with a target, only within
+<code>range</code>. Without one it aims along <code>direction</code>, or the way the object faces
+when that is {0, 0}. A volley is <code>count</code> bullets spread over <code>spread</code> degrees
+(360 is all around, evenly), and <code>rotate_per_shot</code> turns the whole pattern after each
+volley, which is how a spiral is made. <code>fire()</code> fires now if <code>every</code> has passed,
+and <code>shots()</code> counts the volleys.</p>
+
+<p>The bullet is a circle of <code>bullet_radius</code> in <code>bullet_color</code> with a
+<code>Hitbox</code> of <code>damage</code>, a <code>Projectile</code> that ends at a wall or a hit,
+and a <code>Lifespan</code> of <code>bullet_life</code>; it hits the layers of <code>hits</code>, or
+the shooter's own mask less its own layer. Or it is whatever <code>on_shoot</code> makes, handed the
+scene, where it leaves from and its velocity:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;archer = spawn({ .size = { 16, 16 } });
+archer.add&lt;rmp::behavior::Shooter&gt;({
+    .action = "fire",
+    .on_shoot = [](rmp::Scene &amp;s, Vector2 at, Vector2 velocity) {
+        auto &amp;arrow = s.spawn({ .position = at, .size = { 10, 2 }, .velocity = velocity });
+        arrow.add&lt;rmp::behavior::Lifespan&gt;({ .seconds = 1.5f });
+    },
+});
+</pre>
+
+<h3 id="orbit">Orbit</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static rmp::Handle&lt;rmp::Object&gt; player_handle;">
+for (int i = 0; i &lt; 3; ++i) {
+    auto &amp;blade = spawn({ .size = { 6, 6 } });
+    blade.add&lt;rmp::behavior::Orbit&gt;({ .centre = player_handle, .radius = 40,
+                                      .degrees_per_second = 180,
+                                      .face = rmp::behavior::Face::OUTWARD,
+                                      .index = i, .of = 3 });
+}
+</pre>
+
+<p><a href="ref:rmp::behavior::Orbit"><code>Orbit</code></a> circles a <code>centre</code> handle,
+or a <code>point</code> without one, at <code>radius</code>, turning
+<code>degrees_per_second</code> (negative the other way) from <code>angle</code>, where it is now.
+Several on one centre spread evenly with <code>index</code> and <code>of</code>, and
+<code>face</code> turns each to look at the centre or away from it. It runs after everything has
+moved, so the centre's movement this frame is already in.</p>
+
+<h3 id="animator">Animator</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static bool dashing = false;">
+auto &amp;hero = spawn({ .size = { 16, 16 } });
+hero.sprite.sheet = rmp::assets::load_sheet("hero.aseprite");
+hero.add&lt;rmp::behavior::Animator&gt;({ .run = "walk" });
+hero.get&lt;rmp::behavior::Animator&gt;()-&gt;rules.push_back(
+    { .tag = "dash", .when = [](rmp::Object &amp;) { return dashing; } });
+</pre>
+
+<p><a href="ref:rmp::behavior::Animator"><code>Animator</code></a> plays the tag that fits what the
+object is doing: <code>die</code> once its <code>Health</code> is dead (once, not looped),
+<code>hurt</code> while it is invulnerable after a hit, <code>jump</code> and <code>fall</code> in the
+air (with gravity), <code>run</code> while it moves faster than <code>moving_at</code> and
+<code>idle</code> while it does not — and with <code>flip</code> it sets <code>flip_x</code> while it
+moves left, so the art faces right. The names are fields: the tags of your .aseprite. A tag the sheet
+lacks is skipped for the next that fits, and without a sheet only <code>flip_x</code> is set. Its
+<code>rules</code> are asked first, in order: an
+<a href="ref:rmp::behavior::AnimationRule"><code>AnimationRule</code></a> is a <code>tag</code> and a
+<code>when</code>. <code>playing()</code> is the tag it chose last.</p>
+
+<h3 id="draggable">Draggable</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;slot = spawn({ .position = { 500, 300 }, .size = { 40, 40 } });
+slot.add&lt;rmp::behavior::Area&gt;();
+
+auto &amp;gem = spawn({ .position = { 200, 300 }, .shape = rmp::circle(8) });
+gem.add&lt;rmp::behavior::Draggable&gt;({
+    .on_drop = [](rmp::Object &amp;, rmp::Object &amp;) { TraceLog(LOG_INFO, "socketed"); },
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Draggable"><code>Draggable</code></a> is picked up with the pointer
+and put down somewhere: an inventory, a puzzle piece, a card. It takes the object's
+<code>on_drag</code>. Let go over an object with an <code>Area</code> — on a layer of
+<code>drop_on</code>, and <code>accepts</code> saying yes — it is dropped there:
+<code>on_drop</code>, and put on its centre with <code>centre_on_drop</code>. Anywhere else,
+<code>on_reject</code>, and back where it was picked up with <code>return_if_rejected</code> — or
+it stays, snapped to <code>snap</code>, and with <code>throwable</code> keeps the pointer's speed
+and slides to a stop at <code>friction</code>. <code>bounds</code> keeps it inside a rectangle,
+<code>on_pick</code> is told the first time it moves, <code>held()</code> says whether the pointer has
+it, and <code>drop()</code> lets go of it as the pointer would.
+<code>accepts</code> is an <a href="ref:rmp::Condition"><code>rmp::Condition</code></a>: a callback
+that answers, and an empty one answers no.</p>
+
+<h3 id="patrol">Patrol</h3>
+
+<pre data-lang="cpp" data-harness="scene">
+auto &amp;guard = spawn({ .position = { 100, 100 }, .size = { 16, 16 } });
+guard.add&lt;rmp::behavior::Patrol&gt;({
+    .waypoints = { { 100, 100 }, { 300, 100 }, { 300, 220 } },
+    .speed = 60,
+    .wait = 0.5f,
+    .ping_pong = true,
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Patrol"><code>Patrol</code></a> goes from waypoint to waypoint — round
+in a loop, or back and forth with <code>ping_pong</code> — waiting <code>wait</code> seconds at each;
+<code>heading_for()</code> is the one it is going to. Waypoints are for what flies or walks
+top-down: it moves straight to each, on both axes. With no waypoints it walks the floor instead,
+left and right at <code>speed</code>, turning at a wall, at anything that stops it, and, with
+<code>turn_at_ledges</code>, before a drop — a platformer's goomba, with gravity the object's own.
+The way it goes sets <code>flip_x</code>, and its sheet plays <code>walk</code> and
+<code>idle</code> when it has them, unless the object has an <code>Animator</code>, which then
+chooses.</p>
+
+<h3 id="pathfind">Pathfind</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static rmp::Handle&lt;rmp::Object&gt; player_handle;">
+auto &amp;rat = spawn({ .size = { 10, 10 } });
+rat.add&lt;rmp::behavior::Pathfind&gt;({ .target = player_handle, .speed = 90, .clearance = 5 });
+</pre>
+
+<p><a href="ref:rmp::behavior::Pathfind"><code>Pathfind</code></a> walks to a <code>target</code>,
+or to a <code>goal</code> point without one, around the map's walls: it asks
+<code>rmp::find_path()</code> again every <code>repath_every</code> seconds while it walks and
+follows the way at <code>speed</code>, on both axes. With neither it leaves the velocity to whoever
+else moves the object. <code>path()</code> is the cells still ahead, the last one the goal;
+<code>arrived()</code> says it is there, or that there is no way. A <code>Chase</code> on the same
+object steers it.</p>
+
+<p><a href="ref:rmp::find_path"><code>rmp::find_path(map, from, to)</code></a> is the search itself,
+for a game that wants the way without walking it: A* over the map's cells, around its solid ones,
+eight directions — or four, with <code>.diagonal = false</code> — and a diagonal step never cuts a
+solid cell's corner. <code>.clearance</code> keeps that far from every wall: half the walker's
+width. The answer is the centres of the cells to walk through, ending on <code>to</code> itself and
+without <code>from</code>; it is empty when there is no way, when either end is outside the map or
+in a wall, and for a map with no cells.</p>
+
+<pre data-lang="cpp" data-harness="scene">
+const auto way = rmp::find_path(map, { 40, 40 }, { 400, 300 }, { .diagonal = false });
+if (way.empty()) TraceLog(LOG_INFO, "walled in");
+</pre>
+
+<h3 id="chase">Chase</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static rmp::Handle&lt;rmp::Object&gt; player_handle;">
+auto &amp;hound = spawn({ .position = { 300, 200 }, .size = { 14, 14 } });
+hound.add&lt;rmp::behavior::Patrol&gt;({ .waypoints = { { 300, 200 }, { 420, 200 } } });
+hound.add&lt;rmp::behavior::Pathfind&gt;();
+hound.add&lt;rmp::behavior::Chase&gt;({
+    .target = player_handle,
+    .speed = 110,
+    .sight = 160,
+    .fov = 120,
+    .on_spot = [](rmp::Object &amp;, rmp::Object &amp;) { TraceLog(LOG_INFO, "there you are"); },
+});
+</pre>
+
+<p><a href="ref:rmp::behavior::Chase"><code>Chase</code></a> sees a target and goes after it. It
+sees it within <code>sight</code> units (0 is any distance), inside a cone of <code>fov</code>
+degrees around the way it faces, and — with <code>line_of_sight</code> — when no solid map cell
+stands between them. While it chases, a <code>Patrol</code> on the same object is paused (with
+<a href="#enable"><code>enable&lt;Patrol&gt;(false)</code></a>) and a <code>Pathfind</code>, when
+there is one, finds the way; without one it runs straight at the target, stopping within
+<code>stop_distance</code>. After <code>lose_after</code> seconds without seeing it, it gives up:
+<code>on_lose</code>, back to where it started with <code>return_home</code>, and the patrol resumes.
+<code>chasing()</code> and <code>sees()</code> say where it is.</p>
+
+<h3 id="statemachine">StateMachine</h3>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static rmp::Handle&lt;rmp::Object&gt; player_handle;">
+auto &amp;boss = spawn({ .size = { 32, 32 } });
+boss.add&lt;rmp::behavior::Pathfind&gt;({ .target = player_handle });
+boss.add&lt;rmp::behavior::Shooter&gt;({ .automatic = true, .count = 8, .spread = 360 });
+
+rmp::behavior::StateMachine mind;
+mind.states.push_back({ .name = "hunt", .enables = rmp::behavior::kinds&lt;rmp::behavior::Pathfind&gt;() });
+mind.states.push_back({ .name = "volley",
+                        .on_enter = [](rmp::Object &amp;self) { self.velocity = {}; },
+                        .enables = rmp::behavior::kinds&lt;rmp::behavior::Shooter&gt;() });
+mind.transitions.push_back({ .from = "hunt", .to = "volley", .when = [](rmp::Object &amp;self) {
+    return self.get&lt;rmp::behavior::StateMachine&gt;()-&gt;seconds_in_state() &gt; 3;
+} });
+mind.transitions.push_back({ .from = "volley", .to = "hunt", .when = [](rmp::Object &amp;self) {
+    return self.get&lt;rmp::behavior::StateMachine&gt;()-&gt;seconds_in_state() &gt; 2;
+} });
+boss.add(std::move(mind));
+</pre>
+
+<p><a href="ref:rmp::behavior::StateMachine"><code>StateMachine</code></a> is named states and the
+moves between them: an enemy that idles, patrols, chases and flees; a boss's phases. A
+<a href="ref:rmp::behavior::State"><code>State</code></a> has a <code>name</code>,
+<code>on_enter</code>, <code>on_update</code> (handed the delta) and <code>on_exit</code>, and
+<code>enables</code>: the behaviors that run while it is on, written
+<code>rmp::behavior::kinds&lt;Patrol, Animator&gt;()</code>. Every behavior some state names is paused
+in the states that do not name it. It starts in <code>initial</code> (the first state when that is
+empty) at its first update, and every frame asks its
+<a href="ref:rmp::behavior::Transition"><code>transitions</code></a> in order: the first whose
+<code>from</code> matches (empty is any state) and whose <code>when</code> says yes is taken.
+<code>go("name")</code> moves by name at its next update, <code>state()</code> is the state it is in
+and <code>seconds_in_state()</code> how long it has been. A name it does not have is said once and
+changes nothing.</p>
+
+<h2 id="from-the-editor">From the editor</h2>
+
+<p>The behaviors a level designer places — <code>Patrol</code>, <code>Chase</code>,
+<code>Orbit</code>, <code>Shooter</code>, <code>Hitbox</code>, <code>Collectible</code> — read
+their fields from an entity of the map with <code>B::from(const MapObject &amp;)</code>, which takes
+each field the entity has by the name below and leaves the rest at their defaults. Put the fields on
+the entity in LDtk (or as custom properties in Tiled), and the factory is one line:</p>
+
+<pre data-lang="cpp" data-harness="scene">
+map.on_object("Bat", [](rmp::Scene &amp;s, const rmp::MapObject &amp;o) {
+    auto &amp;bat = s.spawn({ .position = o.position, .size = { 12, 8 } });
+    bat.add(rmp::behavior::Patrol::from(o));
+});
+</pre>
+
+<table>
+<thead><tr><th>Behavior</th><th>Fields it reads</th></tr></thead>
+<tbody>
+<tr><td><code>Patrol</code></td><td><code>path</code> (Array&lt;Point&gt;; the entity's own position is the first waypoint), <code>speed</code>, <code>wait</code>, <code>ping_pong</code></td></tr>
+<tr><td><code>Chase</code></td><td><code>speed</code>, <code>sight</code>, <code>fov</code></td></tr>
+<tr><td><code>Orbit</code></td><td><code>radius</code>, <code>speed</code> (degrees_per_second), <code>angle</code></td></tr>
+<tr><td><code>Shooter</code></td><td><code>every</code>, <code>speed</code>, <code>count</code>, <code>spread</code>, <code>rotate</code> (rotate_per_shot), <code>range</code></td></tr>
+<tr><td><code>Hitbox</code></td><td><code>damage</code>, <code>knockback</code></td></tr>
+<tr><td><code>Collectible</code></td><td><code>magnet</code></td></tr>
+</tbody>
+</table>
+
+<p>What is not a number — a target, a callback, a sound — the factory sets, as anything it would
+set on a behavior of its own. <a href="/examples/games/08_dungeon.html">The dungeon</a> is built
+this way: every monster, trap and pickup is an entity with these fields, and its code is which
+behaviors each one carries.</p>
 
 <h2>Writing your own</h2>
 

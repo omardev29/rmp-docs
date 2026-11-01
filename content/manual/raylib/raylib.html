@@ -74,7 +74,7 @@ everything.</li>
 <code>replace</code>, <code>pop</code> — are applied.</li>
 </ol>
 
-<p data-fw-grep="src/rmp/scene.cpp::if \(window\) BeginMode2D\(camera\);\s+scene\.map\.draw\(\);\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);[\s\S]*?scene\._draw\(\);">That
+<p data-fw-grep="src/rmp/scene.cpp::if \(window\) \{\s+BeginMode2D\(camera\);[\s\S]*?scene\.map\.draw\(rmp::tilemap::detail::visible_area\([\s\S]*?\}\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);[\s\S]*?scene\._draw\(\);">That
 fourth step is why a HUD drawn in a scene's <code>_draw()</code> stays put while the camera moves:
 the camera is closed before <code>_draw()</code> is called, and it is the reason the
 <a href="/manual/core/scenes.html">scene</a> hooks say which space they draw in.</p>
