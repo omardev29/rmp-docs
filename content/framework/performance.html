@@ -1,0 +1,151 @@
+<!--
+title: Performance
+description: What the framework costs over raylib, what it saves, and how it compares with raylib and OpenGL by hand.
+order: 55
+-->
+<h1>Performance</h1>
+
+<p class="lede">The framework sits on raylib and draws everything through it, so a frame can never
+be faster than raylib makes it. What the framework decides is how much it adds on top, and how
+much work it saves the game from doing at all. This page goes through both: the abstractions that
+cost nothing, the few that cost a function call, the places where the framework does
+<em>less</em> work than a hand-written raylib game would, and where OpenGL by hand still wins.</p>
+
+<h2 id="principle">The rule: you pay for what you use</h2>
+
+<p>"Zero-cost abstraction" means two things here, and the framework holds both.</p>
+
+<ul>
+<li><strong>What you do not use costs nothing.</strong> The framework is a static library compiled
+with <code>-ffunction-sections -fdata-sections</code> and linked with <code>--gc-sections</code>
+and link-time optimisation in release. The linker takes only the objects something references and
+throws away every function nobody calls. A game that never touches <code>rmp::ui</code> ships no
+UI code; a game that never loads an Aseprite file ships no Aseprite reader. The strongest form of
+the rule is <a href="/framework/architecture.html">"a 2D game pays nothing for 3D"</a>: not one
+byte of the 3D renderer, the physics or raylib's model loaders reaches a 2D binary.</li>
+<li><strong>What you use costs about what you would have written yourself.</strong> A helper is
+not worth having if writing the raylib calls by hand would be faster. Where an abstraction does
+cost something, it is one indirect call or one lookup, said below.</li>
+</ul>
+
+<h2 id="free">What compiles to nothing</h2>
+
+<table>
+<thead><tr><th>Abstraction</th><th>What the compiler makes of it</th></tr></thead>
+<tbody>
+<tr><td>Options structs with designated initialisers (<code>{ .speed = 320 }</code>)</td>
+<td>A plain struct built on the stack. No builder, no map of names, no allocation.</td></tr>
+<tr><td>The math types (<code>Vector2</code> and friends from raylib-cpp, the operators of
+<code>rmp/math.h</code>)</td>
+<td>Header-only and inline: <code>a + b * delta</code> is the same instructions as
+<code>Vector2Add(a, Vector2Scale(b, delta))</code>.</td></tr>
+<tr><td>RAII ownership (<code>rmp::Texture</code>, <code>rmp::Sound</code>, the scenes and
+objects)</td>
+<td>A destructor that calls the <code>Unload*</code> you would have called. No reference
+counting, no garbage collector, no pause.</td></tr>
+<tr><td>No exceptions</td>
+<td>No unwinding tables on the hot path, no <code>try</code> anywhere in the library: a failure is
+a return value, a report once, or a default.
+<a href="/framework/why/no-exceptions.html">No exceptions</a> says why.</td></tr>
+<tr><td>Behaviors that leave out a hook</td>
+<td>Hooks are found at compile time with <code>requires</code>. A behavior with no
+<code>_draw</code> has a null entry in its table of hooks, and the frame never calls it.</td></tr>
+<tr><td>Hot reload in a release, or off the desktop</td>
+<td><code>changed()</code> is a constant <code>false</code>; no file is ever watched.</td></tr>
+<tr><td>Configuration</td>
+<td>The <code>.toml</code> becomes <code>#define</code>s at configure time
+(<a href="/framework/config-pipeline.html">the config pipeline</a>). Nothing is parsed when the
+game starts.</td></tr>
+</tbody>
+</table>
+
+<h2 id="cheap">What costs a call, and why it is worth it</h2>
+
+<ul>
+<li><strong>A behavior's hook</strong> is one indirect call through a table of function pointers
+built for its type at compile time. That is the price of a virtual function, without a base class
+or a vtable pointer in the behavior. A hook the behavior does not define is not called at all.</li>
+<li><strong><code>rmp::Callback</code></strong>, what every <code>on_click</code> and
+<code>on_hit</code> is, is one call through a function pointer over the lambda you gave it. It is
+move-only on purpose, so it carries none of <code>std::function</code>'s copying machinery.</li>
+<li><strong>A handle</strong> (<code>rmp::Handle</code>, <code>rmp::Ref</code>) checks a slot and
+a generation number before it hands you the object: two loads and a compare, in exchange for never
+reading an object that was destroyed.</li>
+<li><strong>An action by name</strong> (<code>rmp::input::pressed("jump")</code>) is a lookup in a
+small table, so the same name works for a key, a button and a touch.</li>
+</ul>
+
+<h2 id="less">Where the framework does less work than a hand-written game</h2>
+
+<h3 id="map">The map draws only what the camera sees</h3>
+
+<p>A naïve tilemap draws every tile every frame. <code>Scene</code> hands
+<code>Tilemap::draw()</code> the camera's view, and only the tiles inside it are drawn: LDtk layers
+through chunks of 16×16 cells, Tiled layers through their range of cells. Nothing is baked into a
+render texture, so the map stays exact at any zoom and costs no video memory. Measured on a 400×400
+map: <strong>87 ms a frame drawn whole, 0.25 ms culled</strong>, with the same pixels
+(<code>ui_render_test</code> checks that). See <a href="/manual/modules/tilemaps.html">Tilemaps</a>.</p>
+
+<h3 id="collisions">Collisions: a grid, and no tile colliders</h3>
+
+<p>Objects go through a uniform grid sized to the objects themselves, so each one is tested only
+against its neighbours instead of against everything (the O(n²) a beginner writes). The map's
+solid tiles are never turned into colliders: when the map is read, every source of solidity is
+folded into one table, and an object is moved in steps of at most half a cell and pushed out by
+bisection against that table. A map of any size adds the same few lookups per moving object.
+Fast objects use a swept test, so they cannot pass through a wall between two frames.</p>
+
+<h3 id="ui">The UI allocates nothing per frame</h3>
+
+<p><code>rmp::ui</code> is immediate mode on top of Clay, a layout engine written in C. Clay works
+in one arena reserved once; every string the UI is given in a frame goes into a bump arena that is
+reset at the next <code>begin()</code>. A menu redrawn every frame makes no heap allocation. Fonts
+are baked once per size, and a glyph is added to the atlas only the first time a text uses it.</p>
+
+<h2 id="binary">The binary</h2>
+
+<ul>
+<li><strong>Size is budgeted.</strong> Every binary a release ships has a line in
+<code>tools/size_budget.txt</code>, and CI fails a growth of more than 10 % that nobody wrote
+down. A 2D game's release is a few hundred KB packed.</li>
+<li><strong>No iostreams in the library.</strong> One <code>std::ifstream</code> once added 19 % to
+the Linux binary and 18 % to the web's <code>.wasm</code>; files are read with C's stdio
+now, and a check refuses an iostream header in the library.</li>
+<li><strong>Hardening costs little.</strong> FORTIFY_SOURCE, the stack protector and stack-clash
+protection together cost 2.0 % of the binary. PIE costs 5.5 % and stays on for security reasons
+(<a href="/framework/security.html">Security</a> says why).</li>
+<li><strong>Debug is slow on purpose.</strong> The framework's own Debug runs under ASan and UBSan,
+about three times slower. A game's Debug has no sanitizers unless the game asks for them, and
+on x86-64 Linux it can compile its C with tcc to build in a fraction of the time. Measure
+performance in a release.</li>
+</ul>
+
+<h2 id="compare">Compared with raylib and with OpenGL</h2>
+
+<table>
+<thead><tr><th></th><th>raylib by hand</th><th>rmp</th><th>OpenGL by hand</th></tr></thead>
+<tbody>
+<tr><td>Draw calls</td><td>rlgl batches quads and lines into one buffer and flushes when the
+texture, shader or blend mode changes</td><td>The same: every sprite, tile, shape and UI element is
+drawn through raylib, so it batches exactly as raylib does</td><td>Whatever you build: instancing,
+persistent mapped buffers, texture arrays, bindless</td></tr>
+<tr><td>Per-object cost</td><td>Your loop</td><td>Your loop, plus one indirect call per hook a
+behavior defines</td><td>Your loop</td></tr>
+<tr><td>Large maps</td><td>Every tile unless you cull by hand</td><td>Culled to the camera</td>
+<td>Usually one draw per chunk from static buffers</td></tr>
+<tr><td>Collisions</td><td>Pairs you test yourself</td><td>Grid broad phase and a solid table for
+the map</td><td>Not its business</td></tr>
+<tr><td>UI</td><td>raygui, redrawn by hand</td><td>Clay layout, no allocation per frame</td>
+<td>Not its business</td></tr>
+</tbody>
+</table>
+
+<p>In practice: for a 2D game a frame costs what the same game written well in raylib costs, often
+less, because the culling, the grid and the arenas are things a game written in a hurry does not
+have. The framework never adds a draw call of its own beyond what it draws for you.</p>
+
+<p>Where OpenGL by hand still wins: tens of thousands of moving sprites, particles that should live
+on the GPU, or a renderer built around instancing. raylib's batch rebuilds its vertex buffer on the
+CPU every frame, and the framework does not change that. A game that needs more can still call
+rlgl or OpenGL directly inside an object's <code>_draw()</code>: the framework does not stand in
+the way of either.</p>
