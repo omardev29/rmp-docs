@@ -160,7 +160,7 @@ never called.</p>
 
 <h3 id="delta">The delta</h3>
 
-<p data-fw-grep="src/rmp/clock.cpp::float clamped\(const float raw\) \{ return clamp_delta\(raw, RMP_MAX_DELTA\); \}[\s\S]*?if \(ceiling &amp;&amp; raw &gt; max\) return max;[\s\S]*?if \(!\(raw &gt;= 0\) \|\| !std::isfinite\(raw\)\) return 0\.0f;[\s\S]*?float step_delta\(\) \{\s+timing\.last = clamped\(raw_delta\(\)\);">The
+<p data-fw-grep="src/rmp/clock.cpp::float clamped\(const float raw\) \{ return clamp_delta\(raw, RMP_MAX_DELTA\); \}[\s\S]*?if \(ceiling &amp;&amp; raw &gt; max\) return max;[\s\S]*?if \(!\(raw &gt;= 0\) \|\| !std::isfinite\(raw\)\) return 0\.0f;[\s\S]*?float step_delta\(\) \{\s+const float raw = raw_delta\(\);[\s\S]*?timing\.last = still \? 0\.0f : clamped\(raw\);">The
 <code>delta</code> every hook receives is raylib's <code>GetFrameTime()</code> with two corrections:
 a negative reading, or one that is not a number, becomes 0, and a reading longer than
 <a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a> — a
@@ -173,8 +173,10 @@ rest of the frame: the UI animates by it too.
 
 <h2 id="input">1. Input, once</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::void begin_frame\(\) \{\n    rmp::input::detail::begin_frame\(\);">The
-runner samples every input device once, before it calls the frame hook. The keyboard, the mouse —
+<p data-fw-grep="src/rmp/app.cpp::void begin_frame\(\) \{[\s\S]*?begin_pace\(\);[\s\S]*?rmp::input::detail::begin_frame\(\);">The
+runner first asks whether anyone can see the window
+(<a href="#out-of-sight">out of sight</a>, below), and then samples every input device once,
+before it calls the frame hook. The keyboard, the mouse —
 which a touch screen drives too — and the first gamepad are read into one snapshot, and every
 <a href="ref:rmp::input::pressed"><code>pressed</code></a> and
 <a href="ref:rmp::input::just_pressed"><code>just_pressed</code></a> of the frame answers from it.
@@ -192,11 +194,41 @@ exactly once.</p>
 compare against, so it compares against itself: a key already held when the game starts is held,
 not just pressed, and does not fire whatever it is bound to.</p>
 
-<p id="ui-frame" data-fw-grep="src/rmp/app.cpp::void frame\(float delta\) \{[\s\S]*?ui::detail::begin_frame\(\)[\s\S]*?scenes::detail::update\(delta\)[\s\S]*?BeginDrawing\(\)[\s\S]*?ClearBackground\(rmp::scenes::detail::clear_color\(\)\)[\s\S]*?scenes::detail::draw\(\)[\s\S]*?SmokeTest_CaptureFrame\(\)[\s\S]*?EndDrawing\(\)[\s\S]*?ui::detail::end_frame\(\)[\s\S]*?scenes::detail::apply_pending\(\)">The
+<p id="ui-frame" data-fw-grep="src/rmp/app.cpp::void draw_frame\(\) \{[\s\S]*?BeginDrawing\(\)[\s\S]*?ClearBackground\(rmp::scenes::detail::clear_color\(\)\)[\s\S]*?scenes::detail::draw\(\)[\s\S]*?SmokeTest_CaptureFrame\(\)[\s\S]*?EndDrawing\(\)[\s\S]*?ui::detail::end_frame\(\)[\s\S]*?void frame\(float delta\) \{[\s\S]*?ui::detail::begin_frame\(\)[\s\S]*?if \(now\.update\) rmp::scenes::detail::update\(delta\);[\s\S]*?draw_frame\(\);[\s\S]*?scenes::detail::apply_pending\(\)">The
 frame proper is <code>frame(float delta)</code> in <code>src/rmp/app.cpp</code>, the function
 <code>RMP_GAME</code>'s frame hook calls, and the first thing it does is open the UI's frame, which
 advances the UI's animations by this frame's <code>delta</code>, and its scroll, once, however many
 scenes draw a menu.</p>
+
+<h3 id="out-of-sight">The window out of sight</h3>
+
+<p data-fw-grep="src/rmp/clock.cpp::void begin_pace\(\) \{[\s\S]*?const bool pause = pacing\.pause_unfocused &amp;&amp; \(!w\.focused \|\| w\.minimized\);[\s\S]*?pacing\.now = Pace\{ \.update = !pause, \.draw = !w\.minimized \};">Before
+anything else, <code>begin_pace()</code> in <code>src/rmp/clock.cpp</code> asks raylib whether the
+window is minimized and whether it has the focus, and decides two things for the frame: whether
+the scenes move, and whether anything is drawn.</p>
+
+<ul>
+<li><strong>Minimized</strong> (on the desktop): the scenes move, the music plays and the clock
+runs, but nothing is drawn, and the loop sleeps a thirtieth of a second instead of waiting for a
+vsync nobody sees. The world does not stop because its player looked away.</li>
+<li><strong>Out of focus, with
+<a href="/reference/configuration.html#window-pause_unfocused"><code>[window] pause_unfocused</code></a></strong>
+(off by default): the scenes stop, the clock stops, every sound and the music pause, and the last
+picture is drawn again ten times a second. The top scene hears
+<a href="ref:rmp::Scene::_suspend"><code>_suspend()</code></a> when it starts and
+<a href="ref:rmp::Scene::_resume"><code>_resume()</code></a> when the window has its focus back,
+and the first <code>delta</code> after it is 0, so nothing jumps by the time the player was away.
+Minimized under it is a pause too.</li>
+</ul>
+
+<p data-fw-grep="src/rmp/app.cpp::Minimized: nothing to see, so nothing drawn and no vsync to wait[\s\S]*?PollInputEvents\(\);">There
+is no <code>#if</code> for it: a browser stops calling a hidden tab's frame and a phone stops a
+backgrounded app on their own, and raylib says a window there is never minimized. A frame that
+draws nothing still polls the window's events itself, because raylib does that in
+<code>EndDrawing()</code>, which does not run: without it the window would never hear it was
+restored. And the frames raylib did not time are timed by the clock itself, so the first one
+drawn after a minimized stretch is not handed the whole stretch as its <code>delta</code>.
+<a href="/framework/performance.html#asleep">Performance</a> has what it saves.</p>
 
 <h2 id="update">2. Update</h2>
 
@@ -346,7 +378,7 @@ pointer finds objects in: the last thing drawn is the first thing clicked.</p>
 be hovered or pressed: the HUD under an open pause menu is visible and inert, and neither scene
 wrote a line about it.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::void frame\(float delta\) \{[\s\S]*?BeginDrawing\(\);[\s\S]*?rmp::ui::detail::begin_backdrop\(\);\s+ClearBackground\(rmp::scenes::detail::clear_color\(\)\);\s+rmp::scenes::detail::draw\(\);[\s\S]*?rmp::ui::detail::finish_backdrop\(\);\s+rmp::ui::detail::draw_notices\(\);">Two
+<p data-fw-grep="src/rmp/app.cpp::void draw_frame\(\) \{[\s\S]*?BeginDrawing\(\);[\s\S]*?rmp::ui::detail::begin_backdrop\(\);\s+ClearBackground\(rmp::scenes::detail::clear_color\(\)\);\s+rmp::scenes::detail::draw\(\);[\s\S]*?rmp::ui::detail::finish_backdrop\(\);\s+rmp::ui::detail::draw_notices\(\);">Two
 things of the interface's go around the scenes. When the last frame's
 <a href="ref:rmp::ui::overlay"><code>overlay()</code></a> asked for a blur, this frame is drawn
 into a texture from <code>BeginDrawing()</code> on, clear included, so that the overlay has the

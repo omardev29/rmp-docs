@@ -1,0 +1,355 @@
+<!--
+title: Dialogue
+description: Conversations written in Yarn Spinner 3 and run by rmp::Dialogue — lines, choices, variables, commands and functions from the game — shown by three presenters of the interface or by your own code, started by a Talker, translated like every other text, and compiled when the game loads or when it is built.
+order: 76
+-->
+<h1>Dialogue</h1>
+
+<p class="lede">A conversation is written in a <code>.yarn</code> file in <code>resources/</code>, in
+<a href="https://docs.yarnspinner.dev/">Yarn Spinner</a>'s language, version 3, and run by an
+<a href="ref:rmp::Dialogue"><code>rmp::Dialogue</code></a>. The framework compiles it with a
+compiler of its own — a port to C++ of Yarn Spinner's official one — and steps it with a small
+machine: the game shows the lines, offers the choices and answers the commands. Drawing it is a
+separate piece, so the same conversation can be a box at the bottom of the screen, a bubble over
+a head, a visual novel's stage, or something the game draws itself. The header is
+<code>rmp/dialogue.h</code>.</p>
+
+<h2 id="a-script">A script</h2>
+
+<pre data-lang="text">
+title: Start
+---
+&lt;&lt;declare $gold = 10&gt;&gt;
+&lt;&lt;declare $met = false&gt;&gt;
+Mika: Welcome, traveller. #line:welcome #mood:happy
+&lt;&lt;if $met&gt;&gt;
+    Mika: Back again? #line:again
+&lt;&lt;else&gt;&gt;
+    Mika: I have not seen you before. #line:first
+    &lt;&lt;set $met = true&gt;&gt;
+&lt;&lt;endif&gt;&gt;
+Mika: What will it be? You have {$gold} gold. #line:ask
+-&gt; Buy a [wave]potion[/wave] &lt;&lt;if $gold &gt;= 5&gt;&gt; #line:buy
+    &lt;&lt;set $gold -= 5&gt;&gt;
+    &lt;&lt;give_item potion&gt;&gt;
+    Mika: A fine choice. #line:fine
+-&gt; Ask about the tower #line:tower
+    &lt;&lt;jump Tower&gt;&gt;
+-&gt; Leave #line:leave
+    Mika: Safe travels. #line:safe
+===
+title: Tower
+---
+Mika: [shake]Nobody[/shake] comes back from the tower. #line:nobody
+&lt;&lt;if visited("Tower") == false and has_key()&gt;&gt;
+    Mika: But you have the key... #line:key
+&lt;&lt;endif&gt;&gt;
+===
+</pre>
+
+<p>Each node has a <code>title:</code> and its body between <code>---</code> and <code>===</code>.
+<code>Mika:</code> names the speaker. <code>{$gold}</code> is the value of a variable, written
+into the line. <code>[wave]…[/wave]</code> is markup the presenters draw. <code>#line:</code> is the
+line's id, the key of its translation, and any other <code>#tag</code> travels with the line for
+the game to read. <code>-&gt;</code> lines are the choices, each with its body indented under it;
+<code>&lt;&lt;if …&gt;&gt;</code> after a choice makes it available only when the condition holds.
+<code>give_item</code> is a command of the game's, and <code>has_key()</code> a function of the
+game's. Yarn's own documentation is the reference for the language; what the framework runs of it
+is <a href="#what-runs">below</a>.</p>
+
+<h2 id="running">Running it yourself</h2>
+
+<pre data-lang="cpp" data-harness="function" data-given="int picked = 0; void say(const std::string &amp;who, const std::string &amp;what); void offer(const std::string &amp;choice, bool available);">
+rmp::Dialogue talk = rmp::assets::load_dialogue("wizard.yarn");
+talk.start("Start");
+
+// every frame:
+if (talk.has_line()) {
+    say(talk.line().speaker, talk.line().text); // "Mika", "Welcome, traveller."
+    if (rmp::input::just_pressed("accept")) talk.advance();
+} else if (talk.has_options()) {
+    for (const rmp::DialogueOption &o : talk.options()) offer(o.text, o.available);
+    if (rmp::input::just_pressed("accept")) talk.choose(picked);
+}
+</pre>
+
+<p><a href="ref:rmp::assets::load_dialogue"><code>rmp::assets::load_dialogue()</code></a> reads and
+compiles the file. A script with a mistake gives a Dialogue that is not
+<a href="ref:rmp::Dialogue::loaded"><code>loaded()</code></a>, and
+<a href="ref:rmp::Dialogue::errors"><code>errors()</code></a> says what is wrong, a line each, as
+<code>file:line:column: what</code>; they are in the log too and, in a debug build, on screen.
+Several files compiled together can jump from one to another:</p>
+
+<pre data-lang="cpp" data-harness="function">
+const std::string_view files[] = { "town.yarn", "school.yarn", "endings.yarn" };
+rmp::Dialogue story = rmp::assets::load_dialogue(files);
+</pre>
+
+<p>At any moment the dialogue is waiting for one of three things, or for nothing once it has
+finished:</p>
+
+<ul>
+<li><strong>A line</strong> — <a href="ref:rmp::Dialogue::has_line"><code>has_line()</code></a>.
+<a href="ref:rmp::Dialogue::line"><code>line()</code></a> is an
+<a href="ref:rmp::DialogueLine"><code>rmp::DialogueLine</code></a>: its <code>id</code>, the
+<code>speaker</code>, the <code>text</code> in the current language with the speaker and the markup
+taken out, where the <code>markup</code> was, and its <code>tags</code> without the
+<code>#</code>. <a href="ref:rmp::Dialogue::advance"><code>advance()</code></a> goes on.</li>
+<li><strong>A choice</strong> — <a href="ref:rmp::Dialogue::has_options"><code>has_options()</code></a>.
+<a href="ref:rmp::Dialogue::options"><code>options()</code></a> are
+<a href="ref:rmp::DialogueOption"><code>rmp::DialogueOption</code></a>s, and one whose condition
+failed is there with <code>available</code> false: show it greyed out, or not at all.
+<a href="ref:rmp::Dialogue::choose"><code>choose(i)</code></a> takes the one at that place.</li>
+<li><strong>A command nobody handles</strong> — <a href="ref:rmp::Dialogue::has_command"><code>has_command()</code></a>
+and its text in <a href="ref:rmp::Dialogue::command"><code>command()</code></a>; the game does
+what it says and calls <code>advance()</code>. A command with a handler (below) never waits.</li>
+</ul>
+
+<p><a href="ref:rmp::Dialogue::running"><code>running()</code></a> is true from
+<a href="ref:rmp::Dialogue::start"><code>start()</code></a> to the end of the conversation or a
+<a href="ref:rmp::Dialogue::stop"><code>stop()</code></a>, and
+<a href="ref:rmp::Dialogue::node"><code>node()</code></a> is the node it is in. A Dialogue is moved,
+never copied: keep it in the scene that shows it, or in a <a href="#talker">Talker</a>.</p>
+
+<h2 id="commands-and-functions">The game's commands and functions</h2>
+
+<p>A script asks the game to do something with a command, <code>&lt;&lt;give_item potion&gt;&gt;</code>,
+and asks it a question with a function in an expression, <code>has_key()</code>. The game answers
+both by name:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk; void give(const std::string &amp;item); bool player_has_key();">
+talk.on_command("give_item", [](std::span&lt;const std::string&gt; args) {
+    if (!args.empty()) give(args[0]);
+});
+talk.on_function("has_key", [](rmp::DialogueValue &amp;result,
+                               std::span&lt;const rmp::DialogueValue&gt; /*args*/) {
+    result = player_has_key();
+});
+</pre>
+
+<p>A command's arguments are its words after the name, with <code>{expressions}</code> filled. A
+function writes its answer into the value it is handed; its arguments are
+<a href="ref:rmp::DialogueValue"><code>rmp::DialogueValue</code></a>s, each a number, a string or a
+bool, read with <code>as_number()</code>, <code>as_string()</code> and <code>as_bool()</code>.</p>
+
+<p>Yarn's own functions are built in: <code>visited()</code>, <code>visited_count()</code>,
+<code>random()</code>, <code>random_range()</code>, <code>dice()</code>, <code>round()</code>,
+<code>round_places()</code>, <code>floor()</code>, <code>ceil()</code>, <code>inc()</code>,
+<code>dec()</code>, <code>decimal()</code>, <code>int()</code>, <code>format_invariant()</code> and
+the conversions <code>string()</code>, <code>number()</code> and <code>bool()</code>. Their random
+numbers come from <a href="/manual/modules/random.html"><code>rmp::random</code></a>, so a
+scripted run of the game is reproducible.</p>
+
+<h2 id="variables">Variables, and saving them</h2>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk;">
+talk.set_variable("$gold", 25);                 // before the script reads it
+const float gold = talk.variable("$gold").as_number();
+const int times = talk.visits("Tower");         // what visited_count("Tower") says
+
+rmp::Value state;
+talk.save(state);                               // variables, visits, what was seen once
+rmp::Value saved;
+saved["talk"] = state;
+rmp::save::write("slot1", saved);
+
+// and when the game starts again:
+rmp::save::read("slot1", saved);
+talk.load(saved["talk"]);
+</pre>
+
+<p><a href="ref:rmp::Dialogue::save"><code>save()</code></a> puts everything the conversation
+remembers — its variables, how many times each node was visited, which <code>&lt;&lt;once&gt;&gt;</code>
+blocks and line groups have been seen — into an <a href="ref:rmp::Value"><code>rmp::Value</code></a>,
+and <a href="ref:rmp::Dialogue::load"><code>load()</code></a> takes it back, so a conversation
+picks up where the player left it with <a href="/manual/modules/saving.html">rmp::save</a>. A
+variable a script declares has the type of its declaration; one the game sets has the type of
+the value.</p>
+
+<h2 id="presenters">Showing it: the presenters</h2>
+
+<p>The interface has three widgets that show a Dialogue, each kept in the scene and shown every
+frame between <a href="ref:rmp::ui::begin"><code>begin()</code></a> and
+<a href="ref:rmp::ui::end"><code>end()</code></a>. They type the line out, offer the choices as
+buttons and take the player's answer from the keyboard, a gamepad, the mouse or a finger:</p>
+
+<pre data-lang="cpp" data-harness="members" data-given="static rmp::Texture mika_face;">
+rmp::Dialogue talk = rmp::assets::load_dialogue("wizard.yarn");
+rmp::ui::DialogueBox box{
+    .portraits = { { .speaker = "Mika", .picture = mika_face } },
+    .flow = { .letters_per_second = 40, .blip = "blip" },
+};
+
+void _ready() override { talk.start(); }
+
+void _draw() override {
+    rmp::ui::begin();
+    if (!box.show(talk)) { /* the conversation is over */ }
+    rmp::ui::end();
+}
+</pre>
+
+<table>
+<thead><tr><th>Presenter</th><th>Looks like</th><th>The world under it</th></tr></thead>
+<tbody>
+<tr><td><a href="ref:rmp::ui::DialogueBox"><code>DialogueBox</code></a></td><td>A box along the
+bottom of the screen, the speaker's portrait and name beside the line, the choices under it: the
+classic RPG.</td><td>waits (<code>pauses_world</code>)</td></tr>
+<tr><td><a href="ref:rmp::ui::DialogueBubble"><code>DialogueBubble</code></a></td><td>A bubble over
+the speaker's head, drawn in the world with <a href="ref:rmp::ui::at"><code>rmp::ui::at()</code></a>
+over the object each <code>BubbleSpeaker</code> names, the choices in it.</td><td>goes on</td></tr>
+<tr><td><a href="ref:rmp::ui::DialogueStage"><code>DialogueStage</code></a></td><td>A visual novel:
+big portraits of who is on stage, the one speaking in front and the others dimmed, the line in a
+box under them.</td><td>waits</td></tr>
+</tbody>
+</table>
+
+<p><code>pauses_world</code> is a hint for whoever starts the conversation: a box or a stage is
+shown in a scene pushed over the game, which then stops under it; a bubble is drawn in the game's
+own scene, which goes on. <code>show()</code> returns true while the dialogue has something to
+show.</p>
+
+<h3 id="flow">How a line is typed and goes on</h3>
+
+<p>Every presenter has a <a href="ref:rmp::ui::DialogueFlow"><code>flow</code></a>:</p>
+
+<ul>
+<li><code>letters_per_second</code> types the line out, 0 shows it whole. A press while it types
+shows the rest at once; the next press goes on. In the line, <code>[speed=2]…[/speed]</code>
+types those letters twice as fast and <code>[pause=0.4/]</code> waits 0.4 s there.</li>
+<li><code>blip</code> is a sound played as the letters appear, every <code>blip_every</code>
+letters: the voice of a character who has no recorded voice.</li>
+<li><code>voices</code> plays a recorded line: the sound named <code>voices</code> plus the line's
+id, <code>"vo/"</code> and <code>#line:welcome</code> playing <code>vo/welcome</code>.</li>
+<li><code>auto_advance</code> goes on by itself so many seconds after a line is whole, and
+<code>skip_seen</code> lets a line already read go by at once.</li>
+<li><code>choice_seconds</code> gives a choice a timer, drawn as a bar, and when it runs out
+<code>default_choice</code> is taken — or the first available one, when that one is not.</li>
+</ul>
+
+<p><a href="ref:rmp::ui::Portrait"><code>portraits</code></a> are chosen by speaker and by the
+line's <code>#mood:</code> tag, falling back to the speaker's picture for no mood; a picture is any
+<a href="/manual/modules/ui-style.html">Picture</a> — a texture, an atlas region, an Aseprite
+sprite or slice, a nine-slice. <code>style</code>, <code>name_style</code> and
+<code>choice_style</code> dress the box, the name plate and each choice with the same
+<a href="ref:rmp::ui::Style"><code>Style</code></a>s as every other widget, so a game's theme and
+skins apply. The lines read so far are in <code>ours.history</code>, and a
+<code>DialogueBox</code>'s <code>toggle_history()</code> shows them in place of the box.</p>
+
+<h3 id="rich-text">Rich text</h3>
+
+<p>The markup of a line is drawn a letter at a time by
+<a href="ref:rmp::ui::rich_text"><code>rmp::ui::rich_text()</code></a>, which a game can use for
+any text of its own:</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::rich_text("A [wave]strange[/wave] [color=#ffcc00]light[/color], [b]now[/b]!");
+rmp::ui::rich_text("[rainbow]You win![/rainbow]", { .width = 300, .visible = 4 });
+</pre>
+
+<p><code>[b]</code> is bold, <code>[color=#rrggbb]</code> or <code>[color=red]</code> a colour,
+<code>[size=30]</code> a size in design units, and <code>[wave]</code>, <code>[shake]</code> and
+<code>[rainbow]</code> move or colour their letters by the interface's clock.
+<code>visible</code> shows that many letters and holds the rest back: a typewriter counts it up
+to <a href="ref:rmp::ui::rich_text_length"><code>rich_text_length()</code></a>.</p>
+
+<h2 id="talker">Someone to talk to: Talker</h2>
+
+<p><a href="ref:rmp::behavior::Talker"><code>rmp::behavior::Talker</code></a> is the behavior of a
+character who talks. When the player is within <code>range</code> and presses <code>action</code>
+— or as soon as it arrives, with an empty action — it loads its <code>dialogue</code>, starts it
+at <code>node</code> and hands it to <code>on_talk</code>, where the game shows it:</p>
+
+<pre data-lang="cpp" data-harness="scene" data-given="static rmp::Handle&lt;rmp::Object&gt; player_handle; struct Talking : rmp::Scene { explicit Talking(rmp::Dialogue &amp;d) : talk(d) {} rmp::Dialogue &amp;talk; };">
+auto &amp;mika = spawn({ .position = { 200, 120 }, .size = { 16, 16 } });
+mika.add&lt;rmp::behavior::Talker&gt;({
+    .dialogue = "wizard.yarn",
+    .node = "Start",
+    .range = 32,
+    .player = player_handle,
+    .on_talk = [](rmp::Dialogue &amp;talk) { rmp::Scene::push&lt;Talking&gt;(talk); },
+});
+</pre>
+
+<p>The scene it pushes keeps a reference to the conversation, shows it with a box or a stage, and
+pops itself when <code>show()</code> returns false. The Dialogue belongs to the Talker, so its
+variables and visits stay with the character between conversations, and <code>once</code> makes
+it talk a single time. <code>in_range()</code> is for the prompt over its head — "Talk", with
+<code>rmp::ui::at()</code> — and <code>talking()</code> says a conversation is running. A level
+designer places one in LDtk with the fields <code>dialogue</code>, <code>node</code>,
+<code>range</code> and <code>once</code>, read by <code>Talker::from()</code>, as every
+<a href="/manual/core/behaviors.html">behavior from the editor</a>.</p>
+
+<h2 id="translation">Translated like every other text</h2>
+
+<p>A line's <code>#line:</code> id is the key of its translation in the game's
+<a href="/manual/modules/localization.html#tables">tables</a>, as <code>line:welcome</code>, and
+the <code>.yarn</code> holds the text in <a href="/reference/configuration.html#lang-default"><code>[lang]
+default</code></a>. <code>rmp text scan</code> adds every line that has an id to
+<code>lang.tsv</code> in <code>resources/</code> with its text in the default language's column, so a translator
+fills one table for the menus and the dialogue alike, and <code>rmp text check</code> holds both to
+<code>[lang] languages</code>. The text is written the way Yarn Spinner's own string table writes
+it: the speaker and the markup stay, the tags and an option's condition go, and each
+<code>{expression}</code> becomes a number in order, <code>{0}</code>, <code>{1}</code>, which the
+machine fills with its value. <code>Mika: What will it be? You have {0} gold.</code> in the English
+column is <code>Mika: ¿Qué será? Tienes {0} de oro.</code> in the Spanish one, and
+<code>check</code> fails on a translation that lost a <code>{0}</code>.</p>
+
+<p>Give every line an id. A line without one gets an id made from its file, its node and its place
+in the node, which changes when a line is added above it; it is shown, but it cannot be translated
+reliably and <code>rmp text scan</code> leaves it out.</p>
+
+<h2 id="build">Compiled when it loads, or when the game is built</h2>
+
+<p><a href="/reference/configuration.html#dialogue-build"><code>[dialogue] build</code></a> says
+where a script is compiled:</p>
+
+<table>
+<thead><tr><th><code>build =</code></th><th>The scripts are compiled</th></tr></thead>
+<tbody>
+<tr><td><code>"runtime"</code></td><td>when the game loads them, from <code>resources/</code>: edit a
+line and load it again.</td></tr>
+<tr><td><code>"embedded"</code></td><td>when the game is built: the host tool <code>rmp_yarnc</code>
+compiles every <code>.yarn</code> of <code>resources/</code> into the executable, so the game reads
+no script and compiles nothing when it starts, and a script with a mistake fails the build with
+its file, line and column. On the desktop; a cross build — Android, iOS, the web — compiles at
+runtime.</td></tr>
+<tr><td><code>"auto"</code> (the default)</td><td>at runtime in a debug build, embedded in a
+release.</td></tr>
+</tbody>
+</table>
+
+<p>The machine is the same in both, so a script behaves the same, and
+<code>load_dialogue()</code> is the same call: it looks in the embedded scripts first.</p>
+
+<h2 id="ink">Written in Ink</h2>
+
+<pre data-lang="shell">
+python3 tools/ink_to_yarn.py story.ink resources/story.yarn
+</pre>
+
+<p>A story written in <a href="https://www.inklestudios.com/ink/">Ink</a> is converted into a
+<code>.yarn</code> file, from its source: knots and stitches become nodes, <code>VAR</code>
+declarations, <code>~</code> assignments, choices with their conditions and their once-only
+<code>*</code>, diverts, <code>-&gt; END</code> and simple conditional text. What Ink has and Yarn
+has not — nested choices, tunnels, threads, lists, functions, sequences, glue — is reported with
+its line number and kept in the output as a comment, so nothing is lost without a word. The
+conversion is done once, by the developer; the game only ever reads Yarn.</p>
+
+<h2 id="what-runs">What of Yarn runs</h2>
+
+<p>The whole of Yarn Spinner 3: nodes and their headers; lines with ids, tags and shadow lines;
+speakers; <code>{expressions}</code> with Yarn's operators; markup, with <code>select</code>,
+<code>plural</code> and <code>ordinal</code> by the current language; options and their
+conditions; line groups (<code>=&gt;</code>) and node groups (<code>when:</code>), chosen by
+saliency (<a href="ref:rmp::Dialogue::set_saliency"><code>set_saliency()</code></a>);
+<code>&lt;&lt;if&gt;&gt;</code>, <code>&lt;&lt;once&gt;&gt;</code>, <code>&lt;&lt;set&gt;&gt;</code> and
+<code>&lt;&lt;declare&gt;&gt;</code> with types, enums and smart variables;
+<code>&lt;&lt;jump&gt;&gt;</code>, <code>&lt;&lt;detour&gt;&gt;</code> and
+<code>&lt;&lt;return&gt;&gt;</code>; visit tracking; and the game's commands and functions. It is
+held to Yarn Spinner's own test cases, which the framework runs as they are: every test plan plays
+step for step, and every script that must not compile does not. What a later Yarn adds and the
+framework does not run yet is listed, with its test, in
+<code>tests/dialogue/yarn_unsupported.txt</code>, which is empty today.
+<a href="/framework/maintaining/dialogue-and-text.html">Maintaining the dialogue</a> is how that is
+kept so.</p>

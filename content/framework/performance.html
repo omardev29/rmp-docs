@@ -116,6 +116,37 @@ frame.</p>
 0.25 s, by size and time; their bytes are read only when one of those moved. Asking
 <code>changed()</code> every frame reads a flag.</p>
 
+<h3 id="asleep">A window nobody sees draws nothing</h3>
+
+<p data-fw-grep="src/rmp/app.cpp::constexpr double MINIMIZED_FRAME = 1\.0 / 30;\s+constexpr double PAUSED_FRAME = 1\.0 / 10;">A
+minimized desktop window is not drawn at all. The world, the music and the clock go on, but the
+loop skips <code>BeginDrawing()</code> and <code>EndDrawing()</code> and sleeps a thirtieth of a
+second a frame instead of waiting for a vsync: a game left minimized on a laptop stops spending
+the GPU and most of a core. With
+<a href="/reference/configuration.html#window-pause_unfocused"><code>[window] pause_unfocused</code></a>
+on, a window without the focus does not even move its scenes: it draws the same picture ten times
+a second and pauses the sound. A browser and a phone do this for a hidden page or app on their
+own, so the framework leaves them to it. <a href="/framework/the-frame.html#out-of-sight">The
+frame</a> has the order of it.</p>
+
+<h3 id="text">A translated text is one lookup</h3>
+
+<p>An <a href="ref:rmp::Text"><code>rmp::Text</code></a> keeps the words the code wrote and is
+translated when it is drawn: one lookup in a hash table of the loaded tables, then the
+placeholders filled. That is what makes
+<a href="ref:rmp::lang::set"><code>rmp::lang::set()</code></a> change every screen at once, with
+nothing to rebuild. A widget's identity is the text's key, never its translation, so changing the
+language costs no layout memory either: the focus and the hover stay where they were.
+<a href="/manual/modules/localization.html">Localization</a> has the rest.</p>
+
+<h3 id="dialogue">A Yarn script is compiled once</h3>
+
+<p>A <code>.yarn</code> file is compiled into instructions when it is loaded, or, in a release on
+the desktop, when the game is built: <code>rmp_yarnc</code> runs over the game's scripts and their
+bytes are compiled into the binary, so the release reads no script and parses nothing. Either way
+a running conversation only steps a small stack machine from one line, choice or command to the
+next. <a href="/manual/modules/dialogue.html#build">Dialogue</a> says how to choose.</p>
+
 <h2 id="binary">The binary</h2>
 
 <ul>
@@ -125,6 +156,16 @@ down. A 2D game's release is a few hundred KB packed.</li>
 <li><strong>No iostreams in the library.</strong> One <code>std::ifstream</code> once added 19 % to
 the Linux binary and 18 % to the web's <code>.wasm</code>; files are read with C's stdio
 now, and a check refuses an iostream header in the library.</li>
+<li><strong>A number in a sentence cost 126 KB once.</strong> A floating-point
+<code>std::to_chars</code> brings libc++'s formatting tables into every static link: the Linux
+release of the demo game was 1,510,904 bytes with it and 1,384,760 without. The framework writes
+a number with <code>printf</code>'s <code>%g</code> at the fewest digits that read back as the
+same number, which gives the same digits <code>to_chars</code> would.</li>
+<li><strong>Android exports only what Java and the system call.</strong> The game is one shared
+library, and a shared library keeps everything it exports. With every symbol exported, a game that
+never loads a dialogue carried the Yarn compiler. The release is compiled with
+<code>-fvisibility=hidden</code> and linked with <code>--gc-sections</code>, and what the system
+looks up by name is marked to stay: the arm64 library went from 3,091,080 bytes to 1,108,688.</li>
 <li><strong>Hardening costs little.</strong> FORTIFY_SOURCE, the stack protector and stack-clash
 protection together cost 2.0 % of the binary. PIE costs 5.5 % and stays on for security reasons
 (<a href="/framework/security.html">Security</a> says why).</li>

@@ -73,6 +73,10 @@ allow = [
   "https://en.cppreference.com/",
   "https://google.github.io/styleguide/",
   "https://clang.llvm.org/extra/clang-tidy/",
+  "https://docs.yarnspinner.dev/",
+  "https://github.com/YarnSpinnerTool/",
+  "https://cldr.unicode.org/",
+  "https://www.inklestudios.com/ink/",
 ]
 
 [counted]

@@ -58,7 +58,7 @@ each thing the module promises.</p>
 selects the tests of its module by — <code>tests/mutation/floors/random.txt</code> runs
 <code>unit_test -ts=random</code>.</p>
 
-<p data-fw-grep="tests/clock_test.cpp::#include &quot;doctest\.h&quot;\n\n#include &quot;\.\./src/rmp/internal\.h&quot;\n#include &quot;\.\./src/rmp/ui/internal\.h&quot;\n\n#include &lt;rmp/app\.h&gt;">A
+<p data-fw-grep="tests/clock_test.cpp::#include &quot;doctest\.h&quot;\n\n(#include &quot;\.\./src/rmp/[a-z_/]+\.h&quot;\n)+\n#include &lt;rmp/app\.h&gt;">A
 test that needs the framework's own internals — the seams below — includes their headers by a
 relative path after doctest and before the public headers, as <code>tests/clock_test.cpp</code>
 does: <code>#include "../src/rmp/internal.h"</code> for the clock and the reports, and

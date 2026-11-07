@@ -32,7 +32,7 @@ read it.</p>
 
 <h2 id="where">Where the clock is read</h2>
 
-<p data-fw-grep="src/rmp/clock.cpp::float raw_delta\(\) \{ return timing\.fixed &gt; 0 \? timing\.fixed : GetFrameTime\(\); \}[\s\S]*?float step_delta\(\) \{\s+timing\.last = clamped\(raw_delta\(\)\);">Once
+<p data-fw-grep="src/rmp/clock.cpp::float raw_delta\(\) \{\s+if \(timing\.fixed &gt; 0\) return timing\.fixed;[\s\S]*?return GetFrameTime\(\);\s+\}[\s\S]*?float step_delta\(\) \{\s+const float raw = raw_delta\(\);">Once
 a frame, in one function of <code>src/rmp/clock.cpp</code>, which asks raylib for the frame time,
 corrects it, remembers it, and hands it to the frame. It is the one call to
 <code>GetFrameTime()</code> in the framework. Every entry point — the desktop loop, the browser's

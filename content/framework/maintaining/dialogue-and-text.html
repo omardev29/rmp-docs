@@ -1,0 +1,139 @@
+<!--
+title: The dialogue and the text
+description: How the Yarn Spinner port, its conformance suite, the translation tables and the tools that keep them are maintained: what came from where, what holds them to the original, how a new Yarn release is taken in, and how a language is added.
+order: 55
+-->
+<h1>The dialogue and the text</h1>
+
+<p class="lede">Two parts of the framework follow something outside it: <code>rmp::Dialogue</code>
+follows Yarn Spinner, whose language moves with its releases, and <code>rmp::Text</code> follows
+CLDR's plural rules and the way each platform names its language. This page is what to know to
+keep both true: where each piece came from, what holds it to the original, and what to do when
+the original moves.</p>
+
+<h2 id="port">The Yarn Spinner port</h2>
+
+<p><code>src/rmp/dialogue/</code> is a port to C++ of
+<a href="https://github.com/YarnSpinnerTool/YarnSpinner">Yarn Spinner</a>'s compiler and runtime,
+which are C# and MIT. It is not a copy and not a binding: there is no ANTLR, no protobuf and no
+.NET, the whole of it is the standard library, and nothing in it throws. Its licence row in
+<code>THIRD_PARTY_LICENSES.md</code> points at <code>src/rmp/dialogue/LICENSE-YarnSpinner.md</code>,
+which ships in every game's <code>LICENSES.txt</code>, and
+<code>src/rmp/dialogue/PATCHES.md</code> says, file by file, which C# it follows and what differs:</p>
+
+<table>
+<thead><tr><th>File</th><th>Follows</th></tr></thead>
+<tbody>
+<tr><td><code>src/rmp/dialogue/yarn_parse.cpp</code></td><td>the lexer and parser grammars and the
+indentation lexer — hand-written, a line at a time</td></tr>
+<tr><td><code>src/rmp/dialogue/yarn_compile.cpp</code></td><td>the compiler, the node-group compiler, the code
+generator and the type solver</td></tr>
+<tr><td><code>src/rmp/dialogue/yarn_vm.cpp</code>, <code>src/rmp/dialogue/yarn_value.cpp</code></td><td>the virtual machine, the
+dialogue, the library of functions and the saliency strategies</td></tr>
+<tr><td><code>src/rmp/dialogue/yarn_markup.cpp</code></td><td>the markup parser, with <code>select</code>,
+<code>plural</code> and <code>ordinal</code> by the framework's own CLDR table</td></tr>
+<tr><td><code>src/rmp/dialogue/yarn_bytes.cpp</code></td><td>the compiled program's format: one of ours
+instead of protobuf, for the embedded build</td></tr>
+<tr><td><code>src/rmp/dialogue/dialogue.cpp</code></td><td><code>rmp::Dialogue</code> and
+<code>load_dialogue()</code>: the framework's side, translation included</td></tr>
+</tbody>
+</table>
+
+<p>The one difference in behaviour that is a choice, not a gap: the machine has a budget — a
+hundred thousand instructions between two things it shows, and a detour stack of 256 nodes — so a
+script that loops without ever reaching a line stops with an error instead of hanging the game.
+The case that found it, a node that detours into itself before any line, is in
+<code>tests/dialogue_test.cpp</code>.</p>
+
+<h2 id="conformance">Held to Yarn Spinner's own tests</h2>
+
+<p>Yarn Spinner's test cases are vendored, as they are, in <code>tests/dialogue/yarn/</code>, with
+their licence and the commit they were taken at in <code>tests/dialogue/yarn/COMMIT</code>. A test
+case is a <code>.yarn</code> script and a test plan that says, step by step, what a run of it must
+produce — each line, each set of options, which one is chosen, each command — and the scripts that
+must not compile say so. <code>tests/yarn_plan_test.cpp</code> compiles every one and plays every
+plan; it is part of <code>unit_test</code>, so <code>rmp test</code> runs it.</p>
+
+<p>Every case passes. A case that does not, after a new Yarn release, is listed in
+<code>tests/dialogue/yarn_unsupported.txt</code> with the reason, and the runner holds that list:
+a listed case that passes fails the run until its line is taken out. The list only shrinks, and it
+is empty today.</p>
+
+<h3 id="new-yarn">Taking in a new Yarn release</h3>
+
+<ol>
+<li>Replace <code>tests/dialogue/yarn/</code> with the new release's test cases, and write its
+commit in <code>tests/dialogue/yarn/COMMIT</code>.</li>
+<li>Run <code>rmp test unit</code>. Each failing case names its script and the step where the
+run went another way.</li>
+<li>Read what changed in the C# between the two commits — the grammars, the compiler, the
+machine — and port it to the file of <code>src/rmp/dialogue/</code> that follows it, a test of the
+framework's own for anything the cases do not show.</li>
+<li>Write the difference into <code>src/rmp/dialogue/PATCHES.md</code> and the
+licence notice if it changed. What cannot be ported yet goes in
+<code>tests/dialogue/yarn_unsupported.txt</code>, with why.</li>
+</ol>
+
+<h2 id="other-guards">The other guards</h2>
+
+<ul>
+<li><strong>Properties.</strong> <code>tests/property/dialogue_prop.cpp</code> compiles and plays
+scripts made of random Yarn statements, and requires that nothing crashes and nothing runs
+forever; <code>tests/property/text_prop.cpp</code> does the same for any table, any key and any
+arguments, and holds the number formatting to <code>std::to_chars</code>' digits.</li>
+<li><strong>Fuzzing.</strong> <code>tests/fuzz/yarn.cpp</code> feeds the compiler and the machine
+arbitrary bytes and <code>tests/fuzz/lang_tsv.cpp</code> the table reader; their corpora are
+replayed on every push.</li>
+<li><strong>Mutation.</strong> The modules <code>dialogue</code>, <code>dialogue_ui</code> and
+<code>text</code> of <code>tests/mutation/floors/</code> are measured every week.</li>
+<li><strong>The presenters</strong> are laid out headless in <code>tests/ui_layout_test.cpp</code>
+— typing, choices, timers, moods, the stage, the bubble — and rich text's pixels are read back on
+a GPU in <code>tests/ui_render_test.cpp</code>.</li>
+</ul>
+
+<h2 id="embedded">The embedded build</h2>
+
+<p><code>rmp_yarnc</code> (<code>tools/rmp_yarnc.cpp</code>) is the same compiler built for the
+machine that builds the game. CMake runs it over every <code>.yarn</code> of a game's <code>resources/</code> when
+<a href="/reference/configuration.html#dialogue-build"><code>[dialogue] build</code></a> asks for
+it, and links the bytes it writes into the game. It is not built when cross-compiling, which is why
+Android, iOS and the web compile their scripts at runtime. A change to the compiler is a change to
+both: there is one compiler.</p>
+
+<h2 id="text">The text and its tables</h2>
+
+<p><code>src/rmp/text.cpp</code> is <code>rmp::Text</code> and <code>rmp::lang</code>: the table
+reader, the lookup and its fallback chain, placeholders, the CLDR plural rules and the system
+language of every platform. Three things in it follow the outside world:</p>
+
+<ul>
+<li><strong>The plural rules.</strong> The cardinal rules of the shipped languages are a small
+table in <code>src/rmp/text.cpp</code>, and <code>tools/text_tool.py</code> holds how many forms
+each language has, to check the tables. Adding a language is a line in both, and a case in
+<code>tests/text_test.cpp</code>'s plural rules; a language in neither takes the last form.</li>
+<li><strong>The system language.</strong> One branch per platform — the environment, CoreFoundation,
+<code>GetUserDefaultLocaleName</code>, the native activity's configuration,
+<code>navigator.language</code> — and only CI's matrix compiles them all. The tests set the
+language through a seam, so none depends on the machine's.</li>
+<li><strong>The codes a folder is searched for.</strong> With no <code>[lang] languages</code>, the
+per-language files are looked for under a list of common codes in <code>src/rmp/text.cpp</code>.</li>
+</ul>
+
+<p><code>tools/text_tool.py</code> is <code>rmp text scan</code> and <code>rmp text check</code>:
+a scanner of C++ literals the framework translates and of Yarn line ids, and a checker of the
+tables against <code>[lang] languages</code>. It writes a Yarn line the way Yarn Spinner's own
+string table does, its expressions numbered <code>{0}</code>, <code>{1}</code>, because that is what
+the machine fills. Its tests, <code>tests/text_tool_test.py</code>, plant each mistake the checker
+is for; <code>tools/ink_to_yarn.py</code> has its own in <code>tests/ink_to_yarn_test.py</code>, and
+the story it converts is played by the C++ in <code>tests/dialogue_test.cpp</code>.</p>
+
+<h2 id="numbers">Numbers</h2>
+
+<p>A number written into a text or a line goes through <code>shortest_number()</code>, in
+<code>src/rmp/number_internal.h</code>: the fewest significant digits that read back as the same
+number, laid out as C# lays it out, since Yarn's numbers are C#'s. It does not call a
+floating-point <code>std::to_chars</code> on purpose: that one brings libc++'s formatting tables
+into every static link, and cost the demo game 126 KB on Linux
+(<a href="/framework/performance.html#binary">Performance</a>). The property in
+<code>tests/property/text_prop.cpp</code> holds its digits to <code>to_chars</code>' on any double
+and any float.</p>

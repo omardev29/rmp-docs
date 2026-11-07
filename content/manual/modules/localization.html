@@ -1,0 +1,227 @@
+<!--
+title: Localization
+description: The game in more than one language: every text the framework draws is an rmp::Text, a literal translates itself from the game's tables, values go in placeholders, plurals follow each language's rules, and rmp text keeps the tables in step with the code.
+order: 75
+-->
+<h1>Localization</h1>
+
+<p class="lede">Every text the framework draws is an <a href="ref:rmp::Text"><code>rmp::Text</code></a>.
+A literal you write in the call translates itself: its own words are the key it is looked up by in
+the game's tables, and what the tables do not have is shown as written. So the three-function menu
+is already translatable, without a line of its own:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="void play();">
+rmp::ui::begin();
+if (rmp::ui::button("Play")) play();
+if (rmp::ui::button("Quit")) rmp::app::quit();
+rmp::ui::end();
+</pre>
+
+<p>Add a table with a Spanish column, and a player whose system speaks Spanish sees
+<em>Jugar</em> and <em>Salir</em>. Nothing else changes. The header is
+<code>rmp/text.h</code>, and <code>rmp/ui.h</code> already includes it.</p>
+
+<h2 id="literal-or-runtime">A literal is translated, a runtime string is not</h2>
+
+<p>The difference is the type, not the words. A string literal written in the call
+(<code>"Play"</code>) is a fixed key: translated. A string made while the game runs — a
+<code>std::string</code>, a <code>std::string_view</code>, what <code>TextFormat()</code> returns —
+is shown exactly as it is and never looked up, because it has no key that stays the same from one
+frame to the next:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="int score = 0; std::string player_name;">
+rmp::ui::text("High scores");          // translated
+rmp::ui::text(player_name);            // the player's name, as it is
+rmp::ui::text(TextFormat("%d", score)); // a number, as it is
+</pre>
+
+<p>A literal kept in a <code>std::string_view</code> variable first is a runtime string by then.
+Pass the literal straight to the function, or make the <code>rmp::Text</code> where it is
+written.</p>
+
+<h2 id="placeholders">Values go in placeholders</h2>
+
+<p>A text with a value in it keeps its key fixed by naming the value instead of printing it:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="int score = 0; float seconds = 0;">
+rmp::ui::text(rmp::Text("Score: {score}", { { "score", score } }));
+rmp::ui::text(rmp::Text("{name} wins in {time} s", { { "name", "Ada" }, { "time", seconds } }));
+</pre>
+
+<p>The key is <code>Score: {score}</code>, whatever the score is, and the Spanish column says
+<code>Puntos: {score}</code>. Each <a href="ref:rmp::TextArg"><code>rmp::TextArg</code></a> is a
+name and a number or a text. A whole number is written as one (<code>3</code>, and
+<code>100000000</code> for a double that holds it); any other number is written with the fewest
+digits that read back as the same number (<code>2.5</code>, <code>0.1</code>). A text argument goes
+in as it is, never translated. <code>{{</code> and <code>}}</code> are a brace, and a placeholder
+with no argument of its name stays as written, braces and all, so a missing value is visible.</p>
+
+<p>A widget's identity is its text's key and context, never the translation, and never the
+values: <code>Score: {score}</code> is the same button at every score and in every language, so
+the focus, the hover and a click in progress all survive a score that changes and a language that
+changes.</p>
+
+<h2 id="plurals">Plurals</h2>
+
+<p>When the arguments hold a number, a text can have plural forms, written in one cell with
+<code>|</code> between them, in the order of the language's
+<a href="https://cldr.unicode.org/index/cldr-spec/plural-rules">CLDR plural categories</a>. The
+first number among the arguments chooses:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="int gems = 0;">
+rmp::ui::text(rmp::Text("{count} gem|{count} gems", { { "count", gems } }));
+</pre>
+
+<table>
+<thead><tr><th>Languages</th><th>Forms</th><th>Chosen by</th></tr></thead>
+<tbody>
+<tr><td>English, Spanish, German, Italian, Dutch, the Nordic languages, Greek, Hungarian, Turkish
+and others</td><td><code>one|other</code></td><td>one for exactly 1</td></tr>
+<tr><td>French, Portuguese, Hindi, Bengali, Persian</td><td><code>one|other</code></td><td>one for
+0 and 1</td></tr>
+<tr><td>Russian, Ukrainian, Belarusian</td><td><code>one|few|many|other</code></td><td>1, 21, 31…;
+2–4, 22–24…; the rest of the whole numbers; fractions</td></tr>
+<tr><td>Polish</td><td><code>one|few|many|other</code></td><td>1; 2–4, 22–24…; the rest; fractions</td></tr>
+<tr><td>Czech, Slovak</td><td><code>one|few|many|other</code></td><td>1; 2–4; fractions; the rest</td></tr>
+<tr><td>Japanese, Chinese, Korean, Thai, Vietnamese, Indonesian, Malay and others</td>
+<td><code>other</code></td><td>the one form there is</td></tr>
+</tbody>
+</table>
+
+<p>A language not on the list takes the last form written. A <code>|</code> in a text with no
+number among its arguments is a character like any other. <code>rmp text check</code> fails on a
+cell with the wrong number of forms for its language.</p>
+
+<h2 id="context">The same words, two meanings</h2>
+
+<p>"Open" a door and "Open" a file are one key in English and two words in many languages. A
+<a href="ref:rmp::TextOptions"><code>context</code></a> tells them apart: it is a column of the
+table, and two rows with the same key and different contexts are two texts.</p>
+
+<pre data-lang="cpp" data-harness="function">
+if (rmp::ui::button(rmp::Text("Open", { .context = "door" }))) { /* ... */ }
+if (rmp::ui::button(rmp::Text("Open", { .context = "file" }))) { /* ... */ }
+</pre>
+
+<p>They are two buttons as well: the context is part of the identity.</p>
+
+<h2 id="tables">The tables</h2>
+
+<p>Translations live in <code>resources/</code>, in tab-separated files, and the game can use
+either shape or both; they are merged when the game starts.</p>
+
+<ul>
+<li><strong>One table, a column per language</strong> — <code>lang.tsv</code> in <code>resources/</code>
+(<a href="/reference/configuration.html#lang-file"><code>[lang] file</code></a>). The first row is
+the header, <code>key</code>, <code>context</code>, then one column per language code, and an
+<code>unused</code> column that <code>rmp text scan</code> keeps:
+<pre data-lang="text">
+key	context	en	es	unused
+Play		Play	Jugar
+Open	door	Open	Abrir
+{count} gem|{count} gems		{count} gem|{count} gems	{count} gema|{count} gemas
+language.name		English	Español
+</pre></li>
+<li><strong>One file per language</strong> — <code>es.tsv</code> in a <code>lang</code> folder of <code>resources/</code>
+(<a href="/reference/configuration.html#lang-folder"><code>[lang] folder</code></a>): three
+columns, <code>key</code>, <code>context</code> and the text, the file's name being the language.
+A translator can have one file without seeing the others.</li>
+</ul>
+
+<p>A row starting with <code>#</code> is a comment, a cell may hold <code>\t</code>,
+<code>\n</code> and <code>\\</code> for a tab, a new line and a backslash, and a file written on
+Windows, with CRLF and a byte-order mark, reads the same. The row <code>language.name</code> is the
+language's own name, what a language menu shows. In a debug build on the desktop the tables are
+watched: edit a translation, and the next frame shows it.</p>
+
+<p>With <a href="/reference/configuration.html#lang-languages"><code>[lang] languages</code></a>
+empty, the files of the folder are looked for under the common codes (<code>en</code>,
+<code>es</code>, <code>fr</code>, <code>de</code>, <code>pt-BR</code>, <code>ja</code>,
+<code>zh-TW</code> and the others of the list in <code>src/rmp/text.cpp</code>); a game that ships
+another one names it in the list.</p>
+
+<h2 id="language">Which language</h2>
+
+<p>The game starts in the language the player chose last time, if <a
+href="ref:rmp::lang::set"><code>rmp::lang::set()</code></a> was ever called; otherwise in the
+system's language — the environment on Linux and the BSDs, the preferred languages on macOS and
+iOS, the user's locale on Windows, the device's configuration on Android, the browser's language on
+the web — and otherwise in <a href="/reference/configuration.html#lang-default"><code>[lang]
+default</code></a>. A text is looked up down a chain: <code>es-MX</code>, then <code>es</code>,
+then the default language, then the words the code wrote.</p>
+
+<p>With <code>[lang] languages</code> set, the system's language is taken only when it is one of
+them (or a chain of it reaches one), so a player is never put in a language the game does not
+ship. <a href="/reference/namespaces/rmp-lang.html"><code>rmp::lang</code></a> is the rest:</p>
+
+<pre data-lang="cpp" data-harness="function">
+for (const std::string &code : rmp::lang::available()) {
+    if (rmp::ui::button(rmp::lang::name(code))) rmp::lang::set(code); // "English", "Español"...
+}
+rmp::ui::text(rmp::Text("Language: {name}",
+                        { { "name", rmp::lang::name(rmp::lang::current()) } }));
+</pre>
+
+<p><a href="ref:rmp::lang::set"><code>set()</code></a> changes every screen at once — the next
+frame draws in it, nothing is reloaded — and saves the choice with
+<a href="/manual/modules/saving.html">rmp::save</a>, so the next run starts in it.
+<a href="ref:rmp::lang::available"><code>available()</code></a> is <code>[lang] languages</code> in
+its order, or every column and file the tables have.
+<a href="ref:rmp::lang::translate"><code>translate()</code></a> is the text of a key in the current
+language, for a place that is not the UI's — a window of your own, a texture drawn with raylib.</p>
+
+<h2 id="fonts">A font per language</h2>
+
+<p>The interface bakes the letters a text needs when it first draws them, so any alphabet works
+with a font that has its glyphs — Cyrillic, Greek, Chinese, Japanese, Korean. A language whose
+alphabet the <a href="/reference/configuration.html#ui-font"><code>[ui] font</code></a> lacks gets
+a font of its own:</p>
+
+<pre data-lang="toml">
+[lang]
+languages = ["en", "es", "ja"]
+fonts = { ja = "NotoSansJP.ttf" }
+</pre>
+
+<p>The interface changes to it when the language changes, and back to the <code>[ui]</code> font
+for a language with none. Right-to-left and complex shaping — Arabic, Hebrew, the Indic scripts —
+are not supported: their letters are drawn left to right, one by one.</p>
+
+<h2 id="rmp-text">Keeping the tables in step: rmp text</h2>
+
+<pre data-lang="shell">
+rmp text scan     # add every text the game shows to resources/lang.tsv
+rmp text check    # fail on a text a shipped language lacks, or gets wrong
+</pre>
+
+<p><code>rmp text scan</code> reads the game's <code>src/</code> and <code>include/</code> for every
+literal the framework translates — the first argument of the interface's text functions and of
+<code>rmp::Text</code>, the <code>.text</code>, <code>.placeholder</code> and <code>.items</code>
+of a kept widget, with the context an <code>rmp::Text</code> gives — the <code>#line:</code> ids
+of the game's <a href="/manual/modules/dialogue.html#translation">Yarn scripts</a>, and what a
+debug build drew that the tables lacked. It adds a row for each text that is not there, with the
+words in the default language's column, and keeps every translation. A row nothing uses any more
+is never deleted: it gets an <code>x</code> in its <code>unused</code> column, and the game ignores
+it.</p>
+
+<p>The texts a debug build drew and did not find are written, when the game ends, to
+<code>lang_seen.tsv</code> next to the executable
+(<a href="/reference/configuration.html#lang-collect"><code>[lang] collect</code></a>), and
+<code>scan</code> reads it from <code>build/debug/</code>: a text built in a way the scanner cannot
+see still reaches the table, the first time somebody sees it on screen.</p>
+
+<p><code>rmp text check</code> holds the tables to <code>[lang] languages</code>, or to every
+language they have: a text with no translation, a placeholder a translation lost or invented, a
+plural with the wrong number of forms. Each mistake is a line with the file, the key and the
+language. It is a stage of <code>rmp test</code> and a step of a game's CI, so a release cannot
+ship a language with a hole in it.</p>
+
+<h2 id="what-is-not">What is not translated</h2>
+
+<ul>
+<li>The window's title, <a href="/reference/configuration.html#window-title"><code>[window]
+title</code></a>, which is the game's name.</li>
+<li>Any string made while the game runs, as above.</li>
+<li>Text the game draws with raylib itself (<code>DrawText()</code>); pass it through
+<a href="ref:rmp::lang::translate"><code>rmp::lang::translate()</code></a> first.</li>
+</ul>
