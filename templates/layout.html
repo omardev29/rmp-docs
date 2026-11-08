@@ -39,6 +39,19 @@
 </main>
 <aside class="toc" aria-label="On this page">{{toc}}</aside>
 </div>
+<div class="takeaway">
+<button class="takeaway-toggle" type="button" aria-expanded="false" aria-controls="takeaway-menu"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10M5.5 8.5 10 13l4.5-4.5M4 17h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg><span class="label">Download</span></button>
+<div class="takeaway-menu" id="takeaway-menu" hidden>
+<p class="takeaway-title">As a PDF</p>
+<button class="takeaway-print" type="button">This page</button>
+<a class="takeaway-manual" href="{{root}}print.html">The whole manual</a>
+<p class="takeaway-title">For an AI, as plain text</p>
+<a href="{{root}}{{markdown}}" download>This page (.md)</a>
+<a href="{{root}}rmp-docs-ai.zip" download>Everything, a folder per section (.zip)</a>
+<a href="{{root}}llms-full.txt">Everything in one file (llms-full.txt)</a>
+<a href="{{root}}llms.txt">The index (llms.txt)</a>
+</div>
+</div>
 <dialog id="nav-dialog" class="nav-dialog" aria-label="Navigation">
 <button class="icon-button dialog-close" type="button">Close</button>
 <nav class="sections" aria-label="Sections">{{sections}}</nav>
