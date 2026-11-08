@@ -292,3 +292,67 @@ details.source > summary { cursor: pointer; font-family: var(--font-ui); padding
 details.source > summary small { color: var(--text-muted); margin-left: 0.5rem; }
 .example-card img { display: block; width: 100%; height: auto; margin: -1rem -1.1rem 0.75rem;
                     width: calc(100% + 2.2rem); max-width: none; border-radius: var(--radius) var(--radius) 0 0; }
+
+/* Download, at the bottom right of every page: this page or the whole manual
+   as a PDF (the browser prints it), or as plain text for an AI. */
+.takeaway {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.takeaway-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 14%, transparent);
+}
+.takeaway-toggle svg { width: 18px; height: 18px; }
+.takeaway-toggle:hover, .takeaway-toggle[aria-expanded="true"] { border-color: var(--accent); }
+.takeaway-menu {
+  order: -1;
+  display: flex;
+  flex-direction: column;
+  min-width: 15rem;
+  max-width: calc(100vw - 32px);
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--text) 20%, transparent);
+}
+.takeaway-menu[hidden] { display: none; }
+.takeaway-title {
+  margin: 6px 8px 2px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.takeaway-menu a, .takeaway-menu button {
+  display: block;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.takeaway-menu a:hover, .takeaway-menu button:hover { background: var(--bg-sunken); }
+@media (max-width: 40rem) { .takeaway-toggle .label { display: none; } }

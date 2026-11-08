@@ -148,4 +148,34 @@
       frame.addEventListener("load", function () { frame.contentWindow.focus(); });
     });
   });
+
+  // Download, at the bottom right: the menu, printing this page, and the
+  // whole manual opened ready to print (print.html prints itself with ?print).
+  var take = document.querySelector(".takeaway-toggle");
+  var takeMenu = document.getElementById("takeaway-menu");
+  if (take && takeMenu) {
+    take.addEventListener("click", function () {
+      var open = takeMenu.hidden;
+      takeMenu.hidden = !open;
+      take.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !takeMenu.hidden) {
+        takeMenu.hidden = true;
+        take.setAttribute("aria-expanded", "false");
+        take.focus();
+      }
+    });
+    var printIt = takeMenu.querySelector(".takeaway-print");
+    if (printIt) printIt.addEventListener("click", function () {
+      takeMenu.hidden = true;
+      take.setAttribute("aria-expanded", "false");
+      window.print();
+    });
+    var manual = takeMenu.querySelector(".takeaway-manual");
+    if (manual) manual.addEventListener("click", function (e) {
+      e.preventDefault();
+      window.open(manual.getAttribute("href") + "?print", "_blank");
+    });
+  }
 })();

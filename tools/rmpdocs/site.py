@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import dom, prose
+from . import export as export_mod
 from .checks import Problem
 from .highlight import LANGS, highlight
 from .facts import Facts
@@ -769,6 +770,7 @@ class Site:
             "ref_short": self.ref[:8],
             "source": html.escape(source),
             "shell_class": " single" if not page.section else "",
+            "markdown": html.escape(export_mod.md_path(page.url)),
         }
         out = re.sub(r"\{\{(\w+)\}\}", lambda m: values[m.group(1)], layout)
         return out
@@ -802,6 +804,10 @@ class Site:
         summaries = {e.qualname: (e.kind, prose.first_sentence(e.doc or e.run_doc or e.trailing))
                      for e in self.reference_model.entities()}
         self.search_json = search_index.build(self.pages, self.reference_model.index, summaries)
+        # What a reader takes away: every page as Markdown, llms.txt, the
+        # zip for an AI, the manual in one page to print (export.py). Served
+        # at the root, so the links to them are checked like any other.
+        self.served.update(export_mod.bundle(self))
         if write:
             self.write()
         return self

@@ -242,7 +242,7 @@
 
 @media print {
   .site-header, .sidebar, .toc, .toc-top, .pager, .skip-link, .nav-dialog,
-  .copy-button, .heading-anchor { display: none !important; }
+  .copy-button, .heading-anchor, .takeaway { display: none !important; }
   .shell { display: block; padding: 0; }
   .prose { max-width: none; }
   body { background: #fff; color: #000; font-size: 11pt; }
