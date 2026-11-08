@@ -13,6 +13,7 @@
 "games/06_tetris" = { play = true }
 "games/07_platformer" = { play = true }
 "games/08_dungeon" = { play = true }
+"games/09_after_school" = { play = true }
 "ui/01_menu" = { play = true }
 "ui/02_layout" = { play = true }
 "ui/03_clay_direct" = { play = true }
@@ -22,6 +23,8 @@
 "ui/07_responsive" = { play = true }
 "ui/08_overlay" = { play = true }
 "ui/09_skinned" = { play = true }
+"ui/10_dialogue" = { play = true }
+"ui/11_localization" = { play = true }
 "scenes/01_stack" = { play = true }
 "scenes/02_stretch" = { play = true }
 "input/01_actions" = { play = true }

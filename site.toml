@@ -77,6 +77,8 @@ allow = [
   "https://github.com/YarnSpinnerTool/",
   "https://cldr.unicode.org/",
   "https://www.inklestudios.com/ink/",
+  "https://marketplace.visualstudio.com/items?itemName=SecretLab.yarn-spinner",
+  "https://github.com/mfussenegger/nvim-lint",
 ]
 
 [counted]

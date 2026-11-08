@@ -187,6 +187,37 @@ fonts = { ja = "NotoSansJP.ttf" }
 for a language with none. Right-to-left and complex shaping — Arabic, Hebrew, the Indic scripts —
 are not supported: their letters are drawn left to right, one by one.</p>
 
+<h3 id="language-menu">A menu of languages, each in its own letters</h3>
+
+<p>A language menu shows every language's name at once, whatever the language is: 日本語 has to be
+drawn in a font with kanji while the interface is in English, and Español in one with ñ while it is
+in Japanese. A button's <a href="ref:rmp::ui::Style"><code>Style</code></a> names its font:</p>
+
+<pre data-lang="cpp" data-harness="members">
+rmp::Font japanese = rmp::assets::load_font("jp.ttf", 16);
+rmp::Font latin = rmp::assets::load_font("font.ttf", 16);
+
+void _draw() override {
+    rmp::ui::begin();
+    rmp::ui::row([this] {
+        for (const std::string &amp;code : rmp::lang::available()) {
+            rmp::ui::Button pick{ .text = rmp::Text(rmp::lang::name(code)),
+                                  .id = "language_" + code };
+            pick.style.font = code == "ja" ? japanese : latin;
+            if (pick.show()) rmp::lang::set(code);
+        }
+    });
+    rmp::ui::end();
+}
+</pre>
+
+<p>Load a font in <code>_ready()</code> or later, not in a member's initialiser of the first
+scene: that scene is made before the window exists. (In the block above the scene is a later one.)
+<a href="/examples/ui/11_localization.html"><code>examples/ui/11_localization</code></a> — play it in
+its page — is a lantern stall in English, Spanish and Japanese from <code>lang.tsv</code> and German
+from <code>lang/de.tsv</code>, with its plurals, its placeholders, a context, and Japanese in Jigmo
+(CC0), cut down to the letters the table uses.</p>
+
 <h2 id="rmp-text">Keeping the tables in step: rmp text</h2>
 
 <pre data-lang="shell">
@@ -201,8 +232,10 @@ of a kept widget, with the context an <code>rmp::Text</code> gives — the <code
 of the game's <a href="/manual/modules/dialogue.html#translation">Yarn scripts</a>, and what a
 debug build drew that the tables lacked. It adds a row for each text that is not there, with the
 words in the default language's column, and keeps every translation. A row nothing uses any more
-is never deleted: it gets an <code>x</code> in its <code>unused</code> column, and the game ignores
-it.</p>
+is never deleted: it gets an <code>x</code> in its <code>unused</code> column, and the game and
+<code>rmp text check</code> ignore it — in the per-language files too. The
+<code>language.name</code> row is never marked: <code>rmp::lang::name()</code> reads it, and no
+literal in the code does.</p>
 
 <p>The texts a debug build drew and did not find are written, when the game ends, to
 <code>lang_seen.tsv</code> next to the executable

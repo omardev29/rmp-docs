@@ -113,24 +113,48 @@ never copied: keep it in the scene that shows it, or in a <a href="#talker">Talk
 
 <h2 id="commands-and-functions">The game's commands and functions</h2>
 
-<p>A script asks the game to do something with a command, <code>&lt;&lt;give_item potion&gt;&gt;</code>,
-and asks it a question with a function in an expression, <code>has_key()</code>. The game answers
-both by name:</p>
+<p>A script asks the game to do something with a command, <code>&lt;&lt;walk Mika door&gt;&gt;</code>,
+and asks it a question with a function in an expression, <code>has_item("key")</code>. The game
+answers both by name, with a lambda whose parameters say what it takes:</p>
 
-<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk; void give(const std::string &amp;item); bool player_has_key();">
-talk.on_command("give_item", [](std::span&lt;const std::string&gt; args) {
-    if (!args.empty()) give(args[0]);
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk; bool carries(const std::string &amp;item); void shake_camera(float strength); void walk_to(const std::string &amp;who, const std::string &amp;where);">
+// has_item("key") in an expression: a string in, a bool out.
+talk.on_function("has_item", [](std::string item) -&gt; bool { return carries(item); });
+// &lt;&lt;walk Mika door&gt;&gt;: two words, as two strings.
+talk.on_command("walk", [](std::string who, std::string where) { walk_to(who, where); });
+// &lt;&lt;quake 2.5&gt;&gt;: a number.
+talk.on_command("quake", [](float strength) { shake_camera(strength); });
+</pre>
+
+<p>A parameter is a number (<code>float</code>, <code>int</code>, <code>double</code> or any other
+arithmetic type), a <code>bool</code>, a string (<code>std::string</code> or
+<code>std::string_view</code>), or an <a href="ref:rmp::DialogueValue"><code>rmp::DialogueValue</code></a>,
+which takes anything. A function returns one of the same. Each is checked before the call: a
+script that gives <code>has_item()</code> two arguments, or a number where its string goes, or a
+<code>&lt;&lt;quake&gt;&gt;</code> a word that is not a number, is a mistake said once — in the
+log, on screen in a debug build, and in <a href="ref:rmp::Dialogue::errors"><code>errors()</code></a>
+— and the call is not made. Write the result's type (<code>-&gt; bool</code>): it is what
+<a href="#editors"><code>rmp yarn ysls</code></a> tells the editor.</p>
+
+<p>The untyped forms take every argument as it comes, for a function or a command that takes any
+number of them:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk; void give(const std::string &amp;item);">
+talk.on_command("give", [](std::span&lt;const std::string&gt; words) {
+    for (const std::string &amp;item : words) give(item);      // &lt;&lt;give potion map key&gt;&gt;
 });
-talk.on_function("has_key", [](rmp::DialogueValue &amp;result,
-                               std::span&lt;const rmp::DialogueValue&gt; /*args*/) {
-    result = player_has_key();
+talk.on_function("sum", [](rmp::DialogueValue &amp;result,
+                           std::span&lt;const rmp::DialogueValue&gt; args) {
+    float total = 0;
+    for (const rmp::DialogueValue &amp;a : args) total += a.as_number();
+    result = total;                                          // sum(1, 2, 3)
 });
 </pre>
 
-<p>A command's arguments are its words after the name, with <code>{expressions}</code> filled. A
-function writes its answer into the value it is handed; its arguments are
-<a href="ref:rmp::DialogueValue"><code>rmp::DialogueValue</code></a>s, each a number, a string or a
-bool, read with <code>as_number()</code>, <code>as_string()</code> and <code>as_bool()</code>.</p>
+<p>A command's words are what follows its name, with its <code>{expressions}</code> filled. A
+command nobody handles does not run anything: the dialogue waits on it in
+<a href="ref:rmp::Dialogue::has_command"><code>has_command()</code></a>, for a game that reads
+<a href="ref:rmp::Dialogue::command"><code>command()</code></a> itself; the presenters pass it.</p>
 
 <p>Yarn's own functions are built in: <code>visited()</code>, <code>visited_count()</code>,
 <code>random()</code>, <code>random_range()</code>, <code>dice()</code>, <code>round()</code>,
@@ -138,7 +162,54 @@ bool, read with <code>as_number()</code>, <code>as_string()</code> and <code>as_
 <code>dec()</code>, <code>decimal()</code>, <code>int()</code>, <code>format_invariant()</code> and
 the conversions <code>string()</code>, <code>number()</code> and <code>bool()</code>. Their random
 numbers come from <a href="/manual/modules/random.html"><code>rmp::random</code></a>, so a
-scripted run of the game is reproducible.</p>
+scripted run of the game is reproducible. There is no overloading: one name, one function.</p>
+
+<h3 id="checked">Checked before it runs</h3>
+
+<p><a href="ref:rmp::Dialogue::start"><code>start()</code></a> looks at every function the script
+calls, in every node, and says each one that is neither built in nor registered — when the
+conversation starts, not at the line that calls it an hour into the game. Register the game's
+functions before the first <code>start()</code>. What goes wrong while it runs — a node a
+<code>&lt;&lt;jump&gt;&gt;</code> names that is not there, a call of the wrong kind — is said the
+same way, once, and kept in <code>errors()</code>. <a href="#rmp-yarn"><code>rmp yarn check</code></a>
+finds all of it before the game is even built.</p>
+
+<h2 id="waiting">Commands that wait</h2>
+
+<p>A command that takes time — someone walking to the door, a door opening, a camera panning —
+holds the conversation until it is over. Its handler starts it and says when it is done:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk; struct Npc { void walk_to(const std::string &amp;) {} bool arrived() const { return true; } }; Npc mika;">
+talk.on_command("walk", [&amp;](std::string where) {
+    mika.walk_to(where);
+    talk.wait_until([&amp;] { return mika.arrived(); });   // asked once a frame
+});
+talk.on_command("pause", [&amp;](float seconds) { talk.wait(seconds); });
+</pre>
+
+<p>From inside a command's handler, <a href="ref:rmp::Dialogue::wait"><code>wait(seconds)</code></a>
+holds the dialogue for that long, and <a href="ref:rmp::Dialogue::wait_until"><code>wait_until(done)</code></a>
+until <code>done()</code> is true; called anywhere else, either is a mistake said once. Yarn's own
+<code>&lt;&lt;wait 2&gt;&gt;</code> does the first by itself, when the game has no command of
+that name. While a command waits there is no line and no choice: the presenters draw nothing and
+<code>show()</code> stays true, and the world is seen doing what the command started.
+<a href="ref:rmp::Dialogue::waiting"><code>waiting()</code></a> says whether a command holds it,
+and asking is what moves it on — the presenters ask every frame, and so does a game's own loop:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk;">
+if (talk.waiting()) {
+    // nothing to show: the world goes on
+} else if (talk.has_line()) {
+    // ...
+}
+</pre>
+
+<p>Time is counted once a frame however often it is asked, from the step the scenes get, so a
+script waits the same in every run. <code>advance()</code> past a wait goes on at once: a skip
+button. A conversation shown over a world that is paused under it (a <code>DialogueBox</code> in a
+pushed scene) can wait on time, but never on something in that world: nothing there moves.
+<code>examples/games/09_after_school</code> shows its conversations in the town's own scene, so
+Mika can walk to the pond while the dialogue waits.</p>
 
 <h2 id="variables">Variables, and saving them</h2>
 
@@ -165,6 +236,37 @@ and <a href="ref:rmp::Dialogue::load"><code>load()</code></a> takes it back, so 
 picks up where the player left it with <a href="/manual/modules/saving.html">rmp::save</a>. A
 variable a script declares has the type of its declaration; one the game sets has the type of
 the value.</p>
+
+<h3 id="bind">The game's own variables</h3>
+
+<p>A variable the game keeps — the gold in the player's purse, the hour of the town's clock — is
+bound instead of copied: the script reads it and writes it, and there is one of it.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk; struct Player { int gold = 0; std::string name; bool met_mika = false; float speed = 1; }; Player player; float hour = 15;">
+talk.bind("$gold", player.gold);           // int &amp;
+talk.bind("$name", player.name);           // std::string &amp;
+talk.bind("$met_mika", player.met_mika);   // bool &amp;
+talk.bind("$speed", player.speed);         // float &amp;
+talk.bind("$hour",                         // or two functions, for a value worked out
+          [&amp;](rmp::DialogueValue &amp;out) { out = hour; },
+          [&amp;](const rmp::DialogueValue &amp;in) { hour = in.as_number(); });
+</pre>
+
+<pre data-lang="text">
+&lt;&lt;declare $gold = 0&gt;&gt;
+You have {$gold} coins.
+&lt;&lt;set $gold = $gold - 5&gt;&gt;
+</pre>
+
+<p>The script declares a bound variable, with the type it has
+(<code>&lt;&lt;declare $gold = 0&gt;&gt;</code>): a binding to one it does not declare, or of
+another type — a <code>bool</code> for a number — is a mistake said once, and the script keeps its
+own. <a href="ref:rmp::Dialogue::bind"><code>bind()</code></a> takes a reference, so the variable
+has to outlive the dialogue. <code>save()</code> leaves bound variables out: they are the game's
+to save. Several conversations bound to the same variables share them, which is how every person
+in <code>09_after_school</code> knows what the others were told. Bind before the first
+<code>start()</code>; a <a href="#talker">Talker</a> has <code>on_load</code> for it.</p>
+
 
 <h2 id="presenters">Showing it: the presenters</h2>
 
@@ -204,6 +306,9 @@ box under them.</td><td>waits</td></tr>
 </tbody>
 </table>
 
+<p>The same conversation, three ways: <a href="/examples/ui/10_dialogue.html"><code>examples/ui/10_dialogue</code></a>
+switches between them while it runs, in Kenney's art (CC0) — play it in its page.</p>
+
 <p><code>pauses_world</code> is a hint for whoever starts the conversation: a box or a stage is
 shown in a scene pushed over the game, which then stops under it; a bubble is drawn in the game's
 own scene, which goes on. <code>show()</code> returns true while the dialogue has something to
@@ -235,6 +340,100 @@ sprite or slice, a nine-slice. <code>style</code>, <code>name_style</code> and
 <a href="ref:rmp::ui::Style"><code>Style</code></a>s as every other widget, so a game's theme and
 skins apply. The lines read so far are in <code>ours.history</code>, and a
 <code>DialogueBox</code>'s <code>toggle_history()</code> shows them in place of the box.</p>
+
+<h3 id="speakers">A look and a voice for each speaker</h3>
+
+<p>A <a href="ref:rmp::ui::Speaker"><code>Speaker</code></a> is how one person's lines are shown:
+their blip and its pitch, and a <code>Style</code> over the presenter's for their box and their
+name plate. A field left unset is the presenter's.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::DialogueBox box{
+    .speakers = { { .name = "Mika", .blip = "blip_high", .pitch = 1.25f,
+                    .name_style = { .tint = Color{ 226, 92, 92, 255 } } },
+                  { .name = "Sora", .pitch = 0.85f,
+                    .style = { .background = Color{ 30, 40, 80, 230 } } } },
+    .flow = { .blip = "blip", .blip_jitter = 0.06f },
+};
+</pre>
+
+<p>A speaker with no blip of their own uses the flow's, at their pitch;
+<code>blip_jitter</code> moves each blip's pitch by up to that much (0.06 is 6&nbsp;%), so a voice
+made of one sound does not drone. A <code>BubbleSpeaker</code> has the same <code>blip</code>,
+<code>pitch</code> and <code>style</code>.</p>
+
+<h3 id="box-layout">The box's layout</h3>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::ui::DialogueBox box{
+    .width = 640,                                     // 0: as wide as it is given
+    .portrait_size = 96,                              // design units, square
+    .portrait_side = rmp::ui::DialogueSide::RIGHT,    // or LEFT
+    .name_offset = { 18, -16 },                       // the plate on the frame's edge
+    .choices = rmp::ui::DialogueChoices::ABOVE,       // IN_BOX, ABOVE or CENTER
+};
+</pre>
+
+<p><code>name_offset</code> moves the name plate out of the column and over the frame's top-left
+corner, so the line has the box to itself; <code>{ 0, 0 }</code> puts it above the line.
+<code>choices</code> shows the choices in the box in place of the line, in a panel of their own
+above the box at its right, or in a panel in the middle of the screen. <code>height</code> fixes
+the box's height, 0 being what the line needs.</p>
+
+<h3 id="bubble-tail">A bubble's tail</h3>
+
+<p>A bubble drawn over its speaker has a tail pointing down at them, <code>tail</code> design
+units tall and twice as wide, in the bubble's background colour — or <code>tail_color</code>, or a
+picture of the game's art in its place, <code>tail_picture</code>. <code>tail = 0</code> has none.
+A bubble with nobody to point at, drawn where the game put it, has no tail either.</p>
+
+<h3 id="stage-motion">The stage's entrances, focus, shakes and flashes</h3>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk;">
+rmp::ui::DialogueStage stage{
+    .enter_seconds = 0.3f, .enter_offset = 80,      // slides in from its side, and fades in
+    .focus_seconds = 0.15f, .focus_lift = 10,       // the speaker comes forward...
+    .focus_scale = 1.04f,                           // ...a little bigger
+};
+talk.on_command("quake", [&amp;] { stage.shake(12, 0.4f); });
+talk.on_command("flash", [&amp;] { stage.flash(WHITE, 0.3f); });
+</pre>
+
+<p>Whoever speaks for the first time comes on stage: the first half of the cast slides in from
+the left, the rest from the right, fading in. The speaker comes forward — full colour, raised,
+bigger — and whoever stops speaking goes back to <code>dimmed</code>, over
+<code>focus_seconds</code>. <a href="ref:rmp::ui::DialogueStage::shake"><code>shake()</code></a>
+shakes the whole stage, dying away, and
+<a href="ref:rmp::ui::DialogueStage::flash"><code>flash()</code></a> turns the screen a colour and
+back: what a game's commands call. A slanted box, a torn edge, a frame like a comic's are art: a
+<code>Skin</code> of nine-slices or Aseprite slices on <code>style</code>.</p>
+
+<h3 id="own-presenter">A presenter of your own</h3>
+
+<p>When none of the three is the layout a game wants, it writes its own around the two pieces
+they are made of:</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk; rmp::ui::DialogueMemory memory; rmp::Texture face;">
+const rmp::ui::DialogueFlow flow{ .letters_per_second = 40, .blip = "blip" };
+rmp::ui::begin({ .placement = rmp::ui::Align::BOTTOM_CENTER, .grow = true });
+rmp::ui::row({ .gap = 16, .grow_x = true }, [&amp;] {
+    rmp::ui::image(face, { .width = 120, .height = 120 });
+    rmp::ui::column({ .grow_x = true }, [&amp;] {
+        rmp::ui::dialogue_line(talk, memory, flow);       // the line, typed out
+        rmp::ui::dialogue_choices(talk, memory, flow);    // or the choices
+    });
+});
+rmp::ui::end();
+</pre>
+
+<p><a href="ref:rmp::ui::dialogue_line"><code>dialogue_line()</code></a> draws the line where the
+call is — its markup, the typewriter with its <code>[speed]</code> and <code>[pause]</code>, the
+blips and the recorded voice, auto-advance, skip-seen, and the <code>&gt;</code> button that goes
+on — and is true while there is a line;
+<a href="ref:rmp::ui::dialogue_choices"><code>dialogue_choices()</code></a> draws the choices and
+a timed choice's bar, true while there are choices. Both pass a command nobody handles and draw
+nothing while a command waits. The <a href="ref:rmp::ui::DialogueMemory"><code>DialogueMemory</code></a>
+is what they remember between frames: keep one, as a presenter does.</p>
 
 <h3 id="rich-text">Rich text</h3>
 
@@ -280,6 +479,24 @@ designer places one in LDtk with the fields <code>dialogue</code>, <code>node</c
 <code>range</code> and <code>once</code>, read by <code>Talker::from()</code>, as every
 <a href="/manual/core/behaviors.html">behavior from the editor</a>.</p>
 
+<p>A Talker loads its file the first time it is asked to talk. <code>on_load</code> is called
+then, before the first line, with the dialogue: where the game binds its variables and registers
+its functions and commands, so that the first line already sees them.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Object npc; rmp::Handle&lt;rmp::Object&gt; hero; int gold = 0;">
+npc.add&lt;rmp::behavior::Talker&gt;({
+    .dialogue = "school.yarn",
+    .player = hero,
+    .on_load = [&amp;](rmp::Dialogue &amp;talk) { talk.bind("$gold", gold); },
+    .on_talk = [](rmp::Dialogue &amp;) { /* show it */ },
+});
+</pre>
+
+<p><a href="/examples/games/09_after_school.html"><code>examples/games/09_after_school</code></a> is
+a whole story told this way, playable in its page: a Talker per person of an LDtk town, a Stage
+over the town, every <code>$variable</code> bound to the game's story, a <code>&lt;&lt;walk&gt;&gt;</code>
+the dialogue waits on, a timed choice and three endings, in English and Spanish.</p>
+
 <h2 id="translation">Translated like every other text</h2>
 
 <p>A line's <code>#line:</code> id is the key of its translation in the game's
@@ -298,6 +515,58 @@ column is <code>Mika: ¿Qué será? Tienes {0} de oro.</code> in the Spanish one
 <p>Give every line an id. A line without one gets an id made from its file, its node and its place
 in the node, which changes when a line is added above it; it is shown, but it cannot be translated
 reliably and <code>rmp text scan</code> leaves it out.</p>
+
+<h2 id="rmp-yarn">Checking the scripts: rmp yarn check</h2>
+
+<pre data-lang="shell">
+rmp yarn check                      # every resources/**/*.yarn
+rmp yarn check resources/intro.yarn # one
+</pre>
+
+<p><code>rmp yarn check</code> compiles every script with the framework's own compiler — the same
+one the game runs, built for the machine as <code>rmp_yarnc</code> — and says each mistake as
+<code>file:line:column: what is wrong</code>. It reads the game's <code>src/</code> and
+<code>include/</code> for what they register: the typed functions are told to the compiler, so a
+script that calls <code>has_item(3)</code> where a string goes fails here, and a function a script
+calls that nothing registers is an error — the game would only find it at the line that calls it.
+A command nothing handles is a warning, since a game may read it itself. It is a stage of
+<code>rmp test</code> and a step of a game's CI, and exits 1 on an error. In the framework, each
+example is checked against its own code.</p>
+
+<h3 id="editors">In the editor</h3>
+
+<p>The <a href="https://marketplace.visualstudio.com/items?itemName=SecretLab.yarn-spinner">Yarn
+Spinner extension for VS Code</a> highlights the language, draws a script's nodes as a graph and
+checks it as it is typed. What it cannot know is the game's own commands and functions, which are
+C++. <code>rmp yarn ysls</code> tells it:</p>
+
+<pre data-lang="shell">
+rmp yarn ysls    # writes rmp.ysls.json next to resources/
+</pre>
+
+<p>The file is the extension's own format (a <code>.ysls.json</code>, which it looks for anywhere
+in the workspace): each command and function the C++ registers, with its parameters' names and
+types, its result, the file it is in, and the <code>//</code> comment just above the registration
+as its documentation. The extension then completes them, shows that comment on hover and checks
+their arguments. Run it again when a registration changes.</p>
+
+<pre data-lang="cpp" data-harness="function" data-given="rmp::Dialogue talk; bool carries(const std::string &amp;item);">
+// Whether the player carries `item`: "key", "map", "flyer".
+talk.on_function("has_item", [](std::string item) -&gt; bool { return carries(item); });
+</pre>
+
+<p>Any editor that runs a linter gets the same checks from <code>rmp yarn check</code>, whose lines
+are <code>file:line:column: message</code>. In Neovim (LazyVim included), with
+<a href="https://github.com/mfussenegger/nvim-lint">nvim-lint</a>:</p>
+
+<pre data-lang="text">
+require("lint").linters.rmp_yarn = {
+  cmd = "rmp", args = { "yarn", "check" }, stdin = false, append_fname = true,
+  stream = "stdout", ignore_exitcode = true,
+  parser = require("lint.parser").from_errorformat("%f:%l:%c: %m,%f:%l: %m"),
+}
+require("lint").linters_by_ft.yarn = { "rmp_yarn" }
+</pre>
 
 <h2 id="build">Compiled when it loads, or when the game is built</h2>
 

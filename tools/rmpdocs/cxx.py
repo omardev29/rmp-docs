@@ -394,7 +394,17 @@ class HeaderReader:
                 run_doc = ""
             trailing = split_comment(self.lines[last_line - 1])[1] if scope_body is None else ""
 
-            ent = self.declaration(text, first_line, owner, access, trailing, scope_body, kind)
+            try:
+                ent = self.declaration(text, first_line, owner, access, trailing, scope_body,
+                                       kind)
+            except ParseError:
+                # Inside a detail namespace -- machinery the reference never
+                # shows, such as a template's partial specialisations -- a
+                # declaration this reader cannot read is skipped; anywhere
+                # else it is still an error.
+                if not owner.internal:
+                    raise
+                ent = None
             if ent is not None:
                 ent.end_line = last_line
                 ent.group = group

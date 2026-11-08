@@ -115,6 +115,38 @@ class GrammarTest(unittest.TestCase):
         self.assertEqual(m.branches, [("#if defined(PLATFORM_WEB)", "web_entry(X)"), ("#else", "desktop_entry(X)")])
 
 
+class DetailMachineryTest(unittest.TestCase):
+    """A template's partial specialisation in a detail namespace -- the
+    machinery of a typed callback -- is skipped; the same outside one is still
+    an error, so a public declaration the reader cannot read never goes by."""
+
+    SPECIALISED = """#pragma once
+// rmp/x.h -- a header with machinery.
+namespace rmp {
+namespace detail {
+template <class F> struct Traits : Traits<decltype(&F::operator())> {};
+template <class C, class R, class... A> struct Traits<R (C::*)(A...) const> {
+    using Result = R;
+};
+} // namespace detail
+// What it does.
+void visible();
+} // namespace rmp
+"""
+
+    def test_inside_detail_it_is_skipped(self):
+        root = read_header("include/rmp/x.h", self.SPECIALISED)
+        names = [e.qualname for e in root.walk()]
+        self.assertIn("rmp::visible", names)
+
+    def test_outside_detail_it_is_an_error(self):
+        from rmpdocs.cxx import ParseError
+        public = self.SPECIALISED.replace("namespace detail {", "namespace open {").replace(
+            "} // namespace detail", "} // namespace open")
+        with self.assertRaises(ParseError):
+            read_header("include/rmp/x.h", public)
+
+
 class FrameworkHeadersTest(unittest.TestCase):
     """Every header of the framework reads, without an error."""
 
