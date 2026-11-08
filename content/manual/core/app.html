@@ -17,10 +17,19 @@ only when it wants to quit or keep something across scenes.</p>
 <pre data-lang="cpp" data-include="src/main.cpp"></pre>
 
 <p><a href="ref:RMP_GAME"><code>RMP_GAME</code></a> takes the type of the first scene. It opens the
-window from <code>[window]</code> in <code>raylib_multiplatform.toml</code>, puts that scene on the
-stack, runs the stack every frame, and shuts everything down when the game ends. There is no
-<code>InitWindow()</code>, no frame loop and no unloading in the game, because those were the same
-lines in every game and none of them was ever yours to get right.</p>
+window from <code>[window]</code> in <code>raylib_multiplatform.toml</code>, then makes that scene and
+puts it on the stack, runs the stack every frame, and shuts everything down when the game ends.
+The window is open before the scene is made, so a texture, a font or a sheet among the scene's
+members loads exactly as one in <code>_ready()</code> does. There is no <code>InitWindow()</code>, no
+frame loop and no unloading in the game, because those were the same lines in every game and none
+of them was ever yours to get right.</p>
+
+<p data-fw-grep="src/rmp/app.cpp::was loaded before the window opened, so it has">A texture, a font or a
+sheet asked for before the window opens has nothing to draw: raylib's GPU calls have nowhere to
+go yet. That is a load at namespace scope, or in the constructor of a global. The framework names
+the first one, once, when the window opens:
+<samp>ASSETS: 'hero.png' was loaded before the window opened, so it has nothing to draw</samp>;
+in a debug build that is on the screen too, and a CI boot fails on it. Load it in a scene.</p>
 
 <p>It also writes the entry point the platform expects, and the platforms do not agree on what that
 is. The difference between them is who owns the frame loop:</p>

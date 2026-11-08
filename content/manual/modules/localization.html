@@ -211,8 +211,9 @@ void _draw() override {
 }
 </pre>
 
-<p>Load a font in <code>_ready()</code> or later, not in a member's initialiser of the first
-scene: that scene is made before the window exists. (In the block above the scene is a later one.)
+<p>A font in a scene's members loads as one in <code>_ready()</code> does: <code>RMP_GAME</code>
+opens the window before it makes the first scene. One loaded at namespace scope has no window yet,
+and the framework says so, once (<a href="/manual/core/app.html">the app</a>).
 <a href="/examples/ui/11_localization.html"><code>examples/ui/11_localization</code></a> — play it in
 its page — is a lantern stall in English, Spanish and Japanese from <code>lang.tsv</code> and German
 from <code>lang/de.tsv</code>, with its plurals, its placeholders, a context, and Japanese in Jigmo
