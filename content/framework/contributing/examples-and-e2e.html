@@ -78,7 +78,7 @@ RMP_EXAMPLE_FRAMES=120 bash tools/examples_build.sh boot
 
 <h3 id="reports">No mistake reported: <code>RAY_TEST_REPORTS=0</code></h3>
 
-<p data-fw-grep="src/rmp/app.cpp::    // The run's last frame: how many of the game's mistakes the framework\n    // reported \(RMP_REPORT_ONCE\), each counted once\. A correct game says 0\.">A
+<p data-fw-grep="src/rmp/app/app.cpp::    // The run's last frame: how many of the game's mistakes the framework\n    // reported \(RMP_REPORT_ONCE\), each counted once\. A correct game says 0\.">A
 mistake in the game that the framework can see — an action nobody defined, a widget outside
 <code>begin()</code> and <code>end()</code>, a number that is not one — is said once, as a warning in
 the log, and counted. On the last frame of a run with a frame budget the framework prints the count,

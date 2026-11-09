@@ -332,13 +332,13 @@ class DependencyMapTest(unittest.TestCase):
         self.assertEqual(clay, {"This site": [("manual/ui.html", 1)]})
 
     def test_the_map_links_every_dependency_to_its_entry(self):
-        fw = self.framework({"src/rmp/save.cpp": "cJSON_Parse\n"})
+        fw = self.framework({"src/rmp/save/save.cpp": "cJSON_Parse\n"})
         got = generated.dependency_map(fw, None)
         for dep in generated.DEPENDENCIES:
             anchor = generated.dep_anchor(dep[0])
             self.assertIn(f'href="#{anchor}"', got)
             self.assertIn(f'id="{anchor}"', got)
-        self.assertIn("<code>src/rmp/save.cpp</code>&#160;(1)", got)
+        self.assertIn("<code>src/rmp/save/save.cpp</code>&#160;(1)", got)
         self.assertEqual(generated.dep_anchor("The build image"), "dep-the-build-image")
 
     def test_every_regex_finds_something_in_the_real_framework(self):

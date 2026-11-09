@@ -230,7 +230,7 @@ the object collides as as well, so the bigger bat bites from where it is drawn.<
 
 <h2>Sound</h2>
 
-<p data-fw-grep="src/rmp/audio.cpp::constexpr int VOICES = 4;"><a href="ref:rmp::audio::play"><code>rmp::audio::play("coin")</code></a> plays a sound by name,
+<p data-fw-grep="src/rmp/audio/audio.cpp::constexpr int VOICES = 4;"><a href="ref:rmp::audio::play"><code>rmp::audio::play("coin")</code></a> plays a sound by name,
 without its extension: <code>coin</code> finds <code>coin.wav</code>, <code>coin.ogg</code>,
 <code>coin.mp3</code> or <code>coin.qoa</code>, the first of them that exists. The sound is loaded
 the first time it is played and kept. Playing it again while it still sounds starts another
@@ -310,10 +310,10 @@ rmp unpack
 <p><code>rmp pack</code> writes the pack into <code>resources/</code>, and the game reads it for
 as long as it is there; <code>rmp unpack</code> deletes it, and the loose files are read again.
 Most of the desktop builds CI makes for a release ship the pack in place of the loose files.
-The pack is flat: it takes the files directly in <code>resources/</code> and not those in a
-folder inside it, so keep <code>resources/</code> flat too.</p>
+The pack takes every file below <code>resources/</code>, its folders too, each under its path
+there, so a game names <code>"sprites/hero.png"</code> the same in development and in a release.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::void enter_executable_folder\(\) \{[\s\S]*?if \(!std::filesystem::is_directory\(folder / RMP_RESOURCES_PATH, error\)\) \{[\s\S]*?std::filesystem::current_path\(folder, error\);">A release for
+<p data-fw-grep="src/rmp/app/app.cpp::void enter_executable_folder\(\) \{[\s\S]*?if \(!std::filesystem::is_directory\(folder / RMP_RESOURCES_PATH, error\)\) \{[\s\S]*?std::filesystem::current_path\(folder, error\);">A release for
 the desktop reads the <code>resources/</code> that sits next to its executable, so it starts the
 same from a file manager, a shortcut or a terminal open in some other folder: when there is one
 there, the game makes the executable's folder its working directory before it loads anything.

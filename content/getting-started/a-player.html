@@ -149,7 +149,7 @@ the frame it goes down. Asked by name, an action is quiet whenever something els
 a text field being typed in, or a scene on top of this one. That is what stops the key that closes
 a menu from also doing something in the game underneath.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::SetExitKey\(KEY_NULL\)">Escape is the game's to bind, with
+<p data-fw-grep="src/rmp/app/app.cpp::SetExitKey\(KEY_NULL\)">Escape is the game's to bind, with
 nothing more to write. raylib makes it the key that closes the window, and in a game it is the
 key for "back" and "pause", so the framework takes it back from raylib as the game starts. The
 window's close button still closes the game; a game that wants a key to quit calls

@@ -29,7 +29,7 @@ hands them to <a href="ref:RMP_ENTRY_POINT"><code>RMP_ENTRY_POINT</code></a>, wh
 for the platform being compiled. A game that wants its own hooks calls
 <code>RMP_ENTRY_POINT</code> directly, as <a href="/framework/the-frame.html#own-frame">One frame</a>
 shows. The bodies are written once, in <code>rmp/app.h</code>, and every platform-specific thing
-they do is a call to a function compiled in <code>src/rmp/app.cpp</code>: the macro is only the
+they do is a call to a function compiled in <code>src/rmp/app/app.cpp</code>: the macro is only the
 shape of the entry point.</p>
 
 <p data-fw-grep="include/rmp/app.h::#define RMP_DECLARE_ENTRY_POINT_ONCE">One more macro rides along
@@ -40,8 +40,8 @@ program with two entry points gets a duplicate definition of that name from the 
 with none is told that name is missing — instead of a message about <code>main</code> that says
 nothing to someone who never wrote one.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::RequireEntryPoint\(\) noexcept \{ rmp_entry_point_is_declared_exactly_once\(\); \}">The
-reference is the constructor of an object at namespace scope in <code>src/rmp/app.cpp</code>,
+<p data-fw-grep="src/rmp/app/app.cpp::RequireEntryPoint\(\) noexcept \{ rmp_entry_point_is_declared_exactly_once\(\); \}">The
+reference is the constructor of an object at namespace scope in <code>src/rmp/app/app.cpp</code>,
 because a static initializer is the one kind of code every linker keeps. A reference from an
 ordinary function would not do: in a program with no entry point nothing calls that function, and
 a linker that discards unused sections throws it away, unresolved reference and all, before it
@@ -108,7 +108,7 @@ instead.</p>
 
 <h2 id="build-macros">Set by the build</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::#error &quot;RMP_PRODUCTION_BUILD is not defined: the build system has to pass it \(0 or 1\)&quot;">Two
+<p data-fw-grep="src/rmp/app/app.cpp::#error &quot;RMP_PRODUCTION_BUILD is not defined: the build system has to pass it \(0 or 1\)&quot;">Two
 more macros come from the build system rather than from the <code>.toml</code>.
 RMP_PRODUCTION_BUILD is 1 in a release build and 0 otherwise, so a game can keep debugging aids
 out of what it ships:</p>

@@ -80,7 +80,7 @@ technique that makes most of this possible is moving the call into a <code>.cpp<
 entry-point macros in <code>rmp/app.h</code> have to start the asset layer, sample the input
 every frame and close the UI, but naming <code>rmp::assets</code>, <code>rmp::input</code> or
 <code>rmp::ui</code> there would make every file with an entry point compile all three. So the macros call a handful of functions declared in <code>rmp/app.h</code>
-and defined in <code>src/rmp/app.cpp</code>, which is the one file that includes the rest.</p>
+and defined in <code>src/rmp/app/app.cpp</code>, which is the one file that includes the rest.</p>
 
 <h2 id="config">The one header every header includes</h2>
 

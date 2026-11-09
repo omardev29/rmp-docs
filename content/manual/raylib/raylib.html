@@ -40,7 +40,7 @@ not:</p>
 calls <code>InitAudioDevice()</code> the first time a sound is loaded or played, so a game that
 never makes a sound never opens one.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::if \(!std::filesystem::is_directory\(folder / RMP_RESOURCES_PATH, error\)\)">Before
+<p data-fw-grep="src/rmp/app/app.cpp::if \(!std::filesystem::is_directory\(folder / RMP_RESOURCES_PATH, error\)\)">Before
 your first scene's <code>_ready()</code> the framework has also opened the asset pack, if there is
 one, and routed raylib's own file loading through it; seeded
 <a href="ref:rmp::random"><code>rmp::random</code></a>; on iOS moved into the app bundle, where the
@@ -56,7 +56,7 @@ write has a fixed place in it:</p>
 <ol>
 <li>The input devices are sampled, once, for the whole frame — by the loop itself, which does
 the same before the frame hook of a game written with <code>RMP_ENTRY_POINT</code>.</li>
-<li data-fw-grep="src/rmp/scene.cpp::rmp::objects::detail::pointer\(scene\);\s+scene\._update\(delta\);">The
+<li data-fw-grep="src/rmp/scene/scene.cpp::rmp::objects::detail::pointer\(scene\);\s+scene\._update\(delta\);">The
 scenes are updated from the bottom of the stack upwards, skipping the ones a scene above freezes.
 For each one: the pointer, first — a click or a drag on one of its objects calls that object's
 <code>on_click</code> or <code>on_drag</code> handler, so a handler can spawn or destroy before
@@ -74,7 +74,7 @@ everything.</li>
 <code>replace</code>, <code>pop</code> — are applied.</li>
 </ol>
 
-<p data-fw-grep="src/rmp/scene.cpp::if \(window\) \{\s+BeginMode2D\(camera\);[\s\S]*?scene\.map\.draw\(rmp::tilemap::detail::visible_area\([\s\S]*?\}\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);[\s\S]*?scene\._draw\(\);">That
+<p data-fw-grep="src/rmp/scene/scene.cpp::if \(window\) \{\s+BeginMode2D\(camera\);[\s\S]*?scene\.map\.draw\(rmp::tilemap::detail::visible_area\([\s\S]*?\}\s+rmp::objects::detail::draw\(scene\);\s+if \(window\) EndMode2D\(\);[\s\S]*?scene\._draw\(\);">That
 fourth step is why a HUD drawn in a scene's <code>_draw()</code> stays put while the camera moves:
 the camera is closed before <code>_draw()</code> is called, and it is the reason the
 <a href="/manual/core/scenes.html">scene</a> hooks say which space they draw in.</p>
@@ -147,7 +147,7 @@ game defines a single action.</p>
 
 <h3 id="escape-is-the-games-key">Escape is the game's key</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">raylib's
+<p data-fw-grep="src/rmp/app/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">raylib's
 <code>InitWindow()</code> makes Escape its exit key: pressed, it closes the window. In a game it
 is the key for "back" and "pause" — <code>rmp::ui</code> goes back on it, and the
 <code>ui_cancel</code> action is bound to it — so the framework calls
@@ -259,7 +259,7 @@ whose <a href="ref:rmp::Texture"><code>rmp::Texture</code></a> releases itself a
 opens its file itself, so music loaded with it has to ship as a loose file — and a desktop archive
 that CI packs ships the pack alone (<code>tools/ship_resources.sh</code>).
 <a href="ref:rmp::audio::music"><code>rmp::audio::music()</code></a> streams from the pack instead.
-And the pack holds the files directly in <code>resources/</code>, not its subfolders.</p>
+The pack holds every file below <code>resources/</code>, folders too, under its path there.</p>
 
 <p>If your code calls <code>InitAudioDevice()</code> itself, the framework notices and leaves
 closing it to you; when <code>rmp::audio</code> opened it, the framework closes it after the

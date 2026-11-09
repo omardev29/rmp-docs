@@ -34,7 +34,7 @@ order: 20
 - Links inside the site are root-relative: `<a href="/manual/core/scenes.html#the-hooks">`.
   The build makes them relative; the `links` gate checks the page and the anchor exist.
 - A link to a reference entry: `<a href="ref:rmp::Scene::change">` — the `names` gate checks it.
-- A link to a framework file at the documented commit: `<a href="fw:src/rmp/app.cpp#L40-L60">`.
+- A link to a framework file at the documented commit: `<a href="fw:src/rmp/app/app.cpp#L40-L60">`.
 - Outside links only to hosts in `site.toml [links] allow`, https only.
 - An address of this site written out — `curl -fsSL https://omardev29.github.io/rmp-docs/install.sh | sh`
   — has to be a page or a file the site serves (the `installer` gate reads pages, the served
@@ -156,7 +156,7 @@ not `build/my_game`.
 it to match a string the framework really prints (`…` for the parts you leave out).
 
 **A sentence about how the framework works inside** can be pinned to its source:
-`<p data-fw-grep="src/rmp/app.cpp::rmp::scenes::detail::draw\(\)">`. If the code changes, the
+`<p data-fw-grep="src/rmp/app/app.cpp::rmp::scenes::detail::draw\(\)">`. If the code changes, the
 gate tells whoever bumps `FRAMEWORK_REF`. Pin the claim WITH its context: a regex that
 names only a call still matches after the call moves to another function, and the page goes on
 saying where it is. Span from the enclosing function's head to the line you mean

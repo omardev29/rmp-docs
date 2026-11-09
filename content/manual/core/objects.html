@@ -104,7 +104,7 @@ auto &amp;spark = scene().spawn({ .position = position, .size = { 3, 3 } });
 spark.velocity = { 0, -60 };
 </pre>
 
-<p data-fw-grep="src/rmp/object.cpp::Scene &amp;Object::scene\(\) const \{\s+if \(_scene\) return \*_scene;[\s\S]*?RMP_REPORT_ONCE\(&quot;OBJECT: scene\(\) on an object no scene spawned; answering &quot;\s+&quot;Scene::current\(\)">It
+<p data-fw-grep="src/rmp/scene/object.cpp::Scene &amp;Object::scene\(\) const \{\s+if \(_scene\) return \*_scene;[\s\S]*?RMP_REPORT_ONCE\(&quot;OBJECT: scene\(\) on an object no scene spawned; answering &quot;\s+&quot;Scene::current\(\)">It
 is a reference, because a spawned object always has a scene. An object no scene spawned — a member,
 a local — has none of its own: asking it is a mistake in the game, said once in the log, and the
 answer is <a href="ref:rmp::Scene::current"><code>Scene::current()</code></a>, the scene on top of
@@ -164,7 +164,7 @@ every field would be ceremony between you and the object you touch most often in
 <tr><td><a href="ref:rmp::Object::position"><code>position</code></a></td><td><code>{ 0, 0 }</code></td><td>The centre of the object, in world units.</td></tr>
 <tr><td><a href="ref:rmp::Object::velocity"><code>velocity</code></a></td><td><code>{ 0, 0 }</code></td><td>World units per second. The scene moves the object by it every frame.</td></tr>
 <tr><td><a href="ref:rmp::Object::scale"><code>scale</code></a></td><td><code>{ 1, 1 }</code></td><td>Multiplies the shape, the collider and the sprite.</td></tr>
-<tr><td><a href="ref:rmp::Object::rotation"><code>rotation</code></a></td><td><code>0</code></td><td data-fw-grep="src/rmp/object.cpp::DrawRectanglePro\(dest, origin, object\.rotation, object\.shape\.color\);\s+\} else \{\s+DrawRectangleLinesEx\(">Degrees, as raylib counts them. It turns a sprite and a filled rectangle as they are drawn; an outlined rectangle is drawn unturned, and collision ignores it.</td></tr>
+<tr><td><a href="ref:rmp::Object::rotation"><code>rotation</code></a></td><td><code>0</code></td><td data-fw-grep="src/rmp/scene/object.cpp::DrawRectanglePro\(dest, origin, object\.rotation, object\.shape\.color\);\s+\} else \{\s+DrawRectangleLinesEx\(">Degrees, as raylib counts them. It turns a sprite and a filled rectangle as they are drawn; an outlined rectangle is drawn unturned, and collision ignores it.</td></tr>
 <tr><td><a href="ref:rmp::Object::mass"><code>mass</code></a></td><td><code>1</code></td><td>Read only by <code>apply_force</code> and <code>apply_impulse</code>.</td></tr>
 </tbody>
 </table>
@@ -448,7 +448,7 @@ card.on_drag([](rmp::Object &amp;self, Vector2 moved) {
 });
 </pre>
 
-<p data-fw-grep="src/rmp/collision.cpp::const Vector2 was = scene\.camera\.to_world\(\s*Vector2\{ screen\.x - pixels\.x, screen\.y - pixels\.y \}\);\s+Storage::notify_drag\(\*captured, Vector2\{ at\.x - was\.x, at\.y - was\.y \}\);">The
+<p data-fw-grep="src/rmp/scene/collision.cpp::const Vector2 was = scene\.camera\.to_world\(\s*Vector2\{ screen\.x - pixels\.x, screen\.y - pixels\.y \}\);\s+Storage::notify_drag\(\*captured, Vector2\{ at\.x - was\.x, at\.y - was\.y \}\);">The
 movement is where the pointer is in the world minus where it was, both taken through the scene's
 camera — not the pixels divided by the zoom — so the card stays under the finger at any zoom and
 under a rotated camera too.</p>

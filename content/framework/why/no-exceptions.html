@@ -40,7 +40,7 @@ struct. A missing picture is a hole in the frame, not a dead process. The failur
 the boot line CI reads reports how many assets failed to load, and a boot with any failure is
 red.</p>
 
-<p data-fw-grep="src/rmp/assets.cpp::void decode_failed\(const char \*name\) \{\s+\+\+detail::loads\.failed;">A
+<p data-fw-grep="src/rmp/assets/assets.cpp::void decode_failed\(const char \*name\) \{\s+\+\+detail::loads\.failed;">A
 file that is there and does not decode — a picture, a sound, a song or a font cut short or
 corrupt — is a failed load in the same way: what comes back is empty, the failure is counted,
 and the log says so once per name. A font is no exception. raylib answers
@@ -87,7 +87,7 @@ has no such behavior, a <a href="ref:rmp::Handle"><code>Handle</code></a> is emp
 object is gone, and <a href="ref:rmp::save::write"><code>rmp::save::write()</code></a> returns
 whether the save reached the disk.</p>
 
-<p data-fw-grep="src/rmp/object.cpp::void report_empty_ref\(int type\) \{\s+RMP_REPORT_ONCE_KEYED">And
+<p data-fw-grep="src/rmp/scene/object.cpp::void report_empty_ref\(int type\) \{\s+RMP_REPORT_ONCE_KEYED">And
 forgetting to ask does not crash either. Reaching through an empty one with <code>-&gt;</code> or
 <code>*</code> is a mistake in the game, said once in the log for each type, and the line goes to
 a stand-in: a <code>B</code> made for the purpose, so a read gives the default and a write lands
@@ -127,10 +127,10 @@ finishes, and the game shuts down in order.</p>
 
 <h2 id="the-standard-library">Exceptions from underneath</h2>
 
-<p data-fw-grep="include/rmp/assets.h::three places in src/rmp/save.cpp \(the random\s+// device, and a path converted on Windows\)">The
+<p data-fw-grep="include/rmp/assets.h::three places in src/rmp/save/save.cpp \(the random\s+// device, and a path converted on Windows\)">The
 C++ standard library does throw, in a few places the framework relies on — asking the operating
 system for random bytes, converting a Windows path to UTF-8 — and those are caught where they
-happen, in three places in <code>src/rmp/save.cpp</code>, and turned into a value: another source
+happen, in three places in <code>src/rmp/save/save.cpp</code>, and turned into a value: another source
 for the random bytes, an empty path that the caller already treats as "cannot be used". None of
 them escapes into your game.</p>
 

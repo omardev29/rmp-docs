@@ -66,7 +66,7 @@ paragraph above.</p>
 
 <h3>It starts from any folder</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::is_directory\(folder / RMP_RESOURCES_PATH, error\)">A release build reads <code>./resources/</code>, and <code>.</code> is the folder the game
+<p data-fw-grep="src/rmp/app/app.cpp::is_directory\(folder / RMP_RESOURCES_PATH, error\)">A release build reads <code>./resources/</code>, and <code>.</code> is the folder the game
 was started from — a file manager, a shortcut and a launcher each start it somewhere else. So
 before it opens the pack or loads anything, a desktop release moves into the folder that holds the
 executable, when that folder has a <code>resources/</code> beside it, and says so in the log. It is
@@ -156,7 +156,7 @@ included</td></tr>
 portable = true
 </pre>
 
-<p data-fw-grep="src/rmp/save.cpp::if \(dir == nullptr \|\| dir\[0\] == '\\0' \|\| std::strcmp\(dir, &quot;\./&quot;\) == 0\) \{\n        TraceLog\(LOG_WARNING,">Only Windows, Linux and FreeBSD have a folder next to the executable to use. macOS ignores
+<p data-fw-grep="src/rmp/save/save.cpp::if \(dir == nullptr \|\| dir\[0\] == '\\0' \|\| std::strcmp\(dir, &quot;\./&quot;\) == 0\) \{\n        TraceLog\(LOG_WARNING,">Only Windows, Linux and FreeBSD have a folder next to the executable to use. macOS ignores
 <code>portable</code>. NetBSD and OpenBSD cannot say where the executable is, so there a portable
 build logs <samp>SAVE: [save] portable: this system does not say where the executable is; saving
 in the user's folder instead</samp> and saves in the player's folder, as if <code>portable</code>

@@ -137,7 +137,7 @@ old one, flushed to the disk, and only then put in its place, so at every instan
 whole save on disk — the old or the new. The power going out in the middle of a save does not lose
 the game.</p>
 
-<p data-fw-grep="src/rmp/save.cpp::slot.size\(\) > 64">A <em>slot</em> is the name of the file, without its extension: letters, digits,
+<p data-fw-grep="src/rmp/save/save.cpp::slot.size\(\) > 64">A <em>slot</em> is the name of the file, without its extension: letters, digits,
 <code>_</code>, <code>-</code> and <code>.</code>, not starting with a dot, at most 64 of them. Each
 slot is a file of its own, so a game with three save slots, settings and a best score uses five
 names. Anything else — a path above all — is refused and said once.</p>
@@ -232,7 +232,7 @@ as long as the tab.</p>
 
 <h3>Portable saves</h3>
 
-<p data-fw-grep="src/rmp/save.cpp::std::string portable_folder\(\) \{(?:[^\n]*\n)*?\s*if \(dir == nullptr \|\| dir\[0\] == '\\0' \|\| std::strcmp\(dir, &quot;\./&quot;\) == 0\) \{\s+TraceLog\(LOG_WARNING,">A
+<p data-fw-grep="src/rmp/save/save.cpp::std::string portable_folder\(\) \{(?:[^\n]*\n)*?\s*if \(dir == nullptr \|\| dir\[0\] == '\\0' \|\| std::strcmp\(dir, &quot;\./&quot;\) == 0\) \{\s+TraceLog\(LOG_WARNING,">A
 game handed out as a zip — on itch.io, say — is expected to keep everything in its own
 folder, so that deleting the folder deletes the game. <code>[save] portable = true</code> puts the
 saves in a <code>saves</code> folder next to the executable instead. Only Windows, Linux and
@@ -354,7 +354,7 @@ rmp-save 1 &lt;version&gt; &lt;plain|sealed&gt; &lt;payload bytes&gt; &lt;crc32&
 {"level":7,"name":"Ada","unlocked":["forest"]}
 </pre>
 
-<p data-fw-grep="src/rmp/save.cpp::MAX_FILE = std::uintmax_t\{ 64 \} \* 1024 \* 1024">The <code>1</code> is the layout of the file itself; a framework that meets a bigger one says
+<p data-fw-grep="src/rmp/save/save.cpp::MAX_FILE = std::uintmax_t\{ 64 \} \* 1024 \* 1024">The <code>1</code> is the layout of the file itself; a framework that meets a bigger one says
 <code>UNREADABLE</code> rather than guessing. The checksum, a CRC-32, spans the first line and
 the payload, so an edited version or length is caught like an edited byte, and the length is what tells a file cut
 short (<code>TRUNCATED</code>) from one with something added (<code>MODIFIED</code>). A file of

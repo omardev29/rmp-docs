@@ -107,10 +107,10 @@ ours: if it fails after an upgrade, the patch was lost.</dd>
 <dt>cute_aseprite</dt>
 <dd>Unmodified, pinned by <code>sha256_cute_aseprite</code>; the new hash is the one
 <code>tools/license_db.py</code> prints. <code>prepare_aseprite()</code> in
-<code>src/rmp/aseprite.cpp</code> walks every chunk before cute_aseprite sees the bytes, so a new
+<code>src/rmp/assets/aseprite.cpp</code> walks every chunk before cute_aseprite sees the bytes, so a new
 chunk type is the thing to read the changelog for.</dd>
 <dt>cJSON</dt>
-<dd>Unmodified, <code>sha256_cjson</code>. <code>src/rmp/cjson_impl.c</code> sets its nesting
+<dd>Unmodified, <code>sha256_cjson</code>. <code>src/rmp/save/cjson_impl.c</code> sets its nesting
 limit to the save format's maximum depth and deliberately does not turn on its locale support; the
 save code writes numbers itself and parses under the C locale. Run <code>tools/test_locales.sh</code>
 after an upgrade.</dd>

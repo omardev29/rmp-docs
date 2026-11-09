@@ -22,7 +22,7 @@ reason = "rmp::Texture, rmp::Sound and the other handles are aliases of it; its 
 # passes would be read as 0 by every `#if`.
 [build_defines.RMP_PRODUCTION_BUILD]
 set_in = ["CMakeLists.txt", "raymob/app/src/main/cpp/CMakeLists.txt", "ios/project.yml"]
-doc = "1 in a release build and 0 in a debug one, on every platform: `rmp build release`, `rmp web` and every build CI ships are 1; `rmp build` and `rmp run` are 0. A build system that forgets it is a compile error in `src/rmp/app.cpp`, not a quiet debug build, so `#if RMP_PRODUCTION_BUILD` is safe to write."
+doc = "1 in a release build and 0 in a debug one, on every platform: `rmp build release`, `rmp web` and every build CI ships are 1; `rmp build` and `rmp run` are 0. A build system that forgets it is a compile error in `src/rmp/app/app.cpp`, not a quiet debug build, so `#if RMP_PRODUCTION_BUILD` is safe to write."
 [build_defines.RMP_SANITIZE]
 set_in = ["cmake/sanitize.cmake"]
 doc = "Defined, as 1, in a debug build that runs under a sanitizer `[dev] sanitize` lists and the compiler could run; not defined otherwise, and never in a release. For code that has to allow for the slowdown, such as a timing test: `#if defined(RMP_SANITIZE)`. The CMake option of the same name is on by default, and `-DRMP_SANITIZE=OFF` builds one debug folder without them, to measure what they cost."

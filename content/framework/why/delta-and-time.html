@@ -32,8 +32,8 @@ read it.</p>
 
 <h2 id="where">Where the clock is read</h2>
 
-<p data-fw-grep="src/rmp/clock.cpp::float raw_delta\(\) \{\s+if \(timing\.fixed &gt; 0\) return timing\.fixed;[\s\S]*?return GetFrameTime\(\);\s+\}[\s\S]*?float step_delta\(\) \{\s+const float raw = raw_delta\(\);">Once
-a frame, in one function of <code>src/rmp/clock.cpp</code>, which asks raylib for the frame time,
+<p data-fw-grep="src/rmp/app/clock.cpp::float raw_delta\(\) \{\s+if \(timing\.fixed &gt; 0\) return timing\.fixed;[\s\S]*?return GetFrameTime\(\);\s+\}[\s\S]*?float step_delta\(\) \{\s+const float raw = raw_delta\(\);">Once
+a frame, in one function of <code>src/rmp/app/clock.cpp</code>, which asks raylib for the frame time,
 corrects it, remembers it, and hands it to the frame. It is the one call to
 <code>GetFrameTime()</code> in the framework. Every entry point — the desktop loop, the browser's
 callback, iOS's — goes through that function, so the correction applies to all of them, and to a
@@ -72,7 +72,7 @@ UI has no clock of its own either. Its transitions, its scrolling, the repeat of
 the blink of a text field's caret, a tooltip's wait and a notice's time on screen take their time
 from <code>frame_time()</code>, which is the <code>delta</code> the frame was handed: the number
 <code>step_delta()</code> remembered.
-<span data-fw-grep="src/rmp/clock.cpp::float frame_delta\(\) \{ return timing\.stepped \? timing\.last : clamped\(raw_delta\(\)\); \}">In
+<span data-fw-grep="src/rmp/app/clock.cpp::float frame_delta\(\) \{ return timing\.stepped \? timing\.last : clamped\(raw_delta\(\)\); \}">In
 a loop of the game's own with no runner to call <code>step_delta()</code>, it is the frame raylib
 timed, clamped the same way.</span> A menu and the game under it cannot disagree about how long a
 frame took. The layout tests run the UI in a mode where no time passes unless the test says how
@@ -87,7 +87,7 @@ keyboard and then for the first half of every second it types.
 file is not on the check's list, so a <code>GetTime()</code> or a key read straight from raylib
 there fails it, as in any other file that is not a seam.</span></p>
 
-<p data-fw-grep="src/rmp/clock.cpp::timing\.fixed = seconds &gt; 0 &amp;&amp; std::isfinite\(seconds\) \? seconds : 0;">One
+<p data-fw-grep="src/rmp/app/clock.cpp::timing\.fixed = seconds &gt; 0 &amp;&amp; std::isfinite\(seconds\) \? seconds : 0;">One
 clock is also what lets a whole game be played the same way twice. A test can fix the step, so that
 every frame is exactly as long as it says whatever the machine took — still clamped by
 <code>[app] max_delta</code> — and name the seed the run starts from. That is how the framework's tests
@@ -127,7 +127,7 @@ to the flag at 60 frames a second and again at 240, and jumps from its moving pl
 and the next frame time comes back as half a second. A bullet at 900 units a second then moves 450
 units in one step — through the wall and out the other side, without ever overlapping it.</p>
 
-<p data-fw-grep="src/rmp/clock.cpp::float clamped\(const float raw\) \{ return clamp_delta\(raw, RMP_MAX_DELTA\); \}[\s\S]*?if \(ceiling &amp;&amp; raw &gt; max\) return max;">So the
+<p data-fw-grep="src/rmp/app/clock.cpp::float clamped\(const float raw\) \{ return clamp_delta\(raw, RMP_MAX_DELTA\); \}[\s\S]*?if \(ceiling &amp;&amp; raw &gt; max\) return max;">So the
 <code>delta</code> the game is handed is clamped to
 <a href="/reference/configuration.html#app-max_delta"><code>[app] max_delta</code></a>, a
 twentieth of a second unless you change it. A frame that really took longer arrives as a twentieth
@@ -154,14 +154,14 @@ max_delta = 0.001
 is longer than a twentieth of a second, and the game would run at three quarters speed forever —
 <a href="/framework/config-pipeline.html#validation">the config pipeline</a> shows that refusal.</p>
 
-<p data-fw-grep="src/rmp/collision.cpp::\[app\] max_delta stops a stalled frame teleporting everything">The
+<p data-fw-grep="src/rmp/scene/collision.cpp::\[app\] max_delta stops a stalled frame teleporting everything">The
 clamp is half of the answer to tunnelling. The other half is the swept test in the collision pass,
 which catches a fast object crossing a thin one between two frames even at a perfectly normal
 frame rate, where no clamp applies.</p>
 
 <h2 id="frame-zero">The frame with no time in it</h2>
 
-<p data-fw-grep="src/rmp/object.cpp::if \(delta &gt; 0\) \{">The first frame of a game reports a
+<p data-fw-grep="src/rmp/scene/object.cpp::if \(delta &gt; 0\) \{">The first frame of a game reports a
 frame time of 0, and a delta of 0 or less is never integrated at all. That matters more than it
 sounds: a push given in <code>_ready()</code> with <code>apply_force</code> waits in the object for
 the first frame that has time in it, instead of being spent on a frame that could not move

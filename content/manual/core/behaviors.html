@@ -116,7 +116,7 @@ hook a behavior does not declare costs nothing at all.</p>
 <tr><td><code>_late_update(Object &amp;self, float delta)</code></td><td>Every frame, after the object has moved, been held to its edges and had its animation advanced.</td></tr>
 <tr><td><code>_ready(Object &amp;self)</code></td><td>Once, when it is added.</td></tr>
 <tr><td><code>_draw(Object &amp;self)</code></td><td>Every frame the object is drawn, after its sprite or shape and before its own <code>_draw()</code>, in world units.</td></tr>
-<tr><td><code>_collision(Object &amp;self, Object &amp;other)</code></td><td data-fw-grep="src/rmp/behavior.cpp::if \(!object\.alive\(\) \|\| !other\.alive\(\)\) break;">Once per frame for each object the object touches, right after the object's own <code>_collision()</code>. The walk stops after any behavior once either of the two is no longer alive: the behaviors after one that destroyed either object hear nothing, and if one was destroyed before the walk began, only the first behavior hears it. See <a href="/manual/core/collision.html#being-told">Collision</a>.</td></tr>
+<tr><td><code>_collision(Object &amp;self, Object &amp;other)</code></td><td data-fw-grep="src/rmp/behavior/behavior.cpp::if \(!object\.alive\(\) \|\| !other\.alive\(\)\) break;">Once per frame for each object the object touches, right after the object's own <code>_collision()</code>. The walk stops after any behavior once either of the two is no longer alive: the behaviors after one that destroyed either object hear nothing, and if one was destroyed before the walk began, only the first behavior hears it. See <a href="/manual/core/collision.html#being-told">Collision</a>.</td></tr>
 <tr><td><code>_end(Object &amp;self)</code></td><td>When it is removed, replaced, or the object is destroyed.</td></tr>
 </tbody>
 </table>
@@ -216,7 +216,7 @@ two, four or eight directions works with nothing configured. The names are yours
 in your file — and <code>idle</code>, <code>walk</code> and the direction suffixes are fields you can
 change. Without a sheet it only sets <code>flip_x</code>.</p>
 
-<p data-fw-grep="src/rmp/behaviors.cpp::if \(rmp::animation::detail::tag_index\(self\.sprite\.sheet\.raw\(\), tag\) &gt;= 0\) \{\s+// &quot;walk_w&quot; is drawn facing west; mirroring it would face it east\.\s+self\.flip_x = false;">The mirroring assumes one thing about your art: <strong>what has no direction of its own faces
+<p data-fw-grep="src/rmp/behavior/behaviors.cpp::if \(rmp::animation::detail::tag_index\(self\.sprite\.sheet\.raw\(\), tag\) &gt;= 0\) \{\s+// &quot;walk_w&quot; is drawn facing west; mirroring it would face it east\.\s+self\.flip_x = false;">The mirroring assumes one thing about your art: <strong>what has no direction of its own faces
 right</strong>. <code>flip_x</code> is set while the object faces left, so a plain <code>walk</code>,
 <code>idle</code> and a sprite with no sheet must be drawn facing east to come out facing west. A tag
 with a direction suffix is drawn for that direction, so it plays unflipped: <code>walk_w</code> is
@@ -236,7 +236,7 @@ in the air, and <code>air_jumps = 1</code> is a double jump. It makes the object
 and applies its own gravity instead of the scene's, so a jump reaches the same height whatever the
 scene's <code>gravity</code> is.</p>
 
-<p data-fw-grep="src/rmp/behaviors.cpp::void Platformer::_ready\(Object &amp;self\) \{[\s\S]*?self\.gravity_scale = 0;">That is why adding it sets the object's
+<p data-fw-grep="src/rmp/behavior/behaviors.cpp::void Platformer::_ready\(Object &amp;self\) \{[\s\S]*?self\.gravity_scale = 0;">That is why adding it sets the object's
 <a href="ref:rmp::Object::gravity_scale"><code>gravity_scale</code></a> to 0. A heavier character is
 its own field, <code>get&lt;rmp::behavior::Platformer&gt;()-&gt;gravity = 3000</code>; setting
 <code>gravity_scale</code> again afterwards does not replace the behavior's gravity but adds the

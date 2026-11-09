@@ -13,7 +13,7 @@ when the code compiles, it is <code>constexpr</code>, and the compiler works it 
 <p data-fw-grep=".clang-tidy::#   misc-const-correctness       const on every local that does not change,">Google's
 guide asks for <code>const</code> "whenever it makes sense". This framework makes it a rule
 without the "whenever": clang-tidy's <code>misc-const-correctness</code> runs over the framework,
-its tests and its examples, and nothing in them is left that it refuses<span data-fw-grep="src/rmp/object.cpp::// pointer to const; misc-const-correctness does not follow it there\.\n\s+// NOLINTNEXTLINE\(misc-const-correctness\)">
+its tests and its examples, and nothing in them is left that it refuses<span data-fw-grep="src/rmp/scene/object.cpp::// pointer to const; misc-const-correctness does not follow it there\.\n\s+// NOLINTNEXTLINE\(misc-const-correctness\)">
 but two lines that carry a <code>NOLINT</code> with the reason</span>. It is not
 about bugs, it is about the reader.</p>
 
@@ -195,7 +195,7 @@ const unsigned layer = layer_bit(index);
 
 <h2 id="constinit"><code>constinit</code>: state that starts known</h2>
 
-<p data-fw-grep="src/rmp/random.cpp::// The generator\. The dot at every use says &quot;file state&quot;\.\nconstinit struct \{">State
+<p data-fw-grep="src/rmp/random/random.cpp::// The generator\. The dot at every use says &quot;file state&quot;\.\nconstinit struct \{">State
 at file scope that changes while the game runs, and whose first value is known when the code
 compiles, is <code>constinit</code>: it is set before any code runs, so no other file's start-up
 can read it before it is ready. The framework's random number generator is held this way, so that

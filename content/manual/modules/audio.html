@@ -16,7 +16,7 @@ be done, and on a machine with no sound at all, every call quietly does nothing.
 rmp::audio::play("coin");
 </pre>
 
-<p data-fw-grep="src/rmp/audio.cpp::EXTENSIONS = \{ ..wav., ..ogg., ..mp3., ..qoa. \}">The name is <em>logical</em>: <code>"coin"</code> finds <code>coin.wav</code>,
+<p data-fw-grep="src/rmp/audio/audio.cpp::EXTENSIONS = \{ ..wav., ..ogg., ..mp3., ..qoa. \}">The name is <em>logical</em>: <code>"coin"</code> finds <code>coin.wav</code>,
 <code>coin.ogg</code>, <code>coin.mp3</code> or <code>coin.qoa</code> in <code>resources/</code>,
 trying them in that order and taking the first that exists. Re-export a sound in another format
 and the code does not change. A name that already ends in an audio extension —
@@ -54,7 +54,7 @@ run.</p>
 
 <h3>Sounds overlap</h3>
 
-<p data-fw-grep="src/rmp/audio.cpp::constexpr int VOICES = 4;">Playing a sound that is still playing starts it again on another voice instead of cutting the
+<p data-fw-grep="src/rmp/audio/audio.cpp::constexpr int VOICES = 4;">Playing a sound that is still playing starts it again on another voice instead of cutting the
 first one off, so a machine gun sounds like one and not like a stuck record. Each sound has up to
 four voices; when all four are busy, the one that has been playing longest is cut. The voices
 share the loaded samples, so a voice costs a few bytes, not a second copy of the sound.</p>

@@ -184,7 +184,7 @@ TEST_CASE_FIXTURE(Fixture, "jump is just pressed on the frame Space goes down, a
 }
 </pre>
 
-<p data-fw-grep="src/rmp/input.cpp::void reset\(\) \{\n    registry\.actions\.clear\(\);[\s\S]*?    frames\.sample = sample_with_raylib;\n\}">The
+<p data-fw-grep="src/rmp/input/input.cpp::void reset\(\) \{\n    registry\.actions\.clear\(\);[\s\S]*?    frames\.sample = sample_with_raylib;\n\}">The
 fixture puts things back in its destructor, and <code>rmp::input::detail::reset()</code> forgets
 every action and every reading and puts raylib back as the provider.
 <span data-fw-grep=".clang-tidy::#   cppcoreguidelines-special-member-functions\n#                                a class that writes one of the five says what\n#                                becomes of the other four\.">Its
@@ -373,7 +373,7 @@ to say — not a compile error, not a crash somewhere else, not a different chec
 touching anything else in the working tree:</p>
 
 <pre data-lang="shell">
-git stash push -- src/rmp/clock.cpp
+git stash push -- src/rmp/app/clock.cpp
 rmp test unit
 git stash pop
 </pre>

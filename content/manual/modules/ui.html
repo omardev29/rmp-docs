@@ -436,7 +436,7 @@ may be about to declare that control; only when no scene does is the focus hande
 
 <h3>A button in the HUD</h3>
 
-<p data-fw-grep="src/rmp/scene.cpp::scene\.camera\.detail_settle\(delta\);[\s\S]*?scene_stack\.playing\[static_cast&lt;size_t&gt;\(i\)\] = rmp::ui::detail::take_game_keys\(\);">The
+<p data-fw-grep="src/rmp/scene/scene.cpp::scene\.camera\.detail_settle\(delta\);[\s\S]*?scene_stack\.playing\[static_cast&lt;size_t&gt;\(i\)\] = rmp::ui::detail::take_game_keys\(\);">The
 scene the player plays in reads its own keys, and Space there is a jump, not a press of the HUD's
 first button. So a scene that reads any of the keys the interface navigates with — Enter, Space,
 the arrows, Tab, the d-pad, the gamepad's bottom face button, the left stick — through
@@ -707,7 +707,7 @@ rmp::ui::notify("Not saved: the disk refused it", { .color = rmp::ui::ColorRole:
 rmp::ui::notify("Achievement unlocked", { .seconds = 5 });
 </pre>
 
-<p data-fw-grep="src/rmp/app.cpp::rmp::ui::detail::finish_backdrop\(\);\s+rmp::ui::detail::draw_notices\(\);">It
+<p data-fw-grep="src/rmp/app/app.cpp::rmp::ui::detail::finish_backdrop\(\);\s+rmp::ui::detail::draw_notices\(\);">It
 only queues a copy of the text, so it can be called from anywhere — <code>_update()</code>, a
 callback, a frame that draws no interface. The framework draws what is queued after the last scene,
 over everything, and a notice never takes the pointer or the focus.
@@ -723,7 +723,7 @@ one that does.</p>
 
 <h3>The framework's warnings, on screen</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::#if !defined\(NDEBUG\)\s+rmp::detail::set_report_sink\(rmp::ui::detail::show_report\);">In
+<p data-fw-grep="src/rmp/app/app.cpp::#if !defined\(NDEBUG\)\s+rmp::detail::set_report_sink\(rmp::ui::detail::show_report\);">In
 a debug build the framework's own warnings arrive here too. A mistake in the game that it says once
 in the log — an action nobody defined, a widget outside <code>begin()</code>/<code>end()</code>, a
 tooltip about nothing — is also a notice, in the theme's danger colour, where it cannot scroll past

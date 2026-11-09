@@ -201,7 +201,7 @@ game started with sudo is root, and saves as root. With sudo's defaults its home
 <code>[save] portable = true</code> writes root's files next to the game. <code>rmp run
 sudo</code> says so before it starts the game.</p>
 
-<p data-fw-grep="src/rmp/console.cpp::return &quot;CONSOLE: started with sudo by &quot; \+ user \+\s+&quot;, so the game runs as root and saves as root, in &quot; \+ std::string\(saves\) \+">The
+<p data-fw-grep="src/rmp/app/console.cpp::return &quot;CONSOLE: started with sudo by &quot; \+ user \+\s+&quot;, so the game runs as root and saves as root, in &quot; \+ std::string\(saves\) \+">The
 game says it as well, once, as it starts — <samp>WARNING: CONSOLE: started with sudo by …</samp> —
 with your name, the folder it really saves in, read from the environment sudo left it, and the
 groups. In the <code>video</code> and <code>input</code> groups the game runs as you and saves where
@@ -209,7 +209,7 @@ it always does.</p>
 
 <h2 id="terminal">The terminal comes back</h2>
 
-<p data-fw-grep="src/rmp/console.cpp::// raylib's DRM backend reads the keyboard from the terminal it was started on\n// \(InitKeyboard in rcore_drm\.c, which SUPPORT_SSH_KEYBOARD_RPI turns on\): it\n// turns off echo, line editing and Ctrl\+C">raylib's
+<p data-fw-grep="src/rmp/app/console.cpp::// raylib's DRM backend reads the keyboard from the terminal it was started on\n// \(InitKeyboard in rcore_drm\.c, which SUPPORT_SSH_KEYBOARD_RPI turns on\): it\n// turns off echo, line editing and Ctrl\+C">raylib's
 DRM backend reads the keyboard from the terminal the game starts on, and changes it: no echo, no
 line editing, no Ctrl+C, the terminal made non-blocking — a setting your shell shares — and a
 virtual console's keyboard put in another mode. It puts them back only from an <code>atexit</code>
@@ -217,11 +217,11 @@ handler, which
 a crash, <code>abort()</code>, a sanitizer's report and a kill never run, and the shell after
 them would type blind, with no Ctrl+C.</p>
 
-<p data-fw-grep="src/rmp/console.cpp::// So guard_console\(\), called before InitWindow, remembers the terminal as it\n// was and puts it back on a fatal signal -- then hands the signal on, so a\n// crash is still a crash">So
+<p data-fw-grep="src/rmp/app/console.cpp::// So guard_console\(\), called before InitWindow, remembers the terminal as it\n// was and puts it back on a fatal signal -- then hands the signal on, so a\n// crash is still a crash">So
 the framework puts it back however the game ends. Before the window opens it remembers the
 terminal, and puts it back on every fatal signal — then hands the signal on to whoever had it, so
 a crash is still a crash: a core dump, AddressSanitizer's report, the status your shell sees — on
-the sanitizers' way out, and at exit. <span data-fw-grep="src/rmp/console.cpp::ours\.sa_flags = SA_SIGINFO \| SA_ONSTACK;">Its
+the sanitizers' way out, and at exit. <span data-fw-grep="src/rmp/app/console.cpp::ours\.sa_flags = SA_SIGINFO \| SA_ONSTACK;">Its
 handler runs on a stack set apart for signals — AddressSanitizer's, or one of its own where
 nothing set one up — because a stack overflow leaves none to run on.</span></p>
 
@@ -243,7 +243,7 @@ mends it from outside.</p>
 
 <h2 id="while-it-runs">While it runs</h2>
 
-<p data-fw-grep="src/rmp/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">Ctrl+C
+<p data-fw-grep="src/rmp/app/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">Ctrl+C
 does nothing while the game runs: the terminal's signals are off. The game quits from its own
 menu, and Escape is the game's key, not a way out — see <a href="/manual/core/app.html#the-escape-key">the
 Escape key</a>.</p>

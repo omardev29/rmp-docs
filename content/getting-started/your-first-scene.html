@@ -109,7 +109,7 @@ this scene and starts a <code>GameScene</code>. It does not happen on that line:
 the frame ends. The call is made from inside the menu's own <code>_draw()</code>, and destroying
 the menu right there would pull it out from under the code that is still running in it.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::RMP_REPORT_ONCE\(.APP: quit\(\) does nothing on iOS"><a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> asks the game to close. It
+<p data-fw-grep="src/rmp/app/app.cpp::RMP_REPORT_ONCE\(.APP: quit\(\) does nothing on iOS"><a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> asks the game to close. It
 lets the frame finish and then shuts everything down in order, which is why it is not
 <code>exit()</code>. On iOS it closes nothing, because Apple rejects an app that closes itself:
 it writes a warning to the log, once, and returns (with <code>[dev] strict</code> on, a debug

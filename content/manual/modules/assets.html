@@ -53,16 +53,33 @@ rmp::SpriteSheet hero = rmp::assets::load_sheet("hero.aseprite");
 std::vector&lt;unsigned char&gt; dialogue = rmp::assets::load_data("dialogue.json");
 </pre>
 
-<h3>A name is a file name</h3>
+<h3>A name is a path below resources/</h3>
 
-<p>The name is the file's name inside <code>resources/</code> — <code>"jump.wav"</code>, never
-<code>"resources/jump.wav"</code> and never an absolute path. The folder where those names are
-looked up is set by the build, so the same name works however the game was started.</p>
+<p>The name is the file's path inside <code>resources/</code>, with <code>/</code> between folders —
+<code>"jump.wav"</code> for a file at the top, <code>"sfx/jump.wav"</code> for one in
+<code>resources/sfx/</code> — never <code>"resources/jump.wav"</code> and never an absolute path. The
+folder where those names are looked up is set by the build, so the same name works however the
+game was started.</p>
 
-<p>Keep every file directly in <code>resources/</code>. The pack described below stores files by
-their bare name and does not look into subfolders, so a file in a subfolder loads while you
-develop and is missing from the release that ships the pack. A release configure that finds a
-subfolder in <code>resources/</code> warns about it for that reason.</p>
+<p data-fw-grep="tools/rres_pack.c::static const char \*pack_name\(const char \*path\)">Keep
+<code>resources/</code> in folders by kind — <code>sprites/</code>, <code>maps/</code>,
+<code>audio/</code>, <code>fonts/</code>, <code>dialogue/</code>, <code>locale/</code> — the way a game
+of any size wants it. Every target finds the same name: a debug build reads the loose file, the
+pack a desktop release ships keeps each file under its path below <code>resources/</code> (the
+packer runs inside that folder), and the web, Android and iOS ship the folder whole.</p>
+
+<pre data-lang="cpp" data-harness="function">
+rmp::Texture hero = rmp::assets::load_texture("sprites/hero.png");
+rmp::Sound jump = rmp::assets::load_sound("audio/jump.wav");
+rmp::Tilemap town = rmp::assets::load_map("maps/town.ldtk");
+</pre>
+
+<p data-fw-grep="src/rmp/tilemap/tilemap.cpp::std::string next_to\(const std::string_view map, const char \*path\)">A
+map names its tilesets and its separate level files by a path relative to itself, as LDtk and Tiled
+write them: <code>maps/town.ldtk</code> with a tileset at <code>../tiles/town.png</code> loads
+<code>tiles/town.png</code>. When that file is not there, the map's tileset is looked for by its
+file name at the top of <code>resources/</code>, where maps kept their files before there were
+folders.</p>
 
 <h3>The fonts are baked at a size</h3>
 
@@ -70,7 +87,7 @@ subfolder in <code>resources/</code> warns about it for that reason.</p>
 identifies it: <code>load_font("ui.ttf", 16)</code> and <code>load_font("ui.ttf", 32)</code> are two
 fonts, two textures. Ask for the size you draw at.</p>
 
-<p data-fw-grep="src/rmp/assets.cpp::for \(int c = 160; c &lt;= 383; \+\+c\) v\.push_back\(c\);">A font is baked with
+<p data-fw-grep="src/rmp/assets/assets.cpp::for \(int c = 160; c &lt;= 383; \+\+c\) v\.push_back\(c\);">A font is baked with
 the letters most languages written in the Latin alphabet need: printable ASCII, Latin-1 (ñ, á, ü, ç,
 ¿, ¡, £, °), Latin Extended-A (the Polish, Czech, Hungarian, Turkish, Baltic and Croatian letters),
 and the dashes, curly quotes, bullet, ellipsis, euro and trademark sign a translated line uses. A
@@ -106,7 +123,7 @@ move takes the reference over and leaves the moved-from handle empty.</p>
 
 <h3>When they free</h3>
 
-<p data-fw-grep="src/rmp/resource.cpp::SLOTS ARE NEVER FREED, only emptied">A resource is unloaded when the last handle to it goes out of scope — a scene ending, an object
+<p data-fw-grep="src/rmp/assets/resource.cpp::SLOTS ARE NEVER FREED, only emptied">A resource is unloaded when the last handle to it goes out of scope — a scene ending, an object
 being destroyed, a member being assigned something else. Whatever is still held when the game
 ends is released by the framework before the window closes, because a texture freed after the
 GPU context is gone is a crash. A handle that outlives that, such as a <code>static</code> one,
@@ -247,9 +264,9 @@ UnloadModel(ship);
 <p>That covers models and the files they pull in behind your back — an <code>.obj</code>'s
 <code>.mtl</code> and the textures it names — as well as shaders, fonts and textures loaded through
 raylib directly. The path has to start with the macro the build defines for the folder,
-RMP_RESOURCES_PATH: only files directly inside it are answered from the pack (it has no
-subfolders), so a save file elsewhere on disk that happens to share a name with a packed one is
-never mistaken for it.</p>
+RMP_RESOURCES_PATH: only files inside it are answered from the pack, by their path below it, so a
+save file elsewhere on disk that happens to share a name with a packed one is never mistaken for
+it.</p>
 
 <aside class="callout warning"><span class="callout-title">The exception</span><p>raylib's
 <code>LoadMusicStream()</code> opens the file itself and never sees the pack, so a song loaded
@@ -263,7 +280,7 @@ project's <code>resources/</code>, so the game finds its files whichever folder 
 A release build (<code>rmp build release</code>) reads <code>./resources/</code>, which is where the
 released archive puts the folder, beside the executable.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::void enter_executable_folder\(\)">On Windows, macOS, Linux and the
+<p data-fw-grep="src/rmp/app/app.cpp::void enter_executable_folder\(\)">On Windows, macOS, Linux and the
 BSDs, the entry point makes that relative path start at the executable's folder: before anything is
 loaded, a release moves into the folder its executable is in, when there is a <code>resources/</code>
 there. A player can start it from a file manager, a shortcut or any terminal folder, and it finds
@@ -395,7 +412,7 @@ font, or a song that <a href="/manual/modules/audio.html">rmp::audio</a> cannot 
 <li>a map file that does not parse, or a Tiled map whose tileset file cannot be read.</li>
 </ul>
 
-<p data-fw-grep="src/rmp/assets.cpp::void decode_failed\(const char \*name\)">A file that does
+<p data-fw-grep="src/rmp/assets/assets.cpp::void decode_failed\(const char \*name\)">A file that does
 not decode — a broken PNG, a download cut short — is an empty handle, and the log names it once:
 <samp>ASSETS: '…' is in … but could not be decoded</samp>. A font is no exception. raylib answers a
 font file it cannot read with its own built-in font, and the framework does not hand that back as
@@ -407,7 +424,7 @@ that is every headless test, not a broken file.</p>
 
 <h3>How CI notices</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::SmokeTest_ReportBoot\(rmp::assets::failed_loads\(\), rmp::assets::requested_loads\(\)\)">When the game boots under the smoke test, the framework prints one line once the ready hook has
+<p data-fw-grep="src/rmp/app/app.cpp::SmokeTest_ReportBoot\(rmp::assets::failed_loads\(\), rmp::assets::requested_loads\(\)\)">When the game boots under the smoke test, the framework prints one line once the ready hook has
 returned — in a game of scenes, once the first scene is ready:</p>
 
 <p><samp>RAY_TEST_BOOT_OK assets_failed=0 …</samp></p>

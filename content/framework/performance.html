@@ -118,7 +118,7 @@ frame.</p>
 
 <h3 id="asleep">A window nobody sees draws nothing</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::constexpr double MINIMIZED_FRAME = 1\.0 / 30;\s+constexpr double PAUSED_FRAME = 1\.0 / 10;">A
+<p data-fw-grep="src/rmp/app/app.cpp::constexpr double MINIMIZED_FRAME = 1\.0 / 30;\s+constexpr double PAUSED_FRAME = 1\.0 / 10;">A
 minimized desktop window is not drawn at all. The world, the music and the clock go on, but the
 loop skips <code>BeginDrawing()</code> and <code>EndDrawing()</code> and sleeps a thirtieth of a
 second a frame instead of waiting for a vsync: a game left minimized on a laptop stops spending

@@ -91,7 +91,7 @@ Texture2D player = rmp::assets::load_texture("player.png");
 DrawTexture(player, 0, 0, WHITE);
 </pre>
 
-<p data-fw-grep="src/rmp/app.cpp::rmp::scenes::detail::shutdown\(\);[\s\S]*?shutdown_globals\(\);[\s\S]*?rmp::detail::release_all\(\);">Ownership
+<p data-fw-grep="src/rmp/app/app.cpp::rmp::scenes::detail::shutdown\(\);[\s\S]*?shutdown_globals\(\);[\s\S]*?rmp::detail::release_all\(\);">Ownership
 is also what makes the way out safe. A texture belongs to the GPU context, and the context belongs
 to the window: unloading a texture after <code>CloseWindow()</code> is a write to something that no
 longer exists. Because every texture is held by something with a lifetime — a scene, an object, a
@@ -119,7 +119,7 @@ public:
 };
 </pre>
 
-<p data-fw-grep="src/rmp/object.cpp::The generation goes up HERE and not on reuse">A handle is the
+<p data-fw-grep="src/rmp/scene/object.cpp::The generation goes up HERE and not on reuse">A handle is the
 object's slot and that slot's generation. When the object dies the generation goes up, so the
 handle is empty from then on — and it stays dead even after the slot holds a
 new object, which is the classic bug of keeping an index. Checking a handle is an integer

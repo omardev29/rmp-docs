@@ -24,7 +24,7 @@ members loads exactly as one in <code>_ready()</code> does. There is no <code>In
 frame loop and no unloading in the game, because those were the same lines in every game and none
 of them was ever yours to get right.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::was loaded before the window opened, so it has">A texture, a font or a
+<p data-fw-grep="src/rmp/app/app.cpp::was loaded before the window opened, so it has">A texture, a font or a
 sheet asked for before the window opens has nothing to draw: raylib's GPU calls have nowhere to
 go yet. That is a load at namespace scope, or in the constructor of a global. The framework names
 the first one, once, when the window opens:
@@ -58,7 +58,7 @@ nothing refers to — and a self-registering object is exactly that. It would no
 would work on your desktop and find no scenes on the phone. So the scene is named where a C++
 program starts, in <code>main.cpp</code>, where the linker can see it.</p>
 
-<p data-fw-grep="src/rmp/app.cpp::RequireEntryPoint\(\) noexcept \{ rmp_entry_point_is_declared_exactly_once\(\); \}">A
+<p data-fw-grep="src/rmp/app/app.cpp::RequireEntryPoint\(\) noexcept \{ rmp_entry_point_is_declared_exactly_once\(\); \}">A
 program with no entry point, or with two, is a link error that names the symbol
 <code>rmp_entry_point_is_declared_exactly_once</code>: missing, or defined twice. The linker's own
 complaint about <code>main</code> comes with it, and on its own it says neither what to write nor
@@ -95,7 +95,7 @@ the app turns raylib's exit key off, so that Escape belongs to the game; see
 
 <h3 id="where-a-release-finds-its-files">Where a release finds its files</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::void enter_executable_folder\(\) \{[\s\S]*?std::filesystem::current_path\(folder, error\);">A
+<p data-fw-grep="src/rmp/app/app.cpp::void enter_executable_folder\(\) \{[\s\S]*?std::filesystem::current_path\(folder, error\);">A
 release build reads its files from <code>./resources/</code>, and <code>.</code> is whatever folder
 the game was started from: a file manager, a shortcut or a terminal somewhere else would leave it
 loading nothing. So on Windows, Linux, macOS and FreeBSD a release moves into the folder the
@@ -128,7 +128,7 @@ For each one: the pointer is offered to its objects (<a href="ref:rmp::Object::o
 <a href="/manual/core/objects.html#the-frame-of-an-object">objects</a> update and move, then the
 <a href="/manual/core/collision.html">collision pass</a> resolves where they ended up, and last the
 <a href="/manual/core/camera.html">camera</a> follows.</li>
-<li data-fw-grep="src/rmp/app.cpp::ClearBackground\(rmp::scenes::detail::clear_color\(\)\);\s+rmp::scenes::detail::draw\(\);[\s\S]*?rmp::ui::detail::draw_notices\(\);"><strong>Draw</strong>,
+<li data-fw-grep="src/rmp/app/app.cpp::ClearBackground\(rmp::scenes::detail::clear_color\(\)\);\s+rmp::scenes::detail::draw\(\);[\s\S]*?rmp::ui::detail::draw_notices\(\);"><strong>Draw</strong>,
 from the bottom upwards, for every scene that is visible. The screen is cleared with the background
 of the lowest of them; then for each scene its map and its objects are drawn through its camera, and
 its own <a href="ref:rmp::Scene::_draw"><code>_draw()</code></a> runs after, in screen space. The
@@ -191,7 +191,7 @@ framework's <code>.toml</code> says <code>letterbox</code>, and so does every ga
 stretch = "expand"
 </pre>
 
-<p data-fw-grep="src/rmp/stretch.cpp::void set_stretch\(const Stretch mode\) \{\s+switch \(mode\) \{[\s\S]*?world\.mode = mode;"><a href="ref:rmp::app::stretch"><code>rmp::app::stretch()</code></a>
+<p data-fw-grep="src/rmp/app/stretch.cpp::void set_stretch\(const Stretch mode\) \{\s+switch \(mode\) \{[\s\S]*?world\.mode = mode;"><a href="ref:rmp::app::stretch"><code>rmp::app::stretch()</code></a>
 is the mode in use, starting from the <code>.toml</code>'s, and
 <a href="ref:rmp::app::set_stretch"><code>rmp::app::set_stretch()</code></a> changes it from anywhere,
 at once: the next thing that asks sees the new one. The <code>.toml</code> is the place for a game's
@@ -247,7 +247,7 @@ has been called, for code that wants to skip work on the way out.</p>
 <tbody>
 <tr><td>Desktops and the web</td><td>The frame loop ends after this frame, and the game shuts down.</td></tr>
 <tr><td>Android</td><td>The same, and the app's activity is finished, so that it goes away instead of leaving an empty task in the recent apps.</td></tr>
-<tr><td>iOS</td><td data-fw-grep="src/rmp/app.cpp::RMP_REPORT_ONCE\(&quot;APP: quit\(\) does nothing on iOS">Nothing. It logs a warning, once, and returns — except in a debug build with <code>[dev] strict = true</code>, where that warning aborts the app instead.</td></tr>
+<tr><td>iOS</td><td data-fw-grep="src/rmp/app/app.cpp::RMP_REPORT_ONCE\(&quot;APP: quit\(\) does nothing on iOS">Nothing. It logs a warning, once, and returns — except in a debug build with <code>[dev] strict = true</code>, where that warning aborts the app instead.</td></tr>
 </tbody>
 </table>
 
@@ -268,7 +268,7 @@ if (rmp::ui::button("Quit")) rmp::app::quit();
 
 <h3 id="the-escape-key">The Escape key</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">Escape does
+<p data-fw-grep="src/rmp/app/app.cpp::void after_ready\(\) \{[\s\S]*?SetExitKey\(KEY_NULL\);">Escape does
 not close the game. raylib's <code>InitWindow()</code> makes Escape its exit key, which ends the
 frame loop when it is pressed, and in a game Escape means "back" or "pause":
 <a href="ref:rmp::ui"><code>rmp::ui</code></a> goes back on it, and the standard
@@ -386,7 +386,7 @@ the music fed every frame. What <code>RMP_GAME</code> adds is the part that read
 <code>[window]</code>: with <code>RMP_ENTRY_POINT</code>, vsync and the frame cap are yours to set,
 like the window.</p>
 
-<p data-fw-grep="src/rmp/input.cpp::Vector2 pointer\(\) \{\s+if \(rmp::Scene::depth\(\) == 0\) return frames\.now\.pointer;\s+return rmp::Scene::current\(\)\.camera\.to_world\(frames\.now\.pointer\);">In a scene,
+<p data-fw-grep="src/rmp/input/input.cpp::Vector2 pointer\(\) \{\s+if \(rmp::Scene::depth\(\) == 0\) return frames\.now\.pointer;\s+return rmp::Scene::current\(\)\.camera\.to_world\(frames\.now\.pointer\);">In a scene,
 <a href="ref:rmp::input::pointer"><code>pointer()</code></a> is the pointer in world units, converted
 through the current scene's camera. With no scene on the stack there is no camera to go through, so
 here it is the position on the screen, the same as <code>pointer_screen()</code>, and it says

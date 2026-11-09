@@ -120,7 +120,7 @@ matters. With <code>[dev] strict = true</code> the first one aborts a debug buil
 made it. A debug build also shows each one on screen, and a boot that reported one fails
 <code>rmp test smoke</code>.</p>
 
-<p data-fw-grep="src/rmp/audio.cpp::// A plain log and not RMP_REPORT_ONCE: that one is for mistakes in the\n        // game, and \[dev\] strict makes it abort a debug build\.">That
+<p data-fw-grep="src/rmp/audio/audio.cpp::// A plain log and not RMP_REPORT_ONCE: that one is for mistakes in the\n        // game, and \[dev\] strict makes it abort a debug build\.">That
 is for mistakes in the game, and only those. A condition of the machine — no sound device, a folder
 it cannot write — is a plain <code>TraceLog()</code>, said once by the state that remembers it,
 with a comment beside it saying why it is not a report: strict mode would abort a correct game on a

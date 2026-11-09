@@ -516,7 +516,7 @@ All three do the same things in the same order around your code, and
 you.</p></dd>
 
 <dt>The scene stack</dt>
-<dd><p data-fw-grep="src/rmp/scene.cpp::std::vector&lt;std::unique_ptr&lt;Scene&gt;&gt; items;">A
+<dd><p data-fw-grep="src/rmp/scene/scene.cpp::std::vector&lt;std::unique_ptr&lt;Scene&gt;&gt; items;">A
 vector of owning pointers, and a queue of the transitions asked for during the frame.
 <a href="ref:rmp::Scene::change"><code>change</code></a>,
 <a href="ref:rmp::Scene::push"><code>push</code></a>,
@@ -525,7 +525,7 @@ vector of owning pointers, and a queue of the transitions asked for during the f
 over, because the call usually comes from inside the scene that is about to go.</p></dd>
 
 <dt>The object storage</dt>
-<dd><p data-fw-grep="src/rmp/object.cpp::std::unique_ptr&lt;Object&gt; object;">Every object of every
+<dd><p data-fw-grep="src/rmp/scene/object.cpp::std::unique_ptr&lt;Object&gt; object;">Every object of every
 scene lives in one pool of slots. A slot owns its object through a
 <code>std::unique_ptr</code> and carries a generation number. A
 <a href="ref:rmp::Handle"><code>rmp::Handle</code></a> is the slot's index and that generation, so
@@ -534,7 +534,7 @@ deferred to the end of the frame, which is what makes the reference
 <a href="ref:rmp::Scene::spawn"><code>spawn()</code></a> returns good for the rest of it.</p></dd>
 
 <dt>Collision and the map</dt>
-<dd><p data-fw-grep="src/rmp/collision.cpp::WHY THIS IS OURS AND NOT BOX2D">Arcade collision, written
+<dd><p data-fw-grep="src/rmp/scene/collision.cpp::WHY THIS IS OURS AND NOT BOX2D">Arcade collision, written
 for the framework: rectangles and circles, a uniform grid so only near pairs are tested, a swept
 test so a fast object cannot pass through a thin one between two frames, and separation for the
 pairs that are both <a href="ref:rmp::Object::solid"><code>solid</code></a>. A solid object that
@@ -555,10 +555,10 @@ carries its destructor. A behavior of yours and one of the catalogue's are the s
 thing; there is no base class and nothing to register.</p></dd>
 </dl>
 
-<p data-fw-grep="CMakeLists.txt::list\(REMOVE_ITEM RMP_SOURCES .*/src/rmp/app.cpp">In
+<p data-fw-grep="CMakeLists.txt::list\(REMOVE_ITEM RMP_SOURCES .*/src/rmp/app/app.cpp">In
 a CMake build — the desktops, the BSDs and the web — the framework is compiled once into a static
 library called <code>rmp</code>, and the game and every example written in C++ link it. The one file kept out of
-the library is <code>src/rmp/app.cpp</code>: each executable compiles its own copy, because it
+the library is <code>src/rmp/app/app.cpp</code>: each executable compiles its own copy, because it
 refers to the symbol the entry-point macro defines, and that reference is what turns a program
 with no <code>RMP_GAME</code> into a link error that names what is missing. The Android build
 and the iOS project compile <code>src/</code> as a whole into the app, framework and game

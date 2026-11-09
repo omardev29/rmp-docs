@@ -205,10 +205,11 @@ pack so the loose files are read again.</p>
 <p><a href="/manual/modules/assets.html">Assets</a> has the whole of loading, and
 <a href="/examples/assets/01_loading.html">the loading example</a> reads the same files both ways.</p>
 
-<p><strong>Keep the folder flat.</strong> Resource names are bare file names and the packer does not
-look into subfolders, so a picture in an <code>art/</code> folder inside <code>resources/</code> loads
-while the files are loose and is missing from the pack a release ships. A release build warns when <code>resources/</code> has a
-subfolder.</p>
+<p><strong>Keep the folder in folders by kind</strong> — <code>sprites/</code>, <code>maps/</code>,
+<code>audio/</code>, <code>fonts/</code>, <code>dialogue/</code>, <code>locale/</code>. A resource's name
+is its path below <code>resources/</code> (<code>"sprites/hero.png"</code>), and every target finds
+it by that name: the pack a desktop release ships keeps each file under it, and the web, Android
+and iOS ship the folder whole.</p>
 
 <p>Where the game looks for the folder depends on the build. On a desktop, a debug build reads the
 project's <code>resources/</code> by its absolute path, so the game finds its files whatever folder it

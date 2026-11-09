@@ -86,7 +86,7 @@ already been destroyed — so a bullet that destroys itself on contact does not 
 always valid to read in a report; its <code>alive()</code> says whether it is still in the game. An
 object destroyed by an earlier pair of the same frame is told nothing more.</p>
 
-<p data-fw-grep="src/rmp/behavior.cpp::a\.ops->collision\(a\.data\.get\(\), object, other\);\s+if \(!object\.alive\(\) \|\| !other\.alive\(\)\) break;">Behaviors are the exception. An object's behaviors are walked in the order they were added, and
+<p data-fw-grep="src/rmp/behavior/behavior.cpp::a\.ops->collision\(a\.data\.get\(\), object, other\);\s+if \(!object\.alive\(\) \|\| !other\.alive\(\)\) break;">Behaviors are the exception. An object's behaviors are walked in the order they were added, and
 the walk stops after any behavior once either of the two is no longer alive. So if the bullet was
 destroyed before the enemy's turn — by its own <code>_collision()</code>, or by a
 <a href="ref:rmp::behavior::Projectile"><code>Projectile</code></a>, which destroys it on a hit by
@@ -128,7 +128,7 @@ land on top of a platform instead of being shoved off its side. If neither is im
 half the way; if one is, the other moves all of it; two immovable objects overlapping are a mistake in
 the level, and neither is moved.</p>
 
-<p data-fw-grep="src/rmp/collision.cpp::if \(b_was\) Storage::notify_collision\(b, a\);[\s\S]{0,1500}?const float into = o\.velocity\.x \* p\.out\.x \+ o\.velocity\.y \* p\.out\.y;\s+if \(into &lt; 0\) \{">Whoever is pushed also loses the part of its velocity going <em>into</em> the contact, and nothing
+<p data-fw-grep="src/rmp/scene/collision.cpp::if \(b_was\) Storage::notify_collision\(b, a\);[\s\S]{0,1500}?const float into = o\.velocity\.x \* p\.out\.x \+ o\.velocity\.y \* p\.out\.y;\s+if \(into &lt; 0\) \{">Whoever is pushed also loses the part of its velocity going <em>into</em> the contact, and nothing
 else: a box resting on another under gravity is pushed back up every frame, and without this its
 downward speed would grow every frame too, so that when the one underneath moved away it would drop
 at whatever all that resting added up to. With it, the box starts falling from rest; a jump off it
@@ -316,7 +316,7 @@ hit:</p>
 </tbody>
 </table>
 
-<p data-fw-grep="src/rmp/collision.cpp::if \(hit &lt; 0\) hit = \(-b \+ root\) / \(2 \* a\); // the origin is inside\s+if \(hit &lt; 0 \|\| hit &gt; 1\) return false;">A ray that starts inside a rectangle hits it at distance 0, with the normal pointing back along
+<p data-fw-grep="src/rmp/scene/collision.cpp::if \(hit &lt; 0\) hit = \(-b \+ root\) / \(2 \* a\); // the origin is inside\s+if \(hit &lt; 0 \|\| hit &gt; 1\) return false;">A ray that starts inside a rectangle hits it at distance 0, with the normal pointing back along
 the ray, wherever the ray ends. One that starts inside a circle hits it where it leaves, with the
 normal pointing outwards there — and misses it altogether when it ends inside the circle too. Two hits at the same distance come
 back in the order the objects were spawned, so the answer does not change from one run to the

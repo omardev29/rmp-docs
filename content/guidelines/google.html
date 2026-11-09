@@ -126,10 +126,10 @@ place.</p>
 
 <h3 id="filesystem">&lt;filesystem&gt;</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::#include &lt;filesystem&gt; // the executable's folder, wide on Windows">Google
+<p data-fw-grep="src/rmp/app/app.cpp::#include &lt;filesystem&gt; // the executable's folder, wide on Windows">Google
 does not allow <code>&lt;filesystem&gt;</code>. The framework uses it in two files:
-<code>src/rmp/app.cpp</code>, to find the folder the executable is in, and
-<code>src/rmp/save.cpp</code>, for the save folder and its files, and on Windows to turn the wide
+<code>src/rmp/app/app.cpp</code>, to find the folder the executable is in, and
+<code>src/rmp/save/save.cpp</code>, for the save folder and its files, and on Windows to turn the wide
 paths the system hands back into UTF-8 and back. The standard library does both on every platform
 the framework ships to, which nothing else the framework has would.</p>
 
@@ -161,11 +161,11 @@ framework's sources share.</p>
 
 <h3 id="statics">Statics that are not trivially destructible</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::ORDER, and every step of it was paid for once">Google allows an
+<p data-fw-grep="src/rmp/app/app.cpp::ORDER, and every step of it was paid for once">Google allows an
 object with static storage duration only when its destructor does nothing, because destructors at
 exit run in an order nobody chooses. The framework's file-scope state is a struct per concern, and
 some of those hold vectors and strings. What they hold is released before the window closes, in
-an order written down in <code>src/rmp/app.cpp</code> — scenes, then globals, then the interface's
+an order written down in <code>src/rmp/app/app.cpp</code> — scenes, then globals, then the interface's
 font, then sounds, then everything left in the resource table — rather than by destructors at
 exit.</p>
 
@@ -222,7 +222,7 @@ and <code>XXX</code>, in the framework and the examples.</p>
 
 <h3 id="licence">The top of a file</h3>
 
-<p data-fw-grep="src/rmp/save.cpp::\A// -+\n// rmp::save: a Value to a file and back, and where the file goes\.">Google
+<p data-fw-grep="src/rmp/save/save.cpp::\A// -+\n// rmp::save: a Value to a file and back, and where the file goes\.">Google
 starts every file with its licence. The framework's licence is the repository's
 <code>LICENSE</code>, and the vendored libraries' are in <code>THIRD_PARTY_LICENSES.md</code>; a
 file starts with what it is for, and why it is built the way it is.</p>

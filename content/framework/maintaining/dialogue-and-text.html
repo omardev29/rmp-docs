@@ -102,13 +102,13 @@ both: there is one compiler.</p>
 
 <h2 id="text">The text and its tables</h2>
 
-<p><code>src/rmp/text.cpp</code> is <code>rmp::Text</code> and <code>rmp::lang</code>: the table
+<p><code>src/rmp/text/text.cpp</code> is <code>rmp::Text</code> and <code>rmp::lang</code>: the table
 reader, the lookup and its fallback chain, placeholders, the CLDR plural rules and the system
 language of every platform. Three things in it follow the outside world:</p>
 
 <ul>
 <li><strong>The plural rules.</strong> The cardinal rules of the shipped languages are a small
-table in <code>src/rmp/text.cpp</code>, and <code>tools/text_tool.py</code> holds how many forms
+table in <code>src/rmp/text/text.cpp</code>, and <code>tools/text_tool.py</code> holds how many forms
 each language has, to check the tables. Adding a language is a line in both, and a case in
 <code>tests/text_test.cpp</code>'s plural rules; a language in neither takes the last form.</li>
 <li><strong>The system language.</strong> One branch per platform — the environment, CoreFoundation,
@@ -116,7 +116,7 @@ each language has, to check the tables. Adding a language is a line in both, and
 <code>navigator.language</code> — and only CI's matrix compiles them all. The tests set the
 language through a seam, so none depends on the machine's.</li>
 <li><strong>The codes a folder is searched for.</strong> With no <code>[lang] languages</code>, the
-per-language files are looked for under a list of common codes in <code>src/rmp/text.cpp</code>.</li>
+per-language files are looked for under a list of common codes in <code>src/rmp/text/text.cpp</code>.</li>
 </ul>
 
 <p><code>tools/text_tool.py</code> is <code>rmp text scan</code> and <code>rmp text check</code>:
@@ -130,7 +130,7 @@ the story it converts is played by the C++ in <code>tests/dialogue_test.cpp</cod
 <h2 id="numbers">Numbers</h2>
 
 <p>A number written into a text or a line goes through <code>shortest_number()</code>, in
-<code>src/rmp/number_internal.h</code>: the fewest significant digits that read back as the same
+<code>src/rmp/save/number_internal.h</code>: the fewest significant digits that read back as the same
 number, laid out as C# lays it out, since Yarn's numbers are C#'s. It does not call a
 floating-point <code>std::to_chars</code> on purpose: that one brings libc++'s formatting tables
 into every static link, and cost the demo game 126 KB on Linux

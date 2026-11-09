@@ -98,9 +98,9 @@ against the file. The first says why:</p>
 // RMP_COVERAGE_ON
 </pre>
 
-<p data-fw-grep="src/rmp/aseprite.cpp::        // RMP_COVERAGE_OFF\(two gigabytes: no test allocates a file past int's range\)">The
+<p data-fw-grep="src/rmp/assets/aseprite.cpp::        // RMP_COVERAGE_OFF\(two gigabytes: no test allocates a file past int's range\)">The
 Aseprite reader's refusal of a file past <code>int</code>'s range is
-<a href="fw:src/rmp/aseprite.cpp#L417-L420">one</a>. A marker with no reason fails, and so does an
+<a href="fw:src/rmp/assets/aseprite.cpp#L417-L420">one</a>. A marker with no reason fails, and so does an
 OFF with no ON. The markers are for lines that cannot run, not for lines nobody has written a test
 for yet: those are what the floor is for.</p>
 
@@ -301,7 +301,7 @@ the tree still owes the style guide is <code>tools/lint_debt.txt</code>, one lin
 file — the check, the file, and how many warnings it owes:</p>
 
 <pre data-lang="text" data-fw-grep="tools/lint_debt.txt::^custom-rmp-raw-pointer  src/rmp/input\.cpp +4$">
-custom-rmp-raw-pointer  src/rmp/input.cpp  4
+custom-rmp-raw-pointer  src/rmp/input/input.cpp  4
 </pre>
 
 <ul>

@@ -225,7 +225,7 @@ def load(framework: Path, config: dict) -> tuple[list[Example], list[str]]:
     rows = readme_rows(framework)
     factory = factory_actions(framework)
     if factory is None:
-        problems.append("src/rmp/input.cpp has no install_factory_actions(): the actions that come "
+        problems.append("src/rmp/input/input.cpp has no install_factory_actions(): the actions that come "
                         "defined, which an example may read by name, cannot be read")
     entries = config.get("examples", {})
     found = find(framework)

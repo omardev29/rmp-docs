@@ -136,7 +136,7 @@ change any of them for one run.</p>
 
 <h3>A link error about the entry point</h3>
 
-<p data-fw-grep="src/rmp/app.cpp::RequireEntryPoint\(\) noexcept \{ rmp_entry_point_is_declared_exactly_once\(\); \}">A
+<p data-fw-grep="src/rmp/app/app.cpp::RequireEntryPoint\(\) noexcept \{ rmp_entry_point_is_declared_exactly_once\(\); \}">A
 program has exactly one entry point: <code>RMP_GAME</code> or <code>RMP_ENTRY_POINT</code>, once,
 in one file. The symbol <code>rmp_entry_point_is_declared_exactly_once</code> exists so that the
 link error points at the cause either way. Two entry points define it twice, and the linker names it
@@ -160,7 +160,7 @@ raylib wants a <code>Texture2D</code>; it converts there.</p>
 <h3>Compiling the framework outside its build</h3>
 
 <p><samp>RMP_PRODUCTION_BUILD is not defined: the build system has to pass it (0 or 1)</samp> comes
-from <code>src/rmp/app.cpp</code> when it is compiled by a build that does not define that macro.
+from <code>src/rmp/app/app.cpp</code> when it is compiled by a build that does not define that macro.
 CMake, Gradle and the generated Xcode project all do; a build of your own has to as well.</p>
 
 <h3>Raw OpenGL links on the desktop and not in the tests</h3>
@@ -201,11 +201,9 @@ test in CI — does not pass with a failed asset:
 found a file there that does not decode. Look for:</p>
 
 <ul>
-<li><strong>A misspelt name.</strong> Names are file names: <code>"player.png"</code>, not a
-path.</li>
-<li><strong>A file in a subfolder.</strong> The pack holds the files directly in
-<code>resources/</code> and does not reach into folders, and a release configure warns when it
-finds one. Move the file up.</li>
+<li><strong>A misspelt name.</strong> A name is the path below <code>resources/</code>:
+<code>"sprites/player.png"</code>, not <code>"resources/sprites/player.png"</code>, and with
+<code>/</code> between folders on every system.</li>
 <li><strong>A file that is there and does not decode.</strong> A picture, a font or a sound cut
 short, or in a format raylib does not read, counts as failed the same as a missing one, and says
 once <samp>ASSETS: '…' is in … but could not be decoded</samp>; a font is not replaced by raylib's
@@ -222,7 +220,7 @@ too for a sound or a font, and <samp>ASSETS: '…' not found in pack, falling ba
 file</samp> for a picture.</li>
 </ul>
 
-<p data-fw-grep="src/rmp/audio.cpp::if \(!next\.bytes\.empty\(\)\) \+\+rmp::assets::detail::loads\.failed;">Only
+<p data-fw-grep="src/rmp/audio/audio.cpp::if \(!next\.bytes\.empty\(\)\) \+\+rmp::assets::detail::loads\.failed;">Only
 loads through <code>rmp::assets</code> are counted. <code>rmp::audio</code> loads through it once
 it has found a file, so a sound or a song whose file is there and does not decode or stream counts
 too. A name that matches no file at all does not: <code>rmp::audio</code> says so once, below, and
