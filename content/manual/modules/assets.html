@@ -74,7 +74,7 @@ rmp::Sound jump = rmp::assets::load_sound("audio/jump.wav");
 rmp::Tilemap town = rmp::assets::load_map("maps/town.ldtk");
 </pre>
 
-<p data-fw-grep="src/rmp/tilemap/tilemap.cpp::std::string next_to\(const std::string_view map, const char \*path\)">A
+<p data-fw-grep="src/rmp/tilemap/tilemap.cpp::std::string next_to\(const std::string_view map, const std::string_view path\)">A
 map names its tilesets and its separate level files by a path relative to itself, as LDtk and Tiled
 write them: <code>maps/town.ldtk</code> with a tileset at <code>../tiles/town.png</code> loads
 <code>tiles/town.png</code>. When that file is not there, the map's tileset is looked for by its
