@@ -270,7 +270,9 @@ def bundle(site) -> dict[str, bytes]:
 
 def print_page(site, order, base: str) -> str:
     """The manual in one page, to print or save as a PDF: every page but the
-    generated API reference, its links made absolute."""
+    generated API reference, its links and pictures made relative to the
+    site's root, where print.html is -- so the page draws from wherever it is
+    served, and a link goes to the same page of the same copy of the site."""
     title = site.config["site"]["title"]
     parts = []
     contents = []
@@ -281,9 +283,9 @@ def print_page(site, order, base: str) -> str:
         for n in body.walk():
             if isinstance(n, dom.Node):
                 if n.get("href"):
-                    n.attrs["href"] = absolute(n.get("href"), p.url, base)
+                    n.attrs["href"] = absolute(n.get("href"), p.url, "")
                 if n.get("src"):
-                    n.attrs["src"] = absolute(n.get("src"), p.url, base)
+                    n.attrs["src"] = absolute(n.get("src"), p.url, "")
                 if n.get("id"):
                     n.attrs["id"] = f"p{i}-{n.get('id')}"
         anchor = f"page-{i}"
@@ -298,6 +300,7 @@ def print_page(site, order, base: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}: the manual</title>
 <link rel="stylesheet" href="assets/site.css">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <style>
   body {{ max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }}
   .print-page {{ break-before: page; }}
