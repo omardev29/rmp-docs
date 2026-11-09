@@ -477,7 +477,7 @@ working directory. NetBSD and OpenBSD cannot say where an executable is, so ther
 working directory and logs <samp>ASSETS: this system does not say where the executable is, so …
 is read from the working directory, …</samp>.</p>
 
-<p data-fw-grep="src/rmp/app/app.cpp::if \(RMP_WINDOW_FPS &gt; 0\) SetTargetFPS\(RMP_WINDOW_FPS\);[\s\S]*?if \(SmokeTest_maxFrames &gt; 0\) \{[\s\S]*?std::getenv\(&quot;RAY_TEST_WINDOW&quot;\);[\s\S]*?WindowSize\{ RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT \}\);\s+InitWindow\(size\.width, size\.height, RMP_WINDOW_TITLE\);\s+rmp::assets::detail::window_opened\(\);">Then
+<p data-fw-grep="src/rmp/app/app.cpp::if \(RMP_WINDOW_FPS &gt; 0\) SetTargetFPS\(RMP_WINDOW_FPS\);[\s\S]*?if \(SmokeTest_maxFrames &gt; 0\) \{[\s\S]*?std::getenv\(&quot;RAY_TEST_WINDOW&quot;\);[\s\S]*?WindowSize\{ RMP_WINDOW_WIDTH, RMP_WINDOW_HEIGHT \}\);\s+InitWindow\(size\.width, size\.height, RMP_WINDOW_TITLE\);[\s\S]*?rmp::assets::detail::window_opened\(\);">Then
 the ready hook. <code>RMP_GAME</code>'s opens the window from <code>[window]</code> — vsync and a
 resizable window first, the frame cap before <code>InitWindow()</code> because raylib's DRM backend
 chooses the display mode from it, and never on the web or iOS, where the browser and the display

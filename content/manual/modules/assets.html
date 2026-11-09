@@ -56,8 +56,8 @@ std::vector&lt;unsigned char&gt; dialogue = rmp::assets::load_data("dialogue.jso
 <h3>A name is a path below resources/</h3>
 
 <p>The name is the file's path inside <code>resources/</code>, with <code>/</code> between folders —
-<code>"jump.wav"</code> for a file at the top, <code>"sfx/jump.wav"</code> for one in
-<code>resources/sfx/</code> — never <code>"resources/jump.wav"</code> and never an absolute path. The
+<code>"jump.wav"</code> for a file at the top, <code>"sfx/jump.wav"</code> for one in a
+folder <code>sfx</code> inside it — never <code>"resources/jump.wav"</code> and never an absolute path. The
 folder where those names are looked up is set by the build, so the same name works however the
 game was started.</p>
 
@@ -302,8 +302,8 @@ without reads the game's.</p>
 
 <h2>The pack</h2>
 
-<p data-fw-grep="CMakeLists.txt::file\(GLOB PACK_FILES LIST_DIRECTORIES false">A release does not have to ship a folder of loose files. <code>rmp pack</code> bundles every
-file directly in <code>resources/</code> into one file, <code>resources.rres</code>, inside that same
+<p data-fw-grep="CMakeLists.txt::file\(GLOB_RECURSE PACK_FILES LIST_DIRECTORIES false">A release does not have to ship a folder of loose files. <code>rmp pack</code> bundles every
+file below <code>resources/</code>, its folders too, into one file, <code>resources.rres</code>, inside that same
 folder, encrypted. The container format is <a href="https://github.com/raysan5/rres">rres</a>, by
 raylib's author, and the packer is part of the framework, so nothing has to be installed or
 bought.</p>

@@ -24,8 +24,8 @@ FACTORY = ("void install_factory_actions() {\n"
 
 
 def framework(tmp: Path, names, readme_rows, factory: str = FACTORY) -> Path:
-    (tmp / "src" / "rmp").mkdir(parents=True)
-    (tmp / "src" / "rmp" / "input.cpp").write_text(factory)
+    (tmp / "src" / "rmp" / "input").mkdir(parents=True)
+    (tmp / "src" / "rmp" / "input" / "input.cpp").write_text(factory)
     (tmp / "examples").mkdir()
     for n in names:
         (tmp / "examples" / n / "src").mkdir(parents=True)

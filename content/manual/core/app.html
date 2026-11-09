@@ -24,7 +24,7 @@ members loads exactly as one in <code>_ready()</code> does. There is no <code>In
 frame loop and no unloading in the game, because those were the same lines in every game and none
 of them was ever yours to get right.</p>
 
-<p data-fw-grep="src/rmp/app/app.cpp::was loaded before the window opened, so it has">A texture, a font or a
+<p data-fw-grep="src/rmp/assets/assets.cpp::was loaded before the window opened, so it has">A texture, a font or a
 sheet asked for before the window opens has nothing to draw: raylib's GPU calls have nowhere to
 go yet. That is a load at namespace scope, or in the constructor of a global. The framework names
 the first one, once, when the window opens:

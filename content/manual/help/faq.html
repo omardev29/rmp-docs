@@ -61,7 +61,7 @@ entry-point macro writes <code>main()</code> for you, and a second one is a link
 
 <h3>Does it use exceptions?</h3>
 
-<p data-fw-grep="include/rmp/assets.h::three places in src/rmp/save\.cpp">No. Nothing of the framework's
+<p data-fw-grep="include/rmp/assets.h::three places in src/rmp/save/save\.cpp">No. Nothing of the framework's
 throws to your code. A load that finds nothing gives an empty handle that draws nothing;
 <a href="ref:rmp::app::quit"><code>rmp::app::quit()</code></a> raises a flag the loop reads; a mistake
 it can see is said once in the log. Where a standard-library call inside it can throw, the framework

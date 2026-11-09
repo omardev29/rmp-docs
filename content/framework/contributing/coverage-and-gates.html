@@ -12,7 +12,7 @@ in a script cannot be forgotten the way a rule in a note is.</p>
 
 <h2 id="coverage">Coverage, measured in the image</h2>
 
-<p data-fw-grep="tools/coverage_check.sh::# Builds the unit tests, the headless UI layout test and tests/input_play\.cpp\n# \(the one program that drives src/rmp/app\.cpp, through the real runner\) with\n# -fprofile-instr-generate -fcoverage-mapping">A
+<p data-fw-grep="tools/coverage_check.sh::# Builds the unit tests, the headless UI layout test and tests/input_play\.cpp\n# \(the one program that drives src/rmp/app/app\.cpp, through the real runner\) with\n# -fprofile-instr-generate -fcoverage-mapping">A
 test that never runs a line cannot find what is wrong with it. <code>rmp test coverage</code> builds
 the unit tests, the headless layout test and <code>tests/input_play.cpp</code> — the one program
 that drives the real desktop runner — with clang's source-based coverage, runs them, and reads which
@@ -296,11 +296,11 @@ framework's <code>.clang-tidy</code>: the same run on your machine and in CI's <
 job. It reads the compile database of the <code>lint</code> preset, which it configures, and a file
 with no entry there is a failure rather than a guess at its flags.</p>
 
-<p data-fw-grep="tools/lint_debt.py::    misc-const-correctness  src/rmp/ldtk\.cpp  3">What
+<p data-fw-grep="tools/lint_debt.py::    misc-const-correctness  src/rmp/tilemap/ldtk\.cpp  3">What
 the tree still owes the style guide is <code>tools/lint_debt.txt</code>, one line per check and
 file — the check, the file, and how many warnings it owes:</p>
 
-<pre data-lang="text" data-fw-grep="tools/lint_debt.txt::^custom-rmp-raw-pointer  src/rmp/input\.cpp +4$">
+<pre data-lang="text" data-fw-grep="tools/lint_debt.txt::^custom-rmp-raw-pointer  src/rmp/input/input\.cpp +4$">
 custom-rmp-raw-pointer  src/rmp/input/input.cpp  4
 </pre>
 
