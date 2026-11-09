@@ -26,7 +26,8 @@ BODY = """<h1>Dialogue</h1>
 <table><thead><tr><th>Name</th><th>What</th></tr></thead>
 <tbody><tr><td><code>a|b</code></td><td>pipes</td></tr></tbody></table>
 <script>never()</script>
-<p>External <a href="https://example.com/x">site</a>.</p>"""
+<p>External <a href="https://example.com/x">site</a>.</p>
+<p><img src="poster.png" alt="A poster"></p>"""
 
 
 @dataclass
@@ -141,7 +142,15 @@ class BundleTest(unittest.TestCase):
         page = self.out["print.html"].decode()
         self.assertIn("<h1>Dialogue</h1>", page)
         self.assertNotIn("<h1>Reference</h1>", page)
-        self.assertIn(f'href="{BASE}reference/x.html#start"', page)
+        # Relative to the site's root, where print.html is: the browser check
+        # opens the built site with no network, and an address of the live
+        # site there was a request that failed (every example's poster).
+        self.assertIn('href="reference/x.html#start"', page)
+        self.assertIn('src="manual/modules/poster.png"', page)
+        self.assertNotIn(f'src="{BASE}', page)
+        # Its own icon, as every page has, or the browser asks for
+        # /favicon.ico and the browser check reads a 404 in the console.
+        self.assertIn('<link rel="icon" href="assets/icon.svg"', page)
         self.assertIn('id="p1-waiting"', page)
 
 
