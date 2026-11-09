@@ -51,6 +51,7 @@ class Context:
     refconf: dict = field(default_factory=dict)      # reference.toml
     served: dict = field(default_factory=dict)       # site path -> bytes: site.toml [served]
     ref: str = ""                                    # FRAMEWORK_REF
+    copied: set = field(default_factory=set)         # site paths the build copies in: posters, play pages
 
     @classmethod
     def from_folder(cls, folder: Path) -> "Context":
