@@ -162,8 +162,11 @@ ACTION_RE = r"action\(\s*\"([^\"]+)\"\s*,([^;]*?)\)\s*;"
 def factory_actions(framework: Path) -> dict | None:
     """{name: [keys]} for the actions that come defined, read from the
     framework's install_factory_actions(); None when it is not there."""
-    src = framework / "src" / "rmp" / "input.cpp"
-    if not src.is_file():
+    # src/rmp/input/input.cpp since the framework's sources have a folder per
+    # module; src/rmp/input.cpp before.
+    src = next((p for p in (framework / "src" / "rmp" / "input" / "input.cpp",
+                            framework / "src" / "rmp" / "input.cpp") if p.is_file()), None)
+    if src is None:
         return None
     code = uncomment(src.read_text(encoding="utf-8"))
     m = re.search(r"void install_factory_actions\(\) \{(.*?)\n\}", code, re.S)
