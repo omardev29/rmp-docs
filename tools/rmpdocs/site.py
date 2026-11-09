@@ -812,6 +812,12 @@ class Site:
             self.write()
         return self
 
+    def copied_paths(self) -> set:
+        """The site paths write() copies in beside the pages: each example's
+        poster and the play page of each one built for the web."""
+        return ({f"examples/posters/{name}" for name in self.posters}
+                | {f"examples/play/{target}/index.html" for target in self.examples_built})
+
     def write(self):
         if self.out.exists():
             shutil.rmtree(self.out)

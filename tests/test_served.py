@@ -126,6 +126,25 @@ class GateTest(unittest.TestCase):
         self.assertIn("install.sh:3: is not tools/install.sh as it is at FRAMEWORK_REF", got[0])
 
 
+class AddressesTest(unittest.TestCase):
+    """An address of this site in a served file is a page, a served file or
+    what the build copies in. print.html links every example's poster by its
+    address, and the posters are copied in, not built: with nothing to say so
+    the publish was red on 56 of them (2026-11-08)."""
+
+    def test_a_copied_poster_is_served(self):
+        base = "https://example.org/docs/"
+        page = f'<img src="{base}examples/posters/a.png"><a href="{base}">home</a>'.encode()
+        config = {"site": {"base_url": base}}
+        ctx = checks.Context(docs=Path("."), config=config, framework=Path("."),
+                             outputs={"index.html": ""}, served={"print.html": page})
+        got = [str(p) for p in truth.check_installer(ctx)]
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("serves nothing at examples/posters/a.png", got[0])
+        ctx.copied = {"examples/posters/a.png"}
+        self.assertEqual(truth.check_installer(ctx), [])
+
+
 class RealSiteTest(unittest.TestCase):
     """The site serves what FRAMEWORK_REF has, when the framework has it."""
 

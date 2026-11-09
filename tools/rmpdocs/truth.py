@@ -592,7 +592,9 @@ def check_installer(ctx: Context) -> list[Problem]:
     base = ctx.config.get("site", {}).get("base_url", "")
     if not base:
         return out
-    known = set(ctx.outputs) | set(ctx.served)
+    # Pages, served files, and what the build copies in beside them -- an
+    # example's poster and its play page -- which print.html links by address.
+    known = set(ctx.outputs) | set(ctx.served) | set(ctx.copied)
     texts = [(path, text) for path, text in ctx.sources.items()]
     texts += [(f"{name} (served)", data.decode("utf-8", "replace")) for name, data in ctx.served.items()]
     for rel in FRAMEWORK_TEXTS:
