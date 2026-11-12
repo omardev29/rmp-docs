@@ -11,6 +11,8 @@ state model — there is no widget object holding a copy, and nothing to keep in
 designed widget by widget there are also <a href="#widgets-you-keep">widgets you keep</a>, each with
 its own style and callbacks, and every control sends <a href="#events">events</a>.</p>
 
+<figure class="shot"><img src="/shots/e2e/ui/04_settings/quality_list_open.png" alt="A settings panel: Fullscreen and VSync checked, Subtitles disabled, three volume sliders with percentages, and the Quality dropdown open on Low, Medium, High and Ultra, with Revert and Apply below" width="800" height="450" loading="lazy"><figcaption>Checkboxes, sliders, a dropdown and a text field &mdash; <a href="/examples/ui/04_settings.html">examples/ui/04_settings</a>, a frame its e2e script compares exactly.</figcaption></figure>
+
 <pre data-lang="cpp" data-harness="function" data-given="struct Settings { bool fullscreen = false; float music = 0.5f; int quality = 1; std::string name = &quot;Player&quot;; }; static Settings settings;">
 rmp::ui::begin();
 rmp::ui::checkbox("Fullscreen", settings.fullscreen);

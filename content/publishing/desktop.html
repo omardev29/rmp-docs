@@ -95,7 +95,7 @@ and the musl and DRM runs start it from <code>/</code>.</p>
 
 <h2 id="hardening">Built to be hard to exploit</h2>
 
-<p data-fw-grep="CMakeLists.txt::if\(PRODUCTION_BUILD AND NOT MSVC AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS\)">A
+<p data-fw-grep="CMakeLists.txt::if\(PRODUCTION_BUILD AND NOT RMP_MSVC_ABI AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS\)">A
 game reads files a player can change — its saves, its assets — and a memory mistake that a
 debug build's <a href="/manual/basics/configuration.html#sanitizers">sanitizers</a> did not meet is
 still in the release. So a release is compiled and linked with what makes such a mistake harder to
@@ -113,9 +113,10 @@ that is not executable; and <code>_FORTIFY_SOURCE</code> where the C library is 
 executable is position-independent, so that ASLR moves it too and not only the libraries around
 it.</li>
 <li><strong>Windows:</strong> MSVC's defaults are the stack protector, ASLR, data execution
-prevention and high-entropy addresses. MinGW is asked for the last three, which its linker gives by
-default anyway, and not for the stack protector, which there can mean shipping a DLL beside the
-game.</li>
+prevention and high-entropy addresses; Clang building for Microsoft's ABI links with
+<code>lld-link</code>, whose defaults give the last three too. MinGW is asked for the last three,
+which its linker gives by default anyway, and not for the stack protector, which there can mean
+shipping a DLL beside the game.</li>
 <li><strong>macOS, iOS and Android</strong> are position-independent by the platform's rule, and
 Android's toolchain adds the stack protector and <code>_FORTIFY_SOURCE</code> by itself. The web
 has no stack to execute and no loader to move.</li>

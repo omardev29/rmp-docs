@@ -55,12 +55,13 @@ a player double-clicking the game has no compiler installed, so raylib and the c
 C++ runtimes are linked into the <code>.exe</code>. A release build is a windowed program — no
 console opens behind the game — and a debug build keeps its console for the log.</p>
 
-<p data-fw-grep="CMakeLists.txt::if\(MSVC\)\s+set\(CMAKE_MSVC_RUNTIME_LIBRARY &quot;MultiThreaded\$&lt;\$&lt;CONFIG:Debug&gt;:Debug&gt;&quot;\)\s+elseif\(MINGW\)\s+add_link_options\(-static\)">How depends on the compiler, and the
+<p data-fw-grep="CMakeLists.txt::if\(RMP_MSVC_ABI\)\s+set\(CMAKE_MSVC_RUNTIME_LIBRARY &quot;MultiThreaded\$&lt;\$&lt;CONFIG:Debug&gt;:Debug&gt;&quot;\)\s+elseif\(MINGW\)\s+add_link_options\(-static\)">How depends on the compiler, and the
 build does it for both. MinGW links with <code>-static</code>, so libstdc++, libgcc and winpthread
 are inside the <code>.exe</code> instead of in <code>libstdc++-6.dll</code> and
-<code>libgcc_s_seh-1.dll</code> next to a compiler the player does not have. MSVC builds with the
-static C runtime, <code>/MT</code> (<code>/MTd</code> in a debug build), so no Visual C++
-Redistributable is needed. The Universal C Runtime is part of Windows 10 and stays a DLL. No
+<code>libgcc_s_seh-1.dll</code> next to a compiler the player does not have. MSVC, and Clang
+when it builds for Microsoft's ABI (<code>[dev] compiler = "clang"</code> on Windows, or
+<code>rmp build windows clang-cl</code>), build with the static C runtime, <code>/MT</code>
+(<code>/MTd</code> in a debug build), so no Visual C++ Redistributable is needed. The Universal C Runtime is part of Windows 10 and stays a DLL. No
 <code>/arch:</code> option is set either: the x64 build stays on the SSE2 every x64 processor has,
 where AVX2 would stop the game with an illegal instruction on a processor without it.</p>
 

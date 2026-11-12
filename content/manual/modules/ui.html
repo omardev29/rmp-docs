@@ -10,6 +10,8 @@ dialogs and settings screens. A main menu is three calls between a <code>begin()
 <code>end()</code>, and it comes out centred, sized for the screen it is on, and playable with a
 mouse, a finger, a keyboard or a gamepad without a line about any of them.</p>
 
+<div class="shots"><figure class="shot"><img src="/shots/e2e/ui/01_menu/options.png" alt="A dark options menu: four buttons stacked in the middle, Music: on with the focus ring, Reset progress in red, Cloud saves greyed out, and Back" width="800" height="450" loading="lazy"><figcaption>Simple mode: a menu of buttons, the default theme &mdash; <a href="/examples/ui/01_menu.html">examples/ui/01_menu</a></figcaption></figure><figure class="shot"><img src="/shots/e2e/ui/09_skinned/shop.png" alt="A shop drawn with pictures: a gold-framed panel titled The Star Shop, coin and star counters, and two skinned buttons, Buy a star and Sell a star" width="800" height="450" loading="lazy"><figcaption>Full mode: retained widgets with a skin, nine-slices and a pixel font &mdash; <a href="/examples/ui/09_skinned.html">examples/ui/09_skinned</a></figcaption></figure></div>
+
 <pre data-lang="cpp" data-harness="function" data-given="void play(); void quit();">
 rmp::ui::begin();
 if (rmp::ui::button("Play")) play();

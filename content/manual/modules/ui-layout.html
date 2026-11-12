@@ -11,6 +11,8 @@ Containers are how you get structure: they nest, they take their contents as a l
 size they take is in design units, so a layout drawn for the <code>[window]</code> resolution keeps
 its proportions on any screen.</p>
 
+<div class="shots"><figure class="shot"><img src="/shots/e2e/ui/02_layout/laid_out.png" alt="A column of cards: an inventory header reading 24 / 40, a rabbit card with two bars, a card that says PAUSED, one that says nothing here, and a Done button" width="800" height="450" loading="lazy"><figcaption>Rows, columns and cards &mdash; <a href="/examples/ui/02_layout.html">examples/ui/02_layout</a></figcaption></figure><figure class="shot"><img src="/shots/e2e/ui/07_responsive/bestiary_expanded.png" alt="A wide layout: a sidebar of sections with Bestiary selected, and a grid of sixteen items with progress bars beside it" width="800" height="450" loading="lazy"><figcaption>One layout that changes with the window &mdash; <a href="/examples/ui/07_responsive.html">examples/ui/07_responsive</a></figcaption></figure></div>
+
 <pre data-lang="cpp" data-harness="function" data-given="void quit();">
 rmp::ui::begin();
 rmp::ui::panel([&amp;] {
