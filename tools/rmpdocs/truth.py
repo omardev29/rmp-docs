@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 
 from . import dom
+from . import served as served_mod
+from . import shots as shots_mod
 from .checks import Context, Problem, gate
 
 
@@ -377,21 +379,46 @@ def check_claims(ctx: Context) -> list[Problem]:
     return out
 
 
-@gate("pictures", "no page carries a raster image of its own: a screenshot goes stale the day "
-                  "the UI changes; pictures are SVG diagrams or come from the examples job")
+@gate("pictures", "a raster image in a page is one the build makes from code -- a golden of the "
+                  "framework's e2e scripts or the tutorial's game after a page (shots.py), with "
+                  "its alt text: a screenshot taken by hand goes stale the day the UI changes")
 def check_pictures(ctx: Context) -> list[Problem]:
     out = []
+    steps = shots_mod.tutorial_steps(ctx.sources)
+    headers = shots_mod.project_headers(ctx.sources)
+
+    def read_golden(path):
+        if ctx.framework is None:
+            raise LookupError("no framework")
+        return served_mod.at_ref(ctx.framework, ctx.ref, path)
+
     for path, root in _fragments(ctx):
         for n in root.walk():
-            src = n.attrs.get("src", "") if n.tag in ("img", "source") else ""
-            if re.search(r"\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)", src, re.I):
-                out.append(Problem("pictures", path, n.line, f"{src}: a raster image in a page"))
+            if n.tag not in ("img", "source"):
+                continue
+            for src in [n.attrs.get("src", "")] + [c.strip().split(" ")[0] for c in
+                                                  n.attrs.get("srcset", "").split(",") if c.strip()]:
+                if not shots_mod.RASTER.search(src):
+                    continue
+                why = shots_mod.why_not(src, read_golden, steps)
+                if why:
+                    out.append(Problem("pictures", path, n.line, why))
+            if n.tag == "img":
+                why = shots_mod.why_not_scene(n.attrs.get("src", ""), n.attrs.get("data-scene", ""),
+                                              n.attrs.get("data-header", ""), headers)
+                if why:
+                    out.append(Problem("pictures", path, n.line, why))
+            if n.tag == "img" and shots_mod.site_path(n.attrs.get("src", "")) \
+                    and not n.attrs.get("alt", "").strip():
+                out.append(Problem("pictures", path, n.line,
+                                   f"{n.attrs['src']}: a picture says what it shows in its alt text"))
     content = ctx.docs / "content"
     if content.is_dir():
         for p in content.rglob("*"):
             if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp"):
                 out.append(Problem("pictures", f"content/{p.relative_to(content).as_posix()}", 0,
-                                   "a raster image in content/"))
+                                   "a raster image in content/: a page's pictures are made by the "
+                                   "build (shots.py), never kept beside it"))
     return out
 
 

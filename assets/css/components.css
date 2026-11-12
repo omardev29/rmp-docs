@@ -129,6 +129,13 @@ figure > figcaption {
   color: var(--text-muted);
 }
 .diagram svg { display: block; width: 100%; height: auto; }
+/* A picture the build made from code (tools/rmpdocs/shots.py): a frame of the
+   game, kept at its own shape; two of them side by side when they compare. */
+.shot img { display: block; width: 100%; height: auto; border-radius: var(--radius);
+            border: 1px solid var(--border); }
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+         gap: 0 1rem; margin: 0 0 1.1em; }
+.shots > figure { min-width: 0; margin: 0; }
 
 /* --- the same thing written two ways, side by side ------------------------ */
 .modes {

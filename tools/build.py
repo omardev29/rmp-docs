@@ -100,13 +100,27 @@ def main(argv):
     if args.command != "check":
         site.write()
     if args.tier == "project":
-        from rmpdocs import project
+        import tempfile
+        from rmpdocs import project, shots
+        # The tutorial's pictures go into the site; a check writes no site,
+        # so they are made in a folder thrown away, and still have to be made.
+        scratch = tempfile.TemporaryDirectory()
+        root = site.out if args.command != "check" else Path(scratch.name)
         for name, steps in site.project_steps().items():
-            for step, why in project.run(site.framework, name, steps):
+            prefix = f"{shots.TUTORIAL}{name}/"
+            wanted = {p[len(prefix):-len(".png")]: site.shot_scenes.get(p)
+                      for p in site.shots if p.startswith(prefix)}
+            for step, why in project.run(site.framework, name, steps, shots=root / prefix,
+                                         wanted=wanted):
                 if why:
                     problems.append(checks.Problem("project", step.page if step else name, 0, why))
                 else:
                     print(f"  ok    {name}: built and booted after {step.page}")
+        for path in sorted(p for p in site.shots if p.startswith(shots.TUTORIAL)):
+            if not (root / path).is_file() and not any(p.gate == "project" for p in problems):
+                problems.append(checks.Problem("project", path, 0, "a page shows this picture, "
+                                               "and no step of the tutorial made it"))
+        scratch.cleanup()
     for p in problems:
         print(p)
     pages = len(site.pages)

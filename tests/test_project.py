@@ -3,6 +3,7 @@
 import os
 import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -67,6 +68,20 @@ class BuildTest(unittest.TestCase):
         results = project.run(FRAMEWORK, "tutorial_check", [bad])
         self.assertIs(results[0][0], bad)
         self.assertIn("the game's own tests, rmp test unit, fail after this page", results[0][1] or "")
+
+
+    def test_a_page_that_shows_the_game_gets_its_picture_and_the_others_none(self):
+        one = project.Step("content/one.html", [project.ProjectFile(
+            "content/one.html", 1, "raylib_multiplatform.toml", '[window]\ntitle = "One"', "toml")])
+        two = project.Step("content/two.html", [project.ProjectFile(
+            "content/two.html", 1, "raylib_multiplatform.toml", '[window]\ntitle = "Two"', "toml")])
+        with tempfile.TemporaryDirectory() as tmp:
+            shots = Path(tmp) / "shots"
+            results = project.run(FRAMEWORK, "tutorial_check", [one, two], shots=shots,
+                                  wanted={"two": None})
+            self.assertEqual(results, [(one, None), (two, None)])
+            self.assertEqual(sorted(p.name for p in shots.iterdir()), ["two.png"])
+            self.assertEqual((shots / "two.png").read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
 
 
 class RelativeFrameworkTest(unittest.TestCase):

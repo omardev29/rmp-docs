@@ -1,0 +1,9 @@
+shot.png: a raster image in a page is a picture the build makes from code
+the framework has no tests/e2e/golden/ui/01_menu/gone.png at FRAMEWORK_REF
+no page called nowhere.html writes files of the tutorial 'my_game'
+a picture says what it shows in its alt text
+/shots/e2e/ui/../01_menu/options.png: not an address of a shot
+/assets/hand.webp: a raster image in a page
+content/kept.png: a raster image in content/
+start a picture of the tutorial's game, and this is none
+data-header='scenes/nowhere.h' is no header the tutorial 'my_game' writes

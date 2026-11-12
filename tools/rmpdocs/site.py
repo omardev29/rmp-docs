@@ -38,6 +38,7 @@ from .snippets import GATES as snippet_gates, Snippet, harness_file
 from .project import ProjectFile
 from . import search as search_index
 from . import served as served_mod
+from . import shots as shots_mod
 
 DOCS = Path(__file__).resolve().parents[2]
 
@@ -131,6 +132,8 @@ class Site:
         self.snippets: list[Snippet] = []
         self.project_files: dict[str, list[ProjectFile]] = {}   # project -> files, page order later
         self.served: dict[str, bytes] = {}   # site path -> bytes, at the site's root
+        self.shots: set = set()   # site paths of the pictures pages show (shots.py)
+        self.shot_scenes: dict = {}   # a tutorial picture's site path -> (scene, header) it starts in
 
     # -- the framework ---------------------------------------------------------
 
@@ -267,6 +270,7 @@ class Site:
         self._code_spans(page, root)
         self._headings(page, root)
         self._links(page, root)
+        self._shots(page, root)
         self._tables(root)
         try:
             page.body = dom.serialize(root)
@@ -608,6 +612,23 @@ class Site:
             elif href.startswith("/"):
                 n.attrs["href"] = relative(page.url, href[1:])
 
+    def _shots(self, page: Page, root: dom.Node):
+        """A picture a page shows (shots.py): written from the site's root,
+        made relative here, and remembered so write() copies it in -- or, for
+        the tutorial's, so the project tier knows it is wanted. Whether it may
+        be shown at all is the pictures gate's."""
+        for n in root.walk():
+            if n.tag != "img":
+                continue
+            path = shots_mod.site_path(n.attrs.get("src", ""))
+            if path is None:
+                continue
+            self.shots.add(path)
+            scene, header = n.attrs.pop("data-scene", ""), n.attrs.pop("data-header", "")
+            if scene and header:
+                self.shot_scenes[path] = (scene, header)
+            n.attrs["src"] = relative(page.url, path)
+
     def _tables(self, root: dom.Node):
         for t in [n for n in root.walk() if n.tag == "table"]:
             if t.parent is not None and "table-wrap" in t.parent.classes():
@@ -814,8 +835,10 @@ class Site:
 
     def copied_paths(self) -> set:
         """The site paths write() copies in beside the pages: each example's
-        poster and the play page of each one built for the web."""
+        poster, the play page of each one built for the web, and the pictures
+        pages show (the tutorial's are written by the project tier)."""
         return ({f"examples/posters/{name}" for name in self.posters}
+                | self.shots
                 | {f"examples/play/{target}/index.html" for target in self.examples_built})
 
     def write(self):
@@ -848,6 +871,15 @@ class Site:
         (assets / "search.json").write_text(self.search_json, encoding="utf-8")
         play = (self.docs / "templates" / "play.html").read_text(encoding="utf-8")
         examples_mod.copy_artifacts(self.examples, self.examples_web, self.posters_dir, self.out, play)
+        for path in sorted(self.shots):
+            if not path.startswith(shots_mod.E2E):
+                continue
+            try:
+                data = served_mod.at_ref(self.framework, self.ref, shots_mod.golden_of(path))
+            except LookupError:
+                continue   # the pictures gate says so
+            (self.out / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.out / path).write_bytes(data)
 
 
 def toc_html(entries: list[tuple[int, str, str]]) -> str:

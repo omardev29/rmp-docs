@@ -16,10 +16,15 @@ every asset, drew, and exited cleanly -- and, while the game has tests in
 tests/game/, runs them the way the reader would: `rmp test unit`. A step that
 does not build, does not boot, or fails the game's own tests is a problem on
 that page. What a reader types at step N works at step N.
+
+A page that shows the game after it (`/shots/tutorial/<project>/<page>.png`,
+shots.py) gets its picture here: the build that just booted runs again for
+shots.FRAMES frames and writes its last one.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -98,8 +103,44 @@ def apply(project: Path, step: Step, framework: Path | None = None) -> None:
         target.write_text(f.code.rstrip("\n") + "\n", encoding="utf-8")
 
 
-def run(framework: Path, name: str, steps: list[Step], keep: Path | None = None):
-    """(step, problem or None) for every step: built and booted in order."""
+def picture(project: Path, name: str, png: Path, scene: tuple | None = None) -> str | None:
+    """The game as it is built now, run for shots.FRAMES frames, its last frame
+    written to `png`; why not, or None. `scene` (class, header) starts it
+    there instead of where src/main.cpp does -- for this run only."""
+    from .shots import FRAMES, start_in
+    png = png.resolve()
+    png.parent.mkdir(parents=True, exist_ok=True)
+    main = project / "src" / "main.cpp"
+    kept = main.read_text(encoding="utf-8")
+    try:
+        if scene:
+            main.write_text(start_in(kept, *scene), encoding="utf-8")
+            built = subprocess.run(["cmake", "--build", "build/memory"], cwd=project,
+                                   capture_output=True, text=True)
+            if built.returncode != 0:
+                said = (built.stdout + built.stderr).strip().splitlines()
+                return (f"the game does not build starting in {scene[0]} ({scene[1]}):\n"
+                        + "\n".join(said[-15:]))
+        env = dict(os.environ, RAY_TEST_MAX_FRAMES=str(FRAMES), RAY_TEST_SCREENSHOT=str(png))
+        got = subprocess.run([f"./build/memory/{name}"], cwd=project, env=env,
+                             stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    except ValueError as e:
+        return str(e)
+    finally:
+        main.write_text(kept, encoding="utf-8")
+    if got.returncode != 0 or not png.is_file():
+        said = (got.stdout + got.stderr).strip().splitlines()
+        return ("the game booted, and its picture for the page was not made (exit "
+                f"{got.returncode}):\n" + "\n".join(said[-15:]))
+    return None
+
+
+def run(framework: Path, name: str, steps: list[Step], keep: Path | None = None,
+        shots: Path | None = None, wanted: dict | None = None):
+    """(step, problem or None) for every step: built and booted in order. A
+    step whose page's stem is in `wanted` leaves its picture in `shots`,
+    started in the (scene, header) it maps to, or where the game starts."""
+    wanted = wanted or {}
     results = []
     framework = framework.resolve()   # rmp new runs from the temporary folder
     with tempfile.TemporaryDirectory() as tmp:
@@ -133,6 +174,12 @@ def run(framework: Path, name: str, steps: list[Step], keep: Path | None = None)
                     tail = "\n".join(said[-25:])
                     results.append((step, "the game's own tests, rmp test unit, fail after this "
                                           f"page:\n{tail}"))
+                    break
+            stem = Path(step.page).stem
+            if shots is not None and stem in wanted:
+                why = picture(project, name, shots / f"{stem}.png", wanted[stem])
+                if why:
+                    results.append((step, why))
                     break
             results.append((step, None))
     return results
