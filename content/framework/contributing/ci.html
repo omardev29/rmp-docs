@@ -14,6 +14,239 @@ how to ask it for more, how to read it when it is red, and how to wait for it.</
 seen from a game: every target's jobs, what is pinned, and what each platform's red means. This
 page adds what only the framework runs.</p>
 
+<h2 id="paths">The paths a run takes</h2>
+
+<p>Four things start a run of <code>ci.yml</code>, and every run begins with the <code>config</code>
+job, which reads <code>raylib_multiplatform.toml</code> once and hands every other job the same
+answers: the targets, whether this is the full matrix, whether this is the framework or a game, and
+where <code>linux-riscv64-glibc</code> is built. From there a run branches three ways: the checks,
+which only the framework's repository runs (but <code>lint</code>, which a game runs too, and
+<code>api</code>, which only a pull request runs); the platforms, one reusable workflow per family
+the <code>.toml</code> enables, each running what the fast set or the full matrix asks of it; and, on
+a tag, the release, which waits for every check and platform it needs to be green.</p>
+
+<figure class="diagram">
+<svg class="rmp-ci" viewBox="0 0 780 770" role="group" aria-labelledby="rmp-ci-title">
+  <title id="rmp-ci-title">The paths a CI run takes: what starts it, the config job, the checks, the platforms, the riscv64 fallback and the release</title>
+<style>
+.rmp-ci text { font-family: var(--font-ui); fill: var(--text); font-size: 12px; }
+.rmp-ci .box { fill: var(--bg-raised); stroke: var(--border-strong); }
+.rmp-ci .gate { fill: var(--bg-sunken); stroke: var(--border-strong); stroke-dasharray: 4 3; }
+.rmp-ci .hot { fill: var(--bg-raised); stroke: var(--accent); stroke-width: 2; }
+.rmp-ci .edge { fill: none; stroke: var(--border-strong); stroke-width: 1.5; marker-end: url(#rmp-ci-arrow); }
+.rmp-ci .fall { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 3; marker-end: url(#rmp-ci-arrow-hot); }
+.rmp-ci .head { font-weight: 750; font-size: 12.5px; }
+.rmp-ci .note { font-size: 10.5px; fill: var(--text-muted); }
+.rmp-ci .lane { font-size: 11px; font-weight: 700; fill: var(--text-muted); letter-spacing: .04em; }
+.rmp-ci .hotnote { font-size: 10.5px; font-weight: 700; fill: var(--accent); }
+.rmp-ci .arrowhead { fill: var(--border-strong); }
+.rmp-ci .arrowhot { fill: var(--accent); }
+.diagram .rmp-ci { max-width: 48rem; margin: 0 auto; }
+</style>
+<defs>
+<marker id="rmp-ci-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="arrowhead" d="M0,0 L8,4 L0,8 z"/></marker>
+<marker id="rmp-ci-arrow-hot" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="arrowhot" d="M0,0 L8,4 L0,8 z"/></marker>
+</defs>
+<text class="lane" x="10" y="16" text-anchor="start">WHAT STARTS IT</text>
+<rect class="box" x="10" y="26" width="200" height="54" rx="6"/>
+<text class="head" x="20" y="44">push to main, pull request</text>
+<text class="note" x="20" y="59">the fast set; a pull request</text>
+<text class="note" x="20" y="72">also runs api</text>
+<rect class="box" x="10" y="92" width="200" height="54" rx="6"/>
+<text class="head" x="20" y="110">gh workflow run -f full=true</text>
+<text class="note" x="20" y="125">every target</text>
+<rect class="box" x="10" y="158" width="200" height="54" rx="6"/>
+<text class="head" x="20" y="176">-f targets=a,b,c</text>
+<text class="note" x="20" y="191">the debug lane: those</text>
+<text class="note" x="20" y="204">targets + every check</text>
+<rect class="box" x="10" y="224" width="200" height="54" rx="6"/>
+<text class="head" x="20" y="242">tag v*</text>
+<text class="note" x="20" y="257">every target, then</text>
+<text class="note" x="20" y="270">the release</text>
+<rect class="hot" x="245" y="128" width="120" height="80" rx="6"/>
+<text class="head" x="255" y="146">config</text>
+<text class="note" x="255" y="161">reads the .toml:</text>
+<text class="note" x="255" y="174">targets, full,</text>
+<text class="note" x="255" y="187">framework, riscv64</text>
+<path class="edge" d="M210,53 C227.5,53 227.5,168 245,168"/>
+<path class="edge" d="M210,119 C227.5,119 227.5,168 245,168"/>
+<path class="edge" d="M210,185 C227.5,185 227.5,168 245,168"/>
+<path class="edge" d="M210,251 C227.5,251 227.5,168 245,168"/>
+<text class="lane" x="400" y="16" text-anchor="start">CHECKS (FRAMEWORK REPO)</text>
+<rect class="box" x="400" y="26" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="44">lint</text>
+<text class="note" x="410" y="59">every repo, a game&#x27;s too</text>
+<rect class="box" x="400" y="68" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="86">tidy</text>
+<text class="note" x="410" y="101">clang-tidy</text>
+<rect class="box" x="400" y="110" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="128">examples</text>
+<text class="note" x="410" y="143">build + boot each</text>
+<rect class="box" x="400" y="152" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="170">e2e</text>
+<text class="note" x="410" y="185">scripts, exact frames</text>
+<rect class="box" x="400" y="194" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="212">coverage</text>
+<text class="note" x="410" y="227">the floors</text>
+<rect class="box" x="400" y="236" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="254">deep</text>
+<text class="note" x="410" y="269">properties, fuzz replay</text>
+<rect class="box" x="400" y="278" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="296">docs</text>
+<text class="note" x="410" y="311">rmp-docs vs this commit</text>
+<rect class="box" x="400" y="320" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="338">rmp_new</text>
+<text class="note" x="410" y="353">a game made, checked</text>
+<rect class="gate" x="400" y="362" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="380">api</text>
+<text class="note" x="410" y="395">pull request only</text>
+<path class="edge" d="M365,150 C382.5,150 382.5,45 400,45"/>
+<path class="edge" d="M365,160 C382.5,160 382.5,213 400,213"/>
+<path class="edge" d="M365,170 C382.5,170 382.5,381 400,381"/>
+<text class="lane" x="400" y="424" text-anchor="start">PLATFORMS</text>
+<rect class="box" x="400" y="434" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="452">linux</text>
+<text class="note" x="410" y="467">x64 always; the rest full</text>
+<rect class="box" x="400" y="476" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="494">windows</text>
+<text class="note" x="410" y="509">x64 always; arm64 full</text>
+<rect class="box" x="400" y="518" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="536">web</text>
+<text class="note" x="410" y="551">build + boot</text>
+<rect class="box" x="400" y="560" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="578">android</text>
+<text class="note" x="410" y="593">apk, aab</text>
+<rect class="gate" x="400" y="602" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="620">apple</text>
+<text class="note" x="410" y="635">full only</text>
+<rect class="gate" x="400" y="644" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="662">bsd</text>
+<text class="note" x="410" y="677">full only</text>
+<rect class="gate" x="400" y="686" width="165" height="39" rx="6"/>
+<text class="head" x="410" y="704">firebase</text>
+<text class="note" x="410" y="719">full, after android</text>
+<path class="edge" d="M365,190 C382.5,190 382.5,453 400,453"/>
+<path class="edge" d="M365,200 C382.5,200 382.5,579 400,579"/>
+<text class="lane" x="605" y="16" text-anchor="start">ON A TAG</text>
+<rect class="hot" x="605" y="26" width="165" height="62" rx="6"/>
+<text class="head" x="615" y="44">release</text>
+<text class="note" x="615" y="59">needs every check and</text>
+<text class="note" x="615" y="72">platform green</text>
+<rect class="box" x="605" y="108" width="165" height="39" rx="6"/>
+<text class="head" x="615" y="126">itch</text>
+<text class="note" x="615" y="141">after the release</text>
+<path class="edge" d="M687,88 C687.0,88 687.0,108 687,108"/>
+<text class="note" x="605" y="170" text-anchor="start">the release waits for every</text>
+<text class="note" x="605" y="183" text-anchor="start">check and platform it needs</text>
+<path class="edge" d="M565,240 C585.0,240 585.0,60 605,60"/>
+<path class="edge" d="M565,540 C585.0,540 585.0,70 605,70"/>
+<text class="lane" x="605" y="424" text-anchor="start">LINUX, IN DETAIL</text>
+<rect class="box" x="605" y="434" width="165" height="39" rx="6"/>
+<text class="head" x="615" y="452">x64</text>
+<text class="note" x="615" y="467">fast set</text>
+<rect class="box" x="605" y="476" width="165" height="39" rx="6"/>
+<text class="head" x="615" y="494">arm64, drm-arm64</text>
+<text class="note" x="615" y="509">full</text>
+<rect class="box" x="605" y="518" width="165" height="39" rx="6"/>
+<text class="head" x="615" y="536">musl-x64 -&gt; -run</text>
+<text class="note" x="615" y="551">full; boots on Alpine</text>
+<rect class="box" x="605" y="560" width="165" height="39" rx="6"/>
+<text class="head" x="615" y="578">drm-x64 -&gt; -run</text>
+<text class="note" x="615" y="593">full; boots on vkms</text>
+<rect class="hot" x="605" y="608" width="165" height="52" rx="6"/>
+<text class="head" x="615" y="626">riscv64-rise</text>
+<text class="note" x="615" y="641">RISE RISC-V board,</text>
+<text class="note" x="615" y="654">[ci] riscv64 = &quot;rise&quot;</text>
+<rect class="box" x="605" y="700" width="165" height="52" rx="6"/>
+<text class="head" x="615" y="718">riscv64 (cross)</text>
+<text class="note" x="615" y="733">amd64 + QEMU; the</text>
+<text class="note" x="615" y="746">fallback, or &quot;cross&quot;</text>
+<path class="edge" d="M565,453 C585.0,453 585.0,453 605,453"/>
+<path class="fall" d="M687,660 L687,700"/>
+<text class="hotnote" x="680" y="684" text-anchor="end">failed, or no board</text></svg>
+<figcaption>The jobs of <code>ci.yml</code> and the conditions that start them. A dashed box runs
+only in the full matrix, or only on a pull request; the dashed blue arrow is the one fallback.</figcaption>
+</figure>
+
+<p data-fw-grep=".github/workflows/_linux.yml::  riscv64-rise:\n    if: >-\n      inputs.full &amp;&amp; inputs.riscv64 == 'rise'">The
+one branch that can go two ways is RISC-V. With <code>[ci] riscv64 = "rise"</code>, the framework's
+setting, <code>riscv64-rise</code> builds and starts <code>linux-riscv64-glibc</code> natively, on a
+<a href="https://riscv-runners.riseproject.dev/">RISE</a> RISC-V board, in the
+<code>raylib-build-riscv64</code> image. RISE lends those boards to open-source projects, and a job it
+cannot serve must not cost a release, so that job is the one allowed to fail without failing the
+run. When it fails, or no board is ever free for it, the <code>riscv64</code> job runs instead: the
+cross build in the amd64 build image, started under QEMU. It ships, and the run's summary says that
+it fell back. With <code>"cross"</code>, what <code>rmp new</code> writes in a game, the cross build
+is the only path. A job with no board waits in GitHub's queue, up to a day, before the fallback
+starts.</p>
+
+<p><code>deep.yml</code> is the other workflow worth a picture: the search that runs while nobody
+watches, and the issues it opens.</p>
+
+<figure class="diagram">
+<svg class="rmp-deep" viewBox="0 0 760 240" role="group" aria-labelledby="rmp-deep-title">
+  <title id="rmp-deep-title">deep.yml: the nightly and weekly search, and the issues it opens</title>
+<style>
+.rmp-deep text { font-family: var(--font-ui); fill: var(--text); font-size: 12px; }
+.rmp-deep .box { fill: var(--bg-raised); stroke: var(--border-strong); }
+.rmp-deep .gate { fill: var(--bg-sunken); stroke: var(--border-strong); stroke-dasharray: 4 3; }
+.rmp-deep .hot { fill: var(--bg-raised); stroke: var(--accent); stroke-width: 2; }
+.rmp-deep .edge { fill: none; stroke: var(--border-strong); stroke-width: 1.5; marker-end: url(#rmp-deep-arrow); }
+.rmp-deep .fall { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 3; marker-end: url(#rmp-deep-arrow-hot); }
+.rmp-deep .head { font-weight: 750; font-size: 12.5px; }
+.rmp-deep .note { font-size: 10.5px; fill: var(--text-muted); }
+.rmp-deep .lane { font-size: 11px; font-weight: 700; fill: var(--text-muted); letter-spacing: .04em; }
+.rmp-deep .hotnote { font-size: 10.5px; font-weight: 700; fill: var(--accent); }
+.rmp-deep .arrowhead { fill: var(--border-strong); }
+.rmp-deep .arrowhot { fill: var(--accent); }
+.diagram .rmp-deep { max-width: 48rem; margin: 0 auto; }
+</style>
+<defs>
+<marker id="rmp-deep-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="arrowhead" d="M0,0 L8,4 L0,8 z"/></marker>
+<marker id="rmp-deep-arrow-hot" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="arrowhot" d="M0,0 L8,4 L0,8 z"/></marker>
+</defs>
+<rect class="box" x="10" y="30" width="170" height="54" rx="6"/>
+<text class="head" x="20" y="48">schedule, nightly</text>
+<text class="note" x="20" y="63">03:00 UTC, or</text>
+<text class="note" x="20" y="76">-f mode=nightly</text>
+<rect class="box" x="10" y="150" width="170" height="54" rx="6"/>
+<text class="head" x="20" y="168">schedule, Sunday</text>
+<text class="note" x="20" y="183">or -f mode=weekly</text>
+<text class="note" x="20" y="196">-f only=&lt;module&gt;</text>
+<rect class="hot" x="220" y="90" width="110" height="54" rx="6"/>
+<text class="head" x="230" y="108">plan</text>
+<text class="note" x="230" y="123">which mode, which</text>
+<text class="note" x="230" y="136">targets / modules</text>
+<path class="edge" d="M180,57 C200.0,57 200.0,117 220,117"/>
+<path class="edge" d="M180,177 C200.0,177 200.0,117 220,117"/>
+<rect class="box" x="370" y="10" width="180" height="39" rx="6"/>
+<text class="head" x="380" y="28">fuzz x13</text>
+<text class="note" x="380" y="43">one target each, libFuzzer</text>
+<path class="edge" d="M330,117 C350.0,117 350.0,29 370,29"/>
+<rect class="box" x="370" y="60" width="180" height="39" rx="6"/>
+<text class="head" x="380" y="78">properties x4</text>
+<text class="note" x="380" y="93">RapidCheck, random seed</text>
+<path class="edge" d="M330,117 C350.0,117 350.0,79 370,79"/>
+<rect class="box" x="370" y="110" width="180" height="39" rx="6"/>
+<text class="head" x="380" y="128">hypothesis</text>
+<text class="note" x="380" y="143">the Python properties</text>
+<path class="edge" d="M330,117 C350.0,117 350.0,129 370,129"/>
+<rect class="box" x="370" y="190" width="180" height="39" rx="6"/>
+<text class="head" x="380" y="208">mutation x modules</text>
+<text class="note" x="380" y="223">Mull + mutmut, floors</text>
+<path class="edge" d="M330,117 C350.0,117 350.0,209 370,209"/>
+<rect class="hot" x="590" y="90" width="160" height="54" rx="6"/>
+<text class="head" x="600" y="108">report</text>
+<text class="note" x="600" y="123">one issue per signature,</text>
+<text class="note" x="600" y="136">nightly-finding</text>
+<path class="edge" d="M550,29 C570.0,29 570.0,117 590,117"/>
+<path class="edge" d="M550,79 C570.0,79 570.0,117 590,117"/>
+<path class="edge" d="M550,129 C570.0,129 570.0,117 590,117"/>
+<path class="edge" d="M550,209 C570.0,209 570.0,117 590,117"/></svg>
+<figcaption>The nightly and weekly search. Every failure is one <code>nightly-finding</code>
+issue per signature, found again as a comment.</figcaption>
+</figure>
+
 <h2 id="when-it-runs">What a push and a pull request run</h2>
 
 <p data-fw-grep=".github/workflows/ci.yml::  push:\n    branches: \[main\]\n    tags: \['v\*'\]\n    paths-ignore: \['\*\*\.md', 'LICENSE'\]\n  pull_request:">A

@@ -108,6 +108,27 @@ knows: with <code>on_push = false</code> a push starts no run and so cancels non
 without asking <code>gh</code>. Unless <code>ci.yml</code> has changes that are not committed yet —
 the commit being pushed may still have the old triggers, and then it checks as it always does.</p>
 
+<h3 id="riscv64">RISC-V on RISC-V: [ci] riscv64</h3>
+
+<p><code>linux-riscv64-glibc</code> can be built and started two ways, and one line of the
+<code>.toml</code> picks. <code>"cross"</code>, what <code>rmp new</code> writes, cross-compiles it on
+GitHub's amd64 runners and starts its archive under QEMU. <code>"rise"</code>, the framework's own,
+builds and starts it natively on a RISC-V board that the <a href="https://riscv-runners.riseproject.dev/">RISE
+project</a> lends to open-source repositories, and keeps the cross build as its fallback: when RISE
+fails or never gives the job a board, the cross build runs and ships, and the run's summary says
+so.</p>
+
+<pre data-lang="toml" data-file="raylib_multiplatform.toml">
+[ci]
+riscv64 = "rise"
+</pre>
+
+<p>RISE needs its GitHub App installed on the repository first (the <em>personal account</em>
+app for a repository of yours, the <em>organization</em> one otherwise). Without it, no board ever
+picks the job up, and it waits in GitHub's queue for a day before the fallback runs, so a game
+stays on <code>"cross"</code> until the app is in. Anything but the two words is refused by
+<code>configure.py</code>, at the line.</p>
+
 <h2>What each target gets</h2>
 
 <p>A target is <strong>booted</strong> when CI starts the game, lets it draw a bounded number of
