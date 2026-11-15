@@ -110,23 +110,37 @@ the commit being pushed may still have the old triggers, and then it checks as i
 
 <h3 id="riscv64">RISC-V on RISC-V: [ci] riscv64</h3>
 
-<p><code>linux-riscv64-glibc</code> can be built and started two ways, and one line of the
+<p><code>linux-riscv64-glibc</code> can be built and started three ways, and one line of the
 <code>.toml</code> picks. <code>"cross"</code>, what <code>rmp new</code> writes, cross-compiles it on
-GitHub's amd64 runners and starts its archive under QEMU. <code>"rise"</code>, the framework's own,
-builds and starts it natively on a RISC-V board that the <a href="https://riscv-runners.riseproject.dev/">RISE
-project</a> lends to open-source repositories, and keeps the cross build as its fallback: when RISE
-fails or never gives the job a board, the cross build runs and ships, and the run's summary says
-so.</p>
+GitHub's amd64 runners and starts its archive under QEMU. The other two build and start it natively,
+on a real RISC-V board, and keep the cross build as their fallback: when the board fails or never
+comes, the cross build runs and ships, and the run's summary says so.</p>
+
+<table>
+<thead><tr><th>Value</th><th>The board</th><th>For</th></tr></thead>
+<tbody>
+<tr><td><code>"rise"</code></td><td>a <a href="https://riscv-runners.riseproject.dev/">RISE</a> runner
+(<code>ubuntu-24.04-riscv</code>), lent free by the RISE project</td><td>an open-source
+repository; the framework's own setting</td></tr>
+<tr><td><code>"cloud-v"</code></td><td>a <a href="https://cloud-v.co/github-riscv-runner">Cloud-V</a>
+Milk-V Pioneer, 64 cores (<code>[self-hosted, milkv-pioneer]</code>)</td><td>a private repository —
+most games — which RISE's offer to open source does not cover</td></tr>
+<tr><td><code>"cross"</code></td><td>none: amd64 and QEMU</td><td>a repository with neither app,
+which is how every game starts</td></tr>
+</tbody>
+</table>
 
 <pre data-lang="toml" data-file="raylib_multiplatform.toml">
 [ci]
 riscv64 = "rise"
 </pre>
 
-<p>RISE needs its GitHub App installed on the repository first (the <em>personal account</em>
-app for a repository of yours, the <em>organization</em> one otherwise). Without it, no board ever
-picks the job up, and it waits in GitHub's queue for a day before the fallback runs, so a game
-stays on <code>"cross"</code> until the app is in. Anything but the two words is refused by
+<p>Both boards run the same job, <code>riscv64-native</code>, which builds, packs and starts the game
+inside the pinned <code>raylib-build-riscv64</code> image, so the binary is the cross build's: one
+size line, one glibc floor. Each provider needs its GitHub App installed on the repository first.
+Without it, no board ever picks the job up, and it waits in GitHub's queue for a day before the
+fallback runs, so a game stays on <code>"cross"</code> until an app is in. A board with no Docker
+fails the job's first step, and the fallback ships. Anything but the three words is refused by
 <code>configure.py</code>, at the line.</p>
 
 <h2>What each target gets</h2>
@@ -140,7 +154,7 @@ file it built without running it — its format, its architecture, what it links
 <tbody>
 <tr data-fw-grep=".github/workflows/_linux.yml::- name: The archive starts from any folder"><td><code>linux-x64-glibc</code></td><td>every push</td><td>Booted under a virtual X server. Then the archive it ships is unzipped and started from another folder: the binary a player gets, compressed when <code>[upx]</code> says so, has to find its <code>resources/</code>. Checked: x86-64 ELF, no debug sections, glibc no newer than <code>[linux] glibc</code>, <a href="/publishing/desktop.html#hardening">linked hardened</a>.</td></tr>
 <tr data-fw-grep=".github/workflows/_linux.yml::^  arm64:\n    if: inputs\.full"><td><code>linux-arm64-glibc</code></td><td>full</td><td>Booted under a virtual X server on an ARM64 runner, and its archive unzipped and started from another folder, as on x64. Checked: aarch64 ELF, the glibc floor, linked hardened.</td></tr>
-<tr data-fw-grep=".github/workflows/_linux.yml::# Held to its OWN floor, not \[linux\] glibc's\. This target is\n      # cross-compiled with the image's riscv64 GNU toolchain[\s\S]*?run: bash tools/glibc_check\.sh build/release/\$\{\{ inputs\.project_name \}\} 2\.38\n\n      # The hardening[\s\S]*?- name: Test \(static\) — binary exists, is RISC-V ELF"><td><code>linux-riscv64-glibc</code></td><td>full</td><td>Cross-compiled; checked statically (RISC-V ELF), and held to a glibc floor of its own, 2.38, which the note on <code>[linux] glibc</code> in the .toml names because the setting does not reach this target. Checked as well: linked hardened. <span data-fw-grep=".github/workflows/_linux.yml::- name: The archive starts from any folder, under QEMU[\s\S]*?timeout 120 qemu-riscv64-static -L / ">There is no RISC-V runner, so the archive it ships, compressed by default, is unzipped and started from another folder under QEMU, in the build image: the RISC-V binary and the RISC-V libraries it opens, emulated, drawing with Mesa's software OpenGL under a virtual X server.</span></td></tr>
+<tr data-fw-grep=".github/workflows/_linux.yml::# Held to its OWN floor, not \[linux\] glibc's\. This target is\n      # cross-compiled with the image's riscv64 GNU toolchain[\s\S]*?run: bash tools/glibc_check\.sh build/release/\$\{\{ inputs\.project_name \}\} 2\.38\n\n      # The hardening[\s\S]*?- name: Test \(static\) — binary exists, is RISC-V ELF"><td><code>linux-riscv64-glibc</code></td><td>full</td><td>Cross-compiled; checked statically (RISC-V ELF), and held to a glibc floor of its own, 2.38, which the note on <code>[linux] glibc</code> in the .toml names because the setting does not reach this target. Checked as well: linked hardened. <span data-fw-grep=".github/workflows/_linux.yml::- name: The archive starts from any folder, under QEMU[\s\S]*?timeout 120 qemu-riscv64-static -L / ">Built and started on a RISC-V board when <code>[ci] riscv64</code> names one (below); otherwise, or when the board fails, the archive it ships is unzipped and started from another folder under QEMU, in the build image: the RISC-V binary and the RISC-V libraries it opens, emulated, drawing with Mesa's software OpenGL under a virtual X server. Never compressed: UPX's RISC-V stub dies on kernels before 6.3.</span></td></tr>
 <tr data-fw-grep=".github/workflows/_linux.yml::- name: It needs nothing but musl\n        run: python3 tools/binary_check\.py elf --musl"><td><code>linux-x64-musl</code></td><td>full</td><td>Checked: no glibc symbol in it, linked hardened, and what it asks the system for is musl and nothing else — musl's loader and musl's <code>libc.so</code>, read out of the binary. Then on Alpine, in an image of the framework's own pinned by digest, with the network off and started from <code>/</code>: a software-rendered release of the game is booted, and the binary the archive ships, compressed by default, is unzipped and started under a virtual X server.</td></tr>
 <tr data-fw-grep=".github/workflows/_linux.yml::unzip -q drm-zip/linux-x64-glibc-drm-build\.zip -d drm-bin"><td><code>linux-x64-glibc-drm</code></td><td>full</td><td>The binary the archive ships, compressed by default, is unzipped and booted through DRM/KMS on a virtual display the kernel provides, started from <code>/</code>. Checked: it links <code>libdrm</code> and no X11 or Wayland, linked hardened; its real glibc floor is printed. <span data-fw-grep=".github/workflows/_linux.yml::- name: rmp run on a console -- chose DRM/KMS, built, booted">Then, on the same display and in the build image, <code>./rmp run</code> is started the way a <a href="/manual/platforms/linux-console.html">Linux console</a> starts it, with no display and <code>XDG_SESSION_TYPE=tty</code>: it has to choose DRM/KMS by itself, build <code>build/debug-drm</code>, check <code>/dev</code> before the game and boot it.</span></td></tr>
 <tr><td><code>linux-arm64-glibc-drm</code></td><td>full</td><td>Checked statically: aarch64, <code>libdrm</code>, no X11 or Wayland, linked hardened. Not run: a virtual display would not answer the question a Raspberry Pi's own display pipeline does.</td></tr>
@@ -226,14 +240,14 @@ drawn.</p>
 
 <ul>
 <li><code>windows-arm64</code> and <code>linux-arm64-glibc-drm</code> are never run, and
-<code>linux-riscv64-glibc</code> runs only under an emulator, which is not a RISC-V machine.</li>
+<code>linux-riscv64-glibc</code> runs on a RISC-V board only when <code>[ci] riscv64</code> names
+one and the board answers; otherwise only under an emulator, which is not a RISC-V machine.</li>
 <li>On macOS and the BSDs, what is booted is a software-rendered build of the game, not the
 executable that ships; the shipped one is checked statically.</li>
-<li data-fw-grep="tools/configure.py::&quot;upx&quot;: \{&quot;enabled&quot;: \[&quot;linux-x64-glibc&quot;, &quot;linux-arm64-glibc&quot;, &quot;linux-x64-musl&quot;,\s+&quot;linux-x64-glibc-drm&quot;, &quot;linux-riscv64-glibc&quot;\]">A
+<li data-fw-grep="tools/configure.py::&quot;upx&quot;: \{&quot;enabled&quot;: \[&quot;linux-x64-glibc&quot;, &quot;linux-arm64-glibc&quot;, &quot;linux-x64-musl&quot;,\s+&quot;linux-x64-glibc-drm&quot;\]">A
 binary compressed with UPX is started only on <code>linux-x64-glibc</code>,
-<code>linux-arm64-glibc</code>, <code>linux-x64-musl</code>, <code>linux-x64-glibc-drm</code> and
-<code>linux-riscv64-glibc</code>, whose jobs start the archive they ship — the five
-<code>[upx]</code> compresses by default. On a target added to <code>[upx] enabled</code> beyond
+<code>linux-arm64-glibc</code>, <code>linux-x64-musl</code> and <code>linux-x64-glibc-drm</code>,
+whose jobs start the archive they ship — the four <code>[upx]</code> compresses by default. On a target added to <code>[upx] enabled</code> beyond
 those, it is only verified with <code>upx -t</code>.</li>
 <li>iOS is not started unless you turn the simulator test on, and Android is not started unless
 Firebase Test Lab is configured.</li>

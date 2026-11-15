@@ -80,6 +80,7 @@ allow = [
   "https://marketplace.visualstudio.com/items?itemName=SecretLab.yarn-spinner",
   "https://github.com/mfussenegger/nvim-lint",
   "https://riscv-runners.riseproject.dev/",
+  "https://cloud-v.co/github-riscv-runner",
 ]
 
 [counted]

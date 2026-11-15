@@ -26,7 +26,7 @@ the <code>.toml</code> enables, each running what the fast set or the full matri
 a tag, the release, which waits for every check and platform it needs to be green.</p>
 
 <figure class="diagram">
-<svg class="rmp-ci" viewBox="0 0 780 770" role="group" aria-labelledby="rmp-ci-title">
+<svg class="rmp-ci" viewBox="0 0 780 784" role="group" aria-labelledby="rmp-ci-title">
   <title id="rmp-ci-title">The paths a CI run takes: what starts it, the config job, the checks, the platforms, the riscv64 fallback and the release</title>
 <style>
 .rmp-ci text { font-family: var(--font-ui); fill: var(--text); font-size: 12px; }
@@ -153,31 +153,34 @@ a tag, the release, which waits for every check and platform it needs to be gree
 <rect class="box" x="605" y="560" width="165" height="39" rx="6"/>
 <text class="head" x="615" y="578">drm-x64 -&gt; -run</text>
 <text class="note" x="615" y="593">full; boots on vkms</text>
-<rect class="hot" x="605" y="608" width="165" height="52" rx="6"/>
-<text class="head" x="615" y="626">riscv64-rise</text>
-<text class="note" x="615" y="641">RISE RISC-V board,</text>
-<text class="note" x="615" y="654">[ci] riscv64 = &quot;rise&quot;</text>
-<rect class="box" x="605" y="700" width="165" height="52" rx="6"/>
-<text class="head" x="615" y="718">riscv64 (cross)</text>
-<text class="note" x="615" y="733">amd64 + QEMU; the</text>
-<text class="note" x="615" y="746">fallback, or &quot;cross&quot;</text>
+<rect class="hot" x="605" y="608" width="165" height="66" rx="6"/>
+<text class="head" x="615" y="626">riscv64-native</text>
+<text class="note" x="615" y="641">a RISC-V board: RISE&#x27;s</text>
+<text class="note" x="615" y="654">(&quot;rise&quot;) or Cloud-V&#x27;s</text>
+<text class="note" x="615" y="667">(&quot;cloud-v&quot;)</text>
+<rect class="box" x="605" y="714" width="165" height="52" rx="6"/>
+<text class="head" x="615" y="732">riscv64 (cross)</text>
+<text class="note" x="615" y="747">amd64 + QEMU; the</text>
+<text class="note" x="615" y="760">fallback, or &quot;cross&quot;</text>
 <path class="edge" d="M565,453 C585.0,453 585.0,453 605,453"/>
-<path class="fall" d="M687,660 L687,700"/>
-<text class="hotnote" x="680" y="684" text-anchor="end">failed, or no board</text></svg>
+<path class="fall" d="M687,674 L687,714"/>
+<text class="hotnote" x="680" y="698" text-anchor="end">failed, or no board</text></svg>
 <figcaption>The jobs of <code>ci.yml</code> and the conditions that start them. A dashed box runs
 only in the full matrix, or only on a pull request; the dashed blue arrow is the one fallback.</figcaption>
 </figure>
 
-<p data-fw-grep=".github/workflows/_linux.yml::  riscv64-rise:\n    if: >-\n      inputs.full &amp;&amp; inputs.riscv64 == 'rise'">The
+<p data-fw-grep=".github/workflows/_linux.yml::  riscv64-native:\n    if: &gt;-\n      inputs.full &amp;&amp; inputs.riscv64 != 'cross'">The
 one branch that can go two ways is RISC-V. With <code>[ci] riscv64 = "rise"</code>, the framework's
-setting, <code>riscv64-rise</code> builds and starts <code>linux-riscv64-glibc</code> natively, on a
-<a href="https://riscv-runners.riseproject.dev/">RISE</a> RISC-V board, in the
-<code>raylib-build-riscv64</code> image. RISE lends those boards to open-source projects, and a job it
-cannot serve must not cost a release, so that job is the one allowed to fail without failing the
-run. When it fails, or no board is ever free for it, the <code>riscv64</code> job runs instead: the
-cross build in the amd64 build image, started under QEMU. It ships, and the run's summary says that
-it fell back. With <code>"cross"</code>, what <code>rmp new</code> writes in a game, the cross build
-is the only path. A job with no board waits in GitHub's queue, up to a day, before the fallback
+setting, or <code>"cloud-v"</code>, <code>riscv64-native</code> builds and starts
+<code>linux-riscv64-glibc</code> natively, in the <code>raylib-build-riscv64</code> image, on a RISC-V
+board: a <a href="https://riscv-runners.riseproject.dev/">RISE</a> runner, which RISE lends to
+open-source projects, or a <a href="https://cloud-v.co/github-riscv-runner">Cloud-V</a> Milk-V
+Pioneer, for a private repository. A board is the provider's to give, and a job it cannot serve
+must not cost a release, so that job is the one allowed to fail without failing the run. When it
+fails, or no board is ever free for it, the <code>riscv64</code> job runs instead: the cross build
+in the amd64 build image, started under QEMU. It ships, and the run's summary says that it fell
+back. With <code>"cross"</code>, what <code>rmp new</code> writes in a game, the cross build is the
+only path. A job with no board waits in GitHub's queue, up to a day, before the fallback
 starts.</p>
 
 <p><code>deep.yml</code> is the other workflow worth a picture: the search that runs while nobody
