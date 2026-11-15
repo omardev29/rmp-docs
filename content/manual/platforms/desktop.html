@@ -336,8 +336,8 @@ true</code> puts them in <code>saves/</code> next to the executable.</p>
 by default — the ones whose packed archive CI starts, so a packed binary that would not launch is
 caught: on every push for <code>linux-x64-glibc</code>, and in the full lane for the other three,
 on a runner of its own architecture, on Alpine and on a virtual DRM display.
-<code>linux-riscv64-glibc</code> is never compressed: UPX 5.2.0's RISC-V stub dies on every kernel
-before 6.3, which most RISC-V boards run (<a href="/publishing/desktop.html#compressing-with-upx">Compressing with UPX</a> says
+<code>linux-riscv64-glibc</code> is compressed only when you name it: UPX 5.2.0's RISC-V stub dies on
+every kernel before 6.3, which most RISC-V boards run (<a href="/publishing/desktop.html#compressing-with-upx">Compressing with UPX</a> says
 why).
 <code>linux-arm64-glibc-drm</code> can be added to <code>[upx] enabled</code>; it is left out by
 default because nothing in CI runs it at all.</p>

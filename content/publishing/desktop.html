@@ -395,11 +395,14 @@ archive it ships, compressed, starts what is in it and checks it draws:
 Alpine under a virtual X server, and <code>linux-x64-glibc-drm</code> on a virtual DRM display. So
 a compressed binary that does not launch is a red run.
 <span data-fw-grep="tools/configure.py::&quot;linux-riscv64-glibc&quot;: &quot;UPX 5\.2\.0's riscv64 stub dies with SIGTRAP on every Linux &quot;"><code>linux-riscv64-glibc</code>
-is never compressed, and naming it is an error: UPX 5.2.0's RISC-V stub dies with
-<code>SIGTRAP</code> on every Linux kernel before 6.3, which is what most RISC-V boards ship. Its
-first act is <code>memfd_create(MFD_EXEC)</code>, a flag those kernels refuse with
+is compressed only when you name it: no group and no default brings it in. UPX 5.2.0's RISC-V stub
+dies with <code>SIGTRAP</code> on every Linux kernel before 6.3, which is what most RISC-V boards
+ship. Its first act is <code>memfd_create(MFD_EXEC)</code>, a flag those kernels refuse with
 <code>EINVAL</code>; the x86-64 and ARM64 stubs try again without it, the RISC-V one does not. QEMU
-runs on the host's newer kernel and never saw it; a RISC-V board with Linux 5.10 did.</span> Every other target is started before
+runs on the host's newer kernel and never saw it; a RISC-V board with Linux 5.10 did. If your
+players all run Linux 6.3 or later, name it in <code>enabled</code> for its 59%;
+<code>configure.py</code> says so with a warning, and with <code>[ci] riscv64 = "rise"</code> the
+board's job fails at its boot and the cross build ships the compressed archive.</span> Every other target is started before
 packaging compresses it, or as a separate software-rendered build, or not at all, so a binary
 compressed there is checked by <code>upx -t</code> and never started. UPX supports those targets; turning it on for one ships a packed binary whose launch
 nothing has seen.</p>
