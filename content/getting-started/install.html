@@ -145,6 +145,21 @@ replaces it. <code>rmp update</code> then updates that clone.</p>
 act on the framework the <code>rmp</code> you typed belongs to, wherever you type them. A game's own
 copy refuses them: it is not the framework on your PATH, and it is never updated.</p>
 
+<h2 id="in-your-editor">In your editor</h2>
+
+<p data-fw-grep=".clangd::CompilationDatabase: build/debug">Completion, hover and go-to-declaration
+come from clangd, which VS Code, LazyVim, Zed and most editors run. The framework, and every game
+<code>rmp new</code> makes, carries its settings in <code>.clangd</code>: it reads what the debug build
+was compiled with, so build once (<code>rmp build</code>) and restart clangd. It is the desktop build on
+every machine, Windows included: no Android NDK and no Xcode, and the code for other platforms is
+greyed out behind its <code>#if</code>.</p>
+
+<p data-fw-grep=".clangd::  Suppress: &quot;*&quot;">Your game's code is checked as the compiler
+checks it, warnings as warnings. The framework's code and what it vendors — <code>include/rmp/</code>,
+<code>src/rmp/</code>, <code>thirdparty/</code> — complete and navigate like any other, and clangd
+reports nothing in them: the framework's own CI builds and checks them. A Visual Studio newer than
+your clangd, or a MinGW flag clang does not know, is not an error in the editor either.</p>
+
 <h2 id="in-a-container">In a container, nothing installed</h2>
 
 <p data-fw-grep=".devcontainer/devcontainer.json::&quot;image&quot;: &quot;ghcr.io/omardev29/raylib-build@sha256:">The
