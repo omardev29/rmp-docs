@@ -60,7 +60,7 @@ comes with Apple's command line tools, and without them the installer stops and 
 needs more — CMake, Ninja, a C++ compiler, and on Linux and FreeBSD the X11 development headers —
 and the installer looks for those at the end. What is missing is listed with the command that
 installs it on this system: <code>apt</code>, <code>dnf</code>, <code>pacman</code>,
-<code>zypper</code>, Homebrew, <code>pkg</code>, <code>pkg_add</code> or <code>pkgin</code>, and on
+<code>zypper</code>, <code>apk</code>, Homebrew, <code>pkg</code>, <code>pkg_add</code> or <code>pkgin</code>, and on
 Windows <code>winget</code>. The command is printed for you to run, as root where the system wants
 it; the installer never runs it.</p>
 
@@ -159,6 +159,57 @@ checks it, warnings as warnings. The framework's code and what it vendors — <c
 <code>src/rmp/</code>, <code>thirdparty/</code> — complete and navigate like any other, and clangd
 reports nothing in them: the framework's own CI builds and checks them. A Visual Studio newer than
 your clangd, or a MinGW flag clang does not know, is not an error in the editor either.</p>
+
+<h2 id="in-the-build-image">In the build image, with Podman</h2>
+
+<p data-fw-grep="thirdparty/FROZEN_VERSIONS.md::^build_image_digest +sha256:[0-9a-f]{64}">The
+packages above go on your machine, one distribution at a time. The other way is to install none
+of them: CI builds every target inside one image, <code>ghcr.io/omardev29/raylib-build</code>, and
+you can work inside the same one. It is Ubuntu with every compiler and tool <code>rmp</code> uses —
+clang, gcc, CMake, Ninja, zig, Emscripten for the web, MinGW-w64, clang-cl and Wine for Windows,
+tcc, the Android SDK and NDK, the X11, Wayland and DRM headers — at the versions CI's own builds
+are proved with. It weighs several gigabytes, and carries more than a 2D desktop game will ever
+ask for; in exchange, nothing in it has to be installed later, and none of it touches your
+system. Every game carries the digest it was made with, in
+<code>thirdparty/FROZEN_VERSIONS.md</code>.</p>
+
+<p>Podman runs it with no daemon and no root: <em>rootless</em>.
+Inside the container you are root, and that root is your own user outside, so whatever it writes in
+your game's folder is yours. Install Podman from your system's packages
+(<code>apt</code>, <code>dnf</code>, <code>pacman</code> and <code>apk</code> all call it
+<code>podman</code>), then, from your game's folder:</p>
+
+<pre data-lang="shell">
+IMAGE=ghcr.io/omardev29/raylib-build@$(sed -nE 's/^build_image_digest +//p' thirdparty/FROZEN_VERSIONS.md)
+podman pull "$IMAGE"
+podman create --name my-game-dev -it --init \
+    -v "$PWD":/work:Z -w /work "$IMAGE" bash
+podman start -ai my-game-dev
+</pre>
+
+<p>That is a container of your own, kept between sessions: <code>podman start -ai
+my-game-dev</code> opens it again, with anything you added to it still there, and your game's
+folder is <code>/work</code> inside it. Build and test there with the game's own
+<code>rmp</code>:</p>
+
+<pre data-lang="shell">
+./rmp build
+./rmp test
+./rmp build windows
+</pre>
+
+<p>A few things worth knowing. <code>--init</code> is not optional: without an init process a game
+started as the container's first process does not stop when asked. <code>:Z</code> labels the folder
+for SELinux, where the system has it (Fedora does), and changes nothing where it does not. The build
+folders remember the path they were configured from, <code>/work</code> inside the container, so
+CMake refuses one made outside it, and the other way round: build in one place, or
+<code>./rmp clean</code> when you move.</p>
+
+<p>The game's window needs a display. On a Linux desktop, X11 or Wayland with XWayland, give the
+container yours when you create it — <code>-e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix
+--device /dev/dri --security-opt label=disable</code> — and <code>./rmp run</code> opens on your
+screen. With no display to give, the next section's container brings a desktop of its own, in the
+browser.</p>
 
 <h2 id="in-a-container">In a container, nothing installed</h2>
 

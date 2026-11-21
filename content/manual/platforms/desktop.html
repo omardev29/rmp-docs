@@ -216,11 +216,21 @@ threading and dynamic-loading libraries every Linux has.</p>
 
 <h3>X11 and Wayland</h3>
 
-<p>To build on a Linux desktop you need the X11 development libraries:</p>
+<p>To build on a Linux desktop you need the X11 development libraries, which each family of
+distributions names its own way:</p>
 
-<pre data-lang="shell">
-sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
-</pre>
+<table>
+<thead><tr><th>Distribution</th><th>The X11 development libraries</th></tr></thead>
+<tbody>
+<tr><td>Debian, Ubuntu</td><td><code>sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev</code></td></tr>
+<tr><td>Fedora</td><td><code>sudo dnf install libX11-devel libXrandr-devel libXi-devel libXcursor-devel libXinerama-devel mesa-libGL-devel</code></td></tr>
+<tr><td>Arch</td><td><code>sudo pacman -S --needed libx11 libxrandr libxi libxcursor libxinerama mesa</code></td></tr>
+<tr><td>Alpine</td><td><code>doas apk add libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev mesa-dev linux-headers</code></td></tr>
+</tbody>
+</table>
+
+<p>With the compiler, CMake and Ninja, in one command each:
+<a href="/getting-started/index.html#linux-packages">Getting started</a>.</p>
 
 <p>On a console with no desktop, <code>rmp</code> builds for DRM/KMS instead, and needs none of
 them: <a href="/manual/platforms/linux-console.html">Linux from a console</a>.</p>

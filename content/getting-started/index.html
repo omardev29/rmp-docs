@@ -17,12 +17,51 @@ compiler. A Linux distribution's own <code>cmake</code> package can be older tha
 older CMake stops the first build before anything is compiled: <code>cmake --version</code> says
 which one you have.</li>
 <li><strong>git</strong>, to get the framework and to keep your game in.</li>
-<li>On a Linux desktop, the X11 development libraries:</li>
+<li>On a Linux desktop, the X11 development libraries.</li>
 </ul>
 
+<h3 id="linux-packages">On Linux, in one command</h3>
+
+<p>Everything a build needs — the compiler, CMake, Ninja, Python, git and the X11 headers — for
+each family of distributions. Any C++20 compiler does: <code>[dev] compiler = "clang"</code> uses
+clang where it is installed and the system's compiler where it is not.</p>
+
+<p><strong>Debian and Ubuntu</strong></p>
+
 <pre data-lang="shell">
-sudo apt install libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
+sudo apt install build-essential cmake ninja-build python3 git \
+    libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
 </pre>
+
+<p>Ubuntu 24.04's <code>cmake</code> is 3.28; take a newer one from Kitware's
+own apt repository, or <code>pipx install cmake</code>.</p>
+
+<p><strong>Fedora</strong></p>
+
+<pre data-lang="shell">
+sudo dnf install gcc-c++ cmake ninja-build python3 git \
+    libX11-devel libXrandr-devel libXi-devel libXcursor-devel libXinerama-devel mesa-libGL-devel
+</pre>
+
+<p><strong>Arch</strong></p>
+
+<pre data-lang="shell">
+sudo pacman -S --needed base-devel cmake ninja python git \
+    libx11 libxrandr libxi libxcursor libxinerama mesa
+</pre>
+
+<p data-fw-grep="tools/install.sh::apk:x11\) say libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev[\s\\]*mesa-dev linux-headers"><strong>Alpine</strong>,
+3.21 or newer for a CMake of 3.30. Its Ninja is <code>samurai</code>, its compiler and
+<code>make</code> come in <code>build-base</code>, and GLFW reads the kernel's input headers.
+Alpine ships <code>doas</code> rather than <code>sudo</code>:</p>
+
+<pre data-lang="shell">
+doas apk add build-base cmake samurai python3 git linux-headers \
+    libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev mesa-dev
+</pre>
+
+<p>Or install nothing on the machine at all, and work inside the image CI builds in:
+<a href="/getting-started/install.html#in-the-build-image">In the build image, with Podman</a>.</p>
 
 <p>On a Linux console with no desktop, <code>rmp</code> builds for DRM/KMS instead, and needs the
 DRM headers in their place; <a href="/manual/platforms/linux-console.html">Linux from a

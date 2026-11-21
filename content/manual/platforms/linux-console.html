@@ -93,13 +93,14 @@ DRM backend draws with — and none of X11's. <a href="/getting-started/install.
 installer</a> decides the way <code>rmp</code> does, and on a console it looks for those instead
 of the X11 headers and lists what is missing with the command for this system:</p>
 
-<table data-fw-grep="tools/install.sh::apt-get:drm\) say libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev ;;[\s\S]*?dnf:drm\) say libdrm-devel mesa-libgbm-devel mesa-libEGL-devel mesa-libGLES-devel ;;[\s\S]*?pacman:drm\) say libdrm mesa libglvnd ;;[\s\S]*?zypper:drm\) say libdrm-devel libgbm-devel Mesa-libEGL-devel Mesa-libGLESv2-devel ;;">
+<table data-fw-grep="tools/install.sh::apt-get:drm\) say libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev ;;[\s\S]*?dnf:drm\) say libdrm-devel mesa-libgbm-devel mesa-libEGL-devel mesa-libGLES-devel ;;[\s\S]*?pacman:drm\) say libdrm mesa libglvnd ;;[\s\S]*?zypper:drm\) say libdrm-devel libgbm-devel Mesa-libEGL-devel Mesa-libGLESv2-devel ;;[\s\S]*?apk:drm\) say libdrm-dev mesa-dev linux-headers ;;">
 <thead><tr><th>System</th><th>Packages</th></tr></thead>
 <tbody>
 <tr><td><code>apt</code></td><td><code>libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev</code></td></tr>
 <tr><td><code>dnf</code></td><td><code>libdrm-devel mesa-libgbm-devel mesa-libEGL-devel mesa-libGLES-devel</code></td></tr>
 <tr><td><code>pacman</code></td><td><code>libdrm mesa libglvnd</code></td></tr>
 <tr><td><code>zypper</code></td><td><code>libdrm-devel libgbm-devel Mesa-libEGL-devel Mesa-libGLESv2-devel</code></td></tr>
+<tr><td><code>apk</code> (Alpine)</td><td><code>libdrm-dev mesa-dev linux-headers</code></td></tr>
 </tbody>
 </table>
 
