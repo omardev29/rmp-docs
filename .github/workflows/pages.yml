@@ -217,8 +217,31 @@ jobs:
           path: screenshots/
           if-no-files-found: warn
 
-  deploy:
+  # The site, as the artifact Pages serves, in a job of its own. Uploaded and
+  # deployed in one job, deploy-pages listed the run's artifacts before the one
+  # just uploaded was among them, three runs in a row on 2026-11-22 ("No
+  # artifacts named github-pages were found"); a job that needs this one starts
+  # after the upload is finished and listed, which is the shape GitHub's own
+  # Pages workflows have.
+  pages-artifact:
     needs: [check, browser]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: site
+          path: _site
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
+        with:
+          path: _site/
+
+  deploy:
+    needs: [pages-artifact]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -229,16 +252,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          name: site
-          path: _site
-
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d  # v6.0.0
-
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
-        with:
-          path: _site/
 
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1
